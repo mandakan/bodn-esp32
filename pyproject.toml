@@ -1,0 +1,16 @@
+[project]
+name = "bodn-esp32"
+version = "0.1.0"
+description = "Battery-powered, kid-friendly interactive box on ESP32-S3"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "black>=26.3.1",
+    "mpremote>=1.27.0",
+    "pytest>=8.0",
+    "ruff>=0.15.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["firmware"]

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# uv
+.python-version
+
+# IDE
+.vscode/
+.idea/
+
+# Wokwi / MicroPython firmware binaries
+*.bin
+
+# OS
+.DS_Store

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Pre-commit hook: ensure docs/wiring.md is in sync with firmware/bodn/config.py.
+#
+# Only runs the check when config.py is staged for commit.
+set -euo pipefail
+
+STAGED=$(git diff --cached --name-only)
+
+# Only check when config.py is being committed
+if ! echo "$STAGED" | grep -q 'firmware/bodn/config\.py'; then
+    exit 0
+fi
+
+# Save current wiring.md, regenerate, compare, restore
+WIRING="docs/wiring.md"
+
+if [ ! -f "$WIRING" ]; then
+    echo ""
+    echo "ERROR: $WIRING does not exist."
+    echo ""
+    echo "  Run:  uv run python tools/pinout.py --md"
+    echo "  Then: git add $WIRING"
+    echo ""
+    exit 1
+fi
+
+BEFORE=$(cat "$WIRING")
+uv run python tools/pinout.py --md >/dev/null 2>&1
+AFTER=$(cat "$WIRING")
+
+if [ "$BEFORE" != "$AFTER" ]; then
+    echo ""
+    echo "ERROR: docs/wiring.md is out of sync with firmware/bodn/config.py"
+    echo ""
+    echo "  The file has been regenerated for you. Just stage it:"
+    echo ""
+    echo "    git add docs/wiring.md"
+    echo ""
+    exit 1
+fi
