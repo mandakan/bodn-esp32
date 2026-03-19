@@ -1,0 +1,142 @@
+# bodn/ui/mystery.py — Mystery Box game screen (Color Alchemy)
+
+from bodn import config
+from bodn.ui.screen import Screen
+from bodn.ui.widgets import draw_centered, draw_button_grid
+from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
+from bodn.patterns import N_LEDS
+
+NAV = config.ENC_NAV
+
+
+class MysteryScreen(Screen):
+    """Mystery Box — discover hidden rules through experimentation.
+
+    No instructions. No tutorial. The box just reacts.
+    Every input produces something interesting.
+    """
+
+    def __init__(self, np, overlay):
+        self._np = np
+        self._overlay = overlay
+        self._engine = MysteryEngine()
+        self._manager = None
+
+    def enter(self, manager):
+        self._manager = manager
+
+    def update(self, inp, frame):
+        # Nav encoder button → back to home
+        if inp.enc_btn_pressed[NAV] and self._manager:
+            self._manager.pop()
+            return
+
+        # Find first just-pressed button
+        btn = inp.first_btn_pressed()
+        self._engine.update(btn, frame)
+
+        # Generate LEDs
+        brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
+        leds = self._engine.make_leds(frame, brightness)
+
+        # Session overlay can override LEDs
+        state = self._overlay.session_mgr.state
+        leds = self._overlay.led_override(state, frame, leds, brightness)
+
+        # Write to NeoPixel strip every 3rd frame
+        if frame % 3 == 0:
+            for i in range(N_LEDS):
+                self._np[i] = leds[i]
+            self._np.write()
+
+    def render(self, tft, theme, frame):
+        landscape = theme.width > theme.height
+        if landscape:
+            self._render_landscape(tft, theme, frame)
+        else:
+            self._render_portrait(tft, theme, frame)
+
+    def _render_landscape(self, tft, theme, frame):
+        out_type = self._engine.output_type
+        out_color = self._engine.output_color
+        held = self._manager.inp.btn_held if self._manager else [False] * 8
+        w = theme.width
+        h = theme.height
+
+        # Big color swatch — top area, full width
+        swatch_y = 4
+        swatch_h = h // 2 - 8
+        if out_type != OUT_IDLE:
+            r, g, b = out_color
+            c565 = tft.rgb(r, g, b)
+            tft.fill_rect(8, swatch_y, w - 16, swatch_h, c565)
+
+            if out_type == OUT_MAGIC:
+                for i in range(8):
+                    px = ((frame * 7 + i * 37) * 53) % (w - 32) + 16
+                    py = ((frame * 11 + i * 23) * 41) % (swatch_h - 8) + swatch_y + 4
+                    tft.fill_rect(px, py, 5, 5, theme.WHITE)
+                draw_centered(tft, "MAGIC!", swatch_y + swatch_h + 4, theme.YELLOW, w, scale=2)
+            elif out_type == OUT_MIX:
+                draw_centered(tft, "Mix!", swatch_y + swatch_h + 4, theme.WHITE, w, scale=2)
+        else:
+            draw_centered(tft, "?", swatch_y + swatch_h // 4, theme.MUTED, w, scale=4)
+
+        # Button grid — bottom half, centered
+        btn_y = h // 2 + 20
+        cell_w = w // 4 - 8
+        cell_h = (h - btn_y - 20) // 2
+        btn_x0 = (w - 4 * cell_w) // 2
+        draw_button_grid(
+            tft, theme, theme.BTN_NAMES, held,
+            cols=4, x0=btn_x0, y0=btn_y, cell_w=cell_w, cell_h=cell_h,
+        )
+
+        # Discovery counter + back hint — bottom
+        found = self._engine.discovery_count
+        total = self._engine.total_discoverable
+        tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)
+        tft.text("< back", w - 56, h - 14, theme.MUTED)
+
+    def _render_portrait(self, tft, theme, frame):
+        out_type = self._engine.output_type
+        out_color = self._engine.output_color
+        held = self._manager.inp.btn_held if self._manager else [False] * 8
+        w = theme.width
+        h = theme.height
+
+        # Large color swatch — top half of screen
+        swatch_y = 8
+        swatch_h = h * 2 // 5
+        if out_type != OUT_IDLE:
+            r, g, b = out_color
+            c565 = tft.rgb(r, g, b)
+            tft.fill_rect(8, swatch_y, w - 16, swatch_h, c565)
+
+            if out_type == OUT_MAGIC:
+                # Animated sparkle dots over the swatch
+                for i in range(8):
+                    px = ((frame * 7 + i * 37) * 53) % (w - 32) + 16
+                    py = ((frame * 11 + i * 23) * 41) % (swatch_h - 16) + swatch_y + 8
+                    tft.fill_rect(px, py, 5, 5, theme.WHITE)
+                draw_centered(tft, "MAGIC!", swatch_y + swatch_h + 8, theme.YELLOW, w, scale=2)
+            elif out_type == OUT_MIX:
+                draw_centered(tft, "Mix!", swatch_y + swatch_h + 8, theme.WHITE, w, scale=2)
+        else:
+            # Idle: big question mark
+            draw_centered(tft, "?", swatch_y + swatch_h // 3, theme.MUTED, w, scale=4)
+
+        # Button grid — centered, below swatch area
+        btn_y = h * 3 // 5
+        cell_w = w // 4 - 4
+        cell_h = (h - btn_y - 24) // 2
+        btn_x0 = (w - 4 * cell_w) // 2
+        draw_button_grid(
+            tft, theme, theme.BTN_NAMES, held,
+            cols=4, x0=btn_x0, y0=btn_y, cell_w=cell_w, cell_h=cell_h,
+        )
+
+        # Discovery counter (bottom)
+        found = self._engine.discovery_count
+        total = self._engine.total_discoverable
+        tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)

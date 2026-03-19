@@ -240,6 +240,11 @@ async def _handle_request(reader, writer, session_mgr, settings):
             except Exception:
                 pass
 
+        elif method == "POST" and path == "/api/debug/toggle":
+            cur = settings.get("debug_input", False)
+            settings["debug_input"] = not cur
+            await _send_json(writer, {"debug_input": settings["debug_input"]})
+
         elif method == "GET" and path == "/api/files":
             # List files for dev UI
             file_list = []

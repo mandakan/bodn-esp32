@@ -108,6 +108,7 @@ th{color:#aaa}
 <button class="tab" onclick="show('stats')">Stats</button>
 <button class="tab" onclick="show('wifi')">WiFi</button>
 <button class="tab" onclick="show('security')">Security</button>
+<button class="tab" onclick="show('debug')">Debug</button>
 </div>
 
 <div id="dash" class="panel active">
@@ -159,6 +160,11 @@ th{color:#aaa}
 <div class="field"><label>OTA token (empty = no token required)</label><input class="input-field" type="text" id="ota_token" placeholder="e.g. my-secret-token"></div>
 <button class="btn btn-save" onclick="saveSecurity()">Save</button>
 <div id="sec-msg" class="msg"></div>
+</div>
+
+<div id="debug" class="panel">
+<div class="toggle"><input type="checkbox" id="dbg-serial" onchange="toggleDebug()"><label>Log inputs to serial (~2x/sec)</label></div>
+<p style="font-size:0.75em;color:#666;margin-top:8px">Prints button, switch, and encoder state to the serial console.</p>
 </div>
 
 <div id="wifi" class="panel">
@@ -329,7 +335,18 @@ var msg=document.getElementById('wifi-msg');
 msg.className=r.ok?'msg ok':'msg err';
 msg.textContent=r.ok?'Saved! Rebooting...':'Error';
 }
-loadSettings();refresh();setInterval(refresh,5000);
+async function toggleDebug(){
+var r=await fetch('/api/debug/toggle',{method:'POST'});
+var d=await r.json();
+document.getElementById('dbg-serial').checked=d.debug_input;
+}
+async function loadDebugState(){
+try{
+var r=await fetch('/api/settings');var d=await r.json();
+document.getElementById('dbg-serial').checked=!!d.debug_input;
+}catch(e){}
+}
+loadSettings();loadDebugState();refresh();setInterval(refresh,5000);
 </script>
 </body>
 </html>

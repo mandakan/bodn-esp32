@@ -15,12 +15,14 @@ class HomeScreen(Screen):
     Nav encoder button or any play button enters the selected mode.
     """
 
-    def __init__(self, mode_screens, session_mgr):
+    def __init__(self, mode_screens, session_mgr, order=None):
         self._mode_screens = mode_screens
         self._session_mgr = session_mgr
-        self._names = list(mode_screens.keys())
+        self._names = order if order else list(mode_screens.keys())
         self._index = 0
         self._manager = None
+        self._error = None
+        self._error_mode = None
 
     def enter(self, manager):
         self._manager = manager
@@ -43,10 +45,30 @@ class HomeScreen(Screen):
         if inp.any_btn_pressed() or inp.enc_btn_pressed[NAV]:
             name = self._names[self._index]
             factory = self._mode_screens[name]
-            self._session_mgr.try_wake(name)
-            self._manager.push(factory())
+            try:
+                screen = factory()
+                self._session_mgr.try_wake(name)
+                self._manager.push(screen)
+            except Exception as e:
+                self._error = str(e)
+                self._error_mode = name
 
     def render(self, tft, theme, frame):
+        # Show error on screen if a mode failed to load
+        if self._error:
+            tft.text("ERR: " + self._error_mode, 4, 4, theme.RED)
+            # Word-wrap error message
+            msg = self._error
+            y = 20
+            while msg and y < theme.height - 16:
+                tft.text(msg[:theme.width // 8], 4, y, theme.WHITE)
+                msg = msg[theme.width // 8:]
+                y += 12
+            tft.text("press to clear", 4, theme.height - 12, theme.MUTED)
+            if self._manager and self._manager.inp.any_btn_pressed():
+                self._error = None
+            return
+
         if not self._names:
             draw_centered(tft, "No modes", theme.CENTER_Y, theme.MUTED, theme.width)
             return
@@ -60,36 +82,35 @@ class HomeScreen(Screen):
             self._render_portrait(tft, theme, frame, name)
 
     def _render_landscape(self, tft, theme, frame, name):
-        """Landscape layout: icon left, info right."""
-        # Icon on the left third
+        """Landscape layout: centered, icon above mode name."""
+        w = theme.width
+        h = theme.height
+
+        # Title — centered at top
+        draw_centered(tft, "~ Bodn ~", 8, theme.WHITE, w, scale=2)
+
+        # Icon — centered
         icon_data = MODE_ICONS.get(name)
         icon_scale = 4
         icon_size = 16 * icon_scale
-        left_w = theme.width // 3
-
         if icon_data:
-            ix = (left_w - icon_size) // 2
-            iy = theme.CENTER_Y - icon_size // 2
+            ix = (w - icon_size) // 2
+            iy = 40
             draw_icon(tft, icon_data, ix, iy, 16, 16, theme.CYAN, scale=icon_scale)
 
-        # Right side: title, mode name, sessions
-        right_x = left_w + 16
-        right_w = theme.width - right_x
-
-        draw_label(tft, "~ Bodn ~", right_x, 24, theme.WHITE, scale=theme.font_scale)
-        draw_label(tft, name.upper(), right_x, theme.CENTER_Y - 12, theme.CYAN, scale=theme.font_scale)
+        # Mode name — centered below icon
+        name_y = 40 + icon_size + 12
+        draw_centered(tft, name.upper(), name_y, theme.CYAN, w, scale=2)
 
         # Arrow hints
         n = len(self._names)
         if n > 1:
-            hint = "< turn to browse >"
-            hint_x = right_x + (right_w - len(hint) * 8) // 2
-            tft.text(hint, max(right_x, hint_x), theme.CENTER_Y + 20, theme.MUTED)
+            draw_centered(tft, "< turn to browse >", name_y + 24, theme.MUTED, w)
 
-        # Sessions remaining
+        # Sessions remaining — bottom center
         remaining = self._session_mgr.sessions_remaining
         color = theme.GREEN if remaining > 0 else theme.RED
-        tft.text("{} plays left".format(remaining), right_x, theme.height - 24, color)
+        draw_centered(tft, "{} plays left".format(remaining), h - 20, color, w)
 
     def _render_portrait(self, tft, theme, frame, name):
         """Portrait layout: icon centered, stacked vertically."""

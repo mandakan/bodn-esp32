@@ -81,7 +81,7 @@ def create_hardware():
     return tft, tft2, buttons, switches, encoders, np
 
 
-async def ui_loop(session_mgr):
+async def ui_loop(session_mgr, settings):
     """Main UI coroutine — both displays driven from the same loop."""
     tft, tft2, buttons, switches, encoders, np = create_hardware()
 
@@ -94,11 +94,16 @@ async def ui_loop(session_mgr):
     manager = ScreenManager(tft, theme, inp)
     manager.set_overlay(overlay)
 
+    def _make_mystery():
+        from bodn.ui.mystery import MysteryScreen
+        return MysteryScreen(np, overlay)
+
     mode_screens = {
+        "mystery": _make_mystery,
         "demo": lambda: DemoScreen(np, overlay, enc_steps=ENC_STEPS),
         "clock": lambda: ClockScreen(),
     }
-    home = HomeScreen(mode_screens, session_mgr)
+    home = HomeScreen(mode_screens, session_mgr, order=["mystery", "demo", "clock"])
     manager.push(home)
 
     # Secondary display — ambient clock
@@ -110,10 +115,35 @@ async def ui_loop(session_mgr):
         np[i] = (0, 0, 0)
     np.write()
 
+    print("UI loop started, debug_input={}".format(settings.get("debug_input")))
+
+    frame = 0
+    errors = 0
     while True:
-        manager.tick()
-        secondary.tick()
-        session_mgr.tick()
+        try:
+            manager.tick()
+            secondary.tick()
+            session_mgr.tick()
+        except Exception as e:
+            errors += 1
+            print("Frame error #{}: {}".format(errors, e))
+
+        if settings.get("debug_input") and frame % 15 == 0:
+            btns = "".join("1" if inp.btn_held[i] else "." for i in range(8))
+            sws = "".join("1" if inp.sw[i] else "." for i in range(4))
+            enc_vals = " ".join("{}".format(inp.enc_pos[i]) for i in range(3))
+            enc_raw = " ".join(
+                "C{}D{}S{}".format(
+                    encoders[i].clk.value(),
+                    encoders[i].dt.value(),
+                    encoders[i].sw.value(),
+                )
+                for i in range(3)
+            )
+            print("INP btn[{}] sw[{}] enc[{}] raw[{}]".format(
+                btns, sws, enc_vals, enc_raw))
+
+        frame += 1
         await asyncio.sleep_ms(30)
 
 
@@ -143,7 +173,7 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    await ui_loop(session_mgr)
+    await ui_loop(session_mgr, settings)
 
 
 try:
