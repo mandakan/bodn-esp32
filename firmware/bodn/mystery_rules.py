@@ -3,6 +3,13 @@
 # Each rule set is a dict describing how inputs map to outputs.
 # The engine tracks input history and evaluates rules to produce
 # visual feedback (color, animation type, LED pattern).
+#
+# Switches and encoder B act as mystery modifiers:
+#   SW0: invert colors (red↔cyan, green↔magenta, etc.)
+#   SW1: mirror LED pattern (both halves identical)
+#   SW2: shimmer mode (output pulses instead of solid)
+#   SW3: add white to the mix (lightens all colors)
+#   ENC_B: hue shift — rotates output colors around the wheel
 
 from bodn.patterns import N_LEDS, scale, _led_buf
 
@@ -30,6 +37,42 @@ def _pair_key(a, b):
     return (min(a, b), max(a, b))
 
 
+def _invert_rgb(c):
+    """Invert an RGB color."""
+    return (255 - c[0], 255 - c[1], 255 - c[2])
+
+
+def _lighten_rgb(c):
+    """Mix a color with white (shift toward lighter)."""
+    return ((c[0] + 255) // 2, (c[1] + 255) // 2, (c[2] + 255) // 2)
+
+
+def _shift_hue(c, amount):
+    """Rotate RGB channels by an amount (0-255). Simple channel rotation."""
+    if amount == 0:
+        return c
+    r, g, b = c
+    # Shift by rotating through 3 zones of 85 each
+    zone = (amount * 3) >> 8  # 0, 1, or 2
+    frac = ((amount * 3) & 0xFF)
+    inv = 255 - frac
+    if zone == 0:
+        # R→G transition
+        return ((r * inv + g * frac) >> 8,
+                (g * inv + b * frac) >> 8,
+                (b * inv + r * frac) >> 8)
+    elif zone == 1:
+        # G→B transition
+        return ((r * inv + b * frac) >> 8,
+                (g * inv + r * frac) >> 8,
+                (b * inv + g * frac) >> 8)
+    else:
+        # B→R transition
+        return ((r * inv + g * frac) >> 8,
+                (g * inv + b * frac) >> 8,
+                (b * inv + r * frac) >> 8)
+
+
 # --- Rule set: Color Alchemy ---
 # Magic pairs: sorted tuple of button indices → result color override
 COLOR_ALCHEMY_MAGIC = {
@@ -55,6 +98,9 @@ class MysteryEngine:
 
     Pure logic — no hardware imports. Feed it button presses each frame
     and read back the current output state.
+
+    Modifiers (switches and encoder) transform the output color and
+    LED pattern, multiplying the discovery space without adding rules.
     """
 
     def __init__(self, colors=None, magic_pairs=None):
@@ -67,6 +113,12 @@ class MysteryEngine:
         self._output_color = (0, 0, 0)
         self._output_frame = 0
         self._discoveries = set()  # tuple keys of combos discovered
+        # Modifier state (set by caller each frame)
+        self.sw_invert = False
+        self.sw_mirror = False
+        self.sw_shimmer = False
+        self.sw_lighten = False
+        self.hue_shift = 0  # 0-255 from encoder B
 
     @property
     def output_type(self):
@@ -75,6 +127,11 @@ class MysteryEngine:
     @property
     def output_color(self):
         return self._output_color
+
+    @property
+    def display_color(self):
+        """Output color after modifier transforms (for screen display)."""
+        return self._apply_color_mods(self._output_color)
 
     @property
     def discoveries(self):
@@ -88,6 +145,16 @@ class MysteryEngine:
     def total_discoverable(self):
         """Total unique outputs: 8 singles + N magic combos."""
         return len(self.colors) + len(self.magic)
+
+    def _apply_color_mods(self, c):
+        """Apply switch/encoder modifiers to a color."""
+        if self.sw_invert:
+            c = _invert_rgb(c)
+        if self.sw_lighten:
+            c = _lighten_rgb(c)
+        if self.hue_shift > 0:
+            c = _shift_hue(c, self.hue_shift)
+        return c
 
     def update(self, btn_pressed, frame):
         """Call every frame with the index of a just-pressed button (-1 if none).
@@ -141,39 +208,58 @@ class MysteryEngine:
         """Generate LED colors for the current output state.
 
         Writes into the shared _led_buf to avoid per-frame allocations.
+        Applies modifier transforms (invert, lighten, hue shift, mirror, shimmer).
         """
         if self._output == OUT_IDLE:
-            # Gentle single-color breathing (no per-LED HSV math)
+            # Gentle single-color breathing
             phase = (frame * 2) & 0xFF
             v = phase if phase < 128 else 255 - phase
             v = (v * brightness) >> 8
-            c = scale((60, 20, 80), v)  # soft purple
+            idle_color = self._apply_color_mods((60, 20, 80))
+            c = scale(idle_color, v)
             for i in range(N_LEDS):
                 _led_buf[i] = c
             return _led_buf
 
+        # Apply color modifiers to the output
+        color = self._apply_color_mods(self._output_color)
+
         if self._output == OUT_MAGIC:
-            # Sparkle: some LEDs bright, rest dim underglow (no pattern_sparkle call)
-            glow = scale(self._output_color, brightness // 4)
-            bright = scale(self._output_color, brightness)
+            # Sparkle: some LEDs bright, rest dim underglow
+            glow = scale(color, brightness // 4)
+            bright = scale(color, brightness)
             for i in range(N_LEDS):
                 v = ((frame * 21 + i * 53) * 131) & 0xFF
                 _led_buf[i] = bright if v > 200 else glow
-            return _led_buf
 
-        if self._output == OUT_MIX:
-            # Pulse the mixed color across all LEDs with a wave
-            age = frame - self._output_frame
+        elif self._output == OUT_MIX:
             # Expand from center
+            age = frame - self._output_frame
             mid = N_LEDS // 2
-            c = scale(self._output_color, brightness)
+            c = scale(color, brightness)
             for i in range(N_LEDS):
                 dist = abs(i - mid)
                 _led_buf[i] = c if dist <= age else (0, 0, 0)
-            return _led_buf
 
-        # OUT_SINGLE: solid flash
-        c = scale(self._output_color, brightness)
-        for i in range(N_LEDS):
-            _led_buf[i] = c
+        else:
+            # OUT_SINGLE: solid flash
+            c = scale(color, brightness)
+            for i in range(N_LEDS):
+                _led_buf[i] = c
+
+        # Shimmer: modulate brightness with a pulse
+        if self.sw_shimmer and self._output != OUT_IDLE:
+            phase = (frame * 4) & 0xFF
+            v = phase if phase < 128 else 255 - phase
+            dim = max(30, (v * brightness) >> 8)
+            for i in range(N_LEDS):
+                r, g, b = _led_buf[i]
+                _led_buf[i] = ((r * dim) >> 8, (g * dim) >> 8, (b * dim) >> 8)
+
+        # Mirror: copy first half to second half (reversed)
+        if self.sw_mirror:
+            half = N_LEDS // 2
+            for i in range(half):
+                _led_buf[N_LEDS - 1 - i] = _led_buf[i]
+
         return _led_buf

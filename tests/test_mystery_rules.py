@@ -153,3 +153,64 @@ def test_total_discoverable():
     engine = MysteryEngine()
     # 8 single colors + 8 magic pairs = 16
     assert engine.total_discoverable == 16
+
+
+def test_invert_modifier():
+    engine = MysteryEngine()
+    engine.update(0, frame=1)  # Red
+    normal = engine.display_color
+
+    engine.sw_invert = True
+    inverted = engine.display_color
+    # Inverted red should be cyan-ish (255-255, 255-0, 255-0) = (0, 255, 255)
+    assert inverted[0] < normal[0]
+    assert inverted[1] > normal[1]
+    assert inverted[2] > normal[2]
+
+
+def test_lighten_modifier():
+    engine = MysteryEngine()
+    engine.update(2, frame=1)  # Blue = (0, 0, 255)
+    normal = engine.display_color
+
+    engine.sw_lighten = True
+    lightened = engine.display_color
+    # Lightened blue should have higher R and G
+    assert lightened[0] > normal[0]
+    assert lightened[1] > normal[1]
+
+
+def test_hue_shift_modifier():
+    engine = MysteryEngine()
+    engine.update(0, frame=1)  # Red
+    normal = engine.display_color
+
+    engine.hue_shift = 85  # ~1/3 rotation
+    shifted = engine.display_color
+    assert shifted != normal
+
+
+def test_modifiers_affect_leds():
+    from bodn.patterns import N_LEDS
+
+    engine = MysteryEngine()
+    engine.update(0, frame=1)  # Red
+    leds_normal = list(engine.make_leds(frame=1, brightness=200))
+
+    engine.sw_invert = True
+    leds_inverted = list(engine.make_leds(frame=1, brightness=200))
+    # LED colors should differ
+    assert leds_normal[0] != leds_inverted[0]
+
+
+def test_mirror_modifier():
+    from bodn.patterns import N_LEDS
+
+    engine = MysteryEngine()
+    engine.update(0, frame=1)
+    # MIX output creates an expanding pattern from center — not symmetric
+    engine.update(1, frame=2)  # combo
+    engine.sw_mirror = True
+    leds = engine.make_leds(frame=3, brightness=200)
+    # First and last LED should match
+    assert leds[0] == leds[N_LEDS - 1]

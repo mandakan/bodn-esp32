@@ -52,6 +52,20 @@ class MysteryScreen(Screen):
             self._dirty = True
             return
 
+        # Update modifier state from switches and encoder B
+        eng = self._engine
+        prev_mods = (eng.sw_invert, eng.sw_mirror, eng.sw_shimmer,
+                     eng.sw_lighten, eng.hue_shift)
+        eng.sw_invert = inp.sw[0]
+        eng.sw_mirror = inp.sw[1]
+        eng.sw_shimmer = inp.sw[2]
+        eng.sw_lighten = len(inp.sw) > 3 and inp.sw[3]
+        eng.hue_shift = inp.enc_pos[config.ENC_B] * 255 // 20
+        new_mods = (eng.sw_invert, eng.sw_mirror, eng.sw_shimmer,
+                    eng.sw_lighten, eng.hue_shift)
+        if new_mods != prev_mods:
+            self._dirty = True
+
         # Find first just-pressed button
         btn = inp.first_btn_pressed()
         self._engine.update(btn, frame)
@@ -63,8 +77,10 @@ class MysteryScreen(Screen):
             self._dirty = True
         if btn >= 0:
             self._dirty = True
-        # Magic/Mix sparkle animations need continuous redraw
+        # Animated states need continuous redraw
         if out_type in (OUT_MAGIC, OUT_MIX):
+            self._dirty = True
+        if eng.sw_shimmer and out_type != OUT_IDLE:
             self._dirty = True
 
         # Only compute and write LEDs on every 6th frame (~5.5 Hz)
@@ -106,7 +122,7 @@ class MysteryScreen(Screen):
 
     def _render_landscape(self, tft, theme, frame):
         out_type = self._engine.output_type
-        out_color = self._engine.output_color
+        out_color = self._engine.display_color
         held = self._manager.inp.btn_held if self._manager else [False] * 8
         w = theme.width
         h = theme.height
@@ -140,14 +156,15 @@ class MysteryScreen(Screen):
             cols=4, x0=btn_x0, y0=btn_y, cell_w=cell_w, cell_h=cell_h,
         )
 
-        # Discovery counter — bottom
+        # Bottom bar: discovery counter + modifier dots
         found = self._engine.discovery_count
         total = self._engine.total_discoverable
         tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)
+        self._draw_mod_dots(tft, theme, w - 60, h - 12)
 
     def _render_portrait(self, tft, theme, frame):
         out_type = self._engine.output_type
-        out_color = self._engine.output_color
+        out_color = self._engine.display_color
         held = self._manager.inp.btn_held if self._manager else [False] * 8
         w = theme.width
         h = theme.height
@@ -181,7 +198,29 @@ class MysteryScreen(Screen):
             cols=4, x0=btn_x0, y0=btn_y, cell_w=cell_w, cell_h=cell_h,
         )
 
-        # Discovery counter (bottom)
+        # Bottom bar: discovery counter + modifier dots
         found = self._engine.discovery_count
         total = self._engine.total_discoverable
         tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)
+        self._draw_mod_dots(tft, theme, w - 50, h - 12)
+
+    def _draw_mod_dots(self, tft, theme, x, y):
+        """Draw small colored dots for active modifiers."""
+        eng = self._engine
+        mods = [
+            (eng.sw_invert, theme.CYAN),
+            (eng.sw_mirror, theme.GREEN),
+            (eng.sw_shimmer, theme.YELLOW),
+            (eng.sw_lighten, theme.WHITE),
+        ]
+        dx = x
+        for active, color in mods:
+            if active:
+                tft.fill_rect(dx, y, 6, 6, color)
+            else:
+                tft.rect(dx, y, 6, 6, theme.MUTED)
+            dx += 10
+        # Hue shift indicator: small bar
+        if eng.hue_shift > 0:
+            bar_w = eng.hue_shift * 20 // 255
+            tft.fill_rect(dx + 4, y, max(2, bar_w), 6, theme.MAGENTA)
