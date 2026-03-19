@@ -1,20 +1,18 @@
 # bodn/ui/overlay.py — session-aware display overlay
 
 from bodn.session import (
-    PLAYING, WARN_5, WARN_2, WINDDOWN, SLEEPING, COOLDOWN, LOCKDOWN, IDLE,
+    WARN_5, WARN_2, WINDDOWN, SLEEPING, COOLDOWN, LOCKDOWN, IDLE,
 )
 from bodn.patterns import scale, N_LEDS
 from bodn.ui.screen import Screen
 
 
 class SessionOverlay(Screen):
-    """Draws session state info over the active screen.
+    """Draws session blocking states on the primary display.
 
-    When the session is in a blocking state (sleeping, lockdown, etc.),
-    takes_over becomes True and the underlying screen is not rendered.
-
-    Tracks its own dirty state — only requests a redraw when the
-    displayed second changes or the session state transitions.
+    The running timer has moved to the secondary display (AmbientClock).
+    This overlay only renders for blocking states (winddown, sleeping,
+    cooldown, lockdown) that take over the whole screen.
     """
 
     _TAKEOVER_STATES = (SLEEPING, COOLDOWN, LOCKDOWN, WINDDOWN)
@@ -22,7 +20,6 @@ class SessionOverlay(Screen):
     def __init__(self, session_mgr):
         self.session_mgr = session_mgr
         self._prev_state = None
-        self._prev_remaining = -1
         self._dirty = True
 
     @property
@@ -43,43 +40,15 @@ class SessionOverlay(Screen):
             self._prev_state = state
             self._dirty = True
 
-        # Track timer changes (once per second)
-        remaining = self.session_mgr.time_remaining_s
-        if remaining != self._prev_remaining:
-            self._prev_remaining = remaining
-            if state in (PLAYING, WARN_5, WARN_2):
-                self._dirty = True
-
         # Blinking states need periodic redraws
-        if state == WARN_2 and frame % 15 == 0:
-            self._dirty = True
-        elif state == WINDDOWN and frame % 20 == 0:
+        if state == WINDDOWN and frame % 20 == 0:
             self._dirty = True
 
     def render(self, tft, theme, frame):
         self._dirty = False
         state = self.session_mgr.state
 
-        if state == PLAYING:
-            remaining = self.session_mgr.time_remaining_s
-            mins = remaining // 60
-            secs = remaining % 60
-            tft.text("{:d}:{:02d}".format(mins, secs), 88, 3, theme.GREEN)
-
-        elif state == WARN_5:
-            remaining = self.session_mgr.time_remaining_s
-            mins = remaining // 60
-            secs = remaining % 60
-            tft.text("{:d}:{:02d}".format(mins, secs), 88, 3, theme.AMBER)
-
-        elif state == WARN_2:
-            remaining = self.session_mgr.time_remaining_s
-            mins = remaining // 60
-            secs = remaining % 60
-            if (frame // 15) % 2 == 0:
-                tft.text("{:d}:{:02d}".format(mins, secs), 88, 3, theme.RED)
-
-        elif state == WINDDOWN:
+        if state == WINDDOWN:
             if (frame // 20) % 2 == 0:
                 tft.text("Zzz...", 40, 70, theme.AMBER)
 

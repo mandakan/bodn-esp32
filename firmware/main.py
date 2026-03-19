@@ -108,7 +108,7 @@ async def ui_loop(session_mgr, settings):
 
     # Secondary display — ambient clock
     secondary = SecondaryDisplay(tft2, theme2)
-    secondary.set_screen(AmbientClock())
+    secondary.set_screen(AmbientClock(session_mgr))
 
     # Clear LEDs
     for i in range(N_LEDS):
