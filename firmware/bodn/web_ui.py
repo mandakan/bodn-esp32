@@ -117,6 +117,7 @@ th{color:#aaa}
 </div>
 <div class="stat"><label>Sessions today</label><span id="s-count" class="val">0</span> / <span id="s-max" class="val">5</span></div>
 <div class="stat"><label>Time remaining</label><div class="progress"><div id="time-bar" class="bar" style="width:0%"></div></div><div id="time-text" style="text-align:center;font-size:0.85em;margin-top:4px">--</div></div>
+<div class="toggle"><input type="checkbox" id="sessions-enabled" checked onchange="toggleSessions()"><label>Session limits enabled</label></div>
 <button class="btn btn-danger" id="lockdown-btn" onclick="toggleLockdown()">Lockdown</button>
 </div>
 
@@ -220,6 +221,7 @@ var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k];
 ['quiet_start','quiet_end','wifi_ssid','wifi_pass','wifi_mode','ui_pin','ota_token'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k]||'';
 });
+var se=document.getElementById('sessions-enabled');if(se)se.checked=d.sessions_enabled!==false;
 updRv(document.getElementById('max_session_min'),'rv-sess',' min');
 updRv(document.getElementById('max_sessions_day'),'rv-maxs','');
 updRv(document.getElementById('break_min'),'rv-brk',' min');
@@ -334,6 +336,12 @@ var r=await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'applicatio
 var msg=document.getElementById('wifi-msg');
 msg.className=r.ok?'msg ok':'msg err';
 msg.textContent=r.ok?'Saved! Rebooting...':'Error';
+}
+async function toggleSessions(){
+var el=document.getElementById('sessions-enabled');
+var body={sessions_enabled:el.checked};
+await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+refresh();
 }
 async function toggleDebug(){
 var r=await fetch('/api/debug/toggle',{method:'POST'});

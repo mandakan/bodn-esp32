@@ -22,6 +22,7 @@ DEFAULT_SETTINGS = {
     "wifi_mode": "ap",
     "ui_pin": "",
     "ota_token": "",
+    "sessions_enabled": True,
     "mode_limits": {},
     "debug_input": False,
 }

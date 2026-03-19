@@ -9,6 +9,7 @@ NAV = config.ENC_NAV
 # Setting definitions: (key, label, type)
 # type: "bool" = toggle, "action" = one-shot
 _ITEMS = [
+    ("sessions_enabled", "Sessions", "bool"),
     ("wifi", "WiFi", "bool"),
     ("leds", "LEDs", "bool"),
     ("debug_input", "Debug log", "bool"),
@@ -42,8 +43,8 @@ class SettingsScreen(Screen):
             return self._wifi_ctrl.is_active()
         if key == "leds":
             return self._leds_on
-        if key == "debug_input":
-            return self._settings.get("debug_input", False)
+        if key in ("debug_input", "sessions_enabled"):
+            return self._settings.get(key, key == "sessions_enabled")
         return False
 
     def _toggle(self, key):
@@ -58,17 +59,14 @@ class SettingsScreen(Screen):
                 for i in range(config.NEOPIXEL_COUNT):
                     self._np[i] = (0, 0, 0)
                 self._np.write()
+        elif key == "sessions_enabled":
+            self._settings["sessions_enabled"] = not self._settings.get("sessions_enabled", True)
         elif key == "debug_input":
             self._settings["debug_input"] = not self._settings.get("debug_input", False)
         self._dirty = True
 
     def update(self, inp, frame):
-        # Nav encoder button → back to home
-        if inp.enc_btn_pressed[NAV] and self._manager:
-            self._manager.pop()
-            return
-
-        # Nav encoder rotation scrolls
+        # Nav encoder rotation scrolls through items
         delta = inp.enc_delta[NAV]
         if delta != 0:
             step = 1 if delta > 0 else -1
@@ -78,10 +76,15 @@ class SettingsScreen(Screen):
             self._manager.inp._prev_enc_pos[NAV] = mid
             self._dirty = True
 
-        # Any button or param encoder button → toggle current item
-        if inp.any_btn_pressed() or inp.enc_btn_pressed[config.ENC_A] or inp.enc_btn_pressed[config.ENC_B]:
+        # Nav encoder button or any play button → toggle selected item
+        if inp.enc_btn_pressed[NAV] or inp.any_btn_pressed():
             key = _ITEMS[self._index][0]
             self._toggle(key)
+
+        # Other encoder buttons → back to home
+        if inp.enc_btn_pressed[config.ENC_A] or inp.enc_btn_pressed[config.ENC_B]:
+            if self._manager:
+                self._manager.pop()
 
     @property
     def leds_enabled(self):
@@ -124,6 +127,5 @@ class SettingsScreen(Screen):
                 tft.text("OFF", w - 38, y + 2, theme.BLACK)
 
         # Hints at bottom
-        tft.text("< back", 4, h - 14, theme.MUTED)
-        hint = "press to toggle"
-        tft.text(hint, w - len(hint) * 8 - 4, h - 14, theme.MUTED)
+        tft.text("[knob] toggle", 4, h - 14, theme.MUTED)
+        tft.text("[enc] back", w - 80, h - 14, theme.MUTED)
