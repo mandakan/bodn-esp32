@@ -1,6 +1,13 @@
 # bodn/ui/widgets.py — stateless draw helper functions
 
 
+import framebuf
+
+# Pre-allocated buffer for scaled text rendering (8×8 RGB565 = 128 bytes)
+_char_buf = bytearray(8 * 8 * 2)
+_char_fb = framebuf.FrameBuffer(_char_buf, 8, 8, framebuf.RGB565)
+
+
 def draw_label(tft, text, x, y, color, scale=1):
     """Draw text at (x, y). scale=1 uses built-in font, scale>1 enlarges."""
     if scale <= 1:
@@ -9,9 +16,6 @@ def draw_label(tft, text, x, y, color, scale=1):
     # Scale > 1: draw each character enlarged via fill_rect per pixel.
     # MicroPython framebuf font is 8×8.  We render into a tiny 1-char
     # buffer and read pixels back to scale them up.
-    import framebuf
-    _char_buf = bytearray(8 * 8 * 2)  # 8×8 RGB565
-    _char_fb = framebuf.FrameBuffer(_char_buf, 8, 8, framebuf.RGB565)
     cx = x
     for ch in text:
         _char_fb.fill(0)

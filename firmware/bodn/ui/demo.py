@@ -3,11 +3,18 @@
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_progress_bar, draw_button_grid, draw_centered
-from bodn.patterns import PATTERNS, PATTERN_NAMES
+from bodn.ui.pause import PauseMenu
+from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS
 
 NAV = config.ENC_NAV
 ENC_A = config.ENC_A
 ENC_B = config.ENC_B
+
+# Colour palette per pattern index — module-level to avoid per-frame allocation
+_COLOUR_RGB = [
+    (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
+    (0, 255, 255), (255, 0, 255), (255, 128, 0), (128, 0, 255),
+]
 
 
 class DemoScreen(Screen):
@@ -16,6 +23,9 @@ class DemoScreen(Screen):
     Buttons select patterns, nav encoder button goes back.
     Encoder A = brightness, Encoder B = speed.
     Toggles apply modifiers.
+
+    Display redraws on any input change. LED computation only
+    happens on NeoPixel-write frames (every 3rd frame).
     """
 
     def __init__(self, np, overlay, enc_steps=20):
@@ -24,69 +34,118 @@ class DemoScreen(Screen):
         self._enc_steps = enc_steps
         self._active_pattern = 0
         self._manager = None
+        self._pause = PauseMenu()
+        self._dirty = True
+        # Snapshot of input state for dirty detection
+        self._prev_enc = [0, 0, 0]
+        self._prev_btn = [False] * 8
+        self._prev_sw = [False] * 4
 
     def enter(self, manager):
         self._manager = manager
+        self._pause.set_manager(manager)
+        self._dirty = True
+
+    def needs_redraw(self):
+        return self._dirty or self._pause.needs_render
 
     def update(self, inp, frame):
-        # Nav encoder button → back to home
-        if inp.enc_btn_pressed[NAV] and self._manager:
-            self._manager.pop()
+        # Pause menu intercepts all input when open
+        if self._pause.is_open:
+            result = self._pause.update(inp, frame)
+            if result == "quit" and self._manager:
+                self._manager.pop()
+            elif result == "resume":
+                self._dirty = True
+            return
+
+        # Nav encoder button → open pause menu
+        if inp.enc_btn_pressed[NAV]:
+            self._pause.open()
+            self._dirty = True
             return
 
         # Button press → select pattern
         first = inp.first_btn_pressed()
         if first >= 0:
             self._active_pattern = first % len(PATTERNS)
+            self._dirty = True
 
         # Encoder A or B button → cycle pattern
         if inp.enc_btn_pressed[ENC_A] or inp.enc_btn_pressed[ENC_B]:
             self._active_pattern = (self._active_pattern + 1) % len(PATTERNS)
+            self._dirty = True
 
-        # Read encoder positions
-        enc_pos = inp.enc_pos
-        brightness = min(255, max(10, enc_pos[ENC_A] * 255 // self._enc_steps))
-        speed = max(1, enc_pos[ENC_B])
+        # Detect input changes for display redraw
+        for i in range(3):
+            if inp.enc_pos[i] != self._prev_enc[i]:
+                self._prev_enc[i] = inp.enc_pos[i]
+                self._dirty = True
+        for i in range(8):
+            if inp.btn_held[i] != self._prev_btn[i]:
+                self._prev_btn[i] = inp.btn_held[i]
+                self._dirty = True
+        for i in range(min(4, len(inp.sw))):
+            if inp.sw[i] != self._prev_sw[i]:
+                self._prev_sw[i] = inp.sw[i]
+                self._dirty = True
 
-        # Compute LED pattern
-        _name, pat_fn = PATTERNS[self._active_pattern]
-        from bodn.patterns import N_LEDS
-
-        if self._active_pattern == 0:
-            leds = pat_fn(frame, speed, 0, brightness)
-        else:
-            colour_rgb = [
-                (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
-                (0, 255, 255), (255, 0, 255), (255, 128, 0), (128, 0, 255),
-            ]
-            colour = colour_rgb[self._active_pattern]
-            leds = pat_fn(frame, speed, colour, brightness)
-
-        # Toggle switch modifiers
-        sw = inp.sw
-        if sw[0]:
-            leds = leds[::-1]
-        if sw[1]:
-            half = N_LEDS // 2
-            for i in range(half):
-                leds[N_LEDS - 1 - i] = leds[i]
-        if sw[2]:
-            if (frame // 4) % 2 == 0:
-                leds = [(0, 0, 0)] * N_LEDS
-        if len(sw) > 3 and sw[3]:
-            leds = [(255 - r, 255 - g, 255 - b) for r, g, b in leds]
-
-        # Session state LED override
-        state = self._overlay.session_mgr.state
-        leds = self._overlay.led_override(state, frame, leds, brightness)
-
-        # Write to NeoPixel strip every 3rd frame
+        # Only compute and write LEDs on NeoPixel-write frames
         if frame % 3 == 0:
+            enc_pos = inp.enc_pos
+            brightness = min(255, max(10, enc_pos[ENC_A] * 255 // self._enc_steps))
+            speed = max(1, enc_pos[ENC_B])
+
+            _name, pat_fn = PATTERNS[self._active_pattern]
+
+            if self._active_pattern == 0:
+                leds = pat_fn(frame, speed, 0, brightness)
+            else:
+                colour = _COLOUR_RGB[self._active_pattern]
+                leds = pat_fn(frame, speed, colour, brightness)
+
+            # Toggle switch modifiers (copy since patterns reuse a shared buffer)
+            sw = inp.sw
+            any_toggle = sw[0] or sw[1] or (sw[2] and (frame // 4) % 2 == 0) or (len(sw) > 3 and sw[3])
+            if any_toggle:
+                leds = list(leds)
+                if sw[0]:
+                    leds.reverse()
+                if sw[1]:
+                    half = N_LEDS // 2
+                    for i in range(half):
+                        leds[N_LEDS - 1 - i] = leds[i]
+                if sw[2] and (frame // 4) % 2 == 0:
+                    for i in range(N_LEDS):
+                        leds[i] = (0, 0, 0)
+                if len(sw) > 3 and sw[3]:
+                    for i in range(N_LEDS):
+                        r, g, b = leds[i]
+                        leds[i] = (255 - r, 255 - g, 255 - b)
+
+            # Session state LED override
+            state = self._overlay.session_mgr.state
+            leds = self._overlay.led_override(state, frame, leds, brightness)
+
             for i in range(N_LEDS):
                 self._np[i] = leds[i]
             self._np.write()
 
     def render(self, tft, theme, frame):
+        if self._pause.is_open:
+            if self._dirty:
+                self._dirty = False
+                tft.fill(theme.BLACK)
+                landscape = theme.width > theme.height
+                if landscape:
+                    self._render_landscape(tft, theme, frame)
+                else:
+                    self._render_portrait(tft, theme, frame)
+            self._pause.render(tft, theme, frame)
+            return
+
+        self._dirty = False
+        tft.fill(theme.BLACK)
         landscape = theme.width > theme.height
         if landscape:
             self._render_landscape(tft, theme, frame)
@@ -110,7 +169,7 @@ class DemoScreen(Screen):
         tft.fill_rect(0, 0, mid_x - 8, 20, pat_colour)
         tft.text(PATTERN_NAMES[self._active_pattern], 4, 6, theme.BLACK)
 
-        # Button grid (4×2)
+        # Button grid (4x2)
         tft.text("Buttons", 0, 28, theme.WHITE)
         draw_button_grid(
             tft, theme, theme.BTN_NAMES, held,

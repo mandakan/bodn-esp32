@@ -19,9 +19,11 @@ A colourful, tactile device that grows with a child (starting around age 4):
 |---|---|
 | MCU | Olimex ESP32-S3-DevKit-Lipo (8 MB flash, 8 MB PSRAM, USB-C, LiPo charger) |
 | Battery | Olimex BATTERY-LIPO6600mAh |
-| Display | 1.8" 128×160 ST7735 TFT (SPI) |
+| Primary display | 2.8" 240×320 ILI9341 TFT with touch (SPI) |
+| Secondary display | 1.8" 128×160 ST7735 TFT (SPI, shared bus) |
 | Microphone | INMP441 I2S MEMS |
 | Amplifier | MAX98357A I2S 3W class-D + 3W 8Ω speaker |
+| LEDs | WS2812 8-LED sticks × 2 (16 addressable RGB NeoPixels) |
 | Inputs | 3× KY-040 rotary encoders, 8× momentary push buttons, 4× toggle switches |
 
 See [`docs/hardware.md`](docs/hardware.md) for full pinout, wiring, and BOM.
@@ -39,11 +41,28 @@ firmware/
     config.py           # pin assignments, constants
     debounce.py         # generic debounce logic
     encoder.py          # IRQ-based rotary encoder reader
+    patterns.py         # LED animation patterns (shared buffer)
+    mystery_rules.py    # Mystery Box rule engine (pure logic)
     session.py          # play session state machine
     storage.py          # JSON settings & session history on flash
-    wifi.py             # WiFi connect (STA / AP)
+    wifi.py             # WiFi connect (STA / AP) + runtime control
     web.py              # async HTTP server for parental controls
     web_ui.py           # HTML/CSS/JS served to the browser
+    ui/
+      screen.py         # Screen base class + ScreenManager
+      theme.py          # colour palette and layout constants
+      input.py          # unified input state with debouncing
+      widgets.py        # stateless draw helpers (labels, bars, grids)
+      icons.py          # 16×16 bitmap icons
+      home.py           # home screen with mode selection
+      demo.py           # LED playground mode
+      mystery.py        # Mystery Box discovery game
+      clock.py          # clock display mode
+      ambient.py        # secondary display (clock + session bar)
+      settings.py       # on-device settings menu
+      overlay.py        # session state overlay
+      pause.py          # in-game pause menu
+      secondary.py      # secondary display manager
 ```
 
 ## Getting started

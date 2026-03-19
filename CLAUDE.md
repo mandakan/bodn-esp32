@@ -10,7 +10,9 @@
 - **Dependencies**: host tools are managed with `uv`. MicroPython libs go directly into `firmware/`.
 - **Pin assignments**: `firmware/bodn/config.py` is the single source of truth. Never hardcode GPIO numbers elsewhere.
 - **Wiring docs**: `docs/wiring.md` is auto-generated. After changing `config.py`, run `uv run python tools/pinout.py --md` and commit both files. A pre-commit hook enforces this.
+- **Wokwi sync**: `tools/wokwi-sync.py` has a **hardcoded file list**. When adding new firmware files, you **must** add them to the `FILES` list in `wokwi-sync.py` or they won't be deployed to the simulator. (`sync.sh` copies the whole directory and doesn't need updating.)
 - **UX design**: when designing screens, game modes, interactions, or feedback, follow `docs/UX_GUIDELINES.md`. Key rules: one concept per screen, large icons over text, immediate multimodal feedback, max 3–4 active choices, no complex gestures. Games should target executive functions (working memory, inhibition, cognitive flexibility) at a 4-year-old level.
+- **Performance**: follow `docs/PERFORMANCE_GUIDELINES.md`. Key rules: event-driven over polling, no full-screen redraws every frame, cooperative async tasks, minimal per-frame allocations, sparse `print()` usage. The review checklist (section 10) applies to all code changes.
 
 ## Project overview
 
@@ -57,14 +59,33 @@ bodn-esp32/
 │     ├─ config.py          # pin assignments, constants
 │     ├─ debounce.py        # generic debounce logic
 │     ├─ encoder.py         # IRQ-based rotary encoder reader
-│     ├─ session.py         # play session state machine (pure logic, tested on host)
+│     ├─ patterns.py        # LED animation patterns (shared buffer)
+│     ├─ mystery_rules.py   # Mystery Box rule engine (pure logic)
+│     ├─ session.py         # play session state machine (pure logic)
 │     ├─ storage.py         # JSON settings & session history on flash
-│     ├─ wifi.py            # WiFi connect (STA / AP mode)
+│     ├─ wifi.py            # WiFi connect (STA / AP) + runtime control
 │     ├─ web.py             # async HTTP server for parental controls
-│     └─ web_ui.py          # HTML/CSS/JS served to the browser
+│     ├─ web_ui.py          # HTML/CSS/JS served to the browser
+│     └─ ui/
+│        ├─ screen.py       # Screen base class + ScreenManager
+│        ├─ theme.py        # colour palette and layout constants
+│        ├─ input.py        # unified input state with debouncing
+│        ├─ widgets.py      # stateless draw helpers
+│        ├─ icons.py        # 16×16 bitmap icons
+│        ├─ home.py         # home screen with mode selection
+│        ├─ demo.py         # LED playground mode
+│        ├─ mystery.py      # Mystery Box discovery game
+│        ├─ clock.py        # clock display mode
+│        ├─ ambient.py      # secondary display (clock + session bar)
+│        ├─ settings.py     # on-device settings menu
+│        ├─ overlay.py      # session state overlay
+│        ├─ pause.py        # in-game pause menu
+│        └─ secondary.py    # secondary display manager
 ├─ docs/
 │  ├─ hardware.md           # BOM, board notes
 │  ├─ wiring.md             # auto-generated pin diagram and tables
+│  ├─ UX_GUIDELINES.md      # child-facing interaction design
+│  ├─ PERFORMANCE_GUIDELINES.md  # ESP32 performance rules
 │  └─ roadmap.md            # milestones and progress
 ├─ tools/
 │  ├─ pinout.py             # generate wiring docs from config.py

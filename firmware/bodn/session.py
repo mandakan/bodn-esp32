@@ -60,6 +60,8 @@ class SessionManager:
     @property
     def time_remaining_s(self):
         """Seconds remaining in current session, or 0 if not playing."""
+        if not self.settings.get("sessions_enabled", True):
+            return 9999  # unlimited
         if self.state not in (PLAYING, WARN_5, WARN_2):
             return 0
         limit = self._session_limit_s()
@@ -118,6 +120,13 @@ class SessionManager:
     def tick(self):
         """Call every frame. Returns current state string."""
         self._reset_day_if_needed()
+
+        # Session controls disabled — stay in PLAYING, skip all limits
+        if not self.settings.get("sessions_enabled", True):
+            if self.state != PLAYING:
+                self.state = PLAYING
+                self._session_start = self._get_time()
+            return self.state
 
         # Lockdown overrides everything
         if self.settings.get("lockdown"):
@@ -183,6 +192,13 @@ class SessionManager:
 
     def try_wake(self, mode=None):
         """Attempt to start a new session. Returns True if allowed."""
+        # Session controls disabled — always allow
+        if not self.settings.get("sessions_enabled", True):
+            self.state = PLAYING
+            self._session_start = self._get_time()
+            self._mode = mode or MODE_FREE_PLAY
+            return True
+
         self._reset_day_if_needed()
 
         if self.settings.get("lockdown"):

@@ -21,6 +21,7 @@ class FakeEncoder:
         self.sw = FakePin(1)  # not pressed
 
 
+
 def make_input(n_btn=8, n_sw=4, n_enc=3):
     buttons = [FakePin() for _ in range(n_btn)]
     switches = [FakePin() for _ in range(n_sw)]

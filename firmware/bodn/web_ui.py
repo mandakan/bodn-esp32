@@ -108,6 +108,7 @@ th{color:#aaa}
 <button class="tab" onclick="show('stats')">Stats</button>
 <button class="tab" onclick="show('wifi')">WiFi</button>
 <button class="tab" onclick="show('security')">Security</button>
+<button class="tab" onclick="show('debug')">Debug</button>
 </div>
 
 <div id="dash" class="panel active">
@@ -116,6 +117,7 @@ th{color:#aaa}
 </div>
 <div class="stat"><label>Sessions today</label><span id="s-count" class="val">0</span> / <span id="s-max" class="val">5</span></div>
 <div class="stat"><label>Time remaining</label><div class="progress"><div id="time-bar" class="bar" style="width:0%"></div></div><div id="time-text" style="text-align:center;font-size:0.85em;margin-top:4px">--</div></div>
+<div class="toggle"><input type="checkbox" id="sessions-enabled" checked onchange="toggleSessions()"><label>Session limits enabled</label></div>
 <button class="btn btn-danger" id="lockdown-btn" onclick="toggleLockdown()">Lockdown</button>
 </div>
 
@@ -159,6 +161,11 @@ th{color:#aaa}
 <div class="field"><label>OTA token (empty = no token required)</label><input class="input-field" type="text" id="ota_token" placeholder="e.g. my-secret-token"></div>
 <button class="btn btn-save" onclick="saveSecurity()">Save</button>
 <div id="sec-msg" class="msg"></div>
+</div>
+
+<div id="debug" class="panel">
+<div class="toggle"><input type="checkbox" id="dbg-serial" onchange="toggleDebug()"><label>Log inputs to serial (~2x/sec)</label></div>
+<p style="font-size:0.75em;color:#666;margin-top:8px">Prints button, switch, and encoder state to the serial console.</p>
 </div>
 
 <div id="wifi" class="panel">
@@ -214,6 +221,7 @@ var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k];
 ['quiet_start','quiet_end','wifi_ssid','wifi_pass','wifi_mode','ui_pin','ota_token'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k]||'';
 });
+var se=document.getElementById('sessions-enabled');if(se)se.checked=d.sessions_enabled!==false;
 updRv(document.getElementById('max_session_min'),'rv-sess',' min');
 updRv(document.getElementById('max_sessions_day'),'rv-maxs','');
 updRv(document.getElementById('break_min'),'rv-brk',' min');
@@ -329,7 +337,24 @@ var msg=document.getElementById('wifi-msg');
 msg.className=r.ok?'msg ok':'msg err';
 msg.textContent=r.ok?'Saved! Rebooting...':'Error';
 }
-loadSettings();refresh();setInterval(refresh,5000);
+async function toggleSessions(){
+var el=document.getElementById('sessions-enabled');
+var body={sessions_enabled:el.checked};
+await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+refresh();
+}
+async function toggleDebug(){
+var r=await fetch('/api/debug/toggle',{method:'POST'});
+var d=await r.json();
+document.getElementById('dbg-serial').checked=d.debug_input;
+}
+async function loadDebugState(){
+try{
+var r=await fetch('/api/settings');var d=await r.json();
+document.getElementById('dbg-serial').checked=!!d.debug_input;
+}catch(e){}
+}
+loadSettings();loadDebugState();refresh();setInterval(refresh,5000);
 </script>
 </body>
 </html>

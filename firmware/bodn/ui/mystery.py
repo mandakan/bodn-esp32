@@ -1,0 +1,226 @@
+# bodn/ui/mystery.py — Mystery Box game screen (Color Alchemy)
+
+from bodn import config
+from bodn.ui.screen import Screen
+from bodn.ui.widgets import draw_centered, draw_button_grid
+from bodn.ui.pause import PauseMenu
+from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
+from bodn.patterns import N_LEDS
+
+NAV = config.ENC_NAV
+
+
+class MysteryScreen(Screen):
+    """Mystery Box — discover hidden rules through experimentation.
+
+    No instructions. No tutorial. The box just reacts.
+    Every input produces something interesting.
+
+    Nav encoder button opens the pause menu (resume / back to menu).
+    """
+
+    def __init__(self, np, overlay):
+        self._np = np
+        self._overlay = overlay
+        self._engine = MysteryEngine()
+        self._manager = None
+        self._pause = PauseMenu()
+        self._prev_out_type = OUT_IDLE
+        self._dirty = True
+
+    def enter(self, manager):
+        self._manager = manager
+        self._pause.set_manager(manager)
+        self._dirty = True
+
+    def needs_redraw(self):
+        return self._dirty or self._pause.needs_render
+
+    def update(self, inp, frame):
+        # Pause menu intercepts all input when open
+        if self._pause.is_open:
+            result = self._pause.update(inp, frame)
+            if result == "quit" and self._manager:
+                self._manager.pop()
+            elif result == "resume":
+                self._dirty = True  # redraw game screen
+            return
+
+        # Nav encoder button → open pause menu
+        if inp.enc_btn_pressed[NAV]:
+            self._pause.open()
+            self._dirty = True
+            return
+
+        # Update modifier state from switches and encoder B
+        eng = self._engine
+        prev_mods = (eng.sw_invert, eng.sw_mirror, eng.sw_shimmer,
+                     eng.sw_lighten, eng.hue_shift)
+        eng.sw_invert = inp.sw[0]
+        eng.sw_mirror = inp.sw[1]
+        eng.sw_shimmer = inp.sw[2]
+        eng.sw_lighten = len(inp.sw) > 3 and inp.sw[3]
+        eng.hue_shift = inp.enc_pos[config.ENC_B] * 255 // 20
+        new_mods = (eng.sw_invert, eng.sw_mirror, eng.sw_shimmer,
+                    eng.sw_lighten, eng.hue_shift)
+        if new_mods != prev_mods:
+            self._dirty = True
+
+        # Find first just-pressed button
+        btn = inp.first_btn_pressed()
+        self._engine.update(btn, frame)
+
+        # Detect state changes that require a redraw
+        out_type = self._engine.output_type
+        if out_type != self._prev_out_type:
+            self._prev_out_type = out_type
+            self._dirty = True
+        if btn >= 0:
+            self._dirty = True
+        # Animated states need continuous redraw
+        if out_type in (OUT_MAGIC, OUT_MIX):
+            self._dirty = True
+        if eng.sw_shimmer and out_type != OUT_IDLE:
+            self._dirty = True
+
+        # Only compute and write LEDs on every 6th frame (~5.5 Hz)
+        if frame % 6 == 0:
+            brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
+            leds = self._engine.make_leds(frame, brightness)
+
+            state = self._overlay.session_mgr.state
+            leds = self._overlay.led_override(state, frame, leds, brightness)
+
+            for i in range(N_LEDS):
+                self._np[i] = leds[i]
+            self._np.write()
+
+    def render(self, tft, theme, frame):
+        if self._pause.is_open:
+            if self._dirty:
+                # Redraw game underneath first time, then overlay pause
+                self._dirty = False
+                tft.fill(theme.BLACK)
+                landscape = theme.width > theme.height
+                if landscape:
+                    self._render_landscape(tft, theme, frame)
+                else:
+                    self._render_portrait(tft, theme, frame)
+            self._pause.render(tft, theme, frame)
+            return
+
+        if not self._dirty:
+            return
+        self._dirty = False
+
+        tft.fill(theme.BLACK)
+        landscape = theme.width > theme.height
+        if landscape:
+            self._render_landscape(tft, theme, frame)
+        else:
+            self._render_portrait(tft, theme, frame)
+
+    def _render_landscape(self, tft, theme, frame):
+        out_type = self._engine.output_type
+        out_color = self._engine.display_color
+        held = self._manager.inp.btn_held if self._manager else [False] * 8
+        w = theme.width
+        h = theme.height
+
+        # Big color swatch — top area, full width
+        swatch_y = 4
+        swatch_h = h // 2 - 8
+        if out_type != OUT_IDLE:
+            r, g, b = out_color
+            c565 = tft.rgb(r, g, b)
+            tft.fill_rect(8, swatch_y, w - 16, swatch_h, c565)
+
+            if out_type == OUT_MAGIC:
+                for i in range(8):
+                    px = ((frame * 7 + i * 37) * 53) % (w - 32) + 16
+                    py = ((frame * 11 + i * 23) * 41) % (swatch_h - 8) + swatch_y + 4
+                    tft.fill_rect(px, py, 5, 5, theme.WHITE)
+                draw_centered(tft, "MAGIC!", swatch_y + swatch_h + 4, theme.YELLOW, w, scale=2)
+            elif out_type == OUT_MIX:
+                draw_centered(tft, "Mix!", swatch_y + swatch_h + 4, theme.WHITE, w, scale=2)
+        else:
+            draw_centered(tft, "?", swatch_y + swatch_h // 4, theme.MUTED, w, scale=4)
+
+        # Button grid — bottom half, centered
+        btn_y = h // 2 + 20
+        cell_w = w // 4 - 8
+        cell_h = (h - btn_y - 20) // 2
+        btn_x0 = (w - 4 * cell_w) // 2
+        draw_button_grid(
+            tft, theme, theme.BTN_NAMES, held,
+            cols=4, x0=btn_x0, y0=btn_y, cell_w=cell_w, cell_h=cell_h,
+        )
+
+        # Bottom bar: discovery counter + modifier dots
+        found = self._engine.discovery_count
+        total = self._engine.total_discoverable
+        tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)
+        self._draw_mod_dots(tft, theme, w - 60, h - 12)
+
+    def _render_portrait(self, tft, theme, frame):
+        out_type = self._engine.output_type
+        out_color = self._engine.display_color
+        held = self._manager.inp.btn_held if self._manager else [False] * 8
+        w = theme.width
+        h = theme.height
+
+        # Large color swatch — top half of screen
+        swatch_y = 8
+        swatch_h = h * 2 // 5
+        if out_type != OUT_IDLE:
+            r, g, b = out_color
+            c565 = tft.rgb(r, g, b)
+            tft.fill_rect(8, swatch_y, w - 16, swatch_h, c565)
+
+            if out_type == OUT_MAGIC:
+                for i in range(8):
+                    px = ((frame * 7 + i * 37) * 53) % (w - 32) + 16
+                    py = ((frame * 11 + i * 23) * 41) % (swatch_h - 16) + swatch_y + 8
+                    tft.fill_rect(px, py, 5, 5, theme.WHITE)
+                draw_centered(tft, "MAGIC!", swatch_y + swatch_h + 8, theme.YELLOW, w, scale=2)
+            elif out_type == OUT_MIX:
+                draw_centered(tft, "Mix!", swatch_y + swatch_h + 8, theme.WHITE, w, scale=2)
+        else:
+            draw_centered(tft, "?", swatch_y + swatch_h // 3, theme.MUTED, w, scale=4)
+
+        # Button grid — centered, below swatch area
+        btn_y = h * 3 // 5
+        cell_w = w // 4 - 4
+        cell_h = (h - btn_y - 24) // 2
+        btn_x0 = (w - 4 * cell_w) // 2
+        draw_button_grid(
+            tft, theme, theme.BTN_NAMES, held,
+            cols=4, x0=btn_x0, y0=btn_y, cell_w=cell_w, cell_h=cell_h,
+        )
+
+        # Bottom bar: discovery counter + modifier dots
+        found = self._engine.discovery_count
+        total = self._engine.total_discoverable
+        tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)
+        self._draw_mod_dots(tft, theme, w - 50, h - 12)
+
+    def _draw_mod_dots(self, tft, theme, x, y):
+        """Draw small colored dots for active modifiers."""
+        eng = self._engine
+        mods = [
+            (eng.sw_invert, theme.CYAN),
+            (eng.sw_mirror, theme.GREEN),
+            (eng.sw_shimmer, theme.YELLOW),
+            (eng.sw_lighten, theme.WHITE),
+        ]
+        dx = x
+        for active, color in mods:
+            if active:
+                tft.fill_rect(dx, y, 6, 6, color)
+            else:
+                tft.rect(dx, y, 6, 6, theme.MUTED)
+            dx += 10
+        # Hue shift indicator: small bar
+        if eng.hue_shift > 0:
+            bar_w = eng.hue_shift * 20 // 255
+            tft.fill_rect(dx + 4, y, max(2, bar_w), 6, theme.MAGENTA)
