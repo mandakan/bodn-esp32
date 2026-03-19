@@ -30,6 +30,11 @@ FILES = [
     ("bodn/config.py", FIRMWARE_DIR / "bodn" / "config.py"),
     ("bodn/debounce.py", FIRMWARE_DIR / "bodn" / "debounce.py"),
     ("bodn/encoder.py", FIRMWARE_DIR / "bodn" / "encoder.py"),
+    ("bodn/storage.py", FIRMWARE_DIR / "bodn" / "storage.py"),
+    ("bodn/session.py", FIRMWARE_DIR / "bodn" / "session.py"),
+    ("bodn/wifi.py", FIRMWARE_DIR / "bodn" / "wifi.py"),
+    ("bodn/web_ui.py", FIRMWARE_DIR / "bodn" / "web_ui.py"),
+    ("bodn/web.py", FIRMWARE_DIR / "bodn" / "web.py"),
     ("main.py", FIRMWARE_DIR / "main.py"),  # last, so it runs after reset
 ]
 
@@ -63,20 +68,28 @@ def drain(sock: socket.socket, timeout: float = 0.5) -> None:
 
 
 def enter_raw_repl(sock: socket.socket) -> bool:
-    """Interrupt any running program and enter raw REPL mode."""
-    for _ in range(5):
-        for _ in range(5):
-            sock.sendall(b"\x03")
-            time.sleep(0.1)
+    """Interrupt any running program and enter raw REPL mode.
 
+    uasyncio needs multiple Ctrl-C bursts with pauses in between —
+    the first one raises KeyboardInterrupt inside the event loop,
+    the second one actually stops execution.
+    """
+    for attempt in range(8):
+        # Send a burst of Ctrl-C to break out of running code / uasyncio
+        for _ in range(10):
+            sock.sendall(b"\x03")
+            time.sleep(0.05)
+
+        # Give the interpreter time to unwind (uasyncio needs longer)
+        time.sleep(0.5)
         drain(sock)
 
         sock.sendall(b"\x02")  # Ctrl-B = normal REPL
-        time.sleep(0.2)
-        drain(sock, 0.3)
+        time.sleep(0.3)
+        drain(sock, 0.5)
 
         sock.sendall(b"\x01")  # Ctrl-A = raw REPL
-        resp = read_until(sock, b"raw REPL; CTRL-B to exit\r\n>", timeout=2)
+        resp = read_until(sock, b"raw REPL; CTRL-B to exit\r\n>", timeout=3)
         if b"raw REPL" in resp:
             return True
 

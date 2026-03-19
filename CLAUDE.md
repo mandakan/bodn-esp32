@@ -47,14 +47,19 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 ```
 bodn-esp32/
 ├─ firmware/
-│  ├─ boot.py              # wifi / boot mode handling
-│  ├─ main.py              # application entry point
+│  ├─ boot.py              # WiFi setup, NTP sync, load settings
+│  ├─ main.py              # async entry point (uasyncio)
 │  ├─ st7735.py            # framebuf-based ST7735/ILI9341 display driver
 │  └─ bodn/
 │     ├─ __init__.py
 │     ├─ config.py          # pin assignments, constants
 │     ├─ debounce.py        # generic debounce logic
-│     └─ encoder.py         # IRQ-based rotary encoder reader
+│     ├─ encoder.py         # IRQ-based rotary encoder reader
+│     ├─ session.py         # play session state machine (pure logic, tested on host)
+│     ├─ storage.py         # JSON settings & session history on flash
+│     ├─ wifi.py            # WiFi connect (STA / AP mode)
+│     ├─ web.py             # async HTTP server for parental controls
+│     └─ web_ui.py          # HTML/CSS/JS served to the browser
 ├─ docs/
 │  ├─ hardware.md           # BOM, board notes
 │  ├─ wiring.md             # auto-generated pin diagram and tables
@@ -62,7 +67,8 @@ bodn-esp32/
 ├─ tools/
 │  ├─ pinout.py             # generate wiring docs from config.py
 │  ├─ sync.sh               # deploy firmware to device via mpremote
-│  └─ wokwi-sync.py         # deploy firmware to Wokwi simulator (raw TCP)
+│  ├─ wokwi-sync.py         # deploy firmware to Wokwi simulator (raw TCP)
+│  └─ ota-push.py           # push firmware over WiFi (no USB needed)
 ├─ tests/
 │  ├─ conftest.py           # MicroPython hardware stubs
 │  └─ test_*.py             # host-side unit tests
@@ -101,6 +107,16 @@ uv run python tools/pinout.py --md
 
 # Run tests
 uv run pytest
+
+# Parental controls web UI
+# On real hardware: connect to Bodn AP, open http://192.168.4.1
+# In Wokwi: requires Wokwi Private Gateway for inbound port forwarding
+# Without gateway, test via REPL: import boot; boot.settings["lockdown"] = True
+
+# OTA firmware push (no USB needed)
+uv run python tools/ota-push.py               # AP mode (192.168.4.1)
+uv run python tools/ota-push.py 192.168.1.42  # specific IP
+uv run python tools/ota-push.py --wokwi        # Wokwi (localhost:9080)
 ```
 
 ## Git hooks

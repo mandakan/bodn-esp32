@@ -129,6 +129,85 @@ class FakeFrameBuffer:
 framebuf.FrameBuffer = FakeFrameBuffer
 sys.modules["framebuf"] = framebuf
 
+# Stub 'neopixel' module
+neopixel = types.ModuleType("neopixel")
+
+
+class FakeNeoPixel:
+    def __init__(self, pin, n, **kwargs):
+        self._leds = [(0, 0, 0)] * n
+        self.n = n
+
+    def __setitem__(self, idx, val):
+        self._leds[idx] = val
+
+    def __getitem__(self, idx):
+        return self._leds[idx]
+
+    def write(self):
+        pass
+
+    def fill(self, color):
+        self._leds = [color] * self.n
+
+
+neopixel.NeoPixel = FakeNeoPixel
+sys.modules["neopixel"] = neopixel
+
+# Stub 'network' module
+network = types.ModuleType("network")
+network.STA_IF = 0
+network.AP_IF = 1
+
+
+class FakeWLAN:
+    def __init__(self, interface=0):
+        self._active = False
+        self._connected = False
+        self._ip = "192.168.4.1"
+
+    def active(self, val=None):
+        if val is not None:
+            self._active = val
+        return self._active
+
+    def isconnected(self):
+        return self._connected
+
+    def connect(self, ssid, password=""):
+        self._connected = True
+
+    def config(self, **kwargs):
+        pass
+
+    def ifconfig(self):
+        return (self._ip, "255.255.255.0", "192.168.4.1", "0.0.0.0")
+
+
+network.WLAN = FakeWLAN
+sys.modules["network"] = network
+
+# Stub 'ntptime' module
+ntptime = types.ModuleType("ntptime")
+ntptime.settime = lambda: None
+sys.modules["ntptime"] = ntptime
+
+# Stub 'uasyncio' — just alias to asyncio
+try:
+    import asyncio as _asyncio
+
+    sys.modules["uasyncio"] = _asyncio
+except ImportError:
+    pass
+
+# Stub 'ujson' — alias to json
+try:
+    import json as _json
+
+    sys.modules["ujson"] = _json
+except ImportError:
+    pass
+
 # Stub other common MicroPython modules
 for mod_name in ("micropython", "uos", "usys", "utime"):
     if mod_name not in sys.modules:

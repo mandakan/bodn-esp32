@@ -24,11 +24,21 @@
 - [ ] "Sequencer" mode: chain lights + sounds into a sequence
 - [ ] Simple animations on the display
 
-## Milestone 4: Quality-of-life
+## Milestone 4: Parental controls
+
+- [x] WiFi connect (AP mode + STA mode)
+- [x] NTP time sync at boot
+- [x] Session state machine (play limits, break timer, quiet hours, lockdown)
+- [x] Settings and session history persisted to flash (JSON)
+- [x] Async web server on device (uasyncio)
+- [x] Web UI for parents (dashboard, limits, history, WiFi config)
+- [x] Wokwi port forwarding (device:80 → localhost:8080)
+- [x] Convert main loop to uasyncio (web server + UI run concurrently)
+- [x] Session-aware LED animations (amber warnings, fade-off wind-down, dark sleep)
+
+## Milestone 5: Quality-of-life
 
 - [ ] Battery level indicator on display
 - [ ] Low battery warning
 - [ ] Serial console for configuration
-- [ ] WiFi AP mode for configuration
-- [ ] Simple web UI for adults (upload sounds, configure buttons)
 - [ ] OTA firmware updates

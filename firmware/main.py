@@ -1,9 +1,17 @@
-# main.py — Bodn ESP32 entry point (hardware test / playground)
+# main.py — Bodn ESP32 entry point (async, with parental session controls)
+
+try:
+    import uasyncio as asyncio
+except ImportError:
+    import asyncio
+
 import time
 import neopixel
 from machine import Pin, SPI
 from bodn import config
 from bodn.encoder import Encoder
+from bodn.session import SessionManager, PLAYING, WARN_5, WARN_2, WINDDOWN, SLEEPING, COOLDOWN, LOCKDOWN, IDLE
+from bodn.web import start_server
 from st7735 import ST7735
 
 # RGB565 colours (byte-swapped for framebuf)
@@ -17,6 +25,7 @@ CYAN = ST7735.rgb(0, 255, 255)
 MAGENTA = ST7735.rgb(255, 0, 255)
 ORANGE = ST7735.rgb(255, 128, 0)
 PURPLE = ST7735.rgb(128, 0, 255)
+AMBER = ST7735.rgb(255, 191, 0)
 
 # One colour per button
 BTN_COLOURS_565 = [RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA, ORANGE, PURPLE]
@@ -92,7 +101,6 @@ def pattern_rainbow(frame, speed, hue_off, bright):
 
 def pattern_pulse(frame, speed, colour, bright):
     """All LEDs pulse together in one colour."""
-    # Triangle wave: 0→255→0 over ~128 frames
     phase = (frame * speed) & 0xFF
     v = phase if phase < 128 else 255 - phase
     v = (v * bright) >> 7
@@ -120,7 +128,6 @@ def pattern_sparkle(frame, speed, colour, bright):
     """Random-ish sparkle — deterministic from frame number."""
     leds = []
     for i in range(N_LEDS):
-        # Simple pseudo-random based on frame and LED index
         v = ((frame * speed * 7 + i * 53) * 131) & 0xFF
         if v > 200:
             leds.append(scale(colour, bright))
@@ -152,7 +159,6 @@ def pattern_wave(frame, speed, colour, bright):
     leds = []
     for i in range(N_LEDS):
         phase = (i * 255 // N_LEDS + frame * speed) & 0xFF
-        # Approximate sine with triangle
         v = phase if phase < 128 else 255 - phase
         v = (v * bright) >> 7
         leds.append(scale(colour, v))
@@ -208,7 +214,80 @@ PATTERN_NAMES = [
 ]
 
 
-def main():
+# ---------------------------------------------------------------------------
+# Session-aware display overlays
+# ---------------------------------------------------------------------------
+
+def draw_session_overlay(tft, session_mgr, frame):
+    """Draw session state info on the bottom of the TFT."""
+    state = session_mgr.state
+
+    if state == PLAYING:
+        remaining = session_mgr.time_remaining_s
+        mins = remaining // 60
+        secs = remaining % 60
+        tft.text("{:d}:{:02d}".format(mins, secs), 88, 3, GREEN)
+
+    elif state == WARN_5:
+        remaining = session_mgr.time_remaining_s
+        mins = remaining // 60
+        secs = remaining % 60
+        tft.text("{:d}:{:02d}".format(mins, secs), 88, 3, AMBER)
+
+    elif state == WARN_2:
+        remaining = session_mgr.time_remaining_s
+        mins = remaining // 60
+        secs = remaining % 60
+        # Blink the timer
+        if (frame // 15) % 2 == 0:
+            tft.text("{:d}:{:02d}".format(mins, secs), 88, 3, RED)
+
+    elif state == WINDDOWN:
+        if (frame // 20) % 2 == 0:
+            tft.text("Zzz...", 40, 70, AMBER)
+
+    elif state in (SLEEPING, COOLDOWN):
+        tft.fill(BLACK)
+        tft.text("Zzz", 52, 60, BLUE)
+        tft.text("See you", 36, 80, WHITE)
+        tft.text("soon!", 44, 96, WHITE)
+
+    elif state == LOCKDOWN:
+        tft.fill(BLACK)
+        tft.text("Goodnight!", 24, 70, MAGENTA)
+
+
+def leds_for_state(state, frame, leds, brightness):
+    """Modify LED output based on session state."""
+    if state == WARN_5:
+        # Shift toward amber
+        amber = (255, 191, 0)
+        return [scale(amber, brightness)] * N_LEDS if (frame // 30) % 2 == 0 else leds
+
+    elif state == WARN_2:
+        # Dim pulsing
+        phase = (frame * 3) & 0xFF
+        v = phase if phase < 128 else 255 - phase
+        dim = max(10, (v * brightness) >> 8)
+        return [scale((255, 100, 0), dim)] * N_LEDS
+
+    elif state == WINDDOWN:
+        # Fade off over 30 seconds (~1000 frames at 30fps)
+        fade = max(0, 255 - (frame % 1000) * 255 // 1000)
+        return [scale((40, 40, 80), (fade * brightness) >> 8)] * N_LEDS
+
+    elif state in (SLEEPING, COOLDOWN, LOCKDOWN):
+        return [(0, 0, 0)] * N_LEDS
+
+    return leds
+
+
+# ---------------------------------------------------------------------------
+# Main async loop
+# ---------------------------------------------------------------------------
+
+async def ui_loop(session_mgr, settings):
+    """Main UI coroutine — reads inputs, runs animations, manages display."""
     tft = create_display()
     buttons = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.BTN_PINS]
     switches = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.SW_PINS]
@@ -218,7 +297,6 @@ def main():
         Encoder(config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW, min_val=0, max_val=ENC_STEPS),
         Encoder(config.ENC3_CLK, config.ENC3_DT, config.ENC3_SW, min_val=0, max_val=ENC_STEPS),
     ]
-    # Sensible defaults: brightness mid, hue 0, speed mid
     encoders[0].value = ENC_STEPS // 2
     encoders[2].value = ENC_STEPS // 4
 
@@ -227,13 +305,70 @@ def main():
         np[i] = (0, 0, 0)
     np.write()
 
-    active_pattern = 0  # default: rainbow
+    active_pattern = 0
     frame = 0
+    # Auto-start first session
+    session_mgr.try_wake()
 
     while True:
         frame += 1
+        state = session_mgr.tick()
 
-        # --- Read inputs ---
+        # --- Handle sleeping/lockdown states (minimal processing) ---
+        if state in (SLEEPING, COOLDOWN, LOCKDOWN):
+            # Check for wake attempt on any button press
+            any_pressed = False
+            for btn in buttons:
+                if btn.value() == 0:
+                    any_pressed = True
+                    break
+
+            if any_pressed and state == COOLDOWN:
+                # Try to wake — will fail if still in cooldown
+                pass  # tick() handles the transition to IDLE
+            elif any_pressed and state == IDLE:
+                session_mgr.try_wake()
+
+            # Dark display
+            tft.fill(BLACK)
+            draw_session_overlay(tft, session_mgr, frame)
+            tft.show()
+
+            # Dark LEDs
+            for i in range(N_LEDS):
+                np[i] = (0, 0, 0)
+            if frame % 3 == 0:
+                np.write()
+
+            await asyncio.sleep_ms(100)
+            continue
+
+        # If we just became IDLE, try to auto-wake on button press
+        if state == IDLE:
+            any_pressed = False
+            for btn in buttons:
+                if btn.value() == 0:
+                    any_pressed = True
+                    break
+            if any_pressed:
+                session_mgr.try_wake()
+            else:
+                # Show idle screen
+                tft.fill(BLACK)
+                tft.text("~ Bodn ~", 32, 40, WHITE)
+                tft.text("Press a", 36, 70, CYAN)
+                tft.text("button!", 36, 86, CYAN)
+                remaining = session_mgr.sessions_remaining
+                tft.text("{} plays left".format(remaining), 16, 120, GREEN if remaining > 0 else RED)
+                tft.show()
+                for i in range(N_LEDS):
+                    np[i] = (0, 0, 0)
+                if frame % 3 == 0:
+                    np.write()
+                await asyncio.sleep_ms(100)
+                continue
+
+        # --- Active play: read inputs ---
         pressed = []
         for i, btn in enumerate(buttons):
             if btn.value() == 0:
@@ -247,18 +382,13 @@ def main():
         sw_states = [sw.value() == 0 for sw in switches]
         enc_pos = [enc.value for enc in encoders]
 
-        # Encoder 1 = brightness
         brightness = min(255, max(10, enc_pos[0] * 255 // ENC_STEPS))
-        # Encoder 2 = hue offset / colour shift
         hue_offset = enc_pos[1] * 255 // ENC_STEPS
-        # Encoder 3 = animation speed
         speed = max(1, enc_pos[2])
 
-        # Button press selects the LED pattern
         if pressed:
             active_pattern = pressed[0] % len(PATTERNS)
 
-        # Encoder buttons cycle patterns too
         for ep in enc_pressed:
             active_pattern = (active_pattern + 1) % len(PATTERNS)
 
@@ -267,34 +397,32 @@ def main():
         colour = BTN_COLOURS_RGB[active_pattern]
 
         if active_pattern == 0:
-            # Rainbow uses hue_offset instead of fixed colour
             leds = pat_fn(frame, speed, hue_offset, brightness)
         else:
             leds = pat_fn(frame, speed, colour, brightness)
 
-        # Toggle switches modify the output:
-        # SW0: reverse the LED order
+        # Toggle switch modifiers
         if sw_states[0]:
             leds = leds[::-1]
-        # SW1: mirror (first half mirrored to second)
         if sw_states[1]:
             half = N_LEDS // 2
             for i in range(half):
                 leds[N_LEDS - 1 - i] = leds[i]
-        # SW2: strobe — blink every 4th frame
         if sw_states[2]:
             if (frame // 4) % 2 == 0:
                 leds = [(0, 0, 0)] * N_LEDS
-        # SW3: colour invert
         if len(sw_states) > 3 and sw_states[3]:
             leds = [(255 - r, 255 - g, 255 - b) for r, g, b in leds]
 
-        # Write to strip (every 3rd frame to avoid simulator timing glitches)
+        # Apply session state to LEDs
+        leds = leds_for_state(state, frame, leds, brightness)
+
+        # Write to strip
         if frame % 3 == 0:
             for i in range(N_LEDS):
                 np[i] = leds[i]
             np.write()
-            time.sleep_ms(2)
+            await asyncio.sleep_ms(2)
 
         # --- Display ---
         tft.fill(BLACK)
@@ -332,7 +460,7 @@ def main():
                 tft.rect(x, y, 28, 14, WHITE)
                 tft.text(toggle_labels[i], x + 2, y + 3, WHITE)
 
-        # Button grid — show which are pressed
+        # Button grid
         tft.text("Buttons", 0, 114, WHITE)
         for i in range(8):
             x = (i % 4) * 32
@@ -343,8 +471,42 @@ def main():
             else:
                 tft.rect(x, y, 28, 12, BTN_COLOURS_565[i])
 
+        # Session overlay (timer, warnings)
+        draw_session_overlay(tft, session_mgr, frame)
+
         tft.show()
-        time.sleep_ms(30)
+        await asyncio.sleep_ms(30)
 
 
-main()
+async def main():
+    """Entry point: start web server + UI loop concurrently."""
+    # Import settings from boot.py (shared by reference)
+    import boot
+
+    settings = boot.settings
+
+    def get_time():
+        return time.time()
+
+    def get_date():
+        t = time.localtime()
+        return "{:04d}-{:02d}-{:02d}".format(t[0], t[1], t[2])
+
+    session_mgr = SessionManager(settings, get_time, get_date)
+
+    # Start web server (non-fatal — box works without networking)
+    _server = None
+    try:
+        _server = await start_server(session_mgr, settings)
+        print("Web server running on port 80")
+    except Exception as e:
+        print("Web server failed to start:", e)
+
+    # Run UI loop (keep _server alive to prevent GC)
+    await ui_loop(session_mgr, settings)
+
+
+try:
+    asyncio.run(main())
+except KeyboardInterrupt:
+    print("Bodn stopped.")
