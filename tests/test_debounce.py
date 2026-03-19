@@ -72,7 +72,7 @@ class TestConfig:
         from bodn import config
 
         assert isinstance(config.BTN_PINS, list)
-        assert len(config.BTN_PINS) == 6
+        assert len(config.BTN_PINS) == 8
 
     def test_pin_numbers_are_ints(self):
         from bodn import config

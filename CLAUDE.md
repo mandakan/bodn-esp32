@@ -36,9 +36,10 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 | Microphone | INMP441 I2S MEMS | I2S IN |
 | Amplifier | MAX98357A 3W class-D (AZDelivery) | I2S OUT |
 | Speaker | 3W 8Ω mini speaker (Quarkzman) | wired to MAX98357A |
-| Encoders | KY-040 rotary encoder × 2 (with push button) | GPIO + pull-up |
-| Buttons | Mini momentary push buttons × 6 | GPIO + pull-up |
-| Toggle switches | On/off toggle switches × 3 | GPIO + pull-up |
+| Encoders | KY-040 rotary encoder × 3 (with push button) | GPIO + pull-up |
+| Buttons | Mini momentary push buttons × 8 | GPIO + pull-up |
+| Toggle switches | SPST mini toggle switches × 4 | GPIO + pull-up |
+| LEDs | WS2812 8-LED sticks × 2 (16 addressable RGB) | NeoPixel (1 GPIO) |
 | Power switch | Panel-mount toggle switch | — |
 
 ## Repository layout

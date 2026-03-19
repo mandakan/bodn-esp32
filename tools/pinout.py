@@ -94,7 +94,7 @@ def friendly_name(var_name: str) -> str:
     if m:
         prefix = m.group(1).replace("_PINS", "").replace("_", " ")
         return f"{prefix} {m.group(2)}"
-    for prefix in ("TFT_", "I2S_MIC_", "I2S_SPK_", "ENC1_", "ENC2_", "SW_"):
+    for prefix in ("TFT_", "I2S_MIC_", "I2S_SPK_", "ENC1_", "ENC2_", "ENC3_", "SW_", "NEOPIXEL_"):
         if var_name.startswith(prefix):
             return var_name[len(prefix):]
     return var_name
