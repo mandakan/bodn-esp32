@@ -13,27 +13,46 @@ Design priorities:
 - Clarity and **predictability** of what inputs do.
 - Low cognitive load; depth comes from repetition and variation, not complex UI.
 
-## 2. Screen design (1.8" ST7735 TFT)
+## 2. Screen design
 
-The display is tiny and should act as a **stage** for the current game, not as a dense dashboard.
+### Displays
+
+| Display | Size | Resolution | Orientation | Role |
+|---------|------|-----------|-------------|------|
+| Primary | 2.8" ILI9341 | 320×240 | Landscape | Game UI, menus, all child‑facing interaction |
+| Secondary | 1.8" ST7735 | 128×160 | Portrait | Ambient info: clock, session timer, idle animations |
+
+The primary display has generous space in landscape. Use it as a **stage**, not a dashboard — fill with big visuals and leave breathing room.
+
+The secondary display is small and always visible. Keep it simple: one piece of info at a time, large text, no interaction.
 
 ### 2.1 General rules
 
 - One **primary concept per screen** (one game mode, one rule, one big feedback animation).
 - Use **large, high‑contrast graphics**; no thin lines or small fonts.
 - Avoid text for the child; if needed, use **1–2 short words max** with large font (e.g. "GO", "STOP").
+- At `font_scale=3` (24 px) the primary fits ~13 characters per line — enough for short labels.
 - Prefer **pictograms** (e.g. ear = listen, mouth = speak, star = success, X = fail).
 - Never rely on color alone; pair color with shape/icon (e.g. red square, green circle).
 
-### 2.2 Layout patterns
+### 2.2 Layout patterns — primary display (landscape 320×240)
 
 Use a small set of repeatable layouts so the child learns them by feel:
 
-- **Home / mode select**: a single icon in the middle for the current mode, with left/right hints if encoders can switch modes.
-- **Game in progress**: most of the screen is a background color or simple graphic; a clear area at top/bottom for short messages/icons.
+- **Home / mode select**: icon centered with mode name below. Left/right arrow hints when multiple modes available. The wide format gives room for generous padding around the icon.
+- **Game in progress — centered**: a single large graphic fills most of the screen. A narrow status strip at top or bottom for timer/score. Good for focused activities (Rule Follow, success/fail feedback).
+- **Game in progress — split**: left half shows visual feedback (the pattern, the cue), right half shows controls or the child's progress. Separated by a clear vertical divide or color change. Good for multi‑step activities (Pattern Copy, Sound Mixer).
 - **Success / try again**:
-  - Success: big symbol (star, smiley, treasure chest), brief animation, bright colors.
+  - Success: big symbol (star, smiley, treasure chest), brief animation, bright colors. Use the full width for impact.
   - Try again: softer symbol (cloud, question mark), muted colors; avoid anything that looks like failure/shame.
+
+### 2.3 Layout patterns — secondary display (portrait 128×160)
+
+The secondary display is passive — the child doesn't interact with it directly.
+
+- **Clock**: large time (HH:MM) centered, date below. Always readable at a glance.
+- **Session timer**: countdown or progress bar during active play. Big enough to see from across the room.
+- **Idle animation**: gentle breathing colors or slow pattern while waiting. Signals "I'm alive" without demanding attention.
 
 ## 3. Physical input & feedback
 

@@ -6,7 +6,8 @@
 |-----|-----------|----------------|-----------|
 | 1 | MCU board | Olimex ESP32-S3-DevKit-Lipo | ~250 SEK |
 | 1 | Battery | Olimex BATTERY-LIPO6600mAh | ~150 SEK |
-| 1 | Display | 1.8" 128×160 ST7735 TFT (DollaTek) | ~130 SEK |
+| 1 | Primary display | 2.8" 240×320 ILI9341 TFT with touch (AZDelivery) | ~200 SEK |
+| 1 | Secondary display | 1.8" 128×160 ST7735 TFT (DollaTek) | ~130 SEK |
 | 1 | Microphone | INMP441 I2S MEMS breakout (Mixitech) | ~95 SEK |
 | 1 | Amplifier | MAX98357A I2S 3W class-D (AZDelivery) | ~129 SEK |
 | 1 | Speaker | 3W 8Ω mini speaker (Quarkzman) | ~81 SEK |
@@ -17,13 +18,13 @@
 | — | Wiring | Dupont jumper wire kits M-M/F-M/F-F (AZDelivery 3×40) | ~89 SEK |
 | 1 | Breadboard | Olimex MAXI breadboard (prototyping) | ~40 SEK |
 
-**Estimated total: ~1 290 SEK** (within the 1 500 SEK budget)
+**Estimated total: ~1 490 SEK** (within the 1 500 SEK budget)
 
 ## Pin assignments
 
 Pin assignments are defined in `firmware/bodn/config.py`. See `docs/wiring.md` for the full auto-generated reference.
 
-### Display (SPI)
+### Primary display — 2.8" ILI9341 (SPI)
 
 | Signal | GPIO |
 |--------|------|
@@ -33,6 +34,20 @@ Pin assignments are defined in `firmware/bodn/config.py`. See `docs/wiring.md` f
 | DC | 8 |
 | RST | 9 |
 | Backlight | 43 |
+
+Touch controller (XPT2046) pins TBD — shares SPI bus with a separate CS.
+
+### Secondary display — 1.8" ST7735 (SPI, shared bus)
+
+| Signal | GPIO |
+|--------|------|
+| SCK | 12 (shared) |
+| MOSI | 11 (shared) |
+| CS | 37 |
+| DC | 8 (shared) |
+| RST | 9 (shared) |
+
+The secondary display shares SCK, MOSI, DC, and RST with the primary. Only CS is separate — asserting one CS at a time selects which display receives data.
 
 ### INMP441 Microphone (I2S IN)
 
@@ -64,11 +79,11 @@ GPIOs: 39, 40, 41, 46
 
 ### Rotary encoders
 
-| Encoder | CLK | DT | SW (button) |
-|---------|-----|----|-------------|
-| 1 | 19 | 18 | 17 |
-| 2 | 16 | 3 | 48 |
-| 3 | 47 | 42 | 0 |
+| Encoder | Role | CLK | DT | SW (button) |
+|---------|------|-----|----|-------------|
+| 1 (NAV) | Navigation | 19 | 18 | 17 |
+| 2 (ENC_A) | Parameter A | 16 | 3 | 48 |
+| 3 (ENC_B) | Parameter B | 47 | 42 | 0 |
 
 ### NeoPixel LEDs (WS2812B)
 
@@ -80,9 +95,19 @@ GPIOs: 39, 40, 41, 46
 Brightness capped in software for battery life and kid-safe eyes.
 Future option: add a WS2812B 144 LED/m strip for ambient lighting in transparent enclosure.
 
+## Display architecture
+
+The two displays serve different purposes:
+
+- **Primary (ILI9341 2.8" 240×320)**: main game UI, menu navigation, all child-facing interaction. Driven by the ScreenManager framework.
+- **Secondary (ST7735 1.8" 128×160)**: ambient/status display. Ideas: persistent clock, session timer, parent dashboard, idle animations, battery level. Updated independently from the main UI loop.
+
+Both share SPI bus 2. The driver deasserts CS after each `show()`, so they can coexist without conflict. The secondary display uses a separate framebuffer (~40 KB) which fits comfortably in the 8 MB PSRAM.
+
 ## Wiring notes
 
-- ST7735 on SPI bus 2.
+- Both displays on SPI bus 2 with separate CS pins.
+- ILI9341 touch (XPT2046) will need a third CS pin on the same SPI bus (pin TBD).
 - INMP441 and MAX98357A on I2S (separate IN/OUT peripherals on ESP32-S3).
 - All buttons and toggle switches use internal pull-ups with software debouncing.
 - NeoPixel strip on a single GPIO — data line chained through all 16 LEDs.
@@ -95,8 +120,8 @@ Future option: add a WS2812B 144 LED/m strip for ambient lighting in transparent
 - USB-C for power, programming, and serial console.
 - Built-in LiPo charging circuit — just plug in the battery.
 - Battery voltage measurable via ADC (check Olimex docs for the specific ADC pin).
-- 8 MB PSRAM available for audio buffers and larger assets.
+- 8 MB PSRAM available for audio buffers, framebuffers, and larger assets.
 
 ## GPIO budget
 
-34 of ~36 usable GPIOs allocated. 2 free (GPIO 37, 44 — reserved for real hardware only, not available in Wokwi sim).
+35 of ~36 usable GPIOs allocated. 1 free (GPIO 44 — reserved for touch CS or future use).

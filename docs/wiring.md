@@ -9,7 +9,10 @@ Regenerate: `uv run python tools/pinout.py --md`
 graph LR
     ESP["ESP32-S3<br/>DevKit-Lipo"]
 
-    ST7735TFT["ST7735 TFT<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST<br/>GPIO 43 → BL</sub>"]
+    ["<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST<br/>GPIO 43 → BL</sub>"]
+     -.- ESP
+
+    ST7735TFT["ST7735 TFT<br/><sub>GPIO 37 → TFT2_CS</sub>"]
     ESP -- SPI --> ST7735TFT
 
     INMP441I2Smicrophone["INMP441 I2S microphone<br/><sub>GPIO 14 → SCK<br/>GPIO 15 → WS<br/>GPIO 38 → SD</sub>"]
@@ -32,7 +35,7 @@ graph LR
 
 ```
 
-### ST7735 TFT
+### 
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
@@ -42,6 +45,12 @@ graph LR
 | DC | 8 | `TFT_DC` |
 | RST | 9 | `TFT_RST` |
 | BL | 43 | `TFT_BL` |
+
+### ST7735 TFT
+
+| Signal | GPIO | Config variable |
+|--------|------|-----------------|
+| TFT2_CS | 37 | `TFT2_CS` |
 
 ### INMP441 I2S microphone
 
@@ -113,11 +122,11 @@ graph LR
 | 5 | MAX98357A I2S amplifier | DIN |
 | 6 | WS2812B NeoPixel LEDs | PIN |
 | 7 | Buttons | BTN 3 |
-| 8 | ST7735 TFT | DC |
-| 9 | ST7735 TFT | RST |
-| 10 | ST7735 TFT | CS |
-| 11 | ST7735 TFT | MOSI |
-| 12 | ST7735 TFT | SCK |
+| 8 |  | DC |
+| 9 |  | RST |
+| 10 |  | CS |
+| 11 |  | MOSI |
+| 12 |  | SCK |
 | 13 | MAX98357A I2S amplifier | BCK |
 | 14 | INMP441 I2S microphone | SCK |
 | 15 | INMP441 I2S microphone | WS |
@@ -129,23 +138,65 @@ graph LR
 | 21 | Buttons | BTN 5 |
 | 35 | Buttons | BTN 6 |
 | 36 | Buttons | BTN 7 |
+| 37 | ST7735 TFT | TFT2_CS |
 | 38 | INMP441 I2S microphone | SD |
 | 39 | Toggle switches | SW 0 |
 | 40 | Toggle switches | SW 1 |
 | 41 | Toggle switches | SW 2 |
 | 42 | Rotary encoders | DT |
-| 43 | ST7735 TFT | BL |
+| 43 |  | BL |
 | 45 | MAX98357A I2S amplifier | WS |
 | 46 | Toggle switches | SW 3 |
 | 47 | Rotary encoders | CLK |
 | 48 | Rotary encoders | SW |
 <!-- pinout:end -->
 
+## Encoder roles and placement
 
+The three KY-040 rotary encoders have fixed roles in the UI. Mount them in
+a horizontal row directly next to (or below) the TFT display, left to right:
 
+| Position | Encoder | Config index | Role | Rotation | Button press |
+|----------|---------|-------------|------|----------|--------------|
+| Left | ENC1 | `ENC_NAV` (0) | Navigation | Home: scroll modes | Home: enter mode / Modes: back |
+| Middle | ENC2 | `ENC_A` (1) | Parameter A | Mode-specific (e.g. brightness) | Cycle pattern |
+| Right | ENC3 | `ENC_B` (2) | Parameter B | Mode-specific (e.g. speed) | Cycle pattern |
 
+**Key rules:**
 
+- **ENC_NAV is always navigation.** It never controls a mode parameter.
+  Its button is the universal "back" action inside any mode screen, and
+  "enter" on the home screen.
+- **ENC_A and ENC_B are mode-specific.** Each mode decides what they
+  control. In Demo mode: brightness (A) and speed (B). Future modes
+  may repurpose them freely.
+- **Place ENC_NAV closest to the display** so the child's dominant hand
+  naturally reaches both the screen and the nav knob.
 
+### Suggested panel layout
+
+```
+  ┌──────────────────────────────────────────────────────────┐
+  │                                                          │
+  │    ┌────────────┐                                        │
+  │    │            │                                        │
+  │    │   Display  │    [NAV]    [ENC A]    [ENC B]         │
+  │    │   128×160  │     ◎         ◎          ◎             │
+  │    │            │                                        │
+  │    └────────────┘                                        │
+  │                                                          │
+  │    [BTN0] [BTN1] [BTN2] [BTN3]    [SW0] [SW1] [SW2] [SW3] │
+  │    [BTN4] [BTN5] [BTN6] [BTN7]                          │
+  │                                                          │
+  │    ═══════ NeoPixel strip (16 LEDs) ═══════              │
+  │                                                          │
+  └──────────────────────────────────────────────────────────┘
+```
+
+- Display and encoders grouped together at top for menu interaction.
+- Buttons in a 4×2 grid below — each button maps to a pattern/colour.
+- Toggle switches to the right of the buttons.
+- NeoPixel strip at the bottom, visible to the child during play.
 
 
 
