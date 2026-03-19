@@ -49,6 +49,7 @@ FILES = [
     ("bodn/ui/secondary.py", FIRMWARE_DIR / "bodn" / "ui" / "secondary.py"),
     ("bodn/ui/ambient.py", FIRMWARE_DIR / "bodn" / "ui" / "ambient.py"),
     ("bodn/ui/mystery.py", FIRMWARE_DIR / "bodn" / "ui" / "mystery.py"),
+    ("bodn/ui/settings.py", FIRMWARE_DIR / "bodn" / "ui" / "settings.py"),
     ("bodn/mystery_rules.py", FIRMWARE_DIR / "bodn" / "mystery_rules.py"),
     ("main.py", FIRMWARE_DIR / "main.py"),  # last, so it runs after reset
 ]

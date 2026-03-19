@@ -55,7 +55,8 @@ class HomeScreen(Screen):
             factory = self._mode_screens[name]
             try:
                 screen = factory()
-                self._session_mgr.try_wake(name)
+                if name != "settings":
+                    self._session_mgr.try_wake(name)
                 self._manager.push(screen)
             except Exception as e:
                 self._error = str(e)

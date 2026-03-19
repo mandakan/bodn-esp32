@@ -12,6 +12,7 @@ from bodn import config
 from bodn.encoder import Encoder
 from bodn.session import SessionManager
 from bodn.web import start_server
+from bodn.wifi import WiFiController
 from bodn import storage
 from st7735 import ST7735
 
@@ -81,7 +82,7 @@ def create_hardware():
     return tft, tft2, buttons, switches, encoders, np
 
 
-async def ui_loop(session_mgr, settings):
+async def ui_loop(session_mgr, settings, wifi_ctrl):
     """Main UI coroutine — both displays driven from the same loop."""
     tft, tft2, buttons, switches, encoders, np = create_hardware()
 
@@ -98,12 +99,17 @@ async def ui_loop(session_mgr, settings):
         from bodn.ui.mystery import MysteryScreen
         return MysteryScreen(np, overlay)
 
+    def _make_settings():
+        from bodn.ui.settings import SettingsScreen
+        return SettingsScreen(settings, np, wifi_ctrl)
+
     mode_screens = {
         "mystery": _make_mystery,
         "demo": lambda: DemoScreen(np, overlay, enc_steps=ENC_STEPS),
         "clock": lambda: ClockScreen(),
+        "settings": _make_settings,
     }
-    home = HomeScreen(mode_screens, session_mgr, order=["mystery", "demo", "clock"])
+    home = HomeScreen(mode_screens, session_mgr, order=["mystery", "demo", "clock", "settings"])
     manager.push(home)
 
     # Secondary display — ambient clock
@@ -165,6 +171,7 @@ async def main():
             print("Failed to save session:", e)
 
     session_mgr = SessionManager(settings, get_time, get_date, on_session_end=on_session_end)
+    wifi_ctrl = WiFiController(settings)
 
     _server = None
     try:
@@ -173,7 +180,7 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    await ui_loop(session_mgr, settings)
+    await ui_loop(session_mgr, settings, wifi_ctrl)
 
 
 try:

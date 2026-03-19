@@ -43,6 +43,43 @@ def get_ip():
     return "0.0.0.0"
 
 
+class WiFiController:
+    """Runtime WiFi enable/disable control."""
+
+    def __init__(self, settings):
+        self._settings = settings
+        self._active = False
+
+    def is_active(self):
+        """Check if any WiFi interface is currently active."""
+        try:
+            sta = network.WLAN(network.STA_IF)
+            ap = network.WLAN(network.AP_IF)
+            self._active = sta.active() or ap.active()
+        except Exception:
+            self._active = False
+        return self._active
+
+    def disable(self):
+        """Disable all WiFi interfaces."""
+        try:
+            network.WLAN(network.STA_IF).active(False)
+            network.WLAN(network.AP_IF).active(False)
+            self._active = False
+            print("WiFi: disabled")
+        except Exception as e:
+            print("WiFi disable error:", e)
+
+    def enable(self):
+        """Re-enable WiFi using current settings."""
+        try:
+            ip = connect(self._settings)
+            self._active = True
+            print("WiFi: enabled, IP:", ip)
+        except Exception as e:
+            print("WiFi enable error:", e)
+
+
 def connect(settings):
     """Connect WiFi based on settings. Returns IP string.
 
