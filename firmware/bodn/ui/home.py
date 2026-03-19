@@ -13,6 +13,8 @@ class HomeScreen(Screen):
 
     Nav encoder (index 0) rotation cycles through modes.
     Nav encoder button or any play button enters the selected mode.
+
+    Only redraws on input events (encoder rotation, button press).
     """
 
     def __init__(self, mode_screens, session_mgr, order=None):
@@ -23,9 +25,14 @@ class HomeScreen(Screen):
         self._manager = None
         self._error = None
         self._error_mode = None
+        self._dirty = True
 
     def enter(self, manager):
         self._manager = manager
+        self._dirty = True
+
+    def needs_redraw(self):
+        return self._dirty
 
     def update(self, inp, frame):
         if not self._names:
@@ -40,6 +47,7 @@ class HomeScreen(Screen):
             mid = self._manager.inp._encoders[NAV]._max // 2
             self._manager.inp._encoders[NAV].value = mid
             self._manager.inp._prev_enc_pos[NAV] = mid
+            self._dirty = True
 
         # Nav encoder button or any play button → enter mode
         if inp.any_btn_pressed() or inp.enc_btn_pressed[NAV]:
@@ -52,8 +60,10 @@ class HomeScreen(Screen):
             except Exception as e:
                 self._error = str(e)
                 self._error_mode = name
+                self._dirty = True
 
     def render(self, tft, theme, frame):
+        self._dirty = False
         tft.fill(theme.BLACK)
 
         # Show error on screen if a mode failed to load
@@ -69,6 +79,7 @@ class HomeScreen(Screen):
             tft.text("press to clear", 4, theme.height - 12, theme.MUTED)
             if self._manager and self._manager.inp.any_btn_pressed():
                 self._error = None
+                self._dirty = True
             return
 
         if not self._names:

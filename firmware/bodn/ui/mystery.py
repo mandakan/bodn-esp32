@@ -14,6 +14,9 @@ class MysteryScreen(Screen):
 
     No instructions. No tutorial. The box just reacts.
     Every input produces something interesting.
+
+    Only redraws when state changes (button press, output transition).
+    Only computes LEDs on NeoPixel-write frames.
     """
 
     def __init__(self, np, overlay):
@@ -21,9 +24,12 @@ class MysteryScreen(Screen):
         self._overlay = overlay
         self._engine = MysteryEngine()
         self._manager = None
+        self._prev_out_type = OUT_IDLE
+        self._dirty = True
 
     def enter(self, manager):
         self._manager = manager
+        self._dirty = True
 
     def update(self, inp, frame):
         # Nav encoder button → back to home
@@ -35,21 +41,34 @@ class MysteryScreen(Screen):
         btn = inp.first_btn_pressed()
         self._engine.update(btn, frame)
 
-        # Generate LEDs
-        brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
-        leds = self._engine.make_leds(frame, brightness)
+        # Detect state changes that require a redraw
+        out_type = self._engine.output_type
+        if out_type != self._prev_out_type:
+            self._prev_out_type = out_type
+            self._dirty = True
+        if btn >= 0:
+            self._dirty = True
+        # Magic/Mix sparkle animations need continuous redraw
+        if out_type in (OUT_MAGIC, OUT_MIX):
+            self._dirty = True
 
-        # Session overlay can override LEDs
-        state = self._overlay.session_mgr.state
-        leds = self._overlay.led_override(state, frame, leds, brightness)
-
-        # Write to NeoPixel strip every 3rd frame
+        # Only compute and write LEDs on NeoPixel-write frames
         if frame % 3 == 0:
+            brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
+            leds = self._engine.make_leds(frame, brightness)
+
+            state = self._overlay.session_mgr.state
+            leds = self._overlay.led_override(state, frame, leds, brightness)
+
             for i in range(N_LEDS):
                 self._np[i] = leds[i]
             self._np.write()
 
     def render(self, tft, theme, frame):
+        if not self._dirty:
+            return
+        self._dirty = False
+
         tft.fill(theme.BLACK)
         landscape = theme.width > theme.height
         if landscape:

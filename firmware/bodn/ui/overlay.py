@@ -12,16 +12,25 @@ class SessionOverlay(Screen):
 
     When the session is in a blocking state (sleeping, lockdown, etc.),
     takes_over becomes True and the underlying screen is not rendered.
+
+    Tracks its own dirty state — only requests a redraw when the
+    displayed second changes or the session state transitions.
     """
 
     _TAKEOVER_STATES = (SLEEPING, COOLDOWN, LOCKDOWN, WINDDOWN)
 
     def __init__(self, session_mgr):
         self.session_mgr = session_mgr
+        self._prev_state = None
+        self._prev_remaining = -1
+        self._dirty = True
 
     @property
     def takes_over(self):
         return self.session_mgr.state in self._TAKEOVER_STATES
+
+    def needs_redraw(self):
+        return self._dirty
 
     def update(self, inp, frame):
         state = self.session_mgr.state
@@ -29,7 +38,26 @@ class SessionOverlay(Screen):
         if state == IDLE and inp.any_btn_pressed():
             self.session_mgr.try_wake()
 
+        # Track state changes
+        if state != self._prev_state:
+            self._prev_state = state
+            self._dirty = True
+
+        # Track timer changes (once per second)
+        remaining = self.session_mgr.time_remaining_s
+        if remaining != self._prev_remaining:
+            self._prev_remaining = remaining
+            if state in (PLAYING, WARN_5, WARN_2):
+                self._dirty = True
+
+        # Blinking states need periodic redraws
+        if state == WARN_2 and frame % 15 == 0:
+            self._dirty = True
+        elif state == WINDDOWN and frame % 20 == 0:
+            self._dirty = True
+
     def render(self, tft, theme, frame):
+        self._dirty = False
         state = self.session_mgr.state
 
         if state == PLAYING:

@@ -2,7 +2,12 @@
 
 
 class Screen:
-    """Base class for all UI screens."""
+    """Base class for all UI screens.
+
+    Screens can set self._dirty = True to request a redraw.
+    ScreenManager checks needs_redraw() each tick and skips
+    the render + show cycle when nothing changed.
+    """
 
     def enter(self, manager):
         """Called when this screen becomes active."""
@@ -16,17 +21,29 @@ class Screen:
         """Process input and update state. Called every frame."""
         pass
 
-    def render(self, tft, theme, frame):
-        """Draw this screen's contents. Called every frame.
+    def needs_redraw(self):
+        """Return True if render() should be called this frame.
 
-        The screen is responsible for clearing its own regions.
-        A full fill(BLACK) is only done on screen transitions (see ScreenManager).
+        Default returns True (always redraw) for backward compatibility.
+        Override in subclasses that track their own dirty state.
+        """
+        return True
+
+    def render(self, tft, theme, frame):
+        """Draw this screen's contents.
+
+        Only called when needs_redraw() returns True.
+        The screen is responsible for clearing its own background.
         """
         pass
 
 
 class ScreenManager:
-    """Stack-based screen manager with optional overlay."""
+    """Stack-based screen manager with optional overlay.
+
+    Skips the expensive render + SPI show cycle when no screen
+    needs a redraw, keeping the CPU idle between state changes.
+    """
 
     def __init__(self, tft, theme, inp):
         self.tft = tft
@@ -43,7 +60,7 @@ class ScreenManager:
         return self._stack[-1] if self._stack else None
 
     def invalidate(self):
-        """Mark the display as needing a full clear on the next tick."""
+        """Mark the display as needing a full redraw on the next tick."""
         self._dirty = True
 
     def push(self, screen):
@@ -76,7 +93,7 @@ class ScreenManager:
         self._overlay = overlay
 
     def tick(self):
-        """One frame: scan → update → clear-if-dirty → render → show."""
+        """One frame: scan → update → render-if-needed → show-if-needed."""
         self._frame += 1
         self.inp.scan()
 
@@ -87,7 +104,19 @@ class ScreenManager:
         if self._overlay:
             self._overlay.update(self.inp, self._frame)
 
-        # Full clear only on screen transitions; screens handle their own regions
+        # Check if anything needs drawing
+        screen_dirty = self._dirty
+        if not screen_dirty and active:
+            screen_dirty = active.needs_redraw()
+        overlay_dirty = False
+        if self._overlay:
+            nr = getattr(self._overlay, "needs_redraw", None)
+            overlay_dirty = nr() if nr else True
+
+        if not screen_dirty and not overlay_dirty:
+            return  # nothing changed — skip render + SPI push
+
+        # Clear on screen transitions
         if self._dirty:
             self.tft.fill(self.theme.BLACK)
             self._dirty = False

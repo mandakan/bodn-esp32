@@ -9,19 +9,34 @@ NAV = config.ENC_NAV
 
 
 class ClockScreen(Screen):
-    """Shows current time (HH:MM) and ISO date (YYYY-MM-DD)."""
+    """Shows current time (HH:MM:SS) and ISO date.
+
+    Only redraws when the second changes (~1/sec instead of ~33/sec).
+    """
 
     def __init__(self):
         self._manager = None
+        self._last_sec = -1
+        self._dirty = True
 
     def enter(self, manager):
         self._manager = manager
+        self._last_sec = -1
+        self._dirty = True
+
+    def needs_redraw(self):
+        t = time.localtime()
+        if t[5] != self._last_sec:
+            self._last_sec = t[5]
+            self._dirty = True
+        return self._dirty
 
     def update(self, inp, frame):
         if inp.enc_btn_pressed[NAV] and self._manager:
             self._manager.pop()
 
     def render(self, tft, theme, frame):
+        self._dirty = False
         tft.fill(theme.BLACK)
         t = time.localtime()
         clock = "{:02d}:{:02d}".format(t[3], t[4])

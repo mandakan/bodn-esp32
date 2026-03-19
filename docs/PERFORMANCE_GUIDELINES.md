@@ -28,7 +28,13 @@ Short, practical rules for writing efficient code for Bodn on ESP32-S3 (and for 
 ## 3. Display (ST7735/ILI9341)
 
 Drawing is one of the slowest operations, especially in simulation.
+The SPI push (`show()`) for the primary 240x320 display sends ~150 KB — at 26 MHz
+that alone takes ~47 ms, exceeding a 30 ms frame budget.
 
+- **Skip the entire render + show cycle when nothing changed.**
+  - Screens should track a `_dirty` flag. Set it on input events or state transitions.
+  - `ScreenManager` checks `needs_redraw()` and skips `render()` + `show()` when clean.
+  - This is the single most impactful optimization — an idle screen costs near zero.
 - **Do not redraw the whole screen every frame.**
   - Only update regions that actually changed (`fill_rect`, partial redraws).
 - Avoid frequent `fill()` of the entire screen.
@@ -122,7 +128,8 @@ When generating or reviewing code, check:
 1. **Loops**:
    - Does every `while True` or long loop yield (`sleep` / `await`) regularly?
 2. **Display**:
-   - Are drawing calls limited to changes, not every tick?
+   - Does the screen implement `needs_redraw()` and track `_dirty` state?
+   - Is `render()` + `show()` skipped entirely when nothing changed?
    - No full `fill()` calls inside fast loops?
 3. **Input**:
    - Debouncing implemented? No polling at insane rates?
