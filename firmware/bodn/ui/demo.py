@@ -3,11 +3,17 @@
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_progress_bar, draw_button_grid, draw_centered
-from bodn.patterns import PATTERNS, PATTERN_NAMES
+from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS
 
 NAV = config.ENC_NAV
 ENC_A = config.ENC_A
 ENC_B = config.ENC_B
+
+# Colour palette per pattern index — module-level to avoid per-frame allocation
+_COLOUR_RGB = [
+    (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
+    (0, 255, 255), (255, 0, 255), (255, 128, 0), (128, 0, 255),
+]
 
 
 class DemoScreen(Screen):
@@ -50,31 +56,31 @@ class DemoScreen(Screen):
 
         # Compute LED pattern
         _name, pat_fn = PATTERNS[self._active_pattern]
-        from bodn.patterns import N_LEDS
 
         if self._active_pattern == 0:
             leds = pat_fn(frame, speed, 0, brightness)
         else:
-            colour_rgb = [
-                (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
-                (0, 255, 255), (255, 0, 255), (255, 128, 0), (128, 0, 255),
-            ]
-            colour = colour_rgb[self._active_pattern]
+            colour = _COLOUR_RGB[self._active_pattern]
             leds = pat_fn(frame, speed, colour, brightness)
 
-        # Toggle switch modifiers
+        # Toggle switch modifiers (work on a copy since patterns reuse a shared buffer)
         sw = inp.sw
-        if sw[0]:
-            leds = leds[::-1]
-        if sw[1]:
-            half = N_LEDS // 2
-            for i in range(half):
-                leds[N_LEDS - 1 - i] = leds[i]
-        if sw[2]:
-            if (frame // 4) % 2 == 0:
-                leds = [(0, 0, 0)] * N_LEDS
-        if len(sw) > 3 and sw[3]:
-            leds = [(255 - r, 255 - g, 255 - b) for r, g, b in leds]
+        any_toggle = sw[0] or sw[1] or (sw[2] and (frame // 4) % 2 == 0) or (len(sw) > 3 and sw[3])
+        if any_toggle:
+            leds = list(leds)
+            if sw[0]:
+                leds.reverse()
+            if sw[1]:
+                half = N_LEDS // 2
+                for i in range(half):
+                    leds[N_LEDS - 1 - i] = leds[i]
+            if sw[2] and (frame // 4) % 2 == 0:
+                for i in range(N_LEDS):
+                    leds[i] = (0, 0, 0)
+            if len(sw) > 3 and sw[3]:
+                for i in range(N_LEDS):
+                    r, g, b = leds[i]
+                    leds[i] = (255 - r, 255 - g, 255 - b)
 
         # Session state LED override
         state = self._overlay.session_mgr.state
@@ -87,6 +93,7 @@ class DemoScreen(Screen):
             self._np.write()
 
     def render(self, tft, theme, frame):
+        tft.fill(theme.BLACK)
         landscape = theme.width > theme.height
         if landscape:
             self._render_landscape(tft, theme, frame)

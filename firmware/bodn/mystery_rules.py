@@ -4,7 +4,7 @@
 # The engine tracks input history and evaluates rules to produce
 # visual feedback (color, animation type, LED pattern).
 
-from bodn.patterns import N_LEDS, scale, hsv_to_rgb
+from bodn.patterns import N_LEDS, scale, hsv_to_rgb, _led_buf
 
 
 # Output types
@@ -138,39 +138,43 @@ class MysteryEngine:
         return self._output, self._output_color
 
     def make_leds(self, frame, brightness=128):
-        """Generate LED colors for the current output state."""
+        """Generate LED colors for the current output state.
+
+        Writes into the shared _led_buf to avoid per-frame allocations.
+        """
         if self._output == OUT_IDLE:
             # Gentle ambient breathing
             phase = (frame * 2) & 0xFF
             v = phase if phase < 128 else 255 - phase
             v = (v * brightness) >> 8
-            return [scale(hsv_to_rgb((frame + i * 16) & 0xFF, 255, 255), v)
-                    for i in range(N_LEDS)]
+            for i in range(N_LEDS):
+                _led_buf[i] = scale(hsv_to_rgb((frame + i * 16) & 0xFF, 255, 255), v)
+            return _led_buf
 
         if self._output == OUT_MAGIC:
             # Sparkle in the magic color
             from bodn.patterns import pattern_sparkle
-            base = pattern_sparkle(frame, 3, self._output_color, brightness)
-            # Also add a solid underglow
+            pattern_sparkle(frame, 3, self._output_color, brightness)
+            # Add a solid underglow (modify buffer in-place)
             glow = scale(self._output_color, brightness // 4)
-            return [
-                (max(b[0], glow[0]), max(b[1], glow[1]), max(b[2], glow[2]))
-                for b in base
-            ]
+            for i in range(N_LEDS):
+                b = _led_buf[i]
+                _led_buf[i] = (max(b[0], glow[0]), max(b[1], glow[1]), max(b[2], glow[2]))
+            return _led_buf
 
         if self._output == OUT_MIX:
             # Pulse the mixed color across all LEDs with a wave
             age = frame - self._output_frame
             # Expand from center
             mid = N_LEDS // 2
-            leds = []
+            c = scale(self._output_color, brightness)
             for i in range(N_LEDS):
                 dist = abs(i - mid)
-                if dist <= age:
-                    leds.append(scale(self._output_color, brightness))
-                else:
-                    leds.append((0, 0, 0))
-            return leds
+                _led_buf[i] = c if dist <= age else (0, 0, 0)
+            return _led_buf
 
         # OUT_SINGLE: solid flash
-        return [scale(self._output_color, brightness)] * N_LEDS
+        c = scale(self._output_color, brightness)
+        for i in range(N_LEDS):
+            _led_buf[i] = c
+        return _led_buf

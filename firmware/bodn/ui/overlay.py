@@ -64,24 +64,33 @@ class SessionOverlay(Screen):
             tft.text("Goodnight!", 24, 70, theme.MAGENTA)
 
     def led_override(self, state, frame, leds, brightness):
-        """Modify LED output based on session state. Returns new LED list."""
+        """Modify LED output based on session state. Writes into leds in-place."""
         if state == WARN_5:
-            amber = (255, 191, 0)
             if (frame // 30) % 2 == 0:
-                return [scale(amber, brightness)] * N_LEDS
+                c = scale((255, 191, 0), brightness)
+                for i in range(N_LEDS):
+                    leds[i] = c
             return leds
 
         elif state == WARN_2:
             phase = (frame * 3) & 0xFF
             v = phase if phase < 128 else 255 - phase
             dim = max(10, (v * brightness) >> 8)
-            return [scale((255, 100, 0), dim)] * N_LEDS
+            c = scale((255, 100, 0), dim)
+            for i in range(N_LEDS):
+                leds[i] = c
+            return leds
 
         elif state == WINDDOWN:
             fade = max(0, 255 - (frame % 1000) * 255 // 1000)
-            return [scale((40, 40, 80), (fade * brightness) >> 8)] * N_LEDS
+            c = scale((40, 40, 80), (fade * brightness) >> 8)
+            for i in range(N_LEDS):
+                leds[i] = c
+            return leds
 
         elif state in (SLEEPING, COOLDOWN, LOCKDOWN):
-            return [(0, 0, 0)] * N_LEDS
+            for i in range(N_LEDS):
+                leds[i] = (0, 0, 0)
+            return leds
 
         return leds

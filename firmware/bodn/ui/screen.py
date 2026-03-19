@@ -17,7 +17,11 @@ class Screen:
         pass
 
     def render(self, tft, theme, frame):
-        """Draw this screen's contents. Called every frame."""
+        """Draw this screen's contents. Called every frame.
+
+        The screen is responsible for clearing its own regions.
+        A full fill(BLACK) is only done on screen transitions (see ScreenManager).
+        """
         pass
 
 
@@ -31,15 +35,21 @@ class ScreenManager:
         self._stack = []
         self._overlay = None
         self._frame = 0
+        self._dirty = True  # full clear needed on first frame / transitions
 
     @property
     def active(self):
         """Return the topmost screen, or None."""
         return self._stack[-1] if self._stack else None
 
+    def invalidate(self):
+        """Mark the display as needing a full clear on the next tick."""
+        self._dirty = True
+
     def push(self, screen):
         """Push a screen onto the stack."""
         self._stack.append(screen)
+        self._dirty = True
         screen.enter(self)
 
     def pop(self):
@@ -48,6 +58,7 @@ class ScreenManager:
             return None
         screen = self._stack.pop()
         screen.exit()
+        self._dirty = True
         return screen
 
     def replace(self, screen):
@@ -57,6 +68,7 @@ class ScreenManager:
             self._stack[-1] = screen
         else:
             self._stack.append(screen)
+        self._dirty = True
         screen.enter(self)
 
     def set_overlay(self, overlay):
@@ -64,7 +76,7 @@ class ScreenManager:
         self._overlay = overlay
 
     def tick(self):
-        """One frame: scan → update → clear → render → show."""
+        """One frame: scan → update → clear-if-dirty → render → show."""
         self._frame += 1
         self.inp.scan()
 
@@ -75,7 +87,10 @@ class ScreenManager:
         if self._overlay:
             self._overlay.update(self.inp, self._frame)
 
-        self.tft.fill(self.theme.BLACK)
+        # Full clear only on screen transitions; screens handle their own regions
+        if self._dirty:
+            self.tft.fill(self.theme.BLACK)
+            self._dirty = False
 
         takes_over = self._overlay and getattr(self._overlay, "takes_over", False)
         if active and not takes_over:

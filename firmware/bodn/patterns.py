@@ -4,6 +4,12 @@ from bodn import config
 
 N_LEDS = config.NEOPIXEL_COUNT
 
+# Pre-allocated LED buffer — reused by all pattern functions to avoid
+# creating a new list every frame.  Callers must treat the returned list
+# as read-only (or copy it) since the next call will overwrite it.
+_led_buf = [(0, 0, 0)] * N_LEDS
+_BLACK = (0, 0, 0)
+
 
 def hsv_to_rgb(h, s, v):
     """Convert HSV (0-255 each) to RGB tuple."""
@@ -29,16 +35,15 @@ def hsv_to_rgb(h, s, v):
 
 def scale(rgb, bright):
     """Scale an RGB tuple by brightness (0-255)."""
-    return tuple((c * bright) >> 8 for c in rgb)
+    return ((rgb[0] * bright) >> 8, (rgb[1] * bright) >> 8, (rgb[2] * bright) >> 8)
 
 
 def pattern_rainbow(frame, speed, hue_off, bright):
     """Smooth rainbow flowing across the strip."""
-    leds = []
     for i in range(N_LEDS):
         h = (hue_off + i * 255 // N_LEDS + frame * speed) & 0xFF
-        leds.append(scale(hsv_to_rgb(h, 255, 255), bright))
-    return leds
+        _led_buf[i] = scale(hsv_to_rgb(h, 255, 255), bright)
+    return _led_buf
 
 
 def pattern_pulse(frame, speed, colour, bright):
@@ -47,40 +52,38 @@ def pattern_pulse(frame, speed, colour, bright):
     v = phase if phase < 128 else 255 - phase
     v = (v * bright) >> 7
     c = scale(colour, v)
-    return [c] * N_LEDS
+    for i in range(N_LEDS):
+        _led_buf[i] = c
+    return _led_buf
 
 
 def pattern_chase(frame, speed, colour, bright):
     """A bright dot chases around the strip, leaving a fading tail."""
-    leds = []
     pos = (frame * speed // 2) % N_LEDS
     for i in range(N_LEDS):
         dist = (pos - i) % N_LEDS
         if dist == 0:
-            leds.append(scale(colour, bright))
+            _led_buf[i] = scale(colour, bright)
         elif dist < 4:
-            fade = bright >> dist
-            leds.append(scale(colour, fade))
+            _led_buf[i] = scale(colour, bright >> dist)
         else:
-            leds.append((0, 0, 0))
-    return leds
+            _led_buf[i] = _BLACK
+    return _led_buf
 
 
 def pattern_sparkle(frame, speed, colour, bright):
     """Random-ish sparkle — deterministic from frame number."""
-    leds = []
     for i in range(N_LEDS):
         v = ((frame * speed * 7 + i * 53) * 131) & 0xFF
         if v > 200:
-            leds.append(scale(colour, bright))
+            _led_buf[i] = scale(colour, bright)
         else:
-            leds.append((0, 0, 0))
-    return leds
+            _led_buf[i] = _BLACK
+    return _led_buf
 
 
 def pattern_bounce(frame, speed, colour, bright):
     """A dot bounces back and forth."""
-    leds = []
     cycle = (N_LEDS - 1) * 2
     pos = (frame * speed // 2) % cycle
     if pos >= N_LEDS:
@@ -88,28 +91,28 @@ def pattern_bounce(frame, speed, colour, bright):
     for i in range(N_LEDS):
         dist = abs(i - pos)
         if dist == 0:
-            leds.append(scale(colour, bright))
+            _led_buf[i] = scale(colour, bright)
         elif dist == 1:
-            leds.append(scale(colour, bright >> 1))
+            _led_buf[i] = scale(colour, bright >> 1)
         else:
-            leds.append((0, 0, 0))
-    return leds
+            _led_buf[i] = _BLACK
+    return _led_buf
 
 
 def pattern_wave(frame, speed, colour, bright):
     """Sine-like wave of brightness across the strip."""
-    leds = []
     for i in range(N_LEDS):
         phase = (i * 255 // N_LEDS + frame * speed) & 0xFF
         v = phase if phase < 128 else 255 - phase
         v = (v * bright) >> 7
-        leds.append(scale(colour, v))
-    return leds
+        _led_buf[i] = scale(colour, v)
+    return _led_buf
 
 
 def pattern_split(frame, speed, colour, bright):
     """Two dots start from center and expand outward, then collapse."""
-    leds = [(0, 0, 0)] * N_LEDS
+    for i in range(N_LEDS):
+        _led_buf[i] = _BLACK
     mid = N_LEDS // 2
     cycle = mid + 1
     pos = (frame * speed // 2) % (cycle * 2)
@@ -120,24 +123,23 @@ def pattern_split(frame, speed, colour, bright):
         a = mid + offset
         b = mid - offset
         if 0 <= a < N_LEDS:
-            leds[a] = scale(colour, v)
+            _led_buf[a] = scale(colour, v)
         if 0 <= b < N_LEDS:
-            leds[b] = scale(colour, v)
-    return leds
+            _led_buf[b] = scale(colour, v)
+    return _led_buf
 
 
 def pattern_fill(frame, speed, colour, bright):
     """LEDs fill up one by one, then empty."""
-    leds = []
     cycle = N_LEDS * 2
     pos = (frame * speed // 2) % cycle
     fill = pos if pos < N_LEDS else cycle - pos
     for i in range(N_LEDS):
         if i < fill:
-            leds.append(scale(colour, bright))
+            _led_buf[i] = scale(colour, bright)
         else:
-            leds.append((0, 0, 0))
-    return leds
+            _led_buf[i] = _BLACK
+    return _led_buf
 
 
 PATTERNS = [

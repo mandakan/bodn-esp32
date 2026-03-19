@@ -50,6 +50,7 @@ class MysteryScreen(Screen):
             self._np.write()
 
     def render(self, tft, theme, frame):
+        tft.fill(theme.BLACK)
         landscape = theme.width > theme.height
         if landscape:
             self._render_landscape(tft, theme, frame)

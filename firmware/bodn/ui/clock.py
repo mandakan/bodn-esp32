@@ -22,6 +22,7 @@ class ClockScreen(Screen):
             self._manager.pop()
 
     def render(self, tft, theme, frame):
+        tft.fill(theme.BLACK)
         t = time.localtime()
         clock = "{:02d}:{:02d}".format(t[3], t[4])
         date = "{:04d}-{:02d}-{:02d}".format(t[0], t[1], t[2])

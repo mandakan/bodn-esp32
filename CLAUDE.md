@@ -12,6 +12,7 @@
 - **Wiring docs**: `docs/wiring.md` is auto-generated. After changing `config.py`, run `uv run python tools/pinout.py --md` and commit both files. A pre-commit hook enforces this.
 - **Wokwi sync**: `tools/wokwi-sync.py` has a **hardcoded file list**. When adding new firmware files, you **must** add them to the `FILES` list in `wokwi-sync.py` or they won't be deployed to the simulator. (`sync.sh` copies the whole directory and doesn't need updating.)
 - **UX design**: when designing screens, game modes, interactions, or feedback, follow `docs/UX_GUIDELINES.md`. Key rules: one concept per screen, large icons over text, immediate multimodal feedback, max 3–4 active choices, no complex gestures. Games should target executive functions (working memory, inhibition, cognitive flexibility) at a 4-year-old level.
+- **Performance**: follow `docs/PERFORMANCE_GUIDELINES.md`. Key rules: event-driven over polling, no full-screen redraws every frame, cooperative async tasks, minimal per-frame allocations, sparse `print()` usage. The review checklist (section 10) applies to all code changes.
 
 ## Project overview
 

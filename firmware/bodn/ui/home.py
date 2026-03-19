@@ -3,7 +3,7 @@
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.icons import MODE_ICONS
-from bodn.ui.widgets import draw_icon, draw_centered, draw_label
+from bodn.ui.widgets import draw_icon, draw_centered
 
 NAV = config.ENC_NAV
 
@@ -54,6 +54,8 @@ class HomeScreen(Screen):
                 self._error_mode = name
 
     def render(self, tft, theme, frame):
+        tft.fill(theme.BLACK)
+
         # Show error on screen if a mode failed to load
         if self._error:
             tft.text("ERR: " + self._error_mode, 4, 4, theme.RED)

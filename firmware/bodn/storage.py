@@ -23,7 +23,7 @@ DEFAULT_SETTINGS = {
     "ui_pin": "",
     "ota_token": "",
     "mode_limits": {},
-    "debug_input": True,
+    "debug_input": False,
 }
 
 # Keep 7 days of session history
