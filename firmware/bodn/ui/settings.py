@@ -7,19 +7,22 @@ from bodn.ui.widgets import draw_centered
 NAV = config.ENC_NAV
 
 # Setting definitions: (key, label, type)
-# type: "bool" = toggle, "action" = one-shot
+# type: "bool" = toggle, "action" = triggers an action
 _ITEMS = [
     ("sessions_enabled", "Sessions", "bool"),
     ("wifi", "WiFi", "bool"),
     ("leds", "LEDs", "bool"),
     ("debug_input", "Debug log", "bool"),
+    ("back", "< Back", "action"),
 ]
 
 
 class SettingsScreen(Screen):
     """Simple settings menu with toggleable options.
 
-    Nav encoder rotates through items. Any button or encoder button toggles.
+    Nav encoder rotates through items.
+    Nav encoder button = confirm (toggle or activate).
+    Consistent with all other screens: encoder button = "do the thing".
     """
 
     def __init__(self, settings, np, wifi_ctrl):
@@ -47,7 +50,11 @@ class SettingsScreen(Screen):
             return self._settings.get(key, key == "sessions_enabled")
         return False
 
-    def _toggle(self, key):
+    def _activate(self, key):
+        if key == "back":
+            if self._manager:
+                self._manager.pop()
+            return
         if key == "wifi":
             if self._wifi_ctrl.is_active():
                 self._wifi_ctrl.disable()
@@ -76,15 +83,10 @@ class SettingsScreen(Screen):
             self._manager.inp._prev_enc_pos[NAV] = mid
             self._dirty = True
 
-        # Nav encoder button or any play button → toggle selected item
+        # Nav encoder button or any play button → activate selected item
         if inp.enc_btn_pressed[NAV] or inp.any_btn_pressed():
             key = _ITEMS[self._index][0]
-            self._toggle(key)
-
-        # Other encoder buttons → back to home
-        if inp.enc_btn_pressed[config.ENC_A] or inp.enc_btn_pressed[config.ENC_B]:
-            if self._manager:
-                self._manager.pop()
+            self._activate(key)
 
     @property
     def leds_enabled(self):
@@ -105,10 +107,9 @@ class SettingsScreen(Screen):
         y_start = 40 if landscape else 30
         row_h = 24 if landscape else 20
 
-        for i, (key, label, _type) in enumerate(_ITEMS):
+        for i, (key, label, item_type) in enumerate(_ITEMS):
             y = y_start + i * row_h
             selected = i == self._index
-            value = self._get_value(key)
 
             # Highlight bar for selected item
             if selected:
@@ -118,14 +119,12 @@ class SettingsScreen(Screen):
             color = theme.WHITE if selected else theme.MUTED
             tft.text(label, 12, y + 2, color)
 
-            # Value indicator
-            if value:
-                tft.fill_rect(w - 40, y, 28, row_h - 6, theme.GREEN)
-                tft.text("ON", w - 36, y + 2, theme.BLACK)
-            else:
-                tft.fill_rect(w - 40, y, 28, row_h - 6, theme.RED)
-                tft.text("OFF", w - 38, y + 2, theme.BLACK)
-
-        # Hints at bottom
-        tft.text("[knob] toggle", 4, h - 14, theme.MUTED)
-        tft.text("[enc] back", w - 80, h - 14, theme.MUTED)
+            # Value indicator (only for bool items)
+            if item_type == "bool":
+                value = self._get_value(key)
+                if value:
+                    tft.fill_rect(w - 40, y, 28, row_h - 6, theme.GREEN)
+                    tft.text("ON", w - 36, y + 2, theme.BLACK)
+                else:
+                    tft.fill_rect(w - 40, y, 28, row_h - 6, theme.RED)
+                    tft.text("OFF", w - 38, y + 2, theme.BLACK)

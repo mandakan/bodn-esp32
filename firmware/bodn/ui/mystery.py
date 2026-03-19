@@ -3,6 +3,7 @@
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_button_grid
+from bodn.ui.pause import PauseMenu
 from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
 from bodn.patterns import N_LEDS
 
@@ -15,8 +16,7 @@ class MysteryScreen(Screen):
     No instructions. No tutorial. The box just reacts.
     Every input produces something interesting.
 
-    Only redraws when state changes (button press, output transition).
-    Only computes LEDs on NeoPixel-write frames.
+    Nav encoder button opens the pause menu (resume / back to menu).
     """
 
     def __init__(self, np, overlay):
@@ -24,17 +24,32 @@ class MysteryScreen(Screen):
         self._overlay = overlay
         self._engine = MysteryEngine()
         self._manager = None
+        self._pause = PauseMenu()
         self._prev_out_type = OUT_IDLE
         self._dirty = True
 
     def enter(self, manager):
         self._manager = manager
+        self._pause.set_manager(manager)
         self._dirty = True
 
+    def needs_redraw(self):
+        return self._dirty or self._pause.needs_render
+
     def update(self, inp, frame):
-        # Nav encoder button → back to home
-        if inp.enc_btn_pressed[NAV] and self._manager:
-            self._manager.pop()
+        # Pause menu intercepts all input when open
+        if self._pause.is_open:
+            result = self._pause.update(inp, frame)
+            if result == "quit" and self._manager:
+                self._manager.pop()
+            elif result == "resume":
+                self._dirty = True  # redraw game screen
+            return
+
+        # Nav encoder button → open pause menu
+        if inp.enc_btn_pressed[NAV]:
+            self._pause.open()
+            self._dirty = True
             return
 
         # Find first just-pressed button
@@ -52,9 +67,7 @@ class MysteryScreen(Screen):
         if out_type in (OUT_MAGIC, OUT_MIX):
             self._dirty = True
 
-        # Only compute and write LEDs when there's something to show
-        # and only on every 6th frame (~5.5 Hz — enough for visual feedback)
-        out_type = self._engine.output_type
+        # Only compute and write LEDs on every 6th frame (~5.5 Hz)
         if frame % 6 == 0:
             brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
             leds = self._engine.make_leds(frame, brightness)
@@ -67,6 +80,19 @@ class MysteryScreen(Screen):
             self._np.write()
 
     def render(self, tft, theme, frame):
+        if self._pause.is_open:
+            if self._dirty:
+                # Redraw game underneath first time, then overlay pause
+                self._dirty = False
+                tft.fill(theme.BLACK)
+                landscape = theme.width > theme.height
+                if landscape:
+                    self._render_landscape(tft, theme, frame)
+                else:
+                    self._render_portrait(tft, theme, frame)
+            self._pause.render(tft, theme, frame)
+            return
+
         if not self._dirty:
             return
         self._dirty = False
@@ -114,11 +140,10 @@ class MysteryScreen(Screen):
             cols=4, x0=btn_x0, y0=btn_y, cell_w=cell_w, cell_h=cell_h,
         )
 
-        # Discovery counter + back hint — bottom
+        # Discovery counter — bottom
         found = self._engine.discovery_count
         total = self._engine.total_discoverable
         tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)
-        tft.text("< back", w - 56, h - 14, theme.MUTED)
 
     def _render_portrait(self, tft, theme, frame):
         out_type = self._engine.output_type
@@ -136,7 +161,6 @@ class MysteryScreen(Screen):
             tft.fill_rect(8, swatch_y, w - 16, swatch_h, c565)
 
             if out_type == OUT_MAGIC:
-                # Animated sparkle dots over the swatch
                 for i in range(8):
                     px = ((frame * 7 + i * 37) * 53) % (w - 32) + 16
                     py = ((frame * 11 + i * 23) * 41) % (swatch_h - 16) + swatch_y + 8
@@ -145,7 +169,6 @@ class MysteryScreen(Screen):
             elif out_type == OUT_MIX:
                 draw_centered(tft, "Mix!", swatch_y + swatch_h + 8, theme.WHITE, w, scale=2)
         else:
-            # Idle: big question mark
             draw_centered(tft, "?", swatch_y + swatch_h // 3, theme.MUTED, w, scale=4)
 
         # Button grid — centered, below swatch area

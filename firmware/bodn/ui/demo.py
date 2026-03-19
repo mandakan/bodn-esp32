@@ -3,6 +3,7 @@
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_progress_bar, draw_button_grid, draw_centered
+from bodn.ui.pause import PauseMenu
 from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS
 
 NAV = config.ENC_NAV
@@ -33,6 +34,7 @@ class DemoScreen(Screen):
         self._enc_steps = enc_steps
         self._active_pattern = 0
         self._manager = None
+        self._pause = PauseMenu()
         self._dirty = True
         # Snapshot of input state for dirty detection
         self._prev_enc = [0, 0, 0]
@@ -41,15 +43,26 @@ class DemoScreen(Screen):
 
     def enter(self, manager):
         self._manager = manager
+        self._pause.set_manager(manager)
         self._dirty = True
 
     def needs_redraw(self):
-        return self._dirty
+        return self._dirty or self._pause.needs_render
 
     def update(self, inp, frame):
-        # Nav encoder button → back to home
-        if inp.enc_btn_pressed[NAV] and self._manager:
-            self._manager.pop()
+        # Pause menu intercepts all input when open
+        if self._pause.is_open:
+            result = self._pause.update(inp, frame)
+            if result == "quit" and self._manager:
+                self._manager.pop()
+            elif result == "resume":
+                self._dirty = True
+            return
+
+        # Nav encoder button → open pause menu
+        if inp.enc_btn_pressed[NAV]:
+            self._pause.open()
+            self._dirty = True
             return
 
         # Button press → select pattern
@@ -119,6 +132,18 @@ class DemoScreen(Screen):
             self._np.write()
 
     def render(self, tft, theme, frame):
+        if self._pause.is_open:
+            if self._dirty:
+                self._dirty = False
+                tft.fill(theme.BLACK)
+                landscape = theme.width > theme.height
+                if landscape:
+                    self._render_landscape(tft, theme, frame)
+                else:
+                    self._render_portrait(tft, theme, frame)
+            self._pause.render(tft, theme, frame)
+            return
+
         self._dirty = False
         tft.fill(theme.BLACK)
         landscape = theme.width > theme.height
