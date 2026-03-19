@@ -241,8 +241,8 @@ def update_wiring_md(content: str) -> None:
         if MARKER_START in existing and MARKER_END in existing:
             # Replace between markers
             before = existing[: existing.index(MARKER_START)]
-            after = existing[existing.index(MARKER_END) + len(MARKER_END) :]
-            WIRING_MD.write_text(before + wrapped + after)
+            after = existing[existing.index(MARKER_END) + len(MARKER_END) :].lstrip("\n")
+            WIRING_MD.write_text(before + wrapped + "\n" + after)
             return
 
     WIRING_MD.write_text(header + wrapped)

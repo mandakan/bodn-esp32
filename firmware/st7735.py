@@ -79,8 +79,8 @@ class ST7735(framebuf.FrameBuffer):
         x1 = x0 + self.width - 1
         y0 = self._row_offset
         y1 = y0 + self.height - 1
-        self._cmd(_CASET, bytes([x0 >> 8, x0, x1 >> 8, x1]))
-        self._cmd(_RASET, bytes([y0 >> 8, y0, y1 >> 8, y1]))
+        self._cmd(_CASET, bytes([x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF]))
+        self._cmd(_RASET, bytes([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF]))
         self.cs.value(0)
         self.dc.value(0)
         self.spi.write(bytes([_RAMWR]))

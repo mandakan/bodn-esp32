@@ -33,7 +33,8 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 |---|---|---|
 | MCU | Olimex ESP32-S3-DevKit-Lipo (8 MB flash + 8 MB PSRAM) | USB-C, built-in LiPo charger |
 | Battery | Olimex BATTERY-LIPO6600mAh | direct to DevKit-Lipo |
-| Display | 1.8" 128×160 ST7735 TFT (DollaTek) | SPI |
+| Primary display | 2.8" 240×320 ILI9341 TFT with touch (AZDelivery) | SPI + XPT2046 touch |
+| Secondary display | 1.8" 128×160 ST7735 TFT (DollaTek) | SPI (shared bus, separate CS) |
 | Microphone | INMP441 I2S MEMS | I2S IN |
 | Amplifier | MAX98357A 3W class-D (AZDelivery) | I2S OUT |
 | Speaker | 3W 8Ω mini speaker (Quarkzman) | wired to MAX98357A |

@@ -8,13 +8,20 @@
       "id": "esp",
       "top": 0,
       "left": 0,
-      "attrs": {}
+      "attrs": { "psramSize": "8" }
     },
     {
       "type": "wokwi-ili9341",
       "id": "lcd",
       "top": -180,
       "left": 300,
+      "attrs": { "rotate": "90" }
+    },
+    {
+      "type": "wokwi-ili9341",
+      "id": "lcd2",
+      "top": -180,
+      "left": 600,
       "attrs": {}
     },
     {
@@ -139,6 +146,15 @@
     ["lcd:VCC", "esp:3V3", "red", []],
     ["lcd:GND", "esp:GND.1", "black", []],
     ["lcd:LED", "esp:3V3", "red", []],
+
+    ["esp:12", "lcd2:SCK", "green", []],
+    ["esp:11", "lcd2:MOSI", "orange", []],
+    ["esp:37", "lcd2:CS", "yellow", []],
+    ["esp:8", "lcd2:D/C", "purple", []],
+    ["esp:9", "lcd2:RST", "gray", []],
+    ["lcd2:VCC", "esp:3V3", "red", []],
+    ["lcd2:GND", "esp:GND.1", "black", []],
+    ["lcd2:LED", "esp:3V3", "red", []],
 
     ["btn0:1.l", "esp:1", "red", []],
     ["btn0:2.l", "esp:GND.2", "black", []],
