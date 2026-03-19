@@ -10,11 +10,13 @@ from bodn.session import (
     SLEEPING,
     COOLDOWN,
     LOCKDOWN,
+    MODE_FREE_PLAY,
+    MODE_SOUND_MIXER,
 )
 from bodn.storage import DEFAULT_SETTINGS
 
 
-def make_session(settings=None, start_time=0):
+def make_session(settings=None, start_time=0, on_session_end=None):
     """Create a SessionManager with controllable time."""
     _now = [start_time]
     _date = ["2026-03-19"]
@@ -29,7 +31,7 @@ def make_session(settings=None, start_time=0):
     if settings:
         s.update(settings)
 
-    mgr = SessionManager(s, get_time, get_date)
+    mgr = SessionManager(s, get_time, get_date, on_session_end=on_session_end)
     return mgr, _now, _date
 
 
@@ -55,42 +57,36 @@ class TestBasicFlow:
         mgr.try_wake()
         assert mgr.state == PLAYING
 
-        # Advance to 5-min warning (5 min remaining = 300s from end)
-        now[0] = 300  # 5 min in, 5 min left
+        now[0] = 300
         mgr.tick()
         assert mgr.state == WARN_5
 
-        # Advance to 2-min warning
-        now[0] = 480  # 8 min in, 2 min left
+        now[0] = 480
         mgr.tick()
         assert mgr.state == WARN_2
 
-        # Session expires
-        now[0] = 600  # 10 min in
+        now[0] = 600
         mgr.tick()
         assert mgr.state == WINDDOWN
 
-        # Wind-down lasts 30s
         now[0] = 630
         mgr.tick()
         assert mgr.state == SLEEPING
 
-        # Sleeping transitions to cooldown
         mgr.tick()
         assert mgr.state == COOLDOWN
 
-        # Cooldown for break_min (1 min)
-        now[0] = 690  # 60s after sleep start
+        now[0] = 690
         mgr.tick()
         assert mgr.state == IDLE
 
     def test_sessions_today_increments(self):
         mgr, now, _ = make_session({"max_session_min": 1, "break_min": 0})
         mgr.try_wake()
-        now[0] = 60  # session expires
-        mgr.tick()  # → WINDDOWN
+        now[0] = 60
+        mgr.tick()  # WINDDOWN
         now[0] = 90
-        mgr.tick()  # → SLEEPING
+        mgr.tick()  # SLEEPING
         assert mgr.sessions_today == 1
 
 
@@ -105,7 +101,7 @@ class TestLimits:
             mgr.tick()  # SLEEPING
             mgr.tick()  # COOLDOWN
             now[0] += 1
-            mgr.tick()  # IDLE (break_min=0)
+            mgr.tick()  # IDLE
 
         assert mgr.sessions_today == 2
         assert not mgr.try_wake()
@@ -140,21 +136,18 @@ class TestLockdown:
 
 class TestQuietHours:
     def test_quiet_hours_triggers_sleep(self):
-        # quiet_start=21:00, quiet_end=07:00, time = 22:00 (79200s into day)
         mgr, now, _ = make_session({"quiet_start": "21:00", "quiet_end": "07:00"})
-        now[0] = 79200  # 22:00
-        mgr.try_wake()  # should fail — quiet hours
-        # Actually try_wake checks quiet hours
+        now[0] = 79200
         assert not mgr.try_wake()
 
     def test_quiet_hours_same_day(self):
         mgr, now, _ = make_session({"quiet_start": "13:00", "quiet_end": "15:00"})
-        now[0] = 50400  # 14:00
+        now[0] = 50400
         assert not mgr.try_wake()
 
     def test_outside_quiet_hours_ok(self):
         mgr, now, _ = make_session({"quiet_start": "21:00", "quiet_end": "07:00"})
-        now[0] = 36000  # 10:00
+        now[0] = 36000
         assert mgr.try_wake()
 
 
@@ -163,16 +156,15 @@ class TestDayRollover:
         mgr, now, date = make_session({"max_session_min": 1, "max_sessions_day": 1, "break_min": 0})
         mgr.try_wake()
         now[0] = 60
-        mgr.tick()  # WINDDOWN
+        mgr.tick()
         now[0] = 90
-        mgr.tick()  # SLEEPING
-        mgr.tick()  # COOLDOWN
+        mgr.tick()
+        mgr.tick()
         now[0] = 91
-        mgr.tick()  # IDLE
+        mgr.tick()
         assert mgr.sessions_today == 1
         assert not mgr.try_wake()
 
-        # New day
         date[0] = "2026-03-20"
         mgr.tick()
         assert mgr.sessions_today == 0
@@ -183,8 +175,8 @@ class TestSettingsChangeMidSession:
     def test_shorter_limit_ends_session_early(self):
         mgr, now, _ = make_session({"max_session_min": 20})
         mgr.try_wake()
-        now[0] = 300  # 5 min in
-        mgr.settings["max_session_min"] = 5  # now limit is 5 min = 300s
+        now[0] = 300
+        mgr.settings["max_session_min"] = 5
         mgr.tick()
         assert mgr.state == WINDDOWN
 
@@ -204,3 +196,126 @@ class TestForceSleep:
         mgr.force_sleep()
         assert mgr.state == SLEEPING
         assert mgr.sessions_today == 1
+
+
+class TestModeLimits:
+    def test_default_mode_is_free_play(self):
+        mgr, _, _ = make_session()
+        assert mgr.mode == MODE_FREE_PLAY
+
+    def test_wake_with_mode(self):
+        mgr, _, _ = make_session()
+        mgr.try_wake(mode=MODE_SOUND_MIXER)
+        assert mgr.mode == MODE_SOUND_MIXER
+
+    def test_per_mode_limit_shorter(self):
+        mgr, now, _ = make_session({
+            "max_session_min": 20,
+            "mode_limits": {"sound_mixer": 5},
+        })
+        mgr.try_wake(mode=MODE_SOUND_MIXER)
+        assert mgr.time_remaining_s == 300  # 5 min
+
+    def test_per_mode_limit_falls_back_to_global(self):
+        mgr, now, _ = make_session({
+            "max_session_min": 10,
+            "mode_limits": {"sound_mixer": 5},
+        })
+        mgr.try_wake(mode=MODE_FREE_PLAY)
+        assert mgr.time_remaining_s == 600  # 10 min (global)
+
+    def test_per_mode_limit_zero_is_unlimited(self):
+        mgr, now, _ = make_session({
+            "max_session_min": 10,
+            "mode_limits": {"free_play": 0},
+        })
+        mgr.try_wake(mode=MODE_FREE_PLAY)
+        assert mgr.time_remaining_s == 9999  # unlimited
+
+    def test_unlimited_mode_never_warns(self):
+        mgr, now, _ = make_session({
+            "max_session_min": 10,
+            "mode_limits": {"free_play": 0},
+        })
+        mgr.try_wake(mode=MODE_FREE_PLAY)
+        now[0] = 3600  # 1 hour in
+        mgr.tick()
+        assert mgr.state == PLAYING  # still playing, no warning
+
+    def test_set_mode_changes_limit(self):
+        mgr, now, _ = make_session({
+            "max_session_min": 20,
+            "mode_limits": {"sound_mixer": 3},
+        })
+        mgr.try_wake()
+        assert mgr.time_remaining_s == 1200  # 20 min global
+        mgr.set_mode(MODE_SOUND_MIXER)
+        assert mgr.time_remaining_s == 180  # 3 min
+
+
+class TestSessionCallback:
+    def test_callback_fires_on_normal_end(self):
+        records = []
+        mgr, now, _ = make_session(
+            {"max_session_min": 1, "break_min": 0},
+            on_session_end=lambda r: records.append(r),
+        )
+        mgr.try_wake()
+        now[0] = 60
+        mgr.tick()  # WINDDOWN
+        now[0] = 90
+        mgr.tick()  # SLEEPING — callback fires here
+        assert len(records) == 1
+        assert records[0]["end_reason"] == "normal"
+        assert records[0]["mode"] == MODE_FREE_PLAY
+        assert records[0]["date"] == "2026-03-19"
+        assert records[0]["duration_s"] == 90
+
+    def test_callback_fires_on_force_sleep(self):
+        records = []
+        mgr, now, _ = make_session(
+            on_session_end=lambda r: records.append(r),
+        )
+        mgr.try_wake()
+        now[0] = 120
+        mgr.force_sleep()
+        assert len(records) == 1
+        assert records[0]["end_reason"] == "force_sleep"
+        assert records[0]["duration_s"] == 120
+
+    def test_callback_includes_mode(self):
+        records = []
+        mgr, now, _ = make_session(
+            {"max_session_min": 1},
+            on_session_end=lambda r: records.append(r),
+        )
+        mgr.try_wake(mode=MODE_SOUND_MIXER)
+        now[0] = 60
+        mgr.tick()  # WINDDOWN
+        now[0] = 90
+        mgr.tick()  # SLEEPING
+        assert records[0]["mode"] == MODE_SOUND_MIXER
+
+    def test_no_callback_if_none(self):
+        """No crash when on_session_end is not set."""
+        mgr, now, _ = make_session({"max_session_min": 1})
+        mgr.try_wake()
+        now[0] = 60
+        mgr.tick()
+        now[0] = 90
+        mgr.tick()
+        assert mgr.sessions_today == 1
+
+    def test_callback_has_start_time(self):
+        records = []
+        mgr, now, _ = make_session(
+            {"max_session_min": 1},
+            start_time=3600,  # 01:00:00
+            on_session_end=lambda r: records.append(r),
+        )
+        mgr.try_wake()
+        now[0] = 3660
+        mgr.tick()
+        now[0] = 3690
+        mgr.tick()
+        assert records[0]["start_time"] == "01:00"

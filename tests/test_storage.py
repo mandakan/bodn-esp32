@@ -11,6 +11,7 @@ from bodn.storage import (
     load_sessions,
     save_session,
     sessions_today,
+    compute_stats,
     SETTINGS_PATH,
     SESSIONS_PATH,
 )
@@ -91,3 +92,79 @@ class TestAtomicWrite:
         save_settings({"test": True})
         tmp_file = str(tmp_data_dir / "settings.json.tmp")
         assert not os.path.exists(tmp_file)
+
+
+class TestModeLimits:
+    def test_default_has_empty_mode_limits(self):
+        settings = load_settings()
+        assert settings["mode_limits"] == {}
+
+    def test_save_and_load_mode_limits(self):
+        settings = dict(DEFAULT_SETTINGS)
+        settings["mode_limits"] = {"sound_mixer": 5, "recorder": 10}
+        save_settings(settings)
+        loaded = load_settings()
+        assert loaded["mode_limits"]["sound_mixer"] == 5
+        assert loaded["mode_limits"]["recorder"] == 10
+
+
+class TestComputeStats:
+    def test_empty_sessions(self):
+        stats = compute_stats([])
+        assert stats["total_sessions"] == 0
+        assert stats["total_play_min"] == 0
+        assert stats["suggestions"] == {}
+
+    def test_basic_stats(self):
+        sessions = [
+            {"date": "2026-03-19", "duration_s": 600, "mode": "free_play"},
+            {"date": "2026-03-19", "duration_s": 900, "mode": "sound_mixer"},
+            {"date": "2026-03-20", "duration_s": 1200, "mode": "free_play"},
+        ]
+        stats = compute_stats(sessions)
+        assert stats["total_sessions"] == 3
+        assert stats["total_play_min"] == 45.0  # (600+900+1200)/60
+        assert stats["total_days"] == 2
+        assert stats["avg_sessions_per_day"] == 1.5
+        assert stats["mode_breakdown"]["free_play"] == 30.0
+        assert stats["mode_breakdown"]["sound_mixer"] == 15.0
+
+    def test_daily_totals(self):
+        sessions = [
+            {"date": "2026-03-19", "duration_s": 600, "mode": "free_play"},
+            {"date": "2026-03-19", "duration_s": 600, "mode": "free_play"},
+            {"date": "2026-03-20", "duration_s": 300, "mode": "free_play"},
+        ]
+        stats = compute_stats(sessions)
+        daily = stats["daily_totals"]
+        assert len(daily) == 2
+        assert daily[0]["date"] == "2026-03-19"
+        assert daily[0]["play_min"] == 20.0
+        assert daily[0]["sessions"] == 2
+
+    def test_suggestions_round_up(self):
+        sessions = [
+            {"date": "2026-03-19", "duration_s": 720, "mode": "free_play"},  # 12 min
+            {"date": "2026-03-20", "duration_s": 480, "mode": "free_play"},  # 8 min
+        ]
+        stats = compute_stats(sessions)
+        # avg session = 10 min → suggest 10
+        assert stats["suggestions"]["max_session_min"] == 10
+        assert stats["suggestions"]["max_sessions_day"] == 1
+
+    def test_suggestions_high_usage_note(self):
+        sessions = [
+            {"date": "2026-03-19", "duration_s": 3600, "mode": "free_play"},  # 60 min
+            {"date": "2026-03-19", "duration_s": 600, "mode": "free_play"},   # 10 min
+        ]
+        stats = compute_stats(sessions)
+        assert stats["suggestions"]["note"] is not None
+        assert "70 min" in stats["suggestions"]["note"]
+
+    def test_suggestions_minimum_values(self):
+        sessions = [
+            {"date": "2026-03-19", "duration_s": 60, "mode": "free_play"},  # 1 min
+        ]
+        stats = compute_stats(sessions)
+        assert stats["suggestions"]["max_session_min"] >= 5  # minimum 5
+        assert stats["suggestions"]["max_sessions_day"] >= 1

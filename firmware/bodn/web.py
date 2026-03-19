@@ -156,6 +156,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 "sessions_today": session_mgr.sessions_today,
                 "sessions_remaining": session_mgr.sessions_remaining,
                 "max_session_s": settings["max_session_min"] * 60,
+                "mode": session_mgr.mode,
             }
             await _send_json(writer, data)
 
@@ -174,15 +175,21 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _send_json(writer, {"ok": True, "lockdown": settings["lockdown"]})
 
         elif method == "GET" and path == "/api/history":
-            import time as time_mod
-
-            try:
-                t = time_mod.localtime()
-                today = "{:04d}-{:02d}-{:02d}".format(t[0], t[1], t[2])
-            except Exception:
-                today = "2026-01-01"
-            sessions = storage.sessions_today(today)
+            sessions = storage.load_sessions()
             await _send_json(writer, sessions)
+
+        elif method == "GET" and path == "/api/stats":
+            sessions = storage.load_sessions()
+            stats = storage.compute_stats(sessions)
+            await _send_json(writer, stats)
+
+        elif method == "GET" and path == "/api/modes":
+            from bodn.session import ALL_MODES
+            mode_limits = settings.get("mode_limits", {})
+            modes = []
+            for m in ALL_MODES:
+                modes.append({"name": m, "limit_min": mode_limits.get(m)})
+            await _send_json(writer, modes)
 
         elif method == "POST" and path == "/api/wifi":
             if body:

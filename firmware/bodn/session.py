@@ -10,31 +10,62 @@ SLEEPING = "SLEEPING"
 COOLDOWN = "COOLDOWN"
 LOCKDOWN = "LOCKDOWN"
 
+# Known play modes (new modes added here as Milestone 3 progresses)
+MODE_FREE_PLAY = "free_play"
+MODE_SOUND_MIXER = "sound_mixer"
+MODE_RECORDER = "recorder"
+MODE_SEQUENCER = "sequencer"
+ALL_MODES = [MODE_FREE_PLAY, MODE_SOUND_MIXER, MODE_RECORDER, MODE_SEQUENCER]
+
 
 class SessionManager:
     """Manages play session timing and limits.
 
     Pure logic — inject get_time (returns epoch seconds) and
     get_date (returns "YYYY-MM-DD" string) for testability.
+    Optional on_session_end callback receives a session record dict.
     """
 
-    def __init__(self, settings, get_time, get_date):
+    def __init__(self, settings, get_time, get_date, on_session_end=None):
         self.settings = settings
         self._get_time = get_time
         self._get_date = get_date
+        self._on_session_end = on_session_end
         self.state = IDLE
         self._session_start = 0
         self._sleep_start = 0
         self._sessions_today = 0
         self._today = ""
+        self._mode = MODE_FREE_PLAY
+        self._end_reason = ""
+
+    @property
+    def mode(self):
+        return self._mode
+
+    def set_mode(self, mode):
+        """Set the current play mode. Affects per-mode time limits."""
+        self._mode = mode
+
+    def _session_limit_s(self):
+        """Return session limit in seconds for the current mode."""
+        mode_limits = self.settings.get("mode_limits", {})
+        mode_limit = mode_limits.get(self._mode)
+        if mode_limit is not None:
+            if mode_limit == 0:
+                return 0  # unlimited
+            return mode_limit * 60
+        return self.settings["max_session_min"] * 60
 
     @property
     def time_remaining_s(self):
         """Seconds remaining in current session, or 0 if not playing."""
         if self.state not in (PLAYING, WARN_5, WARN_2):
             return 0
+        limit = self._session_limit_s()
+        if limit == 0:
+            return 9999  # unlimited — always plenty of time
         elapsed = self._get_time() - self._session_start
-        limit = self.settings["max_session_min"] * 60
         return max(0, limit - elapsed)
 
     @property
@@ -56,17 +87,33 @@ class SessionManager:
         qe = self.settings.get("quiet_end")
         if qs is None or qe is None:
             return False
-        # quiet_start/end are "HH:MM" strings
         now_s = self._get_time()
-        # Extract hour:minute from epoch — caller provides localtime-aware get_time
         h = (now_s % 86400) // 3600
         m = (now_s % 3600) // 60
         now_hm = "{:02d}:{:02d}".format(h, m)
         if qs <= qe:
             return qs <= now_hm < qe
         else:
-            # Wraps midnight: e.g. 21:00 → 07:00
             return now_hm >= qs or now_hm < qe
+
+    def _record_session(self, reason):
+        """Record a completed session via the callback."""
+        self._sessions_today += 1
+        if self._on_session_end:
+            now = self._get_time()
+            duration_s = now - self._session_start
+            # Format start time as HH:MM
+            start_h = (self._session_start % 86400) // 3600
+            start_m = (self._session_start % 3600) // 60
+            record = {
+                "date": self._get_date(),
+                "start_time": "{:02d}:{:02d}".format(start_h, start_m),
+                "duration_s": duration_s,
+                "duration_min": round(duration_s / 60, 1),
+                "mode": self._mode,
+                "end_reason": reason,
+            }
+            self._on_session_end(record)
 
     def tick(self):
         """Call every frame. Returns current state string."""
@@ -118,14 +165,12 @@ class SessionManager:
                 self._sleep_start = now
 
         elif self.state == WINDDOWN:
-            # 30-second wind-down animation, then sleep
             if now - self._sleep_start >= 30:
                 self.state = SLEEPING
                 self._sleep_start = now
-                self._sessions_today += 1
+                self._record_session("normal")
 
         elif self.state == SLEEPING:
-            # Transition to cooldown immediately — sleeping is a brief visual state
             self.state = COOLDOWN
             self._sleep_start = now
 
@@ -136,7 +181,7 @@ class SessionManager:
 
         return self.state
 
-    def try_wake(self):
+    def try_wake(self, mode=None):
         """Attempt to start a new session. Returns True if allowed."""
         self._reset_day_if_needed()
 
@@ -154,11 +199,12 @@ class SessionManager:
 
         self.state = PLAYING
         self._session_start = self._get_time()
+        self._mode = mode or MODE_FREE_PLAY
         return True
 
     def force_sleep(self):
         """Immediately end current session (for lockdown toggle)."""
         if self.state in (PLAYING, WARN_5, WARN_2):
-            self._sessions_today += 1
+            self._record_session("force_sleep")
         self.state = SLEEPING
         self._sleep_start = self._get_time()

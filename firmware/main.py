@@ -12,6 +12,7 @@ from bodn import config
 from bodn.encoder import Encoder
 from bodn.session import SessionManager, PLAYING, WARN_5, WARN_2, WINDDOWN, SLEEPING, COOLDOWN, LOCKDOWN, IDLE
 from bodn.web import start_server
+from bodn import storage
 from st7735 import ST7735
 
 # RGB565 colours (byte-swapped for framebuf)
@@ -492,7 +493,13 @@ async def main():
         t = time.localtime()
         return "{:04d}-{:02d}-{:02d}".format(t[0], t[1], t[2])
 
-    session_mgr = SessionManager(settings, get_time, get_date)
+    def on_session_end(record):
+        try:
+            storage.save_session(record)
+        except Exception as e:
+            print("Failed to save session:", e)
+
+    session_mgr = SessionManager(settings, get_time, get_date, on_session_end=on_session_end)
 
     # Start web server (non-fatal — box works without networking)
     _server = None
