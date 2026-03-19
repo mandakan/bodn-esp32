@@ -52,8 +52,10 @@ class MysteryScreen(Screen):
         if out_type in (OUT_MAGIC, OUT_MIX):
             self._dirty = True
 
-        # Only compute and write LEDs on NeoPixel-write frames
-        if frame % 3 == 0:
+        # Only compute and write LEDs when there's something to show
+        # and only on every 6th frame (~5.5 Hz — enough for visual feedback)
+        out_type = self._engine.output_type
+        if frame % 6 == 0:
             brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
             leds = self._engine.make_leds(frame, brightness)
 

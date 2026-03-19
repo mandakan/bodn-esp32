@@ -4,7 +4,7 @@
 # The engine tracks input history and evaluates rules to produce
 # visual feedback (color, animation type, LED pattern).
 
-from bodn.patterns import N_LEDS, scale, hsv_to_rgb, _led_buf
+from bodn.patterns import N_LEDS, scale, _led_buf
 
 
 # Output types
@@ -143,23 +143,22 @@ class MysteryEngine:
         Writes into the shared _led_buf to avoid per-frame allocations.
         """
         if self._output == OUT_IDLE:
-            # Gentle ambient breathing
+            # Gentle single-color breathing (no per-LED HSV math)
             phase = (frame * 2) & 0xFF
             v = phase if phase < 128 else 255 - phase
             v = (v * brightness) >> 8
+            c = scale((60, 20, 80), v)  # soft purple
             for i in range(N_LEDS):
-                _led_buf[i] = scale(hsv_to_rgb((frame + i * 16) & 0xFF, 255, 255), v)
+                _led_buf[i] = c
             return _led_buf
 
         if self._output == OUT_MAGIC:
-            # Sparkle in the magic color
-            from bodn.patterns import pattern_sparkle
-            pattern_sparkle(frame, 3, self._output_color, brightness)
-            # Add a solid underglow (modify buffer in-place)
+            # Sparkle: some LEDs bright, rest dim underglow (no pattern_sparkle call)
             glow = scale(self._output_color, brightness // 4)
+            bright = scale(self._output_color, brightness)
             for i in range(N_LEDS):
-                b = _led_buf[i]
-                _led_buf[i] = (max(b[0], glow[0]), max(b[1], glow[1]), max(b[2], glow[2]))
+                v = ((frame * 21 + i * 53) * 131) & 0xFF
+                _led_buf[i] = bright if v > 200 else glow
             return _led_buf
 
         if self._output == OUT_MIX:
