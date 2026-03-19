@@ -35,6 +35,12 @@
 - [x] Wokwi port forwarding (device:80 → localhost:8080)
 - [x] Convert main loop to uasyncio (web server + UI run concurrently)
 - [x] Session-aware LED animations (amber warnings, fade-off wind-down, dark sleep)
+- [x] PIN protection for web UI
+- [x] OTA firmware updates with bearer token auth
+- [x] Per-mode time limits (v2 — infrastructure ready, modes use when Milestone 3 arrives)
+- [x] Session recording to flash (date, start time, duration, mode, end reason)
+- [x] Usage statistics over time (v3 — daily totals, mode breakdown, 7-day history)
+- [x] Suggested limits based on actual usage patterns (v3)
 
 ## Milestone 5: Quality-of-life
 
