@@ -99,6 +99,31 @@ uv run python tools/ota-push.py --wokwi                   # Wokwi (localhost:908
 **Note:** OTA reboot does not work in Wokwi — the simulator's filesystem is in RAM
 and is lost on reset. Use `wokwi-sync.py` for Wokwi development instead.
 
+### Wokwi simulation
+
+The firmware runs in [Wokwi](https://wokwi.com/) via the VS Code extension. The simulator includes a custom chip that faithfully emulates the MCP23017 GPIO expander over I2C, so the same driver code runs in simulation and on hardware.
+
+```bash
+# Push firmware to the running Wokwi simulator (start it first in VS Code)
+uv run python tools/wokwi-sync.py
+
+# Re-sync once and exit
+uv run python tools/wokwi-sync.py --once
+```
+
+**Custom MCP23017 chip** — the chip is implemented in `mcp23017.chip.c` and compiled to `mcp23017.chip.wasm` (committed). If you change the C source, recompile before committing:
+
+```bash
+# First-time: download wokwi-cli (macOS arm64 shown; see wokwi-cli releases for other platforms)
+curl -L https://github.com/wokwi/wokwi-cli/releases/latest/download/wokwi-cli-macos-arm64 \
+  -o ~/bin/wokwi-cli && chmod +x ~/bin/wokwi-cli
+
+# Recompile after editing mcp23017.chip.c
+~/bin/wokwi-cli chip compile mcp23017.chip.c -o mcp23017.chip.wasm
+```
+
+The `wokwi-api.h` header downloaded by the CLI on first run is gitignored — don't commit it.
+
 ### Lint & format
 
 ```bash
