@@ -13,5 +13,8 @@ __pycache__/
 # Wokwi / MicroPython firmware binaries
 *.bin
 
+# OTA change tracking
+.ota-hashes.json
+
 # OS
 .DS_Store
