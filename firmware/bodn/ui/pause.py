@@ -1,8 +1,9 @@
-# bodn/ui/pause.py — in-game pause menu overlay
+# bodn/ui/pause.py — in-game pause menu with hold-to-open
 
 from bodn import config
 from bodn.ui.screen import Screen
-from bodn.ui.widgets import draw_centered
+from bodn.ui.widgets import draw_centered, draw_hold_bar
+from bodn.hold_detector import HoldDetector
 
 NAV = config.ENC_NAV
 
@@ -11,36 +12,63 @@ _RESUME = 0
 _QUIT = 1
 _ITEMS = ["Resume", "Back to menu"]
 
+# Hold bar: redraw every N% to avoid full-screen redraws.
+# The bar draws directly over the existing framebuffer (4px at y=0)
+# and pushes show() itself — no game re-render needed.
+_HOLD_BAR_STEPS = 4  # ~4 visual updates over the hold duration
+_HOLD_BAR_H = 4
+
 
 class PauseMenu(Screen):
-    """In-game pause menu triggered by nav encoder button.
+    """In-game pause menu with hold-to-open protection.
 
-    Shows two options: Resume (continue playing) or Back to menu.
-    Nav encoder rotates selection, nav encoder button confirms.
-    Any play button also confirms.
+    The nav encoder button must be held for ~1.5 seconds to open the
+    pause menu, preventing accidental exits during play.  A thin
+    progress bar at the top of the screen shows hold progress.
+
+    The hold bar is drawn as a direct partial update — it overwrites
+    only the top 4 pixels and calls tft.show() itself, avoiding a
+    full-screen redraw of the game content underneath.
+
+    Once open, quick clicks navigate and confirm.
 
     Usage in a game screen's update():
-        if self._pause.is_open:
-            result = self._pause.update(inp, frame)
-            if result == "resume":
-                pass  # continue
-            elif result == "quit":
-                self._manager.pop()
-            return  # skip game logic while paused
-        if inp.enc_btn_pressed[NAV]:
-            self._pause.open()
-            return
+
+        result = self._pause.update(inp)
+        if result == "resume":
+            pass  # continue game
+        elif result == "quit":
+            self._manager.pop()
+        if self._pause.is_open or self._pause.is_holding:
+            return  # skip game logic
+
+    And in render(), after game content:
+
+        self._pause.render(tft, theme, frame)
     """
 
-    def __init__(self):
+    def __init__(self, hold_ms=1500):
         self._open = False
         self._index = _RESUME
         self._dirty = False
         self._manager = None
+        self._hold = HoldDetector(threshold_ms=hold_ms)
+        self._last_hold_step = -1
+        self._bar_visible = False  # True when bar pixels are on screen
 
     @property
     def is_open(self):
         return self._open
+
+    @property
+    def is_holding(self):
+        """True while the user is holding the nav button (before menu opens)."""
+        return self._hold.holding and not self._open
+
+    @property
+    def hold_progress(self):
+        """0.0 to 1.0 — how far through the hold-to-open threshold."""
+        return self._hold.progress
 
     def open(self):
         self._open = True
@@ -49,16 +77,63 @@ class PauseMenu(Screen):
 
     def close(self):
         self._open = False
+        self._hold.reset()
         self._dirty = True
 
     def set_manager(self, manager):
         self._manager = manager
 
-    def update(self, inp, frame):
-        """Process input while paused. Returns 'resume', 'quit', or None."""
-        if not self._open:
+    def update(self, inp, frame=None):
+        """Process input every frame. Returns 'resume', 'quit', or None.
+
+        Handles both the hold-to-open detection AND menu navigation.
+        Game screens should call this unconditionally every frame.
+        """
+        if self._open:
+            return self._update_menu(inp)
+        return self._update_hold(inp)
+
+    def _update_hold(self, inp):
+        """Track nav encoder hold for opening the menu.
+
+        Draws the hold bar as a direct partial update — no _dirty flag,
+        no full-screen redraw. Only the top 4px strip is touched.
+        """
+        was_holding = self._hold.holding
+        self._hold.update(inp.enc_btn_held[NAV], inp._time_ms())
+
+        if self._hold.triggered:
+            # Clear bar before opening menu (menu will redraw everything)
+            self._last_hold_step = -1
+            self._bar_visible = False
+            self.open()
+            self._hold.reset()
             return None
 
+        if self._hold.holding and self._manager:
+            step = int(self._hold.progress * _HOLD_BAR_STEPS)
+            if step != self._last_hold_step:
+                self._last_hold_step = step
+                # Draw bar directly into framebuffer — no game re-render
+                tft = self._manager.tft
+                theme = self._manager.theme
+                draw_hold_bar(tft, theme, self._hold.progress, theme.width)
+                self._manager.request_show()
+                self._bar_visible = True
+        elif was_holding and self._manager:
+            # Just released — clear the bar strip
+            self._last_hold_step = -1
+            if self._bar_visible:
+                tft = self._manager.tft
+                theme = self._manager.theme
+                tft.fill_rect(0, 0, theme.width, _HOLD_BAR_H, theme.BLACK)
+                self._manager.request_show()
+                self._bar_visible = False
+
+        return None
+
+    def _update_menu(self, inp):
+        """Navigate the open pause menu."""
         # Nav encoder rotation scrolls
         delta = inp.enc_delta[NAV]
         if delta != 0:
@@ -72,6 +147,7 @@ class PauseMenu(Screen):
         # Nav encoder button or any play button = confirm
         if inp.enc_btn_pressed[NAV] or inp.any_btn_pressed():
             self._open = False
+            self._hold.reset()
             self._dirty = True
             if self._index == _RESUME:
                 return "resume"
@@ -85,10 +161,15 @@ class PauseMenu(Screen):
         return self._dirty
 
     def render(self, tft, theme, frame):
-        """Draw the pause menu. Call from the game screen's render()."""
+        """Draw pause menu overlay. Called from game screen's render().
+
+        The hold bar is NOT drawn here — it's handled as a direct
+        partial update in _update_hold() to avoid full-screen redraws.
+        """
+        self._dirty = False
+
         if not self._open:
             return
-        self._dirty = False
 
         w = theme.width
         h = theme.height

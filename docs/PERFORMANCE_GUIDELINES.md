@@ -39,6 +39,7 @@ that alone takes ~47 ms, exceeding a 30 ms frame budget.
   - Only update regions that actually changed (`fill_rect`, partial redraws).
 - Avoid frequent `fill()` of the entire screen.
   - Use it mainly when entering a new screen / mode.
+- **Never call `tft.show()` directly** from screens or UI components. Only `ScreenManager.tick()` calls `show()`. If you need to push a small framebuffer change without a full re-render (e.g. a progress bar), write the pixels to the framebuffer and call `manager.request_show()`. This queues a show-only push on the next tick without triggering a full render cycle.
 - Pre-compute and cache:
   - Fonts, color constants, simple icon bitmaps.
   - Layout positions (e.g. button hint coordinates) as constants, not recomputed every loop.
@@ -146,6 +147,7 @@ When generating or reviewing code, check:
    - Secondary display: does the screen clear its own zone in `render()`? Does it stay within zone bounds (content: y<128, status: y≥128)?
 3. **Input**:
    - Debouncing implemented? No polling at insane rates?
+   - Hold-to-pause: does the game screen use `PauseMenu.update()` (which owns `HoldDetector`) instead of rolling its own hold logic? No per-frame allocations in the hold path?
 4. **Audio**:
    - Reasonable sample rate & buffer size? No per-sample Python loops?
 5. **WiFi**:

@@ -66,6 +66,37 @@ class SessionOverlay(Screen):
         elif state == LOCKDOWN:
             tft.text("Goodnight!", 24, 70, theme.MAGENTA)
 
+    def static_led_override(self, state, leds, brightness):
+        """Override LEDs with static colors based on session state.
+
+        No animation — solid colors only. For game screens that update
+        LEDs only on state changes.
+        """
+        if state == WARN_5:
+            c = scale((255, 191, 0), brightness)
+            for i in range(N_LEDS):
+                leds[i] = c
+            return leds
+
+        elif state == WARN_2:
+            c = scale((255, 100, 0), brightness // 2)
+            for i in range(N_LEDS):
+                leds[i] = c
+            return leds
+
+        elif state == WINDDOWN:
+            c = scale((40, 40, 80), brightness // 4)
+            for i in range(N_LEDS):
+                leds[i] = c
+            return leds
+
+        elif state in (SLEEPING, COOLDOWN, LOCKDOWN):
+            for i in range(N_LEDS):
+                leds[i] = (0, 0, 0)
+            return leds
+
+        return leds
+
     def led_override(self, state, frame, leds, brightness):
         """Modify LED output based on session state. Writes into leds in-place."""
         if state == WARN_5:

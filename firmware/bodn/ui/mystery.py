@@ -17,7 +17,7 @@ class MysteryScreen(Screen):
     No instructions. No tutorial. The box just reacts.
     Every input produces something interesting.
 
-    Nav encoder button opens the pause menu (resume / back to menu).
+    Hold nav encoder button to open the pause menu (resume / back to menu).
     """
 
     def __init__(self, np, overlay, secondary_screen=None, on_exit=None):
@@ -30,6 +30,7 @@ class MysteryScreen(Screen):
         self._pause = PauseMenu()
         self._prev_out_type = OUT_IDLE
         self._dirty = True
+        self._leds_dirty = True
 
     def enter(self, manager):
         self._manager = manager
@@ -44,19 +45,14 @@ class MysteryScreen(Screen):
         return self._dirty or self._pause.needs_render
 
     def update(self, inp, frame):
-        # Pause menu intercepts all input when open
-        if self._pause.is_open:
-            result = self._pause.update(inp, frame)
-            if result == "quit" and self._manager:
-                self._manager.pop()
-            elif result == "resume":
-                self._dirty = True  # redraw game screen
+        # Pause menu handles hold-to-open and menu navigation
+        result = self._pause.update(inp, frame)
+        if result == "quit" and self._manager:
+            self._manager.pop()
             return
-
-        # Nav encoder button → open pause menu
-        if inp.enc_btn_pressed[NAV]:
-            self._pause.open()
+        elif result == "resume":
             self._dirty = True
+        if self._pause.is_open or self._pause.is_holding:
             return
 
         # Update modifier state from switches and encoder B
@@ -82,6 +78,7 @@ class MysteryScreen(Screen):
         )
         if new_mods != prev_mods:
             self._dirty = True
+            self._leds_dirty = True
 
         # Find first just-pressed button
         btn = inp.first_btn_pressed()
@@ -92,6 +89,7 @@ class MysteryScreen(Screen):
         if out_type != self._prev_out_type:
             self._prev_out_type = out_type
             self._dirty = True
+            self._leds_dirty = True
             # Update secondary display cat face
             if self._secondary:
                 emotion = {OUT_IDLE: NEUTRAL, OUT_MIX: CURIOUS, OUT_MAGIC: HAPPY}.get(
@@ -100,19 +98,16 @@ class MysteryScreen(Screen):
                 self._secondary.set_emotion(emotion)
         if btn >= 0:
             self._dirty = True
-        # Animated states need continuous redraw
-        if out_type in (OUT_MAGIC, OUT_MIX):
-            self._dirty = True
-        if eng.sw_shimmer and out_type != OUT_IDLE:
-            self._dirty = True
+            self._leds_dirty = True
 
-        # Only compute and write LEDs on every 6th frame (~5.5 Hz)
-        if frame % 6 == 0:
+        # Write LEDs only when state changes (static patterns, no animation)
+        if self._leds_dirty:
+            self._leds_dirty = False
             brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
-            leds = self._engine.make_leds(frame, brightness)
+            leds = self._engine.make_static_leds(brightness)
 
-            state = self._overlay.session_mgr.state
-            leds = self._overlay.led_override(state, frame, leds, brightness)
+            ses_state = self._overlay.session_mgr.state
+            leds = self._overlay.static_led_override(ses_state, leds, brightness)
 
             for i in range(N_LEDS):
                 self._np[i] = leds[i]
@@ -132,16 +127,17 @@ class MysteryScreen(Screen):
             self._pause.render(tft, theme, frame)
             return
 
-        if not self._dirty:
-            return
-        self._dirty = False
+        if self._dirty:
+            self._dirty = False
+            tft.fill(theme.BLACK)
+            landscape = theme.width > theme.height
+            if landscape:
+                self._render_landscape(tft, theme, frame)
+            else:
+                self._render_portrait(tft, theme, frame)
 
-        tft.fill(theme.BLACK)
-        landscape = theme.width > theme.height
-        if landscape:
-            self._render_landscape(tft, theme, frame)
-        else:
-            self._render_portrait(tft, theme, frame)
+        # Hold-to-pause progress bar (always called so PauseMenu can clear its dirty flag)
+        self._pause.render(tft, theme, frame)
 
     def _render_landscape(self, tft, theme, frame):
         out_type = self._engine.output_type

@@ -160,6 +160,35 @@ def test_any_btn_pressed():
     assert inp.first_btn_pressed() == 3
 
 
+def test_enc_btn_held():
+    inp, _, _, encs, t = make_input()
+    t[0] = 0
+    inp.scan()
+    assert not inp.enc_btn_held[0]
+
+    # Press encoder 0 button (register + settle)
+    encs[0].sw._val = 0
+    t[0] = 10
+    inp.scan()
+    t[0] = 70
+    inp.scan()
+    assert inp.enc_btn_held[0]
+
+    # Still held
+    t[0] = 200
+    inp.scan()
+    assert inp.enc_btn_held[0]
+    assert not inp.enc_btn_pressed[0]  # no edge
+
+    # Release
+    encs[0].sw._val = 1
+    t[0] = 250
+    inp.scan()
+    t[0] = 300
+    inp.scan()
+    assert not inp.enc_btn_held[0]
+
+
 def test_switch_states():
     inp, _, sws, _, t = make_input()
     t[0] = 0

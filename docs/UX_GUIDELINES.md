@@ -66,6 +66,17 @@ The **buttons, encoders, and switches are the primary interface**. Design assume
   - Example: top row buttons = game actions, bottom row = back / confirm.
 - For a 4‑year‑old, prefer **single‑press interactions** over complex combos. Long‑presses are acceptable for hidden parent features.
 
+### 3.3 Hold-to-pause (nav encoder)
+
+In game modes, the nav encoder button requires a **~1.5 second hold** to open the pause menu. This prevents accidental exits during play — a 4‑year‑old will press and twist everything constantly.
+
+- **Quick clicks are ignored** during gameplay (no action, no error — just absorbed).
+- **During the hold**, a thin cyan progress bar fills across the top of the screen, giving clear feedback that something is happening.
+- **On completion**, the bar flashes white and the pause menu opens.
+- The **home screen keeps quick-click** for entering modes — hold-to-pause only applies inside game/activity screens.
+- Implementation: `PauseMenu` owns the hold detection via `HoldDetector`, the progress bar rendering, and the menu navigation. Game screens call `self._pause.update(inp, frame)` every frame and check `is_open` / `is_holding` to skip game logic. No per-screen hold management needed.
+- New game modes **must** use `PauseMenu` for the nav encoder instead of checking `enc_btn_pressed[NAV]` directly.
+
 ### 3.2 Feedback
 
 Every meaningful input should trigger **immediate multimodal feedback**:

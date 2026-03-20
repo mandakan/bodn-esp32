@@ -216,6 +216,43 @@ class MysteryEngine:
 
         return self._output, self._output_color
 
+    def make_static_leds(self, brightness=128):
+        """Generate static LED colors for the current output state.
+
+        No animation — solid colors only. Writes into the shared _led_buf.
+        Applies modifier transforms (invert, lighten, hue shift, mirror).
+        """
+        if self._output == OUT_IDLE:
+            idle_color = self._apply_color_mods((60, 20, 80))
+            c = scale(idle_color, brightness // 3)
+            for i in range(N_LEDS):
+                _led_buf[i] = c
+            return _led_buf
+
+        color = self._apply_color_mods(self._output_color)
+        c = scale(color, brightness)
+
+        if self._output == OUT_MAGIC:
+            # Bright solid color
+            for i in range(N_LEDS):
+                _led_buf[i] = c
+        elif self._output == OUT_MIX:
+            # Solid mixed color
+            for i in range(N_LEDS):
+                _led_buf[i] = c
+        else:
+            # OUT_SINGLE: solid color
+            for i in range(N_LEDS):
+                _led_buf[i] = c
+
+        # Mirror: copy first half to second half (reversed)
+        if self.sw_mirror:
+            half = N_LEDS // 2
+            for i in range(half):
+                _led_buf[N_LEDS - 1 - i] = _led_buf[i]
+
+        return _led_buf
+
     def make_leds(self, frame, brightness=128):
         """Generate LED colors for the current output state.
 
