@@ -66,6 +66,7 @@ bodn-esp32/
 │  ├─ st7735.py            # framebuf-based ST7735/ILI9341 display driver
 │  └─ bodn/
 │     ├─ __init__.py
+│     ├─ audio.py           # async AudioEngine (3-channel priority playback)
 │     ├─ config.py          # pin assignments, constants
 │     ├─ debounce.py        # generic debounce logic
 │     ├─ encoder.py         # IRQ-based rotary encoder reader
@@ -73,6 +74,8 @@ bodn-esp32/
 │     ├─ mystery_rules.py   # Mystery Box rule engine (pure logic)
 │     ├─ session.py         # play session state machine (pure logic)
 │     ├─ storage.py         # JSON settings & session history on flash
+│     ├─ tones.py           # procedural tone generation (pure logic)
+│     ├─ wav.py             # WAV header parser + streaming reader (pure logic)
 │     ├─ wifi.py            # WiFi connect (STA / AP) + runtime control
 │     ├─ web.py             # async HTTP server for parental controls
 │     ├─ web_ui.py          # HTML/CSS/JS served to the browser
@@ -93,6 +96,7 @@ bodn-esp32/
 │        ├─ pause.py        # in-game pause menu
 │        └─ secondary.py    # two-zone secondary display manager
 ├─ docs/
+│  ├─ audio.md              # audio file preparation guide
 │  ├─ hardware.md           # BOM, board notes
 │  ├─ wiring.md             # auto-generated pin diagram and tables
 │  ├─ UX_GUIDELINES.md      # child-facing interaction design
