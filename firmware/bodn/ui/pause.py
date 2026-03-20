@@ -43,6 +43,7 @@ class PauseMenu(Screen):
         self._dirty = False
         self._manager = None
         self._hold = HoldDetector(threshold_ms=hold_ms)
+        self._last_hold_step = -1  # tracks which 10% step was last drawn
 
     @property
     def is_open(self):
@@ -89,10 +90,18 @@ class PauseMenu(Screen):
         if self._hold.triggered:
             self.open()
             self._hold.reset()
+            self._last_hold_step = -1
             return None
 
-        # Redraw needed when hold bar appears or disappears
-        if self._hold.holding or was_holding:
+        if self._hold.holding:
+            # Only redraw when progress crosses a 10% step (max 10 redraws)
+            step = int(self._hold.progress * 10)
+            if step != self._last_hold_step:
+                self._last_hold_step = step
+                self._dirty = True
+        elif was_holding:
+            # Just released — one redraw to clear the bar
+            self._last_hold_step = -1
             self._dirty = True
 
         return None
