@@ -5,7 +5,7 @@
 - **Target audience**: a 4-year-old child. Keep UX simple, colourful, and forgiving.
 - **Language**: MicroPython on ESP32-S3. No C/C++ unless absolutely required.
 - **Style**: keep modules small and self-contained. Prefer clarity over cleverness.
-- **Hardware**: assume we have limited GPIO budget — check `firmware/bodn/config.py` before assigning pins.
+- **Hardware**: check `firmware/bodn/config.py` before assigning pins. Non-time-critical I/O (buttons, toggles, status LEDs) should use the MCP23017 I2C expander; latency-sensitive peripherals (encoders, SPI, I2S) stay on native GPIOs. See `docs/hardware.md` for reserved pins and the GPIO budget.
 - **Testing**: pure logic modules (debounce, UI state, audio format) are tested with `pytest` on the host. Hardware wrappers are tested on-device via `mpremote` or in Wokwi.
 - **Dependencies**: host tools are managed with `uv`. MicroPython libs go directly into `firmware/`.
 - **Pin assignments**: `firmware/bodn/config.py` is the single source of truth. Never hardcode GPIO numbers elsewhere.
@@ -44,6 +44,7 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 | Buttons | Mini momentary push buttons × 8 | GPIO + pull-up |
 | Toggle switches | SPST mini toggle switches × 4 | GPIO + pull-up |
 | LEDs | WS2812 8-LED sticks × 2 (16 addressable RGB) | NeoPixel (1 GPIO) |
+| GPIO expander | Waveshare MCP23017 16-IO board | I2C (addr 0x20) |
 | Power switch | Panel-mount toggle switch | — |
 
 ## Repository layout
