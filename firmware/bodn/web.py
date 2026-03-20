@@ -16,6 +16,49 @@ from bodn.web_ui import HTML
 from bodn import storage
 
 
+OTA_STAGE = "/.ota"
+
+
+def _mkdirs(path):
+    """Recursively create parent directories (MicroPython os.mkdir is single-level)."""
+    parts = path.strip("/").split("/")
+    for i in range(len(parts)):
+        d = "/" + "/".join(parts[: i + 1])
+        try:
+            os.mkdir(d)
+        except OSError:
+            pass
+
+
+def _rmtree(path):
+    """Remove a directory tree (MicroPython has no shutil)."""
+    try:
+        for name in os.listdir(path):
+            full = path + "/" + name
+            try:
+                os.listdir(full)  # if this works, it's a dir
+                _rmtree(full)
+            except OSError:
+                os.remove(full)
+        os.rmdir(path)
+    except OSError:
+        pass
+
+
+def _ota_walk(stage_dir):
+    """Yield (staged_path, target_path) pairs from the staging directory."""
+    for name in os.listdir(stage_dir):
+        full = stage_dir + "/" + name
+        try:
+            os.listdir(full)  # directory
+            for pair in _ota_walk(full):
+                yield pair
+        except OSError:
+            # It's a file — compute the target path by stripping the stage prefix
+            target = full[len(OTA_STAGE) :]
+            yield full, target
+
+
 async def _send(writer, status, content_type, body, extra_headers=None):
     """Send an HTTP response."""
     writer.write("HTTP/1.0 {} OK\r\n".format(status).encode())
@@ -127,7 +170,14 @@ async def _handle_request(reader, writer, session_mgr, settings):
             return
 
         # --- Auth: OTA endpoints require bearer token ---
-        if path in ("/api/upload", "/api/reboot", "/api/files"):
+        ota_paths = (
+            "/api/upload",
+            "/api/reboot",
+            "/api/files",
+            "/api/ota/commit",
+            "/api/ota/abort",
+        )
+        if path in ota_paths:
             if not _check_ota_token(headers, settings):
                 await _send_unauthorized(writer, "Invalid OTA token")
                 return
@@ -204,12 +254,11 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 pass
 
         elif method == "POST" and path == "/api/upload":
-            # OTA file upload — streams body to flash in chunks so large
-            # files (media, audio) don't need to fit in RAM all at once.
+            # OTA file upload — streams body to a staging directory so
+            # the running firmware is untouched until commit.
             remote_path = headers.get("x-path", "")
             cl = int(headers.get("content-length", 0))
             if not remote_path or cl == 0:
-                # Drain any unread body
                 if cl > 0:
                     while cl > 0:
                         n = min(cl, 512)
@@ -218,15 +267,11 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 await _send_json(writer, {"error": "need X-Path header and body"}, 400)
             else:
                 try:
-                    # Ensure parent directory exists
-                    if "/" in remote_path:
-                        parent = remote_path.rsplit("/", 1)[0]
-                        try:
-                            os.mkdir(parent)
-                        except OSError:
-                            pass
-                    # Stream body to a temp file in 512-byte chunks
-                    tmp = remote_path + ".tmp"
+                    staged = OTA_STAGE + remote_path
+                    parent = staged.rsplit("/", 1)[0]
+                    _mkdirs(parent)
+                    # Stream body in 512-byte chunks
+                    tmp = staged + ".tmp"
                     written = 0
                     with open(tmp, "wb") as f:
                         remaining = cl
@@ -239,15 +284,50 @@ async def _handle_request(reader, writer, session_mgr, settings):
                             written += len(chunk)
                             remaining -= len(chunk)
                     try:
-                        os.remove(remote_path)
+                        os.remove(staged)
                     except OSError:
                         pass
-                    os.rename(tmp, remote_path)
+                    os.rename(tmp, staged)
                     await _send_json(
-                        writer, {"ok": True, "path": remote_path, "size": written}
+                        writer,
+                        {
+                            "ok": True,
+                            "path": remote_path,
+                            "staged": staged,
+                            "size": written,
+                        },
                     )
                 except Exception as e:
                     await _send_json(writer, {"error": str(e)}, 500)
+
+        elif method == "POST" and path == "/api/ota/commit":
+            # Move all staged files into place and reboot.
+            try:
+                count = 0
+                for staged, target in _ota_walk(OTA_STAGE):
+                    parent = target.rsplit("/", 1)[0]
+                    _mkdirs(parent)
+                    try:
+                        os.remove(target)
+                    except OSError:
+                        pass
+                    os.rename(staged, target)
+                    count += 1
+                _rmtree(OTA_STAGE)
+                await _send_json(writer, {"ok": True, "committed": count})
+                try:
+                    import machine
+
+                    machine.reset()
+                except Exception:
+                    pass
+            except Exception as e:
+                await _send_json(writer, {"error": str(e)}, 500)
+
+        elif method == "POST" and path == "/api/ota/abort":
+            # Discard staged files.
+            _rmtree(OTA_STAGE)
+            await _send_json(writer, {"ok": True})
 
         elif method == "POST" and path == "/api/reboot":
             await _send_json(writer, {"ok": True, "rebooting": True})

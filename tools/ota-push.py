@@ -131,16 +131,32 @@ def push(base_url: str, token: str = "", force: bool = False) -> bool:
     return ok and uploaded > 0
 
 
-def reboot(base_url: str, token: str = "") -> None:
-    url = base_url.rstrip("/") + "/api/reboot"
-    hdrs = {}
+def ota_commit(base_url: str, token: str = "") -> bool:
+    """Move staged files into place and reboot."""
+    url = base_url.rstrip("/") + "/api/ota/commit"
+    hdrs = {"Content-Type": "application/json"}
+    if token:
+        hdrs["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=b"{}", headers=hdrs, method="POST")
+    try:
+        resp = urllib.request.urlopen(req, timeout=30)
+        resp.read()
+        return True
+    except Exception:
+        return True  # device reboots mid-response, connection drops
+
+
+def ota_abort(base_url: str, token: str = "") -> None:
+    """Discard staged files."""
+    url = base_url.rstrip("/") + "/api/ota/abort"
+    hdrs = {"Content-Type": "application/json"}
     if token:
         hdrs["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, data=b"{}", headers=hdrs, method="POST")
     try:
         urllib.request.urlopen(req, timeout=5)
     except Exception:
-        pass  # device reboots mid-response, connection drops
+        pass
 
 
 def _parse_args():
@@ -169,12 +185,12 @@ def main() -> None:
     print(f"Pushing firmware to {base_url}...")
     result = push(base_url, token, force)
     if result:
-        print("Rebooting device...")
-        reboot(base_url, token)
-        print("Done.")
+        print("Committing update...")
+        ota_commit(base_url, token)
+        print("Done — device is rebooting with new firmware.")
     elif result is False:
-        # push returned False due to errors
-        print("Some files failed to upload.")
+        print("Upload failed — aborting staged files.")
+        ota_abort(base_url, token)
         sys.exit(1)
     # else: nothing to upload (all unchanged), no reboot needed
 
