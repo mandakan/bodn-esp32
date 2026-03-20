@@ -11,7 +11,7 @@ TFT_MOSI = 11
 TFT_CS = 10
 TFT_DC = 8
 TFT_RST = 9
-TFT_BL = 43
+TFT_BL = 1  # GPIO 43 is U0TXD (UART TX) — every print() would flicker the backlight
 TFT_WIDTH = 320
 TFT_HEIGHT = 240
 TFT_MADCTL = 0x68  # MV + MX + BGR (landscape)
@@ -27,9 +27,11 @@ TFT2_COL_OFFSET = 0
 TFT2_ROW_OFFSET = 0
 
 # INMP441 I2S microphone (I2S IN)
+# GPIO 38 is the on-board LED (LED1) — mic data would drive the LED and the LED
+# load (~15 mA) would corrupt the I2S signal. SD moved to GPIO 2.
 I2S_MIC_SCK = 14
 I2S_MIC_WS = 15
-I2S_MIC_SD = 38
+I2S_MIC_SD = 2
 
 # MAX98357A I2S amplifier (I2S OUT)
 # GPIO 5 (PWR_SENS) is reserved by the DevKit-Lipo board — DIN moved to GPIO 7.
@@ -57,8 +59,8 @@ NEOPIXEL_COUNT = 16
 NEOPIXEL_BRIGHTNESS = 64  # 0-255, keep low for battery life and kid-safe eyes
 
 # DevKit-Lipo on-board power monitoring (GPIO reserved by board — do not reassign)
-BAT_SENS_PIN = 6   # BAT_SENS: LiPo voltage via R6/R7 divider (470k/150k) → ADC
-PWR_SENS_PIN = 5   # PWR_SENS: high-Z on battery, low when USB power present
+BAT_SENS_PIN = 6  # BAT_SENS: LiPo voltage via R6/R7 divider (470k/150k) → ADC
+PWR_SENS_PIN = 5  # PWR_SENS: high-Z on battery, low when USB power present
 
 # I2C bus — pUEXT connector (2.2k pull-ups on devkit)
 I2C_SCL = 47
@@ -68,9 +70,3 @@ I2C_SDA = 48
 MCP23017_ADDR = 0x20  # A0-A2 jumpers all low
 MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
 MCP_SW_PINS = [8, 9, 10, 11]
-
-# Fallback GPIO pins when MCP23017 is absent (Wokwi simulation / bare-metal testing).
-# GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi.
-# GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively.
-FALLBACK_BTN_PINS = [1, 2, 20, 21, 35, 36, 37, 44]
-FALLBACK_SW_PINS = [46]

@@ -9,14 +9,14 @@ Regenerate: `uv run python tools/pinout.py --md`
 graph LR
     ESP["ESP32-S3<br/>DevKit-Lipo"]
 
-    SharesSPIbuswithsecondarydisplay["Shares SPI bus with secondary display<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST<br/>GPIO 43 → BL</sub>"]
+    SharesSPIbuswithsecondarydisplay["Shares SPI bus with secondary display<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST</sub>"]
     ESP -- SPI --> SharesSPIbuswithsecondarydisplay
 
     ST7735TFT["ST7735 TFT<br/><sub>GPIO 39 → TFT2_CS</sub>"]
     ESP -- SPI --> ST7735TFT
 
-    INMP441I2Smicrophone["INMP441 I2S microphone<br/><sub>GPIO 14 → SCK<br/>GPIO 15 → WS<br/>GPIO 38 → SD</sub>"]
-    INMP441I2Smicrophone -- I2S --> ESP
+    loadwouldcorrupttheI2SsignalSDmovedtoGPIO2["load would corrupt the I2S signal. SD moved to GPIO 2.<br/><sub>GPIO 14 → SCK<br/>GPIO 15 → WS<br/>GPIO 2 → SD</sub>"]
+    ESP -- I2S --> loadwouldcorrupttheI2SsignalSDmovedtoGPIO2
 
     GPIO5isreservedbytheDevKitLipoboardDINmovedtoGPIO7["GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7.<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN</sub>"]
     GPIO5isreservedbytheDevKitLipoboardDINmovedtoGPIO7 -.- ESP
@@ -30,9 +30,6 @@ graph LR
     I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
     I2CbuspUEXTconnector -.- ESP
 
-    GPIO4and7arenowassignedtoNeoPixelandI2SSPKDINrespectively["GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively.<br/><sub>GPIO 1 → FALLBACK BTN 0<br/>GPIO 2 → FALLBACK BTN 1<br/>GPIO 20 → FALLBACK BTN 2<br/>GPIO 21 → FALLBACK BTN 3<br/>GPIO 35 → FALLBACK BTN 4<br/>GPIO 36 → FALLBACK BTN 5<br/>GPIO 37 → FALLBACK BTN 6<br/>GPIO 44 → FALLBACK BTN 7<br/>GPIO 46 → FALLBACK SW 0</sub>"]
-    GPIO4and7arenowassignedtoNeoPixelandI2SSPKDINrespectively -- I2S --> ESP
-
 ```
 
 ### Shares SPI bus with secondary display
@@ -44,7 +41,6 @@ graph LR
 | CS | 10 | `TFT_CS` |
 | DC | 8 | `TFT_DC` |
 | RST | 9 | `TFT_RST` |
-| BL | 43 | `TFT_BL` |
 
 ### ST7735 TFT
 
@@ -52,13 +48,13 @@ graph LR
 |--------|------|-----------------|
 | TFT2_CS | 39 | `TFT2_CS` |
 
-### INMP441 I2S microphone
+### load would corrupt the I2S signal. SD moved to GPIO 2.
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
 | SCK | 14 | `I2S_MIC_SCK` |
 | WS | 15 | `I2S_MIC_WS` |
-| SD | 38 | `I2S_MIC_SD` |
+| SD | 2 | `I2S_MIC_SD` |
 
 ### GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7.
 
@@ -95,27 +91,12 @@ graph LR
 | I2C_SCL | 47 | `I2C_SCL` |
 | I2C_SDA | 48 | `I2C_SDA` |
 
-### GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively.
-
-| Signal | GPIO | Config variable |
-|--------|------|-----------------|
-| FALLBACK BTN 0 | 1 | `FALLBACK_BTN_PINS[0]` |
-| FALLBACK BTN 1 | 2 | `FALLBACK_BTN_PINS[1]` |
-| FALLBACK BTN 2 | 20 | `FALLBACK_BTN_PINS[2]` |
-| FALLBACK BTN 3 | 21 | `FALLBACK_BTN_PINS[3]` |
-| FALLBACK BTN 4 | 35 | `FALLBACK_BTN_PINS[4]` |
-| FALLBACK BTN 5 | 36 | `FALLBACK_BTN_PINS[5]` |
-| FALLBACK BTN 6 | 37 | `FALLBACK_BTN_PINS[6]` |
-| FALLBACK BTN 7 | 44 | `FALLBACK_BTN_PINS[7]` |
-| FALLBACK SW 0 | 46 | `FALLBACK_SW_PINS[0]` |
-
 ### All GPIOs
 
 | GPIO | Component | Signal |
 |------|-----------|--------|
 | 0 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
-| 1 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 0 |
-| 2 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 1 |
+| 2 | load would corrupt the I2S signal. SD moved to GPIO 2. | SD |
 | 3 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
 | 4 | GPIO 6 is reserved by the DevKit-Lipo board — use GPIO 4 instead. | PIN |
 | 7 | GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7. | DIN |
@@ -125,26 +106,17 @@ graph LR
 | 11 | Shares SPI bus with secondary display | MOSI |
 | 12 | Shares SPI bus with secondary display | SCK |
 | 13 | GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7. | BCK |
-| 14 | INMP441 I2S microphone | SCK |
-| 15 | INMP441 I2S microphone | WS |
+| 14 | load would corrupt the I2S signal. SD moved to GPIO 2. | SCK |
+| 15 | load would corrupt the I2S signal. SD moved to GPIO 2. | WS |
 | 16 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 17 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 18 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
 | 19 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
-| 20 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 2 |
-| 21 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 3 |
-| 35 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 4 |
-| 36 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 5 |
-| 37 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 6 |
-| 38 | INMP441 I2S microphone | SD |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 41 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 42 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
-| 43 | Shares SPI bus with secondary display | BL |
-| 44 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 7 |
 | 45 | GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7. | WS |
-| 46 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK SW 0 |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |
 | 48 | I2C bus — pUEXT connector | I2C_SDA |
 <!-- pinout:end -->

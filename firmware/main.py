@@ -71,18 +71,10 @@ def create_hardware():
     )
 
     # MCP23017 GPIO expander for buttons and toggles (I2C)
-    # Falls back to direct GPIO when MCP23017 is absent (Wokwi simulation).
-    mcp = None
-    try:
-        i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
-        mcp = MCP23017(i2c, config.MCP23017_ADDR)
-        buttons = [mcp.pin(p) for p in config.MCP_BTN_PINS]
-        switches = [mcp.pin(p) for p in config.MCP_SW_PINS]
-        print("MCP23017 found — buttons/toggles on I2C expander")
-    except Exception:
-        buttons = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.FALLBACK_BTN_PINS]
-        switches = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.FALLBACK_SW_PINS]
-        print("MCP23017 not found — using direct GPIO (simulation mode)")
+    i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+    mcp = MCP23017(i2c, config.MCP23017_ADDR)
+    buttons = [mcp.pin(p) for p in config.MCP_BTN_PINS]
+    switches = [mcp.pin(p) for p in config.MCP_SW_PINS]
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
         Encoder(
