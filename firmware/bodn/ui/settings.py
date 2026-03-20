@@ -13,6 +13,7 @@ _ITEMS = [
     ("wifi", "WiFi", "bool"),
     ("leds", "LEDs", "bool"),
     ("debug_input", "Debug log", "bool"),
+    ("debug_perf", "Perf stats", "bool"),
     ("back", "< Back", "action"),
 ]
 
@@ -46,7 +47,7 @@ class SettingsScreen(Screen):
             return self._wifi_ctrl.is_active()
         if key == "leds":
             return self._leds_on
-        if key in ("debug_input", "sessions_enabled"):
+        if key in ("debug_input", "debug_perf", "sessions_enabled"):
             return self._settings.get(key, key == "sessions_enabled")
         return False
 
@@ -72,6 +73,11 @@ class SettingsScreen(Screen):
             )
         elif key == "debug_input":
             self._settings["debug_input"] = not self._settings.get("debug_input", False)
+        elif key == "debug_perf":
+            val = not self._settings.get("debug_perf", False)
+            self._settings["debug_perf"] = val
+            if self._manager:
+                self._manager.debug_perf = val
         self._dirty = True
 
     def update(self, inp, frame):
