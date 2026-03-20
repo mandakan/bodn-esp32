@@ -18,20 +18,20 @@ graph LR
     INMP441I2Smicrophone["INMP441 I2S microphone<br/><sub>GPIO 14 → SCK<br/>GPIO 15 → WS<br/>GPIO 38 → SD</sub>"]
     INMP441I2Smicrophone -- I2S --> ESP
 
-    MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 5 → DIN</sub>"]
-    ESP -- I2S --> MAX98357AI2Samplifier
+    GPIO5isreservedbytheDevKitLipoboardDINmovedtoGPIO7["GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7.<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN</sub>"]
+    GPIO5isreservedbytheDevKitLipoboardDINmovedtoGPIO7 -.- ESP
 
     RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 19 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 3 → DT<br/>GPIO 40 → SW<br/>GPIO 41 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
     RotaryencodersmuststayonnativeGPIOforIRQlatency -.- ESP
 
-    WS2812BNeoPixelLEDs["WS2812B NeoPixel LEDs<br/><sub>GPIO 6 → PIN</sub>"]
-    WS2812BNeoPixelLEDs -.- ESP
+    GPIO6isreservedbytheDevKitLipoboarduseGPIO4instead["GPIO 6 is reserved by the DevKit-Lipo board — use GPIO 4 instead.<br/><sub>GPIO 4 → PIN</sub>"]
+    GPIO6isreservedbytheDevKitLipoboarduseGPIO4instead -.- ESP
 
     I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
     I2CbuspUEXTconnector -.- ESP
 
-    GPIO3537arePSRAMreservedonrealhardwarebutusableinWokwi["GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi.<br/><sub>GPIO 1 → FALLBACK BTN 0<br/>GPIO 2 → FALLBACK BTN 1<br/>GPIO 4 → FALLBACK BTN 2<br/>GPIO 7 → FALLBACK BTN 3<br/>GPIO 20 → FALLBACK BTN 4<br/>GPIO 21 → FALLBACK BTN 5<br/>GPIO 35 → FALLBACK BTN 6<br/>GPIO 36 → FALLBACK BTN 7<br/>GPIO 37 → FALLBACK SW 0<br/>GPIO 44 → FALLBACK SW 1<br/>GPIO 46 → FALLBACK SW 2</sub>"]
-    GPIO3537arePSRAMreservedonrealhardwarebutusableinWokwi -.- ESP
+    GPIO4and7arenowassignedtoNeoPixelandI2SSPKDINrespectively["GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively.<br/><sub>GPIO 1 → FALLBACK BTN 0<br/>GPIO 2 → FALLBACK BTN 1<br/>GPIO 20 → FALLBACK BTN 2<br/>GPIO 21 → FALLBACK BTN 3<br/>GPIO 35 → FALLBACK BTN 4<br/>GPIO 36 → FALLBACK BTN 5<br/>GPIO 37 → FALLBACK BTN 6<br/>GPIO 44 → FALLBACK BTN 7<br/>GPIO 46 → FALLBACK SW 0</sub>"]
+    GPIO4and7arenowassignedtoNeoPixelandI2SSPKDINrespectively -- I2S --> ESP
 
 ```
 
@@ -60,13 +60,13 @@ graph LR
 | WS | 15 | `I2S_MIC_WS` |
 | SD | 38 | `I2S_MIC_SD` |
 
-### MAX98357A I2S amplifier
+### GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7.
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
 | BCK | 13 | `I2S_SPK_BCK` |
 | WS | 45 | `I2S_SPK_WS` |
-| DIN | 5 | `I2S_SPK_DIN` |
+| DIN | 7 | `I2S_SPK_DIN` |
 
 ### Rotary encoders — must stay on native GPIO for IRQ latency
 
@@ -82,11 +82,11 @@ graph LR
 | DT | 42 | `ENC3_DT` |
 | SW | 0 | `ENC3_SW` |
 
-### WS2812B NeoPixel LEDs
+### GPIO 6 is reserved by the DevKit-Lipo board — use GPIO 4 instead.
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
-| PIN | 6 | `NEOPIXEL_PIN` |
+| PIN | 4 | `NEOPIXEL_PIN` |
 
 ### I2C bus — pUEXT connector
 
@@ -95,60 +95,56 @@ graph LR
 | I2C_SCL | 47 | `I2C_SCL` |
 | I2C_SDA | 48 | `I2C_SDA` |
 
-### GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi.
+### GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively.
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
 | FALLBACK BTN 0 | 1 | `FALLBACK_BTN_PINS[0]` |
 | FALLBACK BTN 1 | 2 | `FALLBACK_BTN_PINS[1]` |
-| FALLBACK BTN 2 | 4 | `FALLBACK_BTN_PINS[2]` |
-| FALLBACK BTN 3 | 7 | `FALLBACK_BTN_PINS[3]` |
-| FALLBACK BTN 4 | 20 | `FALLBACK_BTN_PINS[4]` |
-| FALLBACK BTN 5 | 21 | `FALLBACK_BTN_PINS[5]` |
-| FALLBACK BTN 6 | 35 | `FALLBACK_BTN_PINS[6]` |
-| FALLBACK BTN 7 | 36 | `FALLBACK_BTN_PINS[7]` |
-| FALLBACK SW 0 | 37 | `FALLBACK_SW_PINS[0]` |
-| FALLBACK SW 1 | 44 | `FALLBACK_SW_PINS[1]` |
-| FALLBACK SW 2 | 46 | `FALLBACK_SW_PINS[2]` |
+| FALLBACK BTN 2 | 20 | `FALLBACK_BTN_PINS[2]` |
+| FALLBACK BTN 3 | 21 | `FALLBACK_BTN_PINS[3]` |
+| FALLBACK BTN 4 | 35 | `FALLBACK_BTN_PINS[4]` |
+| FALLBACK BTN 5 | 36 | `FALLBACK_BTN_PINS[5]` |
+| FALLBACK BTN 6 | 37 | `FALLBACK_BTN_PINS[6]` |
+| FALLBACK BTN 7 | 44 | `FALLBACK_BTN_PINS[7]` |
+| FALLBACK SW 0 | 46 | `FALLBACK_SW_PINS[0]` |
 
 ### All GPIOs
 
 | GPIO | Component | Signal |
 |------|-----------|--------|
 | 0 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
-| 1 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 0 |
-| 2 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 1 |
+| 1 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 0 |
+| 2 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 1 |
 | 3 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
-| 4 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 2 |
-| 5 | MAX98357A I2S amplifier | DIN |
-| 6 | WS2812B NeoPixel LEDs | PIN |
-| 7 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 3 |
+| 4 | GPIO 6 is reserved by the DevKit-Lipo board — use GPIO 4 instead. | PIN |
+| 7 | GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7. | DIN |
 | 8 | Shares SPI bus with secondary display | DC |
 | 9 | Shares SPI bus with secondary display | RST |
 | 10 | Shares SPI bus with secondary display | CS |
 | 11 | Shares SPI bus with secondary display | MOSI |
 | 12 | Shares SPI bus with secondary display | SCK |
-| 13 | MAX98357A I2S amplifier | BCK |
+| 13 | GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7. | BCK |
 | 14 | INMP441 I2S microphone | SCK |
 | 15 | INMP441 I2S microphone | WS |
 | 16 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 17 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 18 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
 | 19 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
-| 20 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 4 |
-| 21 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 5 |
-| 35 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 6 |
-| 36 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 7 |
-| 37 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK SW 0 |
+| 20 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 2 |
+| 21 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 3 |
+| 35 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 4 |
+| 36 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 5 |
+| 37 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 6 |
 | 38 | INMP441 I2S microphone | SD |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 41 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 42 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
 | 43 | Shares SPI bus with secondary display | BL |
-| 44 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK SW 1 |
-| 45 | MAX98357A I2S amplifier | WS |
-| 46 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK SW 2 |
+| 44 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK BTN 7 |
+| 45 | GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7. | WS |
+| 46 | GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively. | FALLBACK SW 0 |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |
 | 48 | I2C bus — pUEXT connector | I2C_SDA |
 <!-- pinout:end -->

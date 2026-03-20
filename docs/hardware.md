@@ -116,6 +116,18 @@ Both share SPI bus 2. The driver deasserts CS after each `show()`, so they can c
 - Battery voltage can be read via the DevKit-Lipo's built-in ADC circuit.
 - GPIO 0 and 46 are strapping pins but safe as inputs with pull-up after boot.
 
+## Schematics
+
+Board schematics (Rev B) are in [`docs/schematics/`](schematics/):
+
+| File | Contents |
+|------|----------|
+| `ESP32-S3-DevKit-LiPo_Rev_B.png` | Full schematic |
+| `power_supply.png` | Power supply, BAT_SENS (GPIO 6), PWR_SENS (GPIO 5) |
+| `gpio_list.png` | Complete GPIO listing with board-level labels |
+
+Source: [OLIMEX/ESP32-S3-DevKit-LiPo on GitHub](https://github.com/OLIMEX/ESP32-S3-DevKit-LiPo)
+
 ## ESP32-S3-DevKit-Lipo
 
 Board: **Olimex ESP32-S3-DevKit-LiPo** (Rev B)
@@ -166,15 +178,19 @@ The ESP32-S3-WROOM-1-**N8R8** module uses OSPI PSRAM which occupies three GPIOs 
 All three pins are avoided in `config.py`. Buttons and toggles have been moved to the
 MCP23017 I2C expander, and TFT2_CS has been reassigned to GPIO 39.
 
-Other GPIOs with board-level functions (usable but be aware):
+Other GPIOs with board-level functions — see [`docs/schematics/`](schematics/) for annotated crops:
 
-| GPIO | Board function |
-|------|----------------|
-| 0 | Strapping pin + USER button (safe as input after boot) |
-| 5 | PWR_SENS — external power detection (high-Z when on battery) |
-| 6 | BAT_SENS — battery ADC via voltage divider |
-| 38 | On-board user LED (accent green) |
-| 46 | Strapping pin (safe as input after boot) |
+| GPIO | Board label | Our assignment | Notes |
+|------|-------------|----------------|-------|
+| 0 | BUT1 (user button) | ENC3_SW | Strapping pin; safe as input after boot |
+| 5 | PWR_SENS | `PWR_SENS_PIN` (battery module) | Active low when USB power present; **do not drive** |
+| 6 | BAT_SENS | `BAT_SENS_PIN` (battery module) | R8/R9 divider (220 kΩ/470 kΩ); ADC only |
+| 19 | USB_D− | ENC1_CLK | USB OTG D−; safe when OTG port unused |
+| 20 | USB_D+ | free (was FALLBACK_BTN) | USB OTG D+; same caveat |
+| 38 | LED1 (green) | I2S_MIC_SD | On-board LED shares pin — will flicker with mic activity |
+| 43 | U0TXD | TFT_BL (backlight) | UART TX; backlight PWM pulses appear on console |
+| 44 | U0RXD | — | UART RX; avoid driving |
+| 46 | — | — | Strapping pin; safe as input after boot |
 
 ## MCP23017 GPIO expander
 
@@ -211,7 +227,8 @@ ENC2_SW → 40) to free the I2C bus.
 | GPB0–GPB3 | 4 toggle switches | Active low with internal pull-ups |
 | GPB4–GPB7 | 4 × available | Future use (additional buttons, status LEDs, etc.) |
 
-This frees up 7 native ESP32 GPIOs for future use (1, 2, 4, 7, 20, 21, 46).
+This frees up 5 native ESP32 GPIOs for future use (1, 2, 20, 21, 46).
+GPIO 4 is now NeoPixel data; GPIO 7 is I2S speaker DIN.
 
 ### Why not put encoders on the expander?
 
@@ -224,7 +241,7 @@ steps. Encoders must stay on native ESP32 GPIOs with hardware interrupts.
 | Category | Details |
 |----------|---------|
 | Native GPIOs in use | 21 (SPI, I2S, encoders, NeoPixel, I2C) |
-| Native GPIOs free | 7 — GPIO 1, 2, 4, 7, 20, 21, 46 |
+| Native GPIOs free | 5 — GPIO 1, 2, 20, 21, 46 |
 | PSRAM-reserved (never use) | GPIO 35, 36, 37 |
 | UART console (avoid) | GPIO 43 (TX), 44 (RX) |
 | MCP23017 in use | 12 (8 buttons + 4 toggles) |

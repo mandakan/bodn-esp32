@@ -32,9 +32,10 @@ I2S_MIC_WS = 15
 I2S_MIC_SD = 38
 
 # MAX98357A I2S amplifier (I2S OUT)
+# GPIO 5 (PWR_SENS) is reserved by the DevKit-Lipo board — DIN moved to GPIO 7.
 I2S_SPK_BCK = 13
 I2S_SPK_WS = 45
-I2S_SPK_DIN = 5
+I2S_SPK_DIN = 7
 
 # Rotary encoders (KY-040) — must stay on native GPIO for IRQ latency
 ENC1_CLK, ENC1_DT, ENC1_SW = 19, 18, 17
@@ -50,9 +51,14 @@ ENC_A = 1  # index: mode parameter 1
 ENC_B = 2  # index: mode parameter 2
 
 # WS2812B NeoPixel LEDs (2 × 8-LED sticks chained)
-NEOPIXEL_PIN = 6
+# GPIO 6 (BAT_SENS) is reserved by the DevKit-Lipo board — use GPIO 4 instead.
+NEOPIXEL_PIN = 4
 NEOPIXEL_COUNT = 16
 NEOPIXEL_BRIGHTNESS = 64  # 0-255, keep low for battery life and kid-safe eyes
+
+# DevKit-Lipo on-board power monitoring (GPIO reserved by board — do not reassign)
+BAT_SENS_PIN = 6   # BAT_SENS: LiPo voltage via R6/R7 divider (470k/150k) → ADC
+PWR_SENS_PIN = 5   # PWR_SENS: high-Z on battery, low when USB power present
 
 # I2C bus — pUEXT connector (2.2k pull-ups on devkit)
 I2C_SCL = 47
@@ -63,7 +69,8 @@ MCP23017_ADDR = 0x20  # A0-A2 jumpers all low
 MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
 MCP_SW_PINS = [8, 9, 10, 11]
 
-# Fallback GPIO pins when MCP23017 is absent (Wokwi simulation)
+# Fallback GPIO pins when MCP23017 is absent (Wokwi simulation / bare-metal testing).
 # GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi.
-FALLBACK_BTN_PINS = [1, 2, 4, 7, 20, 21, 35, 36]
-FALLBACK_SW_PINS = [37, 44, 46]
+# GPIO 4 and 7 are now assigned to NeoPixel and I2S_SPK_DIN respectively.
+FALLBACK_BTN_PINS = [1, 2, 20, 21, 35, 36, 37, 44]
+FALLBACK_SW_PINS = [46]
