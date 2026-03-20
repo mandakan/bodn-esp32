@@ -163,12 +163,32 @@
     },
     {
       "type": "wokwi-led-strip",
-      "id": "strip1",
+      "id": "stickA",
       "top": -55.5,
       "left": -489.6,
       "attrs": {
-        "pixels": "16",
+        "pixels": "8",
         "pixelShape": "square"
+      }
+    },
+    {
+      "type": "wokwi-led-strip",
+      "id": "stickB",
+      "top": -55.5,
+      "left": -329.6,
+      "attrs": {
+        "pixels": "8",
+        "pixelShape": "square"
+      }
+    },
+    {
+      "type": "wokwi-led-strip",
+      "id": "ring1",
+      "top": -105.5,
+      "left": -489.6,
+      "attrs": {
+        "pixels": "16",
+        "pixelShape": "circle"
       }
     },
     {
@@ -368,18 +388,54 @@
     ],
     [
       "esp:4",
-      "strip1:DIN",
+      "stickA:DIN",
       "gold",
       []
     ],
     [
-      "strip1:VDD",
+      "stickA:DOUT",
+      "stickB:DIN",
+      "gold",
+      []
+    ],
+    [
+      "stickB:DOUT",
+      "ring1:DIN",
+      "gold",
+      []
+    ],
+    [
+      "stickA:VDD",
       "esp:3V3",
       "red",
       []
     ],
     [
-      "strip1:VSS",
+      "stickA:VSS",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "stickB:VDD",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "stickB:VSS",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "ring1:VDD",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "ring1:VSS",
       "esp:GND.2",
       "black",
       []
