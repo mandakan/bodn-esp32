@@ -18,6 +18,9 @@ class FakeTft:
     def show(self):
         self.calls.append(("show",))
 
+    def show_rect(self, x, y, w, h):
+        self.calls.append(("show_rect", x, y, w, h))
+
     def text(self, *a, **kw):
         pass
 
@@ -307,3 +310,66 @@ def test_catface_all_emotions_render():
         cat.set_emotion(emotion)
         cat._dirty = True
         cat.render(tft, theme, 1)
+
+
+# --- Zone-aware partial push tests ---
+
+
+def test_status_only_update_uses_show_rect():
+    """When only the status strip changes, show_rect is used for just that zone."""
+    d = make_display()
+    content = SpyScreen()
+    status = SpyScreen()
+    d.set_content(content)
+    d.set_status(status)
+    d.tick()  # consume transitions
+    d.tft.calls.clear()
+
+    # Only status dirty
+    status._dirty = True
+    d.tick()
+
+    show_rects = [c for c in d.tft.calls if c[0] == "show_rect"]
+    full_shows = [c for c in d.tft.calls if c[0] == "show"]
+    assert ("show_rect", 0, STATUS_Y, 128, STATUS_H) in show_rects
+    assert len(full_shows) == 0
+
+
+def test_content_only_update_uses_show_rect():
+    """When only the content zone changes, show_rect is used for just that zone."""
+    d = make_display()
+    content = SpyScreen()
+    status = SpyScreen()
+    d.set_content(content)
+    d.set_status(status)
+    d.tick()  # consume transitions
+    d.tft.calls.clear()
+
+    # Only content dirty
+    content._dirty = True
+    d.tick()
+
+    show_rects = [c for c in d.tft.calls if c[0] == "show_rect"]
+    full_shows = [c for c in d.tft.calls if c[0] == "show"]
+    assert ("show_rect", 0, 0, 128, CONTENT_H) in show_rects
+    assert len(full_shows) == 0
+
+
+def test_both_zones_dirty_uses_full_show():
+    """When both zones need redraw, a single full show() is used."""
+    d = make_display()
+    content = SpyScreen()
+    status = SpyScreen()
+    d.set_content(content)
+    d.set_status(status)
+    d.tick()  # consume transitions
+    d.tft.calls.clear()
+
+    content._dirty = True
+    status._dirty = True
+    d.tick()
+
+    show_rects = [c for c in d.tft.calls if c[0] == "show_rect"]
+    full_shows = [c for c in d.tft.calls if c[0] == "show"]
+    assert len(show_rects) == 0
+    assert len(full_shows) == 1

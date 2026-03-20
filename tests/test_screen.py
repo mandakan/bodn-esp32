@@ -15,6 +15,9 @@ class FakeTft:
     def show(self):
         self.calls.append(("show",))
 
+    def show_rect(self, x, y, w, h):
+        self.calls.append(("show_rect", x, y, w, h))
+
     def text(self, *a, **kw):
         pass
 
@@ -186,3 +189,71 @@ def test_pop_marks_revealed_screen_dirty():
     assert bottom._dirty
     mgr.tick()  # should render bottom
     assert bottom.renders == 2
+
+
+# --- invalidate_rect / request_show partial-push tests ---
+
+
+def test_request_show_no_args_calls_full_show():
+    """request_show() without args triggers tft.show() on next tick."""
+    mgr = make_manager()
+    s = SpyScreen()
+    s.needs_redraw = lambda: False
+    mgr.push(s)
+    mgr.tick()  # consume initial dirty render
+    mgr.tft.calls.clear()
+
+    mgr.request_show()
+    mgr.tick()
+
+    assert ("show",) in mgr.tft.calls
+    assert not any(c[0] == "show_rect" for c in mgr.tft.calls)
+
+
+def test_request_show_with_rect_calls_show_rect():
+    """request_show(x, y, w, h) triggers tft.show_rect() on next tick."""
+    mgr = make_manager()
+    s = SpyScreen()
+    s.needs_redraw = lambda: False
+    mgr.push(s)
+    mgr.tick()
+    mgr.tft.calls.clear()
+
+    mgr.request_show(0, 0, 32, 4)
+    mgr.tick()
+
+    assert ("show_rect", 0, 0, 32, 4) in mgr.tft.calls
+    assert ("show",) not in mgr.tft.calls
+
+
+def test_invalidate_rect_merges_bounding_box():
+    """Multiple invalidate_rect calls are merged into their bounding box."""
+    mgr = make_manager()
+    mgr.invalidate_rect(10, 20, 30, 5)
+    mgr.invalidate_rect(5, 18, 10, 10)
+    # Union: x=5, y=18, x2=max(40,15)=40, y2=max(25,28)=28 → w=35, h=10
+    assert mgr._dirty_rect == (5, 18, 35, 10)
+
+
+def test_dirty_rect_cleared_after_partial_push():
+    """_dirty_rect is reset to None after the push tick."""
+    mgr = make_manager()
+    s = SpyScreen()
+    s.needs_redraw = lambda: False
+    mgr.push(s)
+    mgr.tick()
+
+    mgr.request_show(0, 0, 10, 10)
+    assert mgr._dirty_rect == (0, 0, 10, 10)
+    mgr.tick()
+    assert mgr._dirty_rect is None
+
+
+def test_dirty_rect_cleared_on_full_render():
+    """_dirty_rect is also cleared when a full render happens."""
+    mgr = make_manager()
+    mgr.invalidate_rect(5, 5, 20, 20)
+    s = SpyScreen()
+    mgr.push(s)
+    mgr.tick()
+    assert mgr._dirty_rect is None

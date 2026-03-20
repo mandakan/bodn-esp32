@@ -54,6 +54,7 @@ class ScreenManager:
         self._frame = 0
         self._dirty = True  # full clear needed on first frame / transitions
         self._show_needed = False  # framebuffer changed, just push SPI (no re-render)
+        self._dirty_rect = None  # (x, y, w, h) bounding box for partial push
         # Perf counters (enabled via debug_perf setting)
         self.debug_perf = False
         self._perf_total = 0
@@ -69,14 +70,36 @@ class ScreenManager:
         """Mark the display as needing a full redraw on the next tick."""
         self._dirty = True
 
-    def request_show(self):
-        """Request a show() on the next tick without a full re-render.
+    def invalidate_rect(self, x, y, w, h):
+        """Mark a rectangle as needing a push on the next tick.
+
+        Multiple calls are merged into the bounding-box union. Does NOT
+        trigger a re-render — only a show_rect() push. Use after direct
+        framebuffer writes (progress bars, timers, etc.).
+        """
+        if self._dirty_rect is None:
+            self._dirty_rect = (x, y, w, h)
+        else:
+            ox, oy, ow, oh = self._dirty_rect
+            nx = min(ox, x)
+            ny = min(oy, y)
+            nx2 = max(ox + ow, x + w)
+            ny2 = max(oy + oh, y + h)
+            self._dirty_rect = (nx, ny, nx2 - nx, ny2 - ny)
+
+    def request_show(self, x=None, y=None, w=None, h=None):
+        """Request a push on the next tick without a full re-render.
+
+        With x/y/w/h: only that rectangle is pushed (show_rect).
+        Without arguments: the full buffer is pushed (show).
 
         Use this after writing directly to the framebuffer (e.g. a small
-        partial update like a progress bar). The ScreenManager will call
-        tft.show() but will NOT re-render the active screen or overlay.
+        partial update like a progress bar). The ScreenManager will NOT
+        re-render the active screen or overlay.
         """
         self._show_needed = True
+        if x is not None:
+            self.invalidate_rect(x, y, w, h)
 
     def push(self, screen):
         """Push a screen onto the stack."""
@@ -138,7 +161,12 @@ class ScreenManager:
             # (e.g. partial framebuffer update like a progress bar).
             if self._show_needed:
                 self._show_needed = False
-                self.tft.show()
+                dirty_rect = self._dirty_rect
+                self._dirty_rect = None
+                if dirty_rect is not None:
+                    self.tft.show_rect(*dirty_rect)
+                else:
+                    self.tft.show()
                 if self.debug_perf:
                     self._perf_total += 1
                     self._perf_drawn += 1
@@ -150,6 +178,7 @@ class ScreenManager:
 
         # Full render path
         self._show_needed = False
+        self._dirty_rect = None
 
         # Clear on screen transitions
         if self._dirty:
