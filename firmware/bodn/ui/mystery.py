@@ -30,6 +30,7 @@ class MysteryScreen(Screen):
         self._pause = PauseMenu()
         self._prev_out_type = OUT_IDLE
         self._dirty = True
+        self._leds_dirty = True
 
     def enter(self, manager):
         self._manager = manager
@@ -77,6 +78,7 @@ class MysteryScreen(Screen):
         )
         if new_mods != prev_mods:
             self._dirty = True
+            self._leds_dirty = True
 
         # Find first just-pressed button
         btn = inp.first_btn_pressed()
@@ -87,6 +89,7 @@ class MysteryScreen(Screen):
         if out_type != self._prev_out_type:
             self._prev_out_type = out_type
             self._dirty = True
+            self._leds_dirty = True
             # Update secondary display cat face
             if self._secondary:
                 emotion = {OUT_IDLE: NEUTRAL, OUT_MIX: CURIOUS, OUT_MAGIC: HAPPY}.get(
@@ -95,19 +98,16 @@ class MysteryScreen(Screen):
                 self._secondary.set_emotion(emotion)
         if btn >= 0:
             self._dirty = True
-        # Animated states need continuous redraw
-        if out_type in (OUT_MAGIC, OUT_MIX):
-            self._dirty = True
-        if eng.sw_shimmer and out_type != OUT_IDLE:
-            self._dirty = True
+            self._leds_dirty = True
 
-        # Only compute and write LEDs on every 6th frame (~5.5 Hz)
-        if frame % 6 == 0:
+        # Write LEDs only when state changes (static patterns, no animation)
+        if self._leds_dirty:
+            self._leds_dirty = False
             brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
-            leds = self._engine.make_leds(frame, brightness)
+            leds = self._engine.make_static_leds(brightness)
 
-            state = self._overlay.session_mgr.state
-            leds = self._overlay.led_override(state, frame, leds, brightness)
+            ses_state = self._overlay.session_mgr.state
+            leds = self._overlay.static_led_override(ses_state, leds, brightness)
 
             for i in range(N_LEDS):
                 self._np[i] = leds[i]

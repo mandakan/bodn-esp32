@@ -46,7 +46,9 @@ class SimonScreen(Screen):
         self._manager = None
         self._pause = PauseMenu()
         self._prev_state = None
+        self._prev_active_btn = -1
         self._dirty = True
+        self._leds_dirty = True
 
     def enter(self, manager):
         self._manager = manager
@@ -81,28 +83,31 @@ class SimonScreen(Screen):
         if state != self._prev_state:
             self._prev_state = state
             self._dirty = True
+            self._leds_dirty = True
             # Update cat face
             if self._secondary:
                 emotion = _STATE_EMOTIONS.get(state, NEUTRAL)
                 self._secondary.set_emotion(emotion)
 
         # Active button changes during SHOWING need redraws
-        if state == SHOWING:
+        active_btn = self._engine.active_button
+        if active_btn != self._prev_active_btn:
+            self._prev_active_btn = active_btn
             self._dirty = True
+            self._leds_dirty = True
         # Button press feedback
         if btn >= 0:
             self._dirty = True
-        # Animated states
-        if state in (WIN, FAIL):
-            self._dirty = True
+            self._leds_dirty = True
 
-        # Write LEDs every 6th frame (~5.5 Hz)
-        if frame % 6 == 0:
+        # Write LEDs only when state changes (static patterns, no animation)
+        if self._leds_dirty:
+            self._leds_dirty = False
             brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
-            leds = self._engine.make_leds(frame, brightness)
+            leds = self._engine.make_static_leds(brightness)
 
             ses_state = self._overlay.session_mgr.state
-            leds = self._overlay.led_override(ses_state, frame, leds, brightness)
+            leds = self._overlay.static_led_override(ses_state, leds, brightness)
 
             for i in range(N_LEDS):
                 self._np[i] = leds[i]

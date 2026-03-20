@@ -204,15 +204,93 @@ class SimonEngine:
 
         return self.state
 
+    def make_static_leds(self, brightness=128):
+        """Generate static LED colors for the current game state.
+
+        No animation — solid colors only, updated on state changes.
+        Buttons 0–5 map to LEDs 0–5 (first 6). LEDs 6–15 for accent.
+        """
+        if self.state == READY:
+            # Dim rainbow — each LED a different color
+            for i in range(N_LEDS):
+                h = i * 255 // N_LEDS
+                if h < 85:
+                    c = (brightness // 4, 0, 0)
+                elif h < 170:
+                    c = (0, brightness // 4, 0)
+                else:
+                    c = (0, 0, brightness // 4)
+                _led_buf[i] = c
+            return _led_buf
+
+        elif self.state == SHOWING:
+            # Light up the active button's LED, rest off
+            for i in range(N_LEDS):
+                _led_buf[i] = (0, 0, 0)
+            if self._active_btn >= 0:
+                color = BTN_COLORS[self._active_btn]
+                c = scale(color, brightness)
+                _led_buf[self._active_btn] = c
+                mirror = N_LEDS - 1 - self._active_btn
+                if mirror != self._active_btn:
+                    _led_buf[mirror] = scale(color, brightness // 3)
+            return _led_buf
+
+        elif self.state == WAITING:
+            # Dim glow on valid buttons, bright on last correct press
+            for i in range(N_LEDS):
+                _led_buf[i] = (0, 0, 0)
+            for i in range(NUM_BUTTONS):
+                _led_buf[i] = scale(BTN_COLORS[i], brightness // 8)
+            if self._active_btn >= 0 and self._input_pos > 0:
+                c = scale(BTN_COLORS[self._active_btn], brightness)
+                _led_buf[self._active_btn] = c
+            return _led_buf
+
+        elif self.state == WIN:
+            # Static rainbow — all LEDs bright, spread across hues
+            for i in range(N_LEDS):
+                h = i * 255 // N_LEDS
+                if h < 85:
+                    r, g, b = 255 - h * 3, h * 3, 0
+                elif h < 170:
+                    h2 = h - 85
+                    r, g, b = 0, 255 - h2 * 3, h2 * 3
+                else:
+                    h2 = h - 170
+                    r, g, b = h2 * 3, 0, 255 - h2 * 3
+                _led_buf[i] = scale((r, g, b), brightness)
+            return _led_buf
+
+        elif self.state == FAIL:
+            # Solid dim red
+            c = scale((255, 0, 0), brightness // 3)
+            for i in range(N_LEDS):
+                _led_buf[i] = c
+            return _led_buf
+
+        elif self.state == GAME_OVER:
+            # Dim warm glow
+            v = max(10, brightness // 6)
+            c = (v, v // 2, 0)
+            for i in range(N_LEDS):
+                _led_buf[i] = c
+            return _led_buf
+
+        # Fallback: all off
+        for i in range(N_LEDS):
+            _led_buf[i] = (0, 0, 0)
+        return _led_buf
+
     def make_leds(self, frame, brightness=128):
-        """Generate LED colors for the current game state.
+        """Generate animated LED colors for the current game state.
 
         Buttons 0–5 map to LEDs 0–5 (first 6). LEDs 6–15 used for effects.
+        Only used by Demo mode — game screens use make_static_leds() instead.
         """
         elapsed = frame - self._state_frame
 
         if self.state == READY:
-            # Gentle breathing invite
             phase = (frame * 3) & 0xFF
             v = phase if phase < 128 else 255 - phase
             v = (v * brightness) >> 8
@@ -228,28 +306,22 @@ class SimonEngine:
             return _led_buf
 
         elif self.state == SHOWING:
-            # Light up the active button's LED
             for i in range(N_LEDS):
                 _led_buf[i] = (0, 0, 0)
             if self._active_btn >= 0:
                 color = BTN_COLORS[self._active_btn]
                 c = scale(color, brightness)
-                # Light the button's LED
                 _led_buf[self._active_btn] = c
-                # Also light the mirrored position on the second stick
                 mirror = N_LEDS - 1 - self._active_btn
                 if mirror != self._active_btn:
                     _led_buf[mirror] = scale(color, brightness // 3)
             return _led_buf
 
         elif self.state == WAITING:
-            # Dim glow on valid buttons, bright flash on last correct press
             for i in range(N_LEDS):
                 _led_buf[i] = (0, 0, 0)
-            # Show which buttons are in play (dim)
             for i in range(NUM_BUTTONS):
                 _led_buf[i] = scale(BTN_COLORS[i], brightness // 8)
-            # Flash the last correctly pressed button
             if self._active_btn >= 0 and self._input_pos > 0:
                 fade = max(0, 255 - elapsed * 20)
                 if fade > 0:
@@ -258,10 +330,8 @@ class SimonEngine:
             return _led_buf
 
         elif self.state == WIN:
-            # Rainbow chase celebration
             for i in range(N_LEDS):
                 h = (i * 255 // N_LEDS + elapsed * 8) & 0xFF
-                # Simple rainbow from hue
                 if h < 85:
                     r, g, b = 255 - h * 3, h * 3, 0
                 elif h < 170:
@@ -274,7 +344,6 @@ class SimonEngine:
             return _led_buf
 
         elif self.state == FAIL:
-            # Soft red pulse
             phase = (elapsed * 6) & 0xFF
             v = phase if phase < 128 else 255 - phase
             v = (v * brightness) >> 8
@@ -284,14 +353,12 @@ class SimonEngine:
             return _led_buf
 
         elif self.state == GAME_OVER:
-            # Fade to dim warm glow
             v = max(10, brightness // 6)
             c = (v, v // 2, 0)
             for i in range(N_LEDS):
                 _led_buf[i] = c
             return _led_buf
 
-        # Fallback: all off
         for i in range(N_LEDS):
             _led_buf[i] = (0, 0, 0)
         return _led_buf
