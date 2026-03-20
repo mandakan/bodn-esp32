@@ -5,7 +5,7 @@ from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_button_grid
 from bodn.ui.pause import PauseMenu
 from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
-from bodn.patterns import N_LEDS
+from bodn.patterns import N_LEDS, zone_pulse, zone_chase, ZONE_LID_RING
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = config.ENC_NAV
@@ -104,7 +104,20 @@ class MysteryScreen(Screen):
         if self._leds_dirty:
             self._leds_dirty = False
             brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
+            lid_bright = min(brightness, config.NEOPIXEL_LID_BRIGHTNESS)
+
+            # Sticks: game feedback (engine writes indices 0–15)
             leds = self._engine.make_static_leds(brightness)
+
+            # Lid ring: ambient glow matching output color
+            out_type = self._engine.output_type
+            out_color = self._engine.display_color
+            if out_type == OUT_MAGIC:
+                zone_chase(ZONE_LID_RING, frame, 3, out_color, lid_bright)
+            elif out_type != OUT_IDLE:
+                zone_pulse(ZONE_LID_RING, frame, 1, out_color, lid_bright)
+            else:
+                zone_pulse(ZONE_LID_RING, frame, 1, (60, 20, 80), lid_bright // 2)
 
             ses_state = self._overlay.session_mgr.state
             leds = self._overlay.static_led_override(ses_state, leds, brightness)

@@ -14,7 +14,7 @@ from bodn.simon_rules import (
     GAME_OVER,
     NUM_BUTTONS,
 )
-from bodn.patterns import N_LEDS
+from bodn.patterns import N_LEDS, zone_pulse, zone_rainbow, zone_clear, ZONE_LID_RING
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = config.ENC_NAV
@@ -108,7 +108,24 @@ class SimonScreen(Screen):
         if self._leds_dirty:
             self._leds_dirty = False
             brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
+            lid_bright = min(brightness, config.NEOPIXEL_LID_BRIGHTNESS)
+
+            # Sticks: game feedback (engine writes indices 0–15)
             leds = self._engine.make_static_leds(brightness)
+
+            # Lid ring: ambient effect matching game state
+            state = self._engine.state
+            if state == WIN:
+                zone_rainbow(ZONE_LID_RING, frame, 2, 0, lid_bright)
+            elif state == FAIL:
+                zone_pulse(ZONE_LID_RING, frame, 3, (255, 0, 0), lid_bright)
+            elif state == SHOWING and self._engine.active_button >= 0:
+                from bodn.simon_rules import BTN_COLORS
+
+                c = BTN_COLORS[self._engine.active_button]
+                zone_pulse(ZONE_LID_RING, frame, 1, c, lid_bright)
+            else:
+                zone_clear(ZONE_LID_RING)
 
             ses_state = self._overlay.session_mgr.state
             leds = self._overlay.static_led_override(ses_state, leds, brightness)

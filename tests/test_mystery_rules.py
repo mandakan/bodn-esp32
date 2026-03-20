@@ -111,25 +111,25 @@ def test_same_button_twice_is_single():
 
 
 def test_make_leds_idle_returns_n_leds():
-    from bodn.patterns import N_LEDS
+    from bodn.patterns import N_LEDS, N_STICKS
 
     engine = MysteryEngine()
     leds = engine.make_leds(frame=10, brightness=128)
     assert len(leds) == N_LEDS
-    # Should have some non-zero values (ambient glow)
-    assert any(sum(c) > 0 for c in leds)
+    # Stick LEDs should have some non-zero values (ambient glow)
+    assert any(sum(c) > 0 for c in leds[:N_STICKS])
 
 
 def test_make_leds_single_all_same_color():
-    from bodn.patterns import N_LEDS
+    from bodn.patterns import N_STICKS
 
     engine = MysteryEngine()
     engine.update(0, frame=1)
     leds = engine.make_leds(frame=1, brightness=255)
-    assert len(leds) == N_LEDS
-    # All LEDs should be the same color (red-ish)
-    assert all(led == leds[0] for led in leds)
-    assert leds[0][0] > 0  # has red component
+    # Stick LEDs should all be the same color (red-ish)
+    stick_leds = leds[:N_STICKS]
+    assert all(led == stick_leds[0] for led in stick_leds)
+    assert stick_leds[0][0] > 0  # has red component
 
 
 def test_discovery_count_accumulates():
@@ -191,8 +191,6 @@ def test_hue_shift_modifier():
 
 
 def test_modifiers_affect_leds():
-    from bodn.patterns import N_LEDS
-
     engine = MysteryEngine()
     engine.update(0, frame=1)  # Red
     leds_normal = list(engine.make_leds(frame=1, brightness=200))
@@ -204,7 +202,7 @@ def test_modifiers_affect_leds():
 
 
 def test_mirror_modifier():
-    from bodn.patterns import N_LEDS
+    from bodn.patterns import N_STICKS
 
     engine = MysteryEngine()
     engine.update(0, frame=1)
@@ -212,5 +210,5 @@ def test_mirror_modifier():
     engine.update(1, frame=2)  # combo
     engine.sw_mirror = True
     leds = engine.make_leds(frame=3, brightness=200)
-    # First and last LED should match
-    assert leds[0] == leds[N_LEDS - 1]
+    # First and last stick LED should match
+    assert leds[0] == leds[N_STICKS - 1]

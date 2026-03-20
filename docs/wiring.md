@@ -24,8 +24,8 @@ graph LR
     RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 3 → DT<br/>GPIO 40 → SW<br/>GPIO 41 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
     RotaryencodersmuststayonnativeGPIOforIRQlatency -.- ESP
 
-    WS2812BNeoPixelLEDs["WS2812B NeoPixel LEDs<br/><sub>GPIO 4 → PIN</sub>"]
-    WS2812BNeoPixelLEDs -.- ESP
+    The144LEDmstriprunsaroundtheinsideofthetranslucentlidperimeter["The 144 LED/m strip runs around the inside of the translucent lid perimeter<br/><sub>GPIO 4 → PIN</sub>"]
+    The144LEDmstriprunsaroundtheinsideofthetranslucentlidperimeter -.- ESP
 
     DevKitLipoonboardpowermonitoring["DevKit-Lipo on-board power monitoring<br/><sub>GPIO 6 → BAT_SENS_PIN<br/>GPIO 5 → PWR_SENS_PIN</sub>"]
     DevKitLipoonboardpowermonitoring -.- ESP
@@ -82,7 +82,7 @@ graph LR
 | DT | 42 | `ENC3_DT` |
 | SW | 0 | `ENC3_SW` |
 
-### WS2812B NeoPixel LEDs
+### The 144 LED/m strip runs around the inside of the translucent lid perimeter
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
@@ -110,7 +110,7 @@ graph LR
 | 1 | ILI9341 TFT | BL |
 | 2 | INMP441 I2S microphone | SD |
 | 3 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
-| 4 | WS2812B NeoPixel LEDs | PIN |
+| 4 | The 144 LED/m strip runs around the inside of the translucent lid perimeter | PIN |
 | 5 | DevKit-Lipo on-board power monitoring | PWR_SENS_PIN |
 | 6 | DevKit-Lipo on-board power monitoring | BAT_SENS_PIN |
 | 7 | MAX98357A I2S amplifier | DIN |

@@ -1,8 +1,23 @@
 # bodn/patterns.py — LED animation patterns (extracted from main.py)
+#
+# LED zones (defined in config.py):
+#   Stick A  — indices 0..7    (8 LEDs)
+#   Stick B  — indices 8..15   (8 LEDs)
+#   Lid Ring — indices 16..107 (92 LEDs, 144 LED/m strip around lid)
+#
+# Full-strip pattern functions (pattern_*) write the whole _led_buf.
+# Zone-aware helpers (zone_fill, zone_pattern) operate on a (start, count) slice.
 
 from bodn import config
 
 N_LEDS = config.NEOPIXEL_COUNT
+N_STICKS = config.LED_STICKS[1]  # 16 — total LEDs in both sticks
+
+# Zone constants re-exported for convenience
+ZONE_STICK_A = config.LED_STICK_A
+ZONE_STICK_B = config.LED_STICK_B
+ZONE_STICKS = config.LED_STICKS
+ZONE_LID_RING = config.LED_LID_RING
 
 # Pre-allocated LED buffer — reused by all pattern functions to avoid
 # creating a new list every frame.  Callers must treat the returned list
@@ -140,6 +155,54 @@ def pattern_fill(frame, speed, colour, bright):
         else:
             _led_buf[i] = _BLACK
     return _led_buf
+
+
+# --- Zone-aware helpers ---
+
+
+def zone_fill(zone, colour):
+    """Fill a zone with a solid colour. zone = (start, count)."""
+    start, count = zone
+    for i in range(start, start + count):
+        _led_buf[i] = colour
+
+
+def zone_clear(zone):
+    """Clear a zone to black. zone = (start, count)."""
+    zone_fill(zone, _BLACK)
+
+
+def zone_rainbow(zone, frame, speed, hue_off, bright):
+    """Rainbow pattern within a zone."""
+    start, count = zone
+    for i in range(count):
+        h = (hue_off + i * 255 // count + frame * speed) & 0xFF
+        _led_buf[start + i] = scale(hsv_to_rgb(h, 255, 255), bright)
+
+
+def zone_pulse(zone, frame, speed, colour, bright):
+    """Pulse pattern within a zone."""
+    phase = (frame * speed) & 0xFF
+    v = phase if phase < 128 else 255 - phase
+    v = (v * bright) >> 7
+    c = scale(colour, v)
+    start, count = zone
+    for i in range(start, start + count):
+        _led_buf[i] = c
+
+
+def zone_chase(zone, frame, speed, colour, bright):
+    """Chase pattern within a zone."""
+    start, count = zone
+    pos = (frame * speed // 2) % count
+    for i in range(count):
+        dist = (pos - i) % count
+        if dist == 0:
+            _led_buf[start + i] = scale(colour, bright)
+        elif dist < 4:
+            _led_buf[start + i] = scale(colour, bright >> dist)
+        else:
+            _led_buf[start + i] = _BLACK
 
 
 PATTERNS = [

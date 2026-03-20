@@ -15,11 +15,12 @@
 | 8 | Push buttons | 7mm mini momentary, mixed colors (Gebildet 24-pack) | ~110 SEK |
 | 4 | Toggle switches | Mini SPST on/off (Gebildet 12-pack) | ~99 SEK |
 | 2 | LED sticks | WS2812 8-LED RGB modules (from 10-pack) | ~incl. |
+| 1 | LED strip | WS2812B 144 LED/m RGBIC strip, cut to 640 mm (~92 LEDs) | ~169 SEK |
 | 1 | GPIO expander | Waveshare MCP23017 I2C 16-IO expansion board | ~85 SEK |
 | — | Wiring | Dupont jumper wire kits M-M/F-M/F-F (AZDelivery 3×40) | ~89 SEK |
 | 1 | Breadboard | Olimex MAXI breadboard (prototyping) | ~40 SEK |
 
-**Estimated total: ~1 575 SEK**
+**Estimated total: ~1 745 SEK**
 
 ## Pin assignments
 
@@ -90,11 +91,19 @@ MCP23017 pins: GPB0–GPB3 (config: `MCP_SW_PINS`)
 
 | Signal | GPIO |
 |--------|------|
-| Data | 6 |
+| Data | 4 |
 
-16 addressable RGB LEDs (2 × 8-LED WS2812 sticks chained).
-Brightness capped in software for battery life and kid-safe eyes.
-Future option: add a WS2812B 144 LED/m strip for ambient lighting in transparent enclosure.
+108 addressable RGB LEDs on a single daisy-chained data line, split into three logical zones:
+
+| Zone | LEDs | Indices | Component | Placement |
+|------|------|---------|-----------|-----------|
+| Stick A | 8 | 0–7 | WS2812 8-LED module | Lid (left or parallel) |
+| Stick B | 8 | 8–15 | WS2812 8-LED module | Lid (right or parallel) |
+| Lid Ring | 92 | 16–107 | WS2812B 144 LED/m strip (640 mm) | Inside lid perimeter |
+
+Chain order: Stick A DOUT → Stick B DIN → Stick B DOUT → Lid Ring DIN.
+
+Brightness is capped in software per zone: sticks at 25% (64/255), lid ring at 12.5% (32/255) for ambient glow. For strips longer than ~0.5 m, inject 5V power at the midpoint to prevent voltage drop and color shift at the far end.
 
 ## Display architecture
 
@@ -111,7 +120,7 @@ Both share SPI bus 2. The driver deasserts CS after each `show()`, so they can c
 - ILI9341 touch (XPT2046) will need a third CS pin on the same SPI bus (pin TBD).
 - INMP441 and MAX98357A on I2S (separate IN/OUT peripherals on ESP32-S3).
 - All buttons and toggle switches are on the MCP23017 I2C expander with its internal pull-ups and software debouncing.
-- NeoPixel strip on a single GPIO — data line chained through all 16 LEDs.
+- NeoPixel chain on a single GPIO — data line through 108 LEDs (2 sticks + lid ring).
 - WS2812 LEDs run at 5V but the data line works reliably from 3.3V with short wires. If you get flicker, add a 330Ω series resistor on the data line.
 - Battery voltage can be read via the DevKit-Lipo's built-in ADC circuit.
 - GPIO 0 and 46 are strapping pins but safe as inputs with pull-up after boot.
