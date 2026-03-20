@@ -25,7 +25,6 @@ from bodn.ui.home import HomeScreen
 from bodn.ui.demo import DemoScreen
 from bodn.ui.clock import ClockScreen
 from bodn.ui.ambient import StatusStrip
-from bodn.ui.catface import CatFaceScreen
 
 ENC_STEPS = 20
 N_LEDS = config.NEOPIXEL_COUNT
@@ -115,6 +114,8 @@ def create_ui(
     manager.set_overlay(overlay)
 
     # Secondary display — cat face (default) + status strip
+    from bodn.ui.catface import CatFaceScreen
+
     secondary = SecondaryDisplay(tft2, theme2)
     cat = CatFaceScreen()
     secondary.set_content(cat)
@@ -176,6 +177,8 @@ async def primary_task(manager, settings, inp, encoders):
     while True:
         try:
             manager.tick()
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
             errors += 1
             print("primary_task error #{}: {}".format(errors, e))
@@ -212,6 +215,8 @@ async def secondary_task(secondary):
     while True:
         try:
             secondary.tick()
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
             errors += 1
             print("secondary_task error #{}: {}".format(errors, e))
@@ -224,6 +229,8 @@ async def housekeeping_task(session_mgr):
     while True:
         try:
             session_mgr.tick()
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
             errors += 1
             print("housekeeping_task error #{}: {}".format(errors, e))
