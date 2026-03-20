@@ -53,6 +53,7 @@ class ScreenManager:
         self._overlay = None
         self._frame = 0
         self._dirty = True  # full clear needed on first frame / transitions
+        self._show_needed = False  # framebuffer changed, just push SPI (no re-render)
         # Perf counters (enabled via debug_perf setting)
         self.debug_perf = False
         self._perf_total = 0
@@ -67,6 +68,15 @@ class ScreenManager:
     def invalidate(self):
         """Mark the display as needing a full redraw on the next tick."""
         self._dirty = True
+
+    def request_show(self):
+        """Request a show() on the next tick without a full re-render.
+
+        Use this after writing directly to the framebuffer (e.g. a small
+        partial update like a progress bar). The ScreenManager will call
+        tft.show() but will NOT re-render the active screen or overlay.
+        """
+        self._show_needed = True
 
     def push(self, screen):
         """Push a screen onto the stack."""
@@ -124,10 +134,22 @@ class ScreenManager:
             overlay_dirty = nr() if nr else True
 
         if not screen_dirty and not overlay_dirty:
-            if self.debug_perf:
+            # No re-render needed. Check if a show-only push was requested
+            # (e.g. partial framebuffer update like a progress bar).
+            if self._show_needed:
+                self._show_needed = False
+                self.tft.show()
+                if self.debug_perf:
+                    self._perf_total += 1
+                    self._perf_drawn += 1
+                    self._perf_report()
+            elif self.debug_perf:
                 self._perf_total += 1
                 self._perf_report()
-            return  # nothing changed — skip render + SPI push
+            return
+
+        # Full render path
+        self._show_needed = False
 
         # Clear on screen transitions
         if self._dirty:

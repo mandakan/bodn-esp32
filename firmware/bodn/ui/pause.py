@@ -114,11 +114,11 @@ class PauseMenu(Screen):
             step = int(self._hold.progress * _HOLD_BAR_STEPS)
             if step != self._last_hold_step:
                 self._last_hold_step = step
-                # Draw bar directly — partial update, no game re-render
+                # Draw bar directly into framebuffer — no game re-render
                 tft = self._manager.tft
                 theme = self._manager.theme
                 draw_hold_bar(tft, theme, self._hold.progress, theme.width)
-                tft.show()
+                self._manager.request_show()
                 self._bar_visible = True
         elif was_holding and self._manager:
             # Just released — clear the bar strip
@@ -127,7 +127,7 @@ class PauseMenu(Screen):
                 tft = self._manager.tft
                 theme = self._manager.theme
                 tft.fill_rect(0, 0, theme.width, _HOLD_BAR_H, theme.BLACK)
-                tft.show()
+                self._manager.request_show()
                 self._bar_visible = False
 
         return None
