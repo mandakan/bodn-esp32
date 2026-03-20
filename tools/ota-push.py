@@ -18,6 +18,7 @@ Usage:
 import hashlib
 import json
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -92,21 +93,31 @@ def push(base_url: str, token: str = "", force: bool = False) -> bool:
         }
         if token:
             hdrs["Authorization"] = f"Bearer {token}"
-        req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
-        try:
-            resp = urllib.request.urlopen(req, timeout=10)
-            print(f"  {rel_path} ({len(data)} bytes)")
-            resp.read()
-            new_hashes[rel_path] = h
-            uploaded += 1
-        except urllib.error.HTTPError as e:
-            if e.code == 401:
-                print(f"  ERROR {rel_path}: Unauthorized (set --token)")
-            else:
-                print(f"  ERROR {rel_path}: HTTP {e.code}")
-            ok = False
-        except Exception as e:
-            print(f"  ERROR {rel_path}: {e}")
+
+        success = False
+        for attempt in range(3):
+            timeout = 10 + attempt * 10  # 10s, 20s, 30s
+            req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+            try:
+                resp = urllib.request.urlopen(req, timeout=timeout)
+                resp.read()
+                print(f"  {rel_path} ({len(data)} bytes)")
+                new_hashes[rel_path] = h
+                uploaded += 1
+                success = True
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 401:
+                    print(f"  ERROR {rel_path}: Unauthorized (set --token)")
+                    break  # no point retrying auth errors
+                else:
+                    print(f"  ERROR {rel_path}: HTTP {e.code}")
+            except Exception as e:
+                label = "retrying..." if attempt < 2 else "giving up."
+                print(f"  {rel_path}: {e}, {label}")
+                time.sleep(1)
+
+        if not success:
             ok = False
 
     if ok:
