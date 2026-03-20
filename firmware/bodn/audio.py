@@ -8,17 +8,25 @@ try:
 except ImportError:
     import asyncio
 
+try:
+    from micropython import const
+except ImportError:
+
+    def const(x):
+        return x
+
+
 from bodn import tones
 from bodn.wav import WavReader
 
 
 # Channel priorities (higher number = higher priority)
-CH_MUSIC = 0
-CH_SFX = 1
-CH_UI = 2
+CH_MUSIC = const(0)
+CH_SFX = const(1)
+CH_UI = const(2)
 CHANNEL_NAMES = {"music": CH_MUSIC, "sfx": CH_SFX, "ui": CH_UI}
 
-_BUF_SIZE = 1024  # bytes per audio buffer
+_BUF_SIZE = const(1024)  # bytes per audio buffer
 
 
 class ToneSource:
@@ -85,6 +93,7 @@ class AudioEngine:
         self._i2s = i2s
         self._channels = [_Channel() for _ in range(3)]
         self._buf = bytearray(_BUF_SIZE)
+        self._buf_view = memoryview(self._buf)
         self._silence = bytes(_BUF_SIZE)
         self._volume = 80  # 0-100
         self._vol_mult = 52429  # pre-computed fixed-point multiplier (80%)
@@ -167,19 +176,24 @@ class AudioEngine:
 
     async def start(self):
         """Background audio loop — add to asyncio.gather()."""
+        # Cache attributes as locals — avoids dict lookups each iteration
         buf = self._buf
+        buf_view = self._buf_view
         i2s = self._i2s
+        channels = self._channels
+        silence = self._silence
+        sleep_ms = asyncio.sleep_ms
 
         while True:
             ch_idx = self._active_channel()
 
             if ch_idx < 0:
                 # Nothing playing — write silence (MAX98357A auto-mutes)
-                i2s.write(self._silence)
-                await asyncio.sleep_ms(20)
+                i2s.write(silence)
+                await sleep_ms(20)
                 continue
 
-            ch = self._channels[ch_idx]
+            ch = channels[ch_idx]
             n = 0
             try:
                 n = ch.source.read_chunk(buf)
@@ -198,8 +212,9 @@ class AudioEngine:
 
             self._apply_volume(buf, n)
             try:
-                i2s.write(buf[:n])
+                # memoryview slice avoids allocating a new bytes object
+                i2s.write(buf_view[:n])
             except Exception as e:
                 print("audio write error:", e)
 
-            await asyncio.sleep_ms(0)
+            await sleep_ms(0)

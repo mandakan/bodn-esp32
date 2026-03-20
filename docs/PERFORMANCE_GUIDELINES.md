@@ -76,7 +76,64 @@ The 128×160 secondary display is split into a **content zone** (128×128, y=0..
 
 ---
 
-## 4. Input (buttons & encoders)
+## 4. MicroPython-specific optimizations
+
+These apply across all modules. See the [official guide](https://docs.micropython.org/en/latest/reference/speed_python.html).
+
+### `const()` for module-level numeric constants
+
+```python
+from micropython import const
+_BUF_SIZE = const(1024)
+CH_UI = const(2)
+```
+
+The compiler inlines the value at each use site, avoiding a global dictionary
+lookup every time the name appears. Use for any numeric constant accessed in
+loops or frequently called functions.
+
+### Cache attribute lookups in locals
+
+Each dot access (`self._buf`, `asyncio.sleep_ms`) is a dictionary lookup in
+MicroPython bytecode. In hot loops or long-running coroutines, cache them once:
+
+```python
+async def run(self):
+    buf = self._buf          # one lookup instead of N
+    sleep_ms = asyncio.sleep_ms
+    while True:
+        process(buf)
+        await sleep_ms(10)
+```
+
+### Prefer `bytearray`, `memoryview`, `array` over lists
+
+- `bytearray` / `array.array` for numeric buffers — compact, no per-element
+  object overhead.
+- `memoryview` for zero-copy slicing — `buf_view[:n]` does not allocate a new
+  object, unlike `buf[:n]` on a `bytearray`.
+
+### Use `readinto()` over `read()`
+
+`file.read(n)` allocates a new `bytes` object each call. Where the API
+supports it, use `file.readinto(buf)` with a pre-allocated buffer.
+
+### Escalation: `@micropython.native` and `@micropython.viper`
+
+When a pure-Python hot loop is too slow after applying the above:
+
+1. **`@micropython.native`** — emits native CPU opcodes instead of bytecode.
+   ~2× speedup, minimal restrictions. Try this first.
+2. **`@micropython.viper`** — more aggressive; uses type hints (`int`, `ptr8`)
+   for near-C speed. Restrictions: no floats, limited argument types, no
+   context managers.
+
+Both are built into MicroPython — no custom firmware build needed. Keep the
+decorated function small and self-contained.
+
+---
+
+
 
 - **Debounce in software** with minimal overhead:
   - Sample inputs at a fixed interval (e.g. every 5-10 ms).
@@ -176,5 +233,10 @@ When generating or reviewing code, check:
    - `print()` only on meaningful events, not every iteration.
 7. **Allocations**:
    - Buffers reused; no big lists created in tight loops.
+   - `memoryview` used for buffer slices passed to I/O (I2S, SPI, file).
+8. **MicroPython idioms**:
+   - Module-level numeric constants use `const()`.
+   - Hot loops / long-running coroutines cache `self.*` and module attributes as locals.
+   - No `file.read(n)` in loops — use `readinto(buf)` with pre-allocated buffer.
 
 If any of these are violated, prefer a simpler, event-driven, low-refresh design over "desktop style" code.
