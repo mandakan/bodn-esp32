@@ -76,11 +76,12 @@ bodn-esp32/
 │        ├─ demo.py         # LED playground mode
 │        ├─ mystery.py      # Mystery Box discovery game
 │        ├─ clock.py        # clock display mode
-│        ├─ ambient.py      # secondary display (clock + session bar)
+│        ├─ ambient.py      # AmbientClock (content) + StatusStrip (status)
+│        ├─ catface.py      # cat face with emotions (secondary content)
 │        ├─ settings.py     # on-device settings menu
 │        ├─ overlay.py      # session state overlay
 │        ├─ pause.py        # in-game pause menu
-│        └─ secondary.py    # secondary display manager
+│        └─ secondary.py    # two-zone secondary display manager
 ├─ docs/
 │  ├─ hardware.md           # BOM, board notes
 │  ├─ wiring.md             # auto-generated pin diagram and tables
