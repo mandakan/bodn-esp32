@@ -86,6 +86,31 @@ def draw_hold_bar(tft, theme, progress, w):
         tft.fill_rect(0, 0, w, bar_h, theme.WHITE)
 
 
+def draw_battery_icon(tft, x, y, w, h, percent, fg, bg, border):
+    """Draw a battery icon (w×h px) at (x, y) filled to percent (0–100).
+
+    Layout: main body (w-2 wide) + a 2-px terminal nub on the right.
+    """
+    nub_h = max(2, h // 2)
+    nub_y = y + (h - nub_h) // 2
+    body_w = w - 2
+
+    # Terminal nub
+    tft.fill_rect(x + body_w, nub_y, 2, nub_h, border)
+
+    # Body outline
+    tft.rect(x, y, body_w, h, border)
+
+    # Fill interior
+    inner_w = body_w - 4
+    fill_w = max(0, inner_w * percent // 100)
+    if fill_w > 0:
+        tft.fill_rect(x + 2, y + 2, fill_w, h - 4, fg)
+    unfill_w = inner_w - fill_w
+    if unfill_w > 0:
+        tft.fill_rect(x + 2 + fill_w, y + 2, unfill_w, h - 4, bg)
+
+
 def draw_icon(tft, data, x, y, w, h, color, scale=1):
     """Draw a 1-bit bitmap (row-major, MSB-first)."""
     byte_idx = 0

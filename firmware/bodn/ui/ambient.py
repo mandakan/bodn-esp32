@@ -3,8 +3,9 @@
 import time
 from bodn.session import PLAYING, WARN_5, WARN_2, IDLE
 from bodn.ui.screen import Screen
-from bodn.ui.widgets import draw_centered, draw_progress_bar
+from bodn.ui.widgets import draw_centered, draw_progress_bar, draw_battery_icon
 from bodn.ui.secondary import CONTENT_H, STATUS_Y, STATUS_H
+import bodn.battery as battery
 
 
 _AMBIENT_TEXT_Y = 38  # 2px above clock at y=40 (scale=3, h=24)
@@ -56,11 +57,15 @@ class StatusStrip(Screen):
         self._last_min = -1
         self._prev_state = None
         self._prev_remaining_min = -1
+        self._prev_bat_pct = -1
+        self._prev_charging = None
 
     def enter(self, display):
         self._last_min = -1
         self._prev_state = None
         self._prev_remaining_min = -1
+        self._prev_bat_pct = -1
+        self._prev_charging = None
 
     def needs_redraw(self):
         changed = False
@@ -82,6 +87,13 @@ class StatusStrip(Screen):
                 self._prev_remaining_min = remaining_min
                 changed = True
 
+        # Battery (cached — at most one ADC read per call, refresh every 30 s)
+        bat_pct, charging = battery.read()
+        if bat_pct != self._prev_bat_pct or charging != self._prev_charging:
+            self._prev_bat_pct = bat_pct
+            self._prev_charging = charging
+            changed = True
+
         return changed
 
     def render(self, tft, theme, frame):
@@ -89,6 +101,8 @@ class StatusStrip(Screen):
         y0 = STATUS_Y
         tft.fill_rect(0, y0, w, STATUS_H, theme.BLACK)
         t = time.localtime()
+
+        bat_pct, charging = battery.read()
 
         # Row 1: clock left, session info right
         clock = "{:02d}:{:02d}".format(t[3], t[4])
@@ -113,16 +127,12 @@ class StatusStrip(Screen):
             tft.text(label, x_right, y0 + 2, bar_color)
 
             # Progress bar — row 2
-            bar_x = 2
-            bar_w = w - 4
-            bar_y = y0 + 14
-            bar_h = 8
             draw_progress_bar(
                 tft,
-                bar_x,
-                bar_y,
-                bar_w,
-                bar_h,
+                2,
+                y0 + 14,
+                w - 4,
+                8,
                 remaining,
                 limit,
                 bar_color,
@@ -136,3 +146,29 @@ class StatusStrip(Screen):
             label = "{} plays".format(remaining)
             x_right = w - len(label) * 8 - 2
             tft.text(label, x_right, y0 + 2, color)
+
+        # Battery icon — row 2, always visible
+        # Colour: green ≥50 %, amber ≥20 %, red <20 %; bolt overlay when charging
+        if bat_pct >= 50:
+            bat_color = theme.GREEN
+        elif bat_pct >= 20:
+            bat_color = theme.AMBER
+        else:
+            bat_color = theme.RED
+        icon_w, icon_h = 20, 10
+        icon_x = w - icon_w - 2
+        icon_y = y0 + 18
+        draw_battery_icon(
+            tft,
+            icon_x,
+            icon_y,
+            icon_w,
+            icon_h,
+            bat_pct,
+            bat_color,
+            theme.BLACK,
+            theme.WHITE,
+        )
+        if charging:
+            # Small "+" mark to indicate charging
+            tft.text("+", icon_x + icon_w // 2 - 4, icon_y + 1, theme.YELLOW)
