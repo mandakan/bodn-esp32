@@ -42,20 +42,24 @@ def parse_config(path: Path) -> list[Group]:
             continue
 
         # Skip non-pin constants and MCP23017 expander pins (not ESP32 GPIOs)
-        if re.match(
-            r"^[A-Z][A-Z0-9_]*(WIDTH|HEIGHT|RATE|SIZE|LEN|COUNT|MAX|MIN|MADCTL|OFFSET)\s*=",
-            line,
-        ) or re.match(r"^MCP", line):
+        if (
+            re.match(
+                r"^[A-Z][A-Z0-9_]*(WIDTH|HEIGHT|RATE|SIZE|LEN|COUNT|MAX|MIN|MADCTL|OFFSET|BRIGHTNESS|ADDR|_NAV|_A\b|_B\b)\s*=",
+                line,
+            )
+            or re.match(r"^MCP", line)
+            or re.match(r"^ENC_(NAV|A|B)\s*=", line)
+        ):
             continue
 
-        # Single assignment: NAME = 42
-        m = re.match(r"^([A-Z][A-Z0-9_]+)\s*=\s*(\d+)$", line)
+        # Single assignment: NAME = 42  (optional trailing inline comment)
+        m = re.match(r"^([A-Z][A-Z0-9_]+)\s*=\s*(\d+)\s*(?:#.*)?$", line)
         if m:
             current_pins.append((m.group(1), int(m.group(2))))
             continue
 
-        # Tuple assignment: A, B, C = 1, 2, 3
-        m = re.match(r"^([A-Z][A-Z0-9_,\s]+?)\s*=\s*([\d,\s]+)$", line)
+        # Tuple assignment: A, B, C = 1, 2, 3  (optional trailing inline comment)
+        m = re.match(r"^([A-Z][A-Z0-9_,\s]+?)\s*=\s*([\d,\s]+?)\s*(?:#.*)?$", line)
         if m:
             names = [n.strip() for n in m.group(1).split(",")]
             vals = [int(v.strip()) for v in m.group(2).split(",")]
@@ -94,9 +98,18 @@ def friendly_name(var_name: str) -> str:
     if m:
         prefix = m.group(1).replace("_PINS", "").replace("_", " ")
         return f"{prefix} {m.group(2)}"
-    for prefix in ("TFT_", "I2S_MIC_", "I2S_SPK_", "ENC1_", "ENC2_", "ENC3_", "SW_", "NEOPIXEL_"):
+    for prefix in (
+        "TFT_",
+        "I2S_MIC_",
+        "I2S_SPK_",
+        "ENC1_",
+        "ENC2_",
+        "ENC3_",
+        "SW_",
+        "NEOPIXEL_",
+    ):
         if var_name.startswith(prefix):
-            return var_name[len(prefix):]
+            return var_name[len(prefix) :]
     return var_name
 
 
@@ -137,9 +150,7 @@ def print_terminal(groups: list[Group]) -> None:
             label = friendly_name(var_name)
             print(f"    {label:<12s}  →  GPIO {gpio}")
             if gpio in all_gpios:
-                print(
-                    f"    ⚠️  CONFLICT: GPIO {gpio} also used by {all_gpios[gpio]}"
-                )
+                print(f"    ⚠️  CONFLICT: GPIO {gpio} also used by {all_gpios[gpio]}")
             all_gpios[gpio] = f"{comment}: {label}"
 
     print()
@@ -202,9 +213,7 @@ def generate_markdown(groups: list[Group]) -> str:
         for var_name, gpio in pins:
             label = f"{short_label(comment)}: {friendly_name(var_name)}"
             if gpio in all_gpios:
-                conflicts.append(
-                    f"**GPIO {gpio}**: {all_gpios[gpio]} / {label}"
-                )
+                conflicts.append(f"**GPIO {gpio}**: {all_gpios[gpio]} / {label}")
             all_gpios[gpio] = label
 
     lines.append("### All GPIOs")
@@ -241,7 +250,9 @@ def update_wiring_md(content: str) -> None:
         if MARKER_START in existing and MARKER_END in existing:
             # Replace between markers
             before = existing[: existing.index(MARKER_START)]
-            after = existing[existing.index(MARKER_END) + len(MARKER_END) :].lstrip("\n")
+            after = existing[existing.index(MARKER_END) + len(MARKER_END) :].lstrip(
+                "\n"
+            )
             WIRING_MD.write_text(before + wrapped + "\n" + after)
             return
 

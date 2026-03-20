@@ -9,30 +9,33 @@ Regenerate: `uv run python tools/pinout.py --md`
 graph LR
     ESP["ESP32-S3<br/>DevKit-Lipo"]
 
-    SharesSPIbuswithsecondarydisplay["Shares SPI bus with secondary display<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST</sub>"]
-    ESP -- SPI --> SharesSPIbuswithsecondarydisplay
+    ILI9341TFT["ILI9341 TFT<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST<br/>GPIO 1 → BL</sub>"]
+    ESP -- SPI --> ILI9341TFT
 
     ST7735TFT["ST7735 TFT<br/><sub>GPIO 39 → TFT2_CS</sub>"]
     ESP -- SPI --> ST7735TFT
 
-    loadwouldcorrupttheI2SsignalSDmovedtoGPIO2["load would corrupt the I2S signal. SD moved to GPIO 2.<br/><sub>GPIO 14 → SCK<br/>GPIO 15 → WS<br/>GPIO 2 → SD</sub>"]
-    ESP -- I2S --> loadwouldcorrupttheI2SsignalSDmovedtoGPIO2
+    INMP441I2Smicrophone["INMP441 I2S microphone<br/><sub>GPIO 14 → SCK<br/>GPIO 15 → WS<br/>GPIO 2 → SD</sub>"]
+    INMP441I2Smicrophone -- I2S --> ESP
 
-    GPIO5isreservedbytheDevKitLipoboardDINmovedtoGPIO7["GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7.<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN</sub>"]
-    GPIO5isreservedbytheDevKitLipoboardDINmovedtoGPIO7 -.- ESP
+    MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN</sub>"]
+    ESP -- I2S --> MAX98357AI2Samplifier
 
-    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 19 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 3 → DT<br/>GPIO 40 → SW<br/>GPIO 41 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
+    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 3 → DT<br/>GPIO 40 → SW<br/>GPIO 41 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
     RotaryencodersmuststayonnativeGPIOforIRQlatency -.- ESP
 
-    GPIO6isreservedbytheDevKitLipoboarduseGPIO4instead["GPIO 6 is reserved by the DevKit-Lipo board — use GPIO 4 instead.<br/><sub>GPIO 4 → PIN</sub>"]
-    GPIO6isreservedbytheDevKitLipoboarduseGPIO4instead -.- ESP
+    WS2812BNeoPixelLEDs["WS2812B NeoPixel LEDs<br/><sub>GPIO 4 → PIN</sub>"]
+    WS2812BNeoPixelLEDs -.- ESP
+
+    DevKitLipoonboardpowermonitoring["DevKit-Lipo on-board power monitoring<br/><sub>GPIO 6 → BAT_SENS_PIN<br/>GPIO 5 → PWR_SENS_PIN</sub>"]
+    DevKitLipoonboardpowermonitoring -.- ESP
 
     I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
     I2CbuspUEXTconnector -.- ESP
 
 ```
 
-### Shares SPI bus with secondary display
+### ILI9341 TFT
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
@@ -41,6 +44,7 @@ graph LR
 | CS | 10 | `TFT_CS` |
 | DC | 8 | `TFT_DC` |
 | RST | 9 | `TFT_RST` |
+| BL | 1 | `TFT_BL` |
 
 ### ST7735 TFT
 
@@ -48,7 +52,7 @@ graph LR
 |--------|------|-----------------|
 | TFT2_CS | 39 | `TFT2_CS` |
 
-### load would corrupt the I2S signal. SD moved to GPIO 2.
+### INMP441 I2S microphone
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
@@ -56,7 +60,7 @@ graph LR
 | WS | 15 | `I2S_MIC_WS` |
 | SD | 2 | `I2S_MIC_SD` |
 
-### GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7.
+### MAX98357A I2S amplifier
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
@@ -68,7 +72,7 @@ graph LR
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
-| CLK | 19 | `ENC1_CLK` |
+| CLK | 21 | `ENC1_CLK` |
 | DT | 18 | `ENC1_DT` |
 | SW | 17 | `ENC1_SW` |
 | CLK | 16 | `ENC2_CLK` |
@@ -78,11 +82,18 @@ graph LR
 | DT | 42 | `ENC3_DT` |
 | SW | 0 | `ENC3_SW` |
 
-### GPIO 6 is reserved by the DevKit-Lipo board — use GPIO 4 instead.
+### WS2812B NeoPixel LEDs
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
 | PIN | 4 | `NEOPIXEL_PIN` |
+
+### DevKit-Lipo on-board power monitoring
+
+| Signal | GPIO | Config variable |
+|--------|------|-----------------|
+| BAT_SENS_PIN | 6 | `BAT_SENS_PIN` |
+| PWR_SENS_PIN | 5 | `PWR_SENS_PIN` |
 
 ### I2C bus — pUEXT connector
 
@@ -96,27 +107,30 @@ graph LR
 | GPIO | Component | Signal |
 |------|-----------|--------|
 | 0 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
-| 2 | load would corrupt the I2S signal. SD moved to GPIO 2. | SD |
+| 1 | ILI9341 TFT | BL |
+| 2 | INMP441 I2S microphone | SD |
 | 3 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
-| 4 | GPIO 6 is reserved by the DevKit-Lipo board — use GPIO 4 instead. | PIN |
-| 7 | GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7. | DIN |
-| 8 | Shares SPI bus with secondary display | DC |
-| 9 | Shares SPI bus with secondary display | RST |
-| 10 | Shares SPI bus with secondary display | CS |
-| 11 | Shares SPI bus with secondary display | MOSI |
-| 12 | Shares SPI bus with secondary display | SCK |
-| 13 | GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7. | BCK |
-| 14 | load would corrupt the I2S signal. SD moved to GPIO 2. | SCK |
-| 15 | load would corrupt the I2S signal. SD moved to GPIO 2. | WS |
+| 4 | WS2812B NeoPixel LEDs | PIN |
+| 5 | DevKit-Lipo on-board power monitoring | PWR_SENS_PIN |
+| 6 | DevKit-Lipo on-board power monitoring | BAT_SENS_PIN |
+| 7 | MAX98357A I2S amplifier | DIN |
+| 8 | ILI9341 TFT | DC |
+| 9 | ILI9341 TFT | RST |
+| 10 | ILI9341 TFT | CS |
+| 11 | ILI9341 TFT | MOSI |
+| 12 | ILI9341 TFT | SCK |
+| 13 | MAX98357A I2S amplifier | BCK |
+| 14 | INMP441 I2S microphone | SCK |
+| 15 | INMP441 I2S microphone | WS |
 | 16 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 17 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 18 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
-| 19 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
+| 21 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 41 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 42 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
-| 45 | GPIO 5 is reserved by the DevKit-Lipo board — DIN moved to GPIO 7. | WS |
+| 45 | MAX98357A I2S amplifier | WS |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |
 | 48 | I2C bus — pUEXT connector | I2C_SDA |
 <!-- pinout:end -->
