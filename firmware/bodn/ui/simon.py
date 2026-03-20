@@ -89,12 +89,16 @@ class SimonScreen(Screen):
                 emotion = _STATE_EMOTIONS.get(state, NEUTRAL)
                 self._secondary.set_emotion(emotion)
 
-        # Active button changes during SHOWING need redraws
+        # Active button advances during SHOWING — only the dot row changes,
+        # so use a partial push instead of a full redraw.
         active_btn = self._engine.active_button
         if active_btn != self._prev_active_btn:
             self._prev_active_btn = active_btn
-            self._dirty = True
             self._leds_dirty = True
+            if state == SHOWING and not self._dirty and self._manager:
+                self._push_dot_row()
+            else:
+                self._dirty = True
         # Button press feedback
         if btn >= 0:
             self._dirty = True
@@ -112,6 +116,44 @@ class SimonScreen(Screen):
             for i in range(N_LEDS):
                 self._np[i] = leds[i]
             self._np.write()
+
+    def _push_dot_row(self):
+        """Partial push of just the sequence dot row during SHOWING.
+
+        Called from update() when active_button advances and the rest of
+        the screen hasn't changed. Pushes only the dot row rectangle
+        (~12 KB for landscape) instead of the full framebuffer (~150 KB).
+        """
+        tft = self._manager.tft
+        theme = self._manager.theme
+        eng = self._engine
+        landscape = theme.width > theme.height
+        round_num = eng.sequence_length
+
+        if landscape:
+            dot_y = 40
+            dot_size = min(20, (theme.width - 40) // max(1, round_num) - 4)
+            step = dot_size + 4
+            total_w = round_num * step - 4
+        else:
+            dot_y = 20
+            dot_size = min(14, (theme.width - 16) // max(1, round_num) - 2)
+            step = dot_size + 2
+            total_w = round_num * step - 2
+
+        dot_x0 = (theme.width - total_w) // 2
+        row_h = dot_size + 4
+        tft.fill_rect(0, dot_y, theme.width, row_h, theme.BLACK)
+
+        for i in range(round_num):
+            x = dot_x0 + i * step
+            color = theme.BTN_565[eng.sequence[i]]
+            if i < eng._show_pos or (i == eng._show_pos and eng.active_button >= 0):
+                tft.fill_rect(x, dot_y, dot_size, dot_size, color)
+            else:
+                tft.rect(x, dot_y, dot_size, dot_size, theme.MUTED)
+
+        self._manager.request_show(0, dot_y, theme.width, row_h)
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:

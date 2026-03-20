@@ -12,9 +12,17 @@ NAV = config.ENC_NAV
 class ClockScreen(Screen):
     """Shows current time (HH:MM) and ISO date.
 
-    Only redraws when the second changes (~1/sec instead of ~33/sec).
+    Time ticks (1/sec) are partial updates — only the text region is pushed
+    via request_show(x, y, w, h).  Full redraws happen only on transitions
+    (enter, pause open/close), keeping the typical SPI cost at ~7 KB/sec
+    instead of ~150 KB/sec.
     Nav encoder button opens pause menu.
     """
+
+    # Region containing both text lines (clock scale=2→16 px tall, date 8 px).
+    # Relative to theme.CENTER_Y; total height = (CENTER_Y+10+8) - (CENTER_Y-20) = 38.
+    _TEXT_REL_Y = -20  # offset from CENTER_Y
+    _TEXT_H = 38
 
     def __init__(self):
         self._manager = None
@@ -29,12 +37,10 @@ class ClockScreen(Screen):
         self._dirty = True
 
     def needs_redraw(self):
+        # Full render only for transitions and pause menu state changes.
+        # Normal time ticks are handled via request_show() in update().
         if self._pause.is_open:
             return self._pause.needs_render
-        t = time.localtime()
-        if t[5] != self._last_sec:
-            self._last_sec = t[5]
-            self._dirty = True
         return self._dirty
 
     def update(self, inp, frame):
@@ -49,19 +55,26 @@ class ClockScreen(Screen):
         if inp.enc_btn_pressed[NAV]:
             self._pause.open()
             self._dirty = True
-
-    def render(self, tft, theme, frame):
-        if self._pause.is_open:
-            if self._dirty:
-                self._dirty = False
-                tft.fill(theme.BLACK)
-                self._render_clock(tft, theme)
-            self._pause.render(tft, theme, frame)
             return
 
+        # Time tick — partial push, no full render cycle
+        t = time.localtime()
+        if t[5] != self._last_sec and self._manager:
+            self._last_sec = t[5]
+            tft = self._manager.tft
+            theme = self._manager.theme
+            text_y = theme.CENTER_Y + self._TEXT_REL_Y
+            tft.fill_rect(0, text_y, theme.width, self._TEXT_H, theme.BLACK)
+            self._render_clock(tft, theme)
+            self._manager.request_show(0, text_y, theme.width, self._TEXT_H)
+
+    def render(self, tft, theme, frame):
+        """Full redraw — only called on transitions and pause menu changes."""
         self._dirty = False
         tft.fill(theme.BLACK)
         self._render_clock(tft, theme)
+        if self._pause.is_open:
+            self._pause.render(tft, theme, frame)
 
     def _render_clock(self, tft, theme):
         t = time.localtime()
