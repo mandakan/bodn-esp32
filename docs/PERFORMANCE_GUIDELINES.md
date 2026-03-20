@@ -28,18 +28,32 @@ Short, practical rules for writing efficient code for Bodn on ESP32-S3 (and for 
 ## 3. Display (ST7735/ILI9341)
 
 Drawing is one of the slowest operations, especially in simulation.
-The SPI push (`show()`) for the primary 240x320 display sends ~150 KB — at 26 MHz
+The SPI push (`show()`) for the primary 240×320 display sends ~150 KB — at 26 MHz
 that alone takes ~47 ms, exceeding a 30 ms frame budget.
 
 - **Skip the entire render + show cycle when nothing changed.**
   - Screens should track a `_dirty` flag. Set it on input events or state transitions.
   - `ScreenManager` checks `needs_redraw()` and skips `render()` + `show()` when clean.
   - This is the single most impactful optimization — an idle screen costs near zero.
+- **Use partial pushes for small, frequent updates** (preferred pattern):
+  - Instead of triggering a full render cycle, write pixels directly to the framebuffer
+    and call `manager.request_show(x, y, w, h)`. This calls `tft.show_rect()` on the
+    next tick, pushing only that rectangle over SPI.
+  - Use `manager.invalidate_rect(x, y, w, h)` to accumulate multiple regions —
+    they are merged into a bounding box and pushed as one `show_rect()` call.
+  - Example speedups: a 320×4 hold bar costs ~0.8 ms instead of ~47 ms (~60×).
+  - Fall back to `manager.request_show()` (no args) only when the updated area
+    is large (>50% of screen) or unknown — `show_rect()` auto-falls back anyway.
+  - **`tft.show_rect(x, y, w, h)`** is available on both displays and handles CASET/RASET
+    windowing, row extraction, and the 50% fallback automatically.
 - **Do not redraw the whole screen every frame.**
   - Only update regions that actually changed (`fill_rect`, partial redraws).
-- Avoid frequent `fill()` of the entire screen.
-  - Use it mainly when entering a new screen / mode.
-- **Never call `tft.show()` directly** from screens or UI components. Only `ScreenManager.tick()` calls `show()`. If you need to push a small framebuffer change without a full re-render (e.g. a progress bar), write the pixels to the framebuffer and call `manager.request_show()`. This queues a show-only push on the next tick without triggering a full render cycle.
+  - In `render()`, prefer `tft.fill_rect(x, y, w, h, BLACK)` over `tft.fill(BLACK)`.
+    Clear only the region you are about to redraw, not the whole screen.
+  - Reserve `tft.fill(BLACK)` for screen transitions (entering a new screen / mode).
+- **Never call `tft.show()` or `tft.show_rect()` directly** from screens or UI components.
+  Always route through `manager.request_show()` or `manager.request_show(x, y, w, h)`.
+  Only `ScreenManager.tick()` and `SecondaryDisplay.tick()` issue the actual SPI push.
 - Pre-compute and cache:
   - Fonts, color constants, simple icon bitmaps.
   - Layout positions (e.g. button hint coordinates) as constants, not recomputed every loop.
@@ -52,11 +66,12 @@ that alone takes ~47 ms, exceeding a 30 ms frame budget.
 The 128×160 secondary display is split into a **content zone** (128×128, y=0..127) and a **status strip** (128×32, y=128..159). `SecondaryDisplay` manages them independently. Follow these rules when writing a content or status screen:
 
 - **Track `_dirty` state** and implement `needs_redraw()` — same as primary screens. `SecondaryDisplay` skips `render()` + `show()` entirely when both zones are clean.
-- **Clear your own zone in `render()`**, not on every pixel. `SecondaryDisplay` only does a full `fill_rect` clear on transitions (when `set_content()` / `set_status()` is called). On normal redraws the screen is responsible for clearing what it needs. This allows future screens to do partial updates instead of blanking the whole zone.
-  - Content screens: `tft.fill_rect(0, 0, w, CONTENT_H, theme.BLACK)` at the top of `render()` if you repaint everything, or clear only the changed sub-region if you can.
-  - Status screens: `tft.fill_rect(0, STATUS_Y, w, STATUS_H, theme.BLACK)`.
+- **Clear only what you draw.** `SecondaryDisplay` only does a full `fill_rect` clear on transitions (`set_content()` / `set_status()`). On normal redraws, clear only the sub-region you are about to repaint — not the whole zone. This keeps the SPI push small.
+  - Content screens: clear only the changed sub-region, e.g. `tft.fill_rect(0, text_y, w, text_h, BLACK)`. Only use a full zone clear (`fill_rect(0, 0, w, CONTENT_H, BLACK)`) when the entire zone changes.
+  - Status screens: same principle; `fill_rect(0, STATUS_Y, w, STATUS_H, BLACK)` only when everything changes.
+- **Zone-aware partial push is automatic.** `SecondaryDisplay.tick()` already calls `show_rect()` for just the dirty zone (content or status) when only one zone changed. Tight `fill_rect` calls in `render()` ensure those zone-level SPI transfers stay small.
 - **Stay within your zone bounds.** Content screens must not draw below y=127. Status screens draw only at y=128..159. There is no clip guard — drawing outside your zone will overwrite the other zone and cause visual glitches.
-- **`show()` is never called by the screen** — `SecondaryDisplay.tick()` issues a single `show()` if either zone was redrawn. Do not call `tft.show()` from `render()`.
+- **`show()` / `show_rect()` are never called by the screen** — `SecondaryDisplay.tick()` issues the SPI push. Do not call `tft.show()` from `render()`.
 - **Tick rate is ~200 ms** (5 Hz). Design for state-change-driven redraws, not animation. If a screen needs faster updates, discuss adjusting the tick rate or moving the work to a dedicated task.
 
 ---
@@ -144,7 +159,12 @@ When generating or reviewing code, check:
    - Does the screen implement `needs_redraw()` and track `_dirty` state?
    - Is `render()` + `show()` skipped entirely when nothing changed?
    - No full `fill()` calls inside fast loops?
-   - Secondary display: does the screen clear its own zone in `render()`? Does it stay within zone bounds (content: y<128, status: y≥128)?
+   - For small, frequent updates (progress bars, timers, counters): does the screen use
+     `manager.request_show(x, y, w, h)` (partial push) instead of triggering a full render?
+   - In `render()`, is `fill_rect(x, y, w, h)` used instead of `fill()` wherever possible?
+     `fill()` should only appear on screen transitions.
+   - Secondary display: does the screen clear only its changed sub-region (not the full zone)?
+     Does it stay within zone bounds (content: y<128, status: y≥128)?
 3. **Input**:
    - Debouncing implemented? No polling at insane rates?
    - Hold-to-pause: does the game screen use `PauseMenu.update()` (which owns `HoldDetector`) instead of rolling its own hold logic? No per-frame allocations in the hold path?

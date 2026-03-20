@@ -7,12 +7,17 @@ from bodn.ui.widgets import draw_centered, draw_progress_bar
 from bodn.ui.secondary import CONTENT_H, STATUS_Y, STATUS_H
 
 
+_AMBIENT_TEXT_Y = 38  # 2px above clock at y=40 (scale=3, h=24)
+_AMBIENT_TEXT_H = 52  # covers clock (40..64) and date (80..88) with margin
+
+
 class AmbientClock(Screen):
     """Large clock display for the 128×128 content zone.
 
     Shows time and date in the centre of the content area.
-    Redraws when the minute changes.  Clears its own zone so the
-    SecondaryDisplay doesn't need to fill_rect on every normal redraw.
+    Redraws when the minute changes.  Only the text region is cleared
+    (not the full zone) so SecondaryDisplay.show_rect() covers as few
+    pixels as possible.
     """
 
     def __init__(self):
@@ -31,7 +36,7 @@ class AmbientClock(Screen):
 
     def render(self, tft, theme, frame):
         w = theme.width
-        tft.fill_rect(0, 0, w, CONTENT_H, theme.BLACK)
+        tft.fill_rect(0, _AMBIENT_TEXT_Y, w, _AMBIENT_TEXT_H, theme.BLACK)
         t = time.localtime()
         clock = "{:02d}:{:02d}".format(t[3], t[4])
         date = "{:04d}-{:02d}-{:02d}".format(t[0], t[1], t[2])
