@@ -5,6 +5,10 @@ elf = "ESP32_GENERIC_S3-20251209-v1.27.0.bin"
 rfc2217ServerPort = 5555
 gdbServerPort = 3333
 
+[[chip]]
+name = "mcp23017"
+binary = "mcp23017.chip.wasm"
+
 [net]
 gateway = "ws://localhost:9011"
 
