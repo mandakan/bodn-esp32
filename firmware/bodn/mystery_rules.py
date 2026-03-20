@@ -16,15 +16,15 @@ from bodn.patterns import N_LEDS, scale, _led_buf
 
 # Output types
 OUT_IDLE = 0
-OUT_SINGLE = 1     # single button → solid color
-OUT_MIX = 2        # two-button combo → blended color
-OUT_MAGIC = 3      # special combo → sparkle animation
+OUT_SINGLE = 1  # single button → solid color
+OUT_MIX = 2  # two-button combo → blended color
+OUT_MAGIC = 3  # special combo → sparkle animation
 
 # How long a combo window lasts (in frames, ~33 fps)
-COMBO_WINDOW = 33   # ~1 second
+COMBO_WINDOW = 33  # ~1 second
 # How long an output stays visible
-DISPLAY_HOLD = 50   # ~1.5 seconds
-MAGIC_HOLD = 80     # ~2.5 seconds for magic combos
+DISPLAY_HOLD = 50  # ~1.5 seconds
+MAGIC_HOLD = 80  # ~2.5 seconds for magic combos
 
 
 def mix_rgb(a, b):
@@ -54,42 +54,54 @@ def _shift_hue(c, amount):
     r, g, b = c
     # Shift by rotating through 3 zones of 85 each
     zone = (amount * 3) >> 8  # 0, 1, or 2
-    frac = ((amount * 3) & 0xFF)
+    frac = (amount * 3) & 0xFF
     inv = 255 - frac
     if zone == 0:
         # R→G transition
-        return ((r * inv + g * frac) >> 8,
-                (g * inv + b * frac) >> 8,
-                (b * inv + r * frac) >> 8)
+        return (
+            (r * inv + g * frac) >> 8,
+            (g * inv + b * frac) >> 8,
+            (b * inv + r * frac) >> 8,
+        )
     elif zone == 1:
         # G→B transition
-        return ((r * inv + b * frac) >> 8,
-                (g * inv + r * frac) >> 8,
-                (b * inv + g * frac) >> 8)
+        return (
+            (r * inv + b * frac) >> 8,
+            (g * inv + r * frac) >> 8,
+            (b * inv + g * frac) >> 8,
+        )
     else:
         # B→R transition
-        return ((r * inv + g * frac) >> 8,
-                (g * inv + b * frac) >> 8,
-                (b * inv + r * frac) >> 8)
+        return (
+            (r * inv + g * frac) >> 8,
+            (g * inv + b * frac) >> 8,
+            (b * inv + r * frac) >> 8,
+        )
 
 
 # --- Rule set: Color Alchemy ---
 # Magic pairs: sorted tuple of button indices → result color override
 COLOR_ALCHEMY_MAGIC = {
-    (0, 2): (128, 0, 255),    # Red + Blue → Purple
-    (0, 3): (255, 128, 0),    # Red + Yellow → Orange
-    (2, 3): (0, 200, 100),    # Blue + Yellow → Teal-Green
-    (0, 1): (255, 215, 0),    # Red + Green → Gold
+    (0, 2): (128, 0, 255),  # Red + Blue → Purple
+    (0, 3): (255, 128, 0),  # Red + Yellow → Orange
+    (2, 3): (0, 200, 100),  # Blue + Yellow → Teal-Green
+    (0, 1): (255, 215, 0),  # Red + Green → Gold
     (4, 5): (255, 255, 255),  # Cyan + Magenta → White
-    (1, 2): (0, 128, 128),    # Green + Blue → Teal
+    (1, 2): (0, 128, 128),  # Green + Blue → Teal
     (6, 7): (255, 100, 200),  # Orange + Purple → Pink
     (3, 4): (180, 255, 180),  # Yellow + Cyan → Mint
 }
 
 # Base colors per button (same as theme.BTN_RGB)
 BASE_COLORS = [
-    (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
-    (0, 255, 255), (255, 0, 255), (255, 128, 0), (128, 0, 255),
+    (255, 0, 0),
+    (0, 255, 0),
+    (0, 0, 255),
+    (255, 255, 0),
+    (0, 255, 255),
+    (255, 0, 255),
+    (255, 128, 0),
+    (128, 0, 255),
 ]
 
 

@@ -146,10 +146,14 @@ def compute_stats(sessions):
     daily_totals = []
     for d in sorted(by_date.keys()):
         day_s = sum(s.get("duration_s", 0) for s in by_date[d])
-        daily_totals.append({"date": d, "play_min": round(day_s / 60, 1), "sessions": len(by_date[d])})
+        daily_totals.append(
+            {"date": d, "play_min": round(day_s / 60, 1), "sessions": len(by_date[d])}
+        )
 
     # Suggestions
-    suggestions = _compute_suggestions(avg_session_s, avg_sessions_per_day, avg_daily_play_s)
+    suggestions = _compute_suggestions(
+        avg_session_s, avg_sessions_per_day, avg_daily_play_s
+    )
 
     return {
         "total_days": total_days,
@@ -178,7 +182,11 @@ def _compute_suggestions(avg_session_s, avg_sessions_per_day, avg_daily_play_s):
     avg_daily_min = avg_daily_play_s / 60
     note = None
     if avg_daily_min > 60:
-        note = "Average daily play time is {:.0f} min. Consider shorter sessions.".format(avg_daily_min)
+        note = (
+            "Average daily play time is {:.0f} min. Consider shorter sessions.".format(
+                avg_daily_min
+            )
+        )
 
     return {
         "max_session_min": suggested_session,

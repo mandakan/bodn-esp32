@@ -6,6 +6,7 @@ from bodn.ui.widgets import draw_centered, draw_button_grid
 from bodn.ui.pause import PauseMenu
 from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
 from bodn.patterns import N_LEDS
+from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = config.ENC_NAV
 
@@ -19,9 +20,11 @@ class MysteryScreen(Screen):
     Nav encoder button opens the pause menu (resume / back to menu).
     """
 
-    def __init__(self, np, overlay):
+    def __init__(self, np, overlay, secondary_screen=None, on_exit=None):
         self._np = np
         self._overlay = overlay
+        self._secondary = secondary_screen
+        self._on_exit = on_exit
         self._engine = MysteryEngine()
         self._manager = None
         self._pause = PauseMenu()
@@ -32,6 +35,10 @@ class MysteryScreen(Screen):
         self._manager = manager
         self._pause.set_manager(manager)
         self._dirty = True
+
+    def exit(self):
+        if self._on_exit:
+            self._on_exit()
 
     def needs_redraw(self):
         return self._dirty or self._pause.needs_render
@@ -54,15 +61,25 @@ class MysteryScreen(Screen):
 
         # Update modifier state from switches and encoder B
         eng = self._engine
-        prev_mods = (eng.sw_invert, eng.sw_mirror, eng.sw_shimmer,
-                     eng.sw_lighten, eng.hue_shift)
+        prev_mods = (
+            eng.sw_invert,
+            eng.sw_mirror,
+            eng.sw_shimmer,
+            eng.sw_lighten,
+            eng.hue_shift,
+        )
         eng.sw_invert = inp.sw[0]
         eng.sw_mirror = inp.sw[1]
         eng.sw_shimmer = inp.sw[2]
         eng.sw_lighten = len(inp.sw) > 3 and inp.sw[3]
         eng.hue_shift = inp.enc_pos[config.ENC_B] * 255 // 20
-        new_mods = (eng.sw_invert, eng.sw_mirror, eng.sw_shimmer,
-                    eng.sw_lighten, eng.hue_shift)
+        new_mods = (
+            eng.sw_invert,
+            eng.sw_mirror,
+            eng.sw_shimmer,
+            eng.sw_lighten,
+            eng.hue_shift,
+        )
         if new_mods != prev_mods:
             self._dirty = True
 
@@ -75,6 +92,12 @@ class MysteryScreen(Screen):
         if out_type != self._prev_out_type:
             self._prev_out_type = out_type
             self._dirty = True
+            # Update secondary display cat face
+            if self._secondary:
+                emotion = {OUT_IDLE: NEUTRAL, OUT_MIX: CURIOUS, OUT_MAGIC: HAPPY}.get(
+                    out_type, NEUTRAL
+                )
+                self._secondary.set_emotion(emotion)
         if btn >= 0:
             self._dirty = True
         # Animated states need continuous redraw
@@ -140,9 +163,13 @@ class MysteryScreen(Screen):
                     px = ((frame * 7 + i * 37) * 53) % (w - 32) + 16
                     py = ((frame * 11 + i * 23) * 41) % (swatch_h - 8) + swatch_y + 4
                     tft.fill_rect(px, py, 5, 5, theme.WHITE)
-                draw_centered(tft, "MAGIC!", swatch_y + swatch_h + 4, theme.YELLOW, w, scale=2)
+                draw_centered(
+                    tft, "MAGIC!", swatch_y + swatch_h + 4, theme.YELLOW, w, scale=2
+                )
             elif out_type == OUT_MIX:
-                draw_centered(tft, "Mix!", swatch_y + swatch_h + 4, theme.WHITE, w, scale=2)
+                draw_centered(
+                    tft, "Mix!", swatch_y + swatch_h + 4, theme.WHITE, w, scale=2
+                )
         else:
             draw_centered(tft, "?", swatch_y + swatch_h // 4, theme.MUTED, w, scale=4)
 
@@ -152,8 +179,15 @@ class MysteryScreen(Screen):
         cell_h = (h - btn_y - 20) // 2
         btn_x0 = (w - 4 * cell_w) // 2
         draw_button_grid(
-            tft, theme, theme.BTN_NAMES, held,
-            cols=4, x0=btn_x0, y0=btn_y, cell_w=cell_w, cell_h=cell_h,
+            tft,
+            theme,
+            theme.BTN_NAMES,
+            held,
+            cols=4,
+            x0=btn_x0,
+            y0=btn_y,
+            cell_w=cell_w,
+            cell_h=cell_h,
         )
 
         # Bottom bar: discovery counter + modifier dots
@@ -182,9 +216,13 @@ class MysteryScreen(Screen):
                     px = ((frame * 7 + i * 37) * 53) % (w - 32) + 16
                     py = ((frame * 11 + i * 23) * 41) % (swatch_h - 16) + swatch_y + 8
                     tft.fill_rect(px, py, 5, 5, theme.WHITE)
-                draw_centered(tft, "MAGIC!", swatch_y + swatch_h + 8, theme.YELLOW, w, scale=2)
+                draw_centered(
+                    tft, "MAGIC!", swatch_y + swatch_h + 8, theme.YELLOW, w, scale=2
+                )
             elif out_type == OUT_MIX:
-                draw_centered(tft, "Mix!", swatch_y + swatch_h + 8, theme.WHITE, w, scale=2)
+                draw_centered(
+                    tft, "Mix!", swatch_y + swatch_h + 8, theme.WHITE, w, scale=2
+                )
         else:
             draw_centered(tft, "?", swatch_y + swatch_h // 3, theme.MUTED, w, scale=4)
 
@@ -194,8 +232,15 @@ class MysteryScreen(Screen):
         cell_h = (h - btn_y - 24) // 2
         btn_x0 = (w - 4 * cell_w) // 2
         draw_button_grid(
-            tft, theme, theme.BTN_NAMES, held,
-            cols=4, x0=btn_x0, y0=btn_y, cell_w=cell_w, cell_h=cell_h,
+            tft,
+            theme,
+            theme.BTN_NAMES,
+            held,
+            cols=4,
+            x0=btn_x0,
+            y0=btn_y,
+            cell_w=cell_w,
+            cell_h=cell_h,
         )
 
         # Bottom bar: discovery counter + modifier dots

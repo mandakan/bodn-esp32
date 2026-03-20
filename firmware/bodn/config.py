@@ -49,9 +49,9 @@ ENC3_CLK, ENC3_DT, ENC3_SW = 47, 42, 0
 #   ENC1 = NAV   (left,   nearest display — menu scroll + back button)
 #   ENC2 = ENC_A (middle, mode parameter 1 — e.g. brightness)
 #   ENC3 = ENC_B (right,  mode parameter 2 — e.g. speed)
-ENC_NAV = 0   # index: navigation (home: scroll modes, modes: back button)
-ENC_A = 1     # index: mode parameter 1
-ENC_B = 2     # index: mode parameter 2
+ENC_NAV = 0  # index: navigation (home: scroll modes, modes: back button)
+ENC_A = 1  # index: mode parameter 1
+ENC_B = 2  # index: mode parameter 2
 
 # WS2812B NeoPixel LEDs (2 × 8-LED sticks chained)
 NEOPIXEL_PIN = 6

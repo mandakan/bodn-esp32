@@ -16,6 +16,49 @@ from bodn.web_ui import HTML
 from bodn import storage
 
 
+OTA_STAGE = "/.ota"
+
+
+def _mkdirs(path):
+    """Recursively create parent directories (MicroPython os.mkdir is single-level)."""
+    parts = path.strip("/").split("/")
+    for i in range(len(parts)):
+        d = "/" + "/".join(parts[: i + 1])
+        try:
+            os.mkdir(d)
+        except OSError:
+            pass
+
+
+def _rmtree(path):
+    """Remove a directory tree (MicroPython has no shutil)."""
+    try:
+        for name in os.listdir(path):
+            full = path + "/" + name
+            try:
+                os.listdir(full)  # if this works, it's a dir
+                _rmtree(full)
+            except OSError:
+                os.remove(full)
+        os.rmdir(path)
+    except OSError:
+        pass
+
+
+def _ota_walk(stage_dir):
+    """Yield (staged_path, target_path) pairs from the staging directory."""
+    for name in os.listdir(stage_dir):
+        full = stage_dir + "/" + name
+        try:
+            os.listdir(full)  # directory
+            for pair in _ota_walk(full):
+                yield pair
+        except OSError:
+            # It's a file — compute the target path by stripping the stage prefix
+            target = full[len(OTA_STAGE) :]
+            yield full, target
+
+
 async def _send(writer, status, content_type, body, extra_headers=None):
     """Send an HTTP response."""
     writer.write("HTTP/1.0 {} OK\r\n".format(status).encode())
@@ -56,14 +99,6 @@ async def _read_body(reader):
     return {}
 
 
-async def _read_raw_body(reader, headers):
-    """Read HTTP body as raw bytes."""
-    cl = int(headers.get("content-length", 0))
-    if cl > 0:
-        return await reader.read(cl)
-    return b""
-
-
 def _check_pin(headers, settings):
     """Check if request has valid PIN cookie. Returns True if OK or no PIN set."""
     pin = settings.get("ui_pin", "")
@@ -91,6 +126,67 @@ async def _send_unauthorized(writer, msg="Unauthorized"):
     await _send(writer, 401, "application/json", json.dumps({"error": msg}))
 
 
+async def _drain_body(reader, cl):
+    """Read and discard cl bytes from reader."""
+    while cl > 0:
+        n = min(cl, 512)
+        await reader.read(n)
+        cl -= n
+
+
+async def _handle_upload(reader, writer, headers):
+    """OTA file upload — streams body to staging, checks free space first."""
+    remote_path = headers.get("x-path", "")
+    cl = int(headers.get("content-length", 0))
+
+    if not remote_path or cl == 0:
+        await _drain_body(reader, cl)
+        await _send_json(writer, {"error": "need X-Path header and body"}, 400)
+        return
+
+    # Check free space (keep 4 KB reserve for filesystem metadata)
+    try:
+        st = os.statvfs("/")
+        free = st[0] * st[3]  # f_bsize * f_bavail
+    except Exception:
+        free = 0
+    if free > 0 and cl > free - 4096:
+        await _drain_body(reader, cl)
+        await _send_json(
+            writer, {"error": "not enough space", "need": cl, "free": free}, 507
+        )
+        return
+
+    try:
+        staged = OTA_STAGE + remote_path
+        parent = staged.rsplit("/", 1)[0]
+        _mkdirs(parent)
+        # Stream body in 512-byte chunks
+        tmp = staged + ".tmp"
+        written = 0
+        with open(tmp, "wb") as f:
+            remaining = cl
+            while remaining > 0:
+                n = min(remaining, 512)
+                chunk = await reader.read(n)
+                if not chunk:
+                    break
+                f.write(chunk)
+                written += len(chunk)
+                remaining -= len(chunk)
+        try:
+            os.remove(staged)
+        except OSError:
+            pass
+        os.rename(tmp, staged)
+        await _send_json(
+            writer,
+            {"ok": True, "path": remote_path, "staged": staged, "size": written},
+        )
+    except Exception as e:
+        await _send_json(writer, {"error": str(e)}, 500)
+
+
 async def _handle_request(reader, writer, session_mgr, settings):
     """Parse HTTP request and route to handler."""
     try:
@@ -108,11 +204,10 @@ async def _handle_request(reader, writer, session_mgr, settings):
         # Read headers
         headers = await _read_headers(reader)
 
-        # Parse body for POST (deferred for upload route)
+        # Parse body for POST (upload route streams directly to flash)
         body = None
-        raw_body = None
         if method == "POST" and path == "/api/upload":
-            raw_body = await _read_raw_body(reader, headers)
+            pass  # body read inline by upload handler below
         elif method == "POST":
             cl = int(headers.get("content-length", 0))
             if cl > 0:
@@ -124,15 +219,26 @@ async def _handle_request(reader, writer, session_mgr, settings):
             pin = settings.get("ui_pin", "")
             submitted = (body or {}).get("pin", "")
             if not pin or submitted == pin:
-                await _send(writer, 200, "application/json",
-                            json.dumps({"ok": True}),
-                            ["Set-Cookie: bodn_pin={}; Path=/; SameSite=Strict".format(pin)])
+                await _send(
+                    writer,
+                    200,
+                    "application/json",
+                    json.dumps({"ok": True}),
+                    ["Set-Cookie: bodn_pin={}; Path=/; SameSite=Strict".format(pin)],
+                )
             else:
                 await _send_unauthorized(writer, "Wrong PIN")
             return
 
         # --- Auth: OTA endpoints require bearer token ---
-        if path in ("/api/upload", "/api/reboot", "/api/files"):
+        ota_paths = (
+            "/api/upload",
+            "/api/reboot",
+            "/api/files",
+            "/api/ota/commit",
+            "/api/ota/abort",
+        )
+        if path in ota_paths:
             if not _check_ota_token(headers, settings):
                 await _send_unauthorized(writer, "Invalid OTA token")
                 return
@@ -142,6 +248,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
             if not _check_pin(headers, settings):
                 # Serve the login page instead
                 from bodn.web_ui import LOGIN_HTML
+
                 await _send(writer, 200, "text/html", LOGIN_HTML)
                 return
 
@@ -185,6 +292,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
 
         elif method == "GET" and path == "/api/modes":
             from bodn.session import ALL_MODES
+
             mode_limits = settings.get("mode_limits", {})
             modes = []
             for m in ALL_MODES:
@@ -207,35 +315,42 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 pass
 
         elif method == "POST" and path == "/api/upload":
-            # OTA file upload: PUT file content with X-Path header
-            remote_path = headers.get("x-path", "")
-            if not remote_path or raw_body is None:
-                await _send_json(writer, {"error": "need X-Path header and body"}, 400)
-            else:
-                try:
-                    # Ensure parent directory exists
-                    if "/" in remote_path:
-                        parent = remote_path.rsplit("/", 1)[0]
-                        try:
-                            os.mkdir(parent)
-                        except OSError:
-                            pass
-                    tmp = remote_path + ".tmp"
-                    with open(tmp, "wb") as f:
-                        f.write(raw_body)
+            await _handle_upload(reader, writer, headers)
+
+        elif method == "POST" and path == "/api/ota/commit":
+            # Move all staged files into place and reboot.
+            try:
+                count = 0
+                for staged, target in _ota_walk(OTA_STAGE):
+                    parent = target.rsplit("/", 1)[0]
+                    _mkdirs(parent)
                     try:
-                        os.remove(remote_path)
+                        os.remove(target)
                     except OSError:
                         pass
-                    os.rename(tmp, remote_path)
-                    await _send_json(writer, {"ok": True, "path": remote_path, "size": len(raw_body)})
-                except Exception as e:
-                    await _send_json(writer, {"error": str(e)}, 500)
+                    os.rename(staged, target)
+                    count += 1
+                _rmtree(OTA_STAGE)
+                await _send_json(writer, {"ok": True, "committed": count})
+                try:
+                    import machine
+
+                    machine.reset()
+                except Exception:
+                    pass
+            except Exception as e:
+                await _send_json(writer, {"error": str(e)}, 500)
+
+        elif method == "POST" and path == "/api/ota/abort":
+            # Discard staged files.
+            _rmtree(OTA_STAGE)
+            await _send_json(writer, {"ok": True})
 
         elif method == "POST" and path == "/api/reboot":
             await _send_json(writer, {"ok": True, "rebooting": True})
             try:
                 import machine
+
                 machine.reset()
             except Exception:
                 pass

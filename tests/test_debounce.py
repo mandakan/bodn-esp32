@@ -59,7 +59,7 @@ class TestDebouncer:
         """Simulate noisy contact: 0, 1, 0, 0 — should still detect press."""
         d = Debouncer(delay_ms=30)
         d.update(0, now_ms=0)
-        d.update(1, now_ms=5)   # bounce
+        d.update(1, now_ms=5)  # bounce
         d.update(0, now_ms=10)  # settles low again
         d.update(0, now_ms=40)  # 30ms since last change at t=10
         assert d.pressed

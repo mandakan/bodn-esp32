@@ -24,7 +24,7 @@ from bodn.ui.secondary import SecondaryDisplay
 from bodn.ui.home import HomeScreen
 from bodn.ui.demo import DemoScreen
 from bodn.ui.clock import ClockScreen
-from bodn.ui.ambient import AmbientClock
+from bodn.ui.ambient import StatusStrip
 
 ENC_STEPS = 20
 N_LEDS = config.NEOPIXEL_COUNT
@@ -73,19 +73,37 @@ def create_hardware():
     switches = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.SW_PINS]
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
-        Encoder(config.ENC1_CLK, config.ENC1_DT, config.ENC1_SW, min_val=0, max_val=ENC_STEPS),
-        Encoder(config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW, min_val=0, max_val=ENC_STEPS),
-        Encoder(config.ENC3_CLK, config.ENC3_DT, config.ENC3_SW, min_val=0, max_val=ENC_STEPS),
+        Encoder(
+            config.ENC1_CLK,
+            config.ENC1_DT,
+            config.ENC1_SW,
+            min_val=0,
+            max_val=ENC_STEPS,
+        ),
+        Encoder(
+            config.ENC2_CLK,
+            config.ENC2_DT,
+            config.ENC2_SW,
+            min_val=0,
+            max_val=ENC_STEPS,
+        ),
+        Encoder(
+            config.ENC3_CLK,
+            config.ENC3_DT,
+            config.ENC3_SW,
+            min_val=0,
+            max_val=ENC_STEPS,
+        ),
     ]
-    encoders[config.ENC_A].value = ENC_STEPS // 2   # brightness default
-    encoders[config.ENC_B].value = ENC_STEPS // 4   # speed default
+    encoders[config.ENC_A].value = ENC_STEPS // 2  # brightness default
+    encoders[config.ENC_B].value = ENC_STEPS // 4  # speed default
     return tft, tft2, buttons, switches, encoders, np
 
 
-async def ui_loop(session_mgr, settings, wifi_ctrl):
-    """Main UI coroutine — both displays driven from the same loop."""
-    tft, tft2, buttons, switches, encoders, np = create_hardware()
-
+def create_ui(
+    session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, encoders, np
+):
+    """Wire up UI components. Returns (manager, secondary, inp, encoders)."""
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
     theme2 = Theme(config.TFT2_WIDTH, config.TFT2_HEIGHT, ST7735.rgb)
     inp = InputState(buttons, switches, encoders, time.ticks_ms)
@@ -95,44 +113,75 @@ async def ui_loop(session_mgr, settings, wifi_ctrl):
     manager = ScreenManager(tft, theme, inp)
     manager.set_overlay(overlay)
 
+    # Secondary display — cat face (default) + status strip
+    from bodn.ui.catface import CatFaceScreen
+
+    secondary = SecondaryDisplay(tft2, theme2)
+    cat = CatFaceScreen()
+    secondary.set_content(cat)
+    secondary.set_status(StatusStrip(session_mgr))
+
+    def _reset_secondary():
+        nonlocal cat
+        cat = CatFaceScreen()
+        secondary.set_content(cat)
+
     def _make_mystery():
         from bodn.ui.mystery import MysteryScreen
-        return MysteryScreen(np, overlay)
+
+        _reset_secondary()
+        return MysteryScreen(
+            np, overlay, secondary_screen=cat, on_exit=_reset_secondary
+        )
 
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
+
+        _reset_secondary()
         return SettingsScreen(settings, np, wifi_ctrl)
 
     mode_screens = {
         "mystery": _make_mystery,
-        "demo": lambda: DemoScreen(np, overlay, enc_steps=ENC_STEPS),
-        "clock": lambda: ClockScreen(),
+        "demo": lambda: (
+            _reset_secondary(),
+            DemoScreen(np, overlay, enc_steps=ENC_STEPS),
+        )[1],
+        "clock": lambda: (_reset_secondary(), ClockScreen())[1],
         "settings": _make_settings,
     }
-    home = HomeScreen(mode_screens, session_mgr, order=["mystery", "demo", "clock", "settings"])
+    home = HomeScreen(
+        mode_screens, session_mgr, order=["mystery", "demo", "clock", "settings"]
+    )
     manager.push(home)
-
-    # Secondary display — ambient clock
-    secondary = SecondaryDisplay(tft2, theme2)
-    secondary.set_screen(AmbientClock(session_mgr))
 
     # Clear LEDs
     for i in range(N_LEDS):
         np[i] = (0, 0, 0)
     np.write()
 
-    print("UI loop started, debug_input={}".format(settings.get("debug_input")))
+    return manager, secondary, inp
 
+
+# ---------------------------------------------------------------------------
+# Async tasks — each runs at its own tick rate so slow work in one task
+# doesn't block the others.  All tasks share objects (manager, inp, …)
+# through the same event loop, so no locking is needed.
+# ---------------------------------------------------------------------------
+
+
+async def primary_task(manager, settings, inp, encoders):
+    """Input scanning + primary display: ~30 ms tick."""
+    print("primary_task started, debug_input={}".format(settings.get("debug_input")))
     frame = 0
     errors = 0
     while True:
         try:
             manager.tick()
-            secondary.tick()
-            session_mgr.tick()
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
             errors += 1
-            print("Frame error #{}: {}".format(errors, e))
+            print("primary_task error #{}: {}".format(errors, e))
 
         if settings.get("debug_input") and frame % 15 == 0:
             btns = "".join("1" if inp.btn_held[i] else "." for i in range(8))
@@ -146,11 +195,46 @@ async def ui_loop(session_mgr, settings, wifi_ctrl):
                 )
                 for i in range(3)
             )
-            print("INP btn[{}] sw[{}] enc[{}] raw[{}]".format(
-                btns, sws, enc_vals, enc_raw))
+            print(
+                "INP btn[{}] sw[{}] enc[{}] raw[{}]".format(
+                    btns, sws, enc_vals, enc_raw
+                )
+            )
 
         frame += 1
         await asyncio.sleep_ms(30)
+
+
+async def secondary_task(secondary):
+    """Secondary display: ~200 ms tick.
+
+    Fast enough for game content updates (emotion changes), cheap when
+    idle thanks to per-zone dirty tracking in SecondaryDisplay.
+    """
+    errors = 0
+    while True:
+        try:
+            secondary.tick()
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            errors += 1
+            print("secondary_task error #{}: {}".format(errors, e))
+        await asyncio.sleep_ms(200)
+
+
+async def housekeeping_task(session_mgr):
+    """Session management and periodic bookkeeping: ~500 ms tick."""
+    errors = 0
+    while True:
+        try:
+            session_mgr.tick()
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            errors += 1
+            print("housekeeping_task error #{}: {}".format(errors, e))
+        await asyncio.sleep_ms(500)
 
 
 async def main():
@@ -170,7 +254,9 @@ async def main():
         except Exception as e:
             print("Failed to save session:", e)
 
-    session_mgr = SessionManager(settings, get_time, get_date, on_session_end=on_session_end)
+    session_mgr = SessionManager(
+        settings, get_time, get_date, on_session_end=on_session_end
+    )
     wifi_ctrl = WiFiController(settings)
 
     _server = None
@@ -180,7 +266,24 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    await ui_loop(session_mgr, settings, wifi_ctrl)
+    tft, tft2, buttons, switches, encoders, np = create_hardware()
+    manager, secondary, inp = create_ui(
+        session_mgr,
+        settings,
+        wifi_ctrl,
+        tft,
+        tft2,
+        buttons,
+        switches,
+        encoders,
+        np,
+    )
+
+    await asyncio.gather(
+        primary_task(manager, settings, inp, encoders),
+        secondary_task(secondary),
+        housekeeping_task(session_mgr),
+    )
 
 
 try:
@@ -189,4 +292,5 @@ except KeyboardInterrupt:
     print("Bodn stopped.")
 except Exception as e:
     import sys
+
     sys.print_exception(e)

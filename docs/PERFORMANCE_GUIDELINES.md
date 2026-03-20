@@ -46,6 +46,18 @@ that alone takes ~47 ms, exceeding a 30 ms frame budget.
 - Keep your "frame rate" low but responsive:
   - UI update loop around **10-20 Hz** (50-100 ms between updates) is fine for a kid's toy.
 
+### 3a. Secondary display (two-zone layout)
+
+The 128×160 secondary display is split into a **content zone** (128×128, y=0..127) and a **status strip** (128×32, y=128..159). `SecondaryDisplay` manages them independently. Follow these rules when writing a content or status screen:
+
+- **Track `_dirty` state** and implement `needs_redraw()` — same as primary screens. `SecondaryDisplay` skips `render()` + `show()` entirely when both zones are clean.
+- **Clear your own zone in `render()`**, not on every pixel. `SecondaryDisplay` only does a full `fill_rect` clear on transitions (when `set_content()` / `set_status()` is called). On normal redraws the screen is responsible for clearing what it needs. This allows future screens to do partial updates instead of blanking the whole zone.
+  - Content screens: `tft.fill_rect(0, 0, w, CONTENT_H, theme.BLACK)` at the top of `render()` if you repaint everything, or clear only the changed sub-region if you can.
+  - Status screens: `tft.fill_rect(0, STATUS_Y, w, STATUS_H, theme.BLACK)`.
+- **Stay within your zone bounds.** Content screens must not draw below y=127. Status screens draw only at y=128..159. There is no clip guard — drawing outside your zone will overwrite the other zone and cause visual glitches.
+- **`show()` is never called by the screen** — `SecondaryDisplay.tick()` issues a single `show()` if either zone was redrawn. Do not call `tft.show()` from `render()`.
+- **Tick rate is ~200 ms** (5 Hz). Design for state-change-driven redraws, not animation. If a screen needs faster updates, discuss adjusting the tick rate or moving the work to a dedicated task.
+
 ---
 
 ## 4. Input (buttons & encoders)
@@ -131,6 +143,7 @@ When generating or reviewing code, check:
    - Does the screen implement `needs_redraw()` and track `_dirty` state?
    - Is `render()` + `show()` skipped entirely when nothing changed?
    - No full `fill()` calls inside fast loops?
+   - Secondary display: does the screen clear its own zone in `render()`? Does it stay within zone bounds (content: y<128, status: y≥128)?
 3. **Input**:
    - Debouncing implemented? No polling at insane rates?
 4. **Audio**:

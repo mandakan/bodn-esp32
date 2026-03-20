@@ -92,7 +92,9 @@ class TestBasicFlow:
 
 class TestLimits:
     def test_max_sessions_blocks_wake(self):
-        mgr, now, _ = make_session({"max_session_min": 1, "max_sessions_day": 2, "break_min": 0})
+        mgr, now, _ = make_session(
+            {"max_session_min": 1, "max_sessions_day": 2, "break_min": 0}
+        )
         for i in range(2):
             assert mgr.try_wake()
             now[0] += 60
@@ -153,7 +155,9 @@ class TestQuietHours:
 
 class TestDayRollover:
     def test_new_day_resets_count(self):
-        mgr, now, date = make_session({"max_session_min": 1, "max_sessions_day": 1, "break_min": 0})
+        mgr, now, date = make_session(
+            {"max_session_min": 1, "max_sessions_day": 1, "break_min": 0}
+        )
         mgr.try_wake()
         now[0] = 60
         mgr.tick()
@@ -209,44 +213,54 @@ class TestModeLimits:
         assert mgr.mode == MODE_SOUND_MIXER
 
     def test_per_mode_limit_shorter(self):
-        mgr, now, _ = make_session({
-            "max_session_min": 20,
-            "mode_limits": {"sound_mixer": 5},
-        })
+        mgr, now, _ = make_session(
+            {
+                "max_session_min": 20,
+                "mode_limits": {"sound_mixer": 5},
+            }
+        )
         mgr.try_wake(mode=MODE_SOUND_MIXER)
         assert mgr.time_remaining_s == 300  # 5 min
 
     def test_per_mode_limit_falls_back_to_global(self):
-        mgr, now, _ = make_session({
-            "max_session_min": 10,
-            "mode_limits": {"sound_mixer": 5},
-        })
+        mgr, now, _ = make_session(
+            {
+                "max_session_min": 10,
+                "mode_limits": {"sound_mixer": 5},
+            }
+        )
         mgr.try_wake(mode=MODE_FREE_PLAY)
         assert mgr.time_remaining_s == 600  # 10 min (global)
 
     def test_per_mode_limit_zero_is_unlimited(self):
-        mgr, now, _ = make_session({
-            "max_session_min": 10,
-            "mode_limits": {"free_play": 0},
-        })
+        mgr, now, _ = make_session(
+            {
+                "max_session_min": 10,
+                "mode_limits": {"free_play": 0},
+            }
+        )
         mgr.try_wake(mode=MODE_FREE_PLAY)
         assert mgr.time_remaining_s == 9999  # unlimited
 
     def test_unlimited_mode_never_warns(self):
-        mgr, now, _ = make_session({
-            "max_session_min": 10,
-            "mode_limits": {"free_play": 0},
-        })
+        mgr, now, _ = make_session(
+            {
+                "max_session_min": 10,
+                "mode_limits": {"free_play": 0},
+            }
+        )
         mgr.try_wake(mode=MODE_FREE_PLAY)
         now[0] = 3600  # 1 hour in
         mgr.tick()
         assert mgr.state == PLAYING  # still playing, no warning
 
     def test_set_mode_changes_limit(self):
-        mgr, now, _ = make_session({
-            "max_session_min": 20,
-            "mode_limits": {"sound_mixer": 3},
-        })
+        mgr, now, _ = make_session(
+            {
+                "max_session_min": 20,
+                "mode_limits": {"sound_mixer": 3},
+            }
+        )
         mgr.try_wake()
         assert mgr.time_remaining_s == 1200  # 20 min global
         mgr.set_mode(MODE_SOUND_MIXER)

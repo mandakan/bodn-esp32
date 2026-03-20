@@ -28,13 +28,25 @@ class Theme:
 
         # One colour per button (RGB565)
         self.BTN_565 = [
-            self.RED, self.GREEN, self.BLUE, self.YELLOW,
-            self.CYAN, self.MAGENTA, self.ORANGE, self.PURPLE,
+            self.RED,
+            self.GREEN,
+            self.BLUE,
+            self.YELLOW,
+            self.CYAN,
+            self.MAGENTA,
+            self.ORANGE,
+            self.PURPLE,
         ]
         # Same in RGB tuples (for NeoPixel)
         self.BTN_RGB = [
-            (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
-            (0, 255, 255), (255, 0, 255), (255, 128, 0), (128, 0, 255),
+            (255, 0, 0),
+            (0, 255, 0),
+            (0, 0, 255),
+            (255, 255, 0),
+            (0, 255, 255),
+            (255, 0, 255),
+            (255, 128, 0),
+            (128, 0, 255),
         ]
         self.BTN_NAMES = ["Red", "Grn", "Blu", "Yel", "Cyn", "Mag", "Org", "Pur"]
 

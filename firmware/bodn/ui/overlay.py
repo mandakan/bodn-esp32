@@ -1,7 +1,13 @@
 # bodn/ui/overlay.py — session-aware display overlay
 
 from bodn.session import (
-    WARN_5, WARN_2, WINDDOWN, SLEEPING, COOLDOWN, LOCKDOWN, IDLE,
+    WARN_5,
+    WARN_2,
+    WINDDOWN,
+    SLEEPING,
+    COOLDOWN,
+    LOCKDOWN,
+    IDLE,
 )
 from bodn.patterns import scale, N_LEDS
 from bodn.ui.screen import Screen
