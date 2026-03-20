@@ -110,6 +110,9 @@ def push(base_url: str, token: str = "", force: bool = False) -> bool:
                 if e.code == 401:
                     print(f"  ERROR {rel_path}: Unauthorized (set --token)")
                     break  # no point retrying auth errors
+                elif e.code == 507:
+                    print(f"  ERROR {rel_path}: not enough space on device")
+                    break  # no point retrying
                 else:
                     print(f"  ERROR {rel_path}: HTTP {e.code}")
             except Exception as e:

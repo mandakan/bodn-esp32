@@ -126,6 +126,67 @@ async def _send_unauthorized(writer, msg="Unauthorized"):
     await _send(writer, 401, "application/json", json.dumps({"error": msg}))
 
 
+async def _drain_body(reader, cl):
+    """Read and discard cl bytes from reader."""
+    while cl > 0:
+        n = min(cl, 512)
+        await reader.read(n)
+        cl -= n
+
+
+async def _handle_upload(reader, writer, headers):
+    """OTA file upload — streams body to staging, checks free space first."""
+    remote_path = headers.get("x-path", "")
+    cl = int(headers.get("content-length", 0))
+
+    if not remote_path or cl == 0:
+        await _drain_body(reader, cl)
+        await _send_json(writer, {"error": "need X-Path header and body"}, 400)
+        return
+
+    # Check free space (keep 4 KB reserve for filesystem metadata)
+    try:
+        st = os.statvfs("/")
+        free = st[0] * st[3]  # f_bsize * f_bavail
+    except Exception:
+        free = 0
+    if free > 0 and cl > free - 4096:
+        await _drain_body(reader, cl)
+        await _send_json(
+            writer, {"error": "not enough space", "need": cl, "free": free}, 507
+        )
+        return
+
+    try:
+        staged = OTA_STAGE + remote_path
+        parent = staged.rsplit("/", 1)[0]
+        _mkdirs(parent)
+        # Stream body in 512-byte chunks
+        tmp = staged + ".tmp"
+        written = 0
+        with open(tmp, "wb") as f:
+            remaining = cl
+            while remaining > 0:
+                n = min(remaining, 512)
+                chunk = await reader.read(n)
+                if not chunk:
+                    break
+                f.write(chunk)
+                written += len(chunk)
+                remaining -= len(chunk)
+        try:
+            os.remove(staged)
+        except OSError:
+            pass
+        os.rename(tmp, staged)
+        await _send_json(
+            writer,
+            {"ok": True, "path": remote_path, "staged": staged, "size": written},
+        )
+    except Exception as e:
+        await _send_json(writer, {"error": str(e)}, 500)
+
+
 async def _handle_request(reader, writer, session_mgr, settings):
     """Parse HTTP request and route to handler."""
     try:
@@ -254,51 +315,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 pass
 
         elif method == "POST" and path == "/api/upload":
-            # OTA file upload — streams body to a staging directory so
-            # the running firmware is untouched until commit.
-            remote_path = headers.get("x-path", "")
-            cl = int(headers.get("content-length", 0))
-            if not remote_path or cl == 0:
-                if cl > 0:
-                    while cl > 0:
-                        n = min(cl, 512)
-                        await reader.read(n)
-                        cl -= n
-                await _send_json(writer, {"error": "need X-Path header and body"}, 400)
-            else:
-                try:
-                    staged = OTA_STAGE + remote_path
-                    parent = staged.rsplit("/", 1)[0]
-                    _mkdirs(parent)
-                    # Stream body in 512-byte chunks
-                    tmp = staged + ".tmp"
-                    written = 0
-                    with open(tmp, "wb") as f:
-                        remaining = cl
-                        while remaining > 0:
-                            n = min(remaining, 512)
-                            chunk = await reader.read(n)
-                            if not chunk:
-                                break
-                            f.write(chunk)
-                            written += len(chunk)
-                            remaining -= len(chunk)
-                    try:
-                        os.remove(staged)
-                    except OSError:
-                        pass
-                    os.rename(tmp, staged)
-                    await _send_json(
-                        writer,
-                        {
-                            "ok": True,
-                            "path": remote_path,
-                            "staged": staged,
-                            "size": written,
-                        },
-                    )
-                except Exception as e:
-                    await _send_json(writer, {"error": str(e)}, 500)
+            await _handle_upload(reader, writer, headers)
 
         elif method == "POST" and path == "/api/ota/commit":
             # Move all staged files into place and reboot.
