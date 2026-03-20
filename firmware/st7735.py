@@ -98,6 +98,56 @@ class ST7735(framebuf.FrameBuffer):
         self.spi.write(self._buf)
         self.cs.value(1)
 
+    def show_rect(self, x, y, w, h):
+        """Push a sub-rectangle of the framebuffer to the display.
+
+        Falls back to show() when the region covers more than half the screen.
+        Coordinates are in logical (post-rotation) framebuffer space.
+        """
+        # Clamp to screen bounds
+        if x < 0:
+            w += x
+            x = 0
+        if y < 0:
+            h += y
+            y = 0
+        if x + w > self.width:
+            w = self.width - x
+        if y + h > self.height:
+            h = self.height - y
+        if w <= 0 or h <= 0:
+            return
+        # Fallback for large regions
+        if w * h > self.width * self.height // 2:
+            self.show()
+            return
+        # Set address window
+        x0 = self._col_offset + x
+        x1 = x0 + w - 1
+        y0 = self._row_offset + y
+        y1 = y0 + h - 1
+        self._cmd(_CASET, bytes([x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF]))
+        self._cmd(_RASET, bytes([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF]))
+        # Begin RAMWR
+        self.cs.value(0)
+        self.dc.value(0)
+        self.spi.write(bytes([_RAMWR]))
+        self.dc.value(1)
+        # Push pixel data from framebuffer
+        mv = memoryview(self._buf)
+        stride = self.width * 2
+        if w == self.width:
+            # Full-width: contiguous slice, single write
+            start = y * stride
+            self.spi.write(mv[start : start + h * stride])
+        else:
+            # Partial-width: one write per row
+            row_bytes = w * 2
+            for row in range(h):
+                start = (y + row) * stride + x * 2
+                self.spi.write(mv[start : start + row_bytes])
+        self.cs.value(1)
+
     @staticmethod
     def rgb(r, g, b):
         """Convert 8-bit RGB to byte-swapped RGB565 for framebuf."""

@@ -129,4 +129,9 @@ class SecondaryDisplay:
             redraw = True
 
         if redraw:
-            self.tft.show()
+            if content_needs and not status_needs:
+                self.tft.show_rect(0, 0, self.content_w, CONTENT_H)
+            elif status_needs and not content_needs:
+                self.tft.show_rect(0, STATUS_Y, self.content_w, STATUS_H)
+            else:
+                self.tft.show()
