@@ -135,7 +135,7 @@ class PauseMenu(Screen):
             # Hold progress bar at top of screen
             if self._hold.holding:
                 draw_hold_bar(tft, theme, self._hold.progress, theme.width)
-                self._dirty = False
+            self._dirty = False
             return
 
         self._dirty = False

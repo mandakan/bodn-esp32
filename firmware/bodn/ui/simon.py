@@ -122,14 +122,12 @@ class SimonScreen(Screen):
             self._pause.render(tft, theme, frame)
             return
 
-        if not self._dirty:
-            return
-        self._dirty = False
+        if self._dirty:
+            self._dirty = False
+            tft.fill(theme.BLACK)
+            self._render_game(tft, theme, frame)
 
-        tft.fill(theme.BLACK)
-        self._render_game(tft, theme, frame)
-
-        # Hold-to-pause progress bar (drawn on top by PauseMenu)
+        # Hold-to-pause progress bar (always called so PauseMenu can clear its dirty flag)
         self._pause.render(tft, theme, frame)
 
     def _render_game(self, tft, theme, frame):

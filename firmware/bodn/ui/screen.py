@@ -53,6 +53,11 @@ class ScreenManager:
         self._overlay = None
         self._frame = 0
         self._dirty = True  # full clear needed on first frame / transitions
+        # Perf counters (enabled via debug_perf setting)
+        self.debug_perf = False
+        self._perf_total = 0
+        self._perf_drawn = 0
+        self._perf_time_ms = None  # set to time_ms function when enabled
 
     @property
     def active(self):
@@ -119,6 +124,9 @@ class ScreenManager:
             overlay_dirty = nr() if nr else True
 
         if not screen_dirty and not overlay_dirty:
+            if self.debug_perf:
+                self._perf_total += 1
+                self._perf_report()
             return  # nothing changed — skip render + SPI push
 
         # Clear on screen transitions
@@ -134,3 +142,25 @@ class ScreenManager:
             self._overlay.render(self.tft, self.theme, self._frame)
 
         self.tft.show()
+
+        if self.debug_perf:
+            self._perf_total += 1
+            self._perf_drawn += 1
+            self._perf_report()
+
+    def _perf_report(self):
+        """Print perf stats every 100 frames."""
+        if self._perf_total % 100 != 0:
+            return
+        total = self._perf_total
+        drawn = self._perf_drawn
+        pct = drawn * 100 // max(1, total)
+        active = self.active
+        name = active.__class__.__name__ if active else "none"
+        print(
+            "PERF f={} drawn={}/{}({}%) screen={}".format(
+                self._frame, drawn, total, pct, name
+            )
+        )
+        self._perf_total = 0
+        self._perf_drawn = 0

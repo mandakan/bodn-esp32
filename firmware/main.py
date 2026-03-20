@@ -124,6 +124,9 @@ def create_ui(
     # Primary display — full screen manager with navigation
     manager = ScreenManager(tft, theme, inp)
     manager.set_overlay(overlay)
+    if settings.get("debug_perf"):
+        manager.debug_perf = True
+        manager._perf_time_ms = time.ticks_ms
 
     # Secondary display — cat face (default) + status strip
     from bodn.ui.catface import CatFaceScreen
