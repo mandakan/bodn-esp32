@@ -151,3 +151,38 @@ def test_stack_depth():
     assert mgr.active is b
     mgr.pop()
     assert mgr.active is a
+
+
+def test_pop_marks_revealed_screen_dirty():
+    """When a screen is popped, the screen underneath must be redrawn."""
+
+    class DirtyScreen(Screen):
+        def __init__(self):
+            self._dirty = False
+            self.renders = 0
+
+        def enter(self, manager):
+            self._dirty = True
+
+        def needs_redraw(self):
+            return self._dirty
+
+        def render(self, tft, theme, frame):
+            self._dirty = False
+            self.renders += 1
+
+    mgr = make_manager()
+    bottom = DirtyScreen()
+    top = SpyScreen()
+    mgr.push(bottom)
+    mgr.tick()  # renders bottom, clears its dirty flag
+    assert bottom.renders == 1
+    assert not bottom._dirty
+
+    mgr.push(top)
+    mgr.tick()  # renders top
+    mgr.pop()  # should mark bottom as dirty again
+
+    assert bottom._dirty
+    mgr.tick()  # should render bottom
+    assert bottom.renders == 2

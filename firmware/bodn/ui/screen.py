@@ -76,6 +76,11 @@ class ScreenManager:
         screen = self._stack.pop()
         screen.exit()
         self._dirty = True
+        # Mark the newly-revealed screen as needing a redraw
+        if self._stack:
+            revealed = self._stack[-1]
+            if hasattr(revealed, "_dirty"):
+                revealed._dirty = True
         return screen
 
     def replace(self, screen):
