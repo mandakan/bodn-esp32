@@ -41,11 +41,11 @@ def parse_config(path: Path) -> list[Group]:
             current_comment = line.lstrip("# ")
             continue
 
-        # Skip non-pin constants
+        # Skip non-pin constants and MCP23017 expander pins (not ESP32 GPIOs)
         if re.match(
             r"^[A-Z][A-Z0-9_]*(WIDTH|HEIGHT|RATE|SIZE|LEN|COUNT|MAX|MIN|MADCTL|OFFSET)\s*=",
             line,
-        ):
+        ) or re.match(r"^MCP", line):
             continue
 
         # Single assignment: NAME = 42

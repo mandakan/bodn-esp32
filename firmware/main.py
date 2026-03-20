@@ -7,9 +7,10 @@ except ImportError:
 
 import time
 import neopixel
-from machine import Pin, SPI
+from machine import Pin, SPI, SoftI2C
 from bodn import config
 from bodn.encoder import Encoder
+from bodn.mcp23017 import MCP23017
 from bodn.session import SessionManager
 from bodn.web import start_server
 from bodn.wifi import WiFiController
@@ -69,8 +70,19 @@ def create_hardware():
         madctl=config.TFT2_MADCTL,
     )
 
-    buttons = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.BTN_PINS]
-    switches = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.SW_PINS]
+    # MCP23017 GPIO expander for buttons and toggles (I2C)
+    # Falls back to direct GPIO when MCP23017 is absent (Wokwi simulation).
+    mcp = None
+    try:
+        i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+        mcp = MCP23017(i2c, config.MCP23017_ADDR)
+        buttons = [mcp.pin(p) for p in config.MCP_BTN_PINS]
+        switches = [mcp.pin(p) for p in config.MCP_SW_PINS]
+        print("MCP23017 found — buttons/toggles on I2C expander")
+    except Exception:
+        buttons = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.FALLBACK_BTN_PINS]
+        switches = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.FALLBACK_SW_PINS]
+        print("MCP23017 not found — using direct GPIO (simulation mode)")
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
         Encoder(
@@ -97,7 +109,7 @@ def create_hardware():
     ]
     encoders[config.ENC_A].value = ENC_STEPS // 2  # brightness default
     encoders[config.ENC_B].value = ENC_STEPS // 4  # speed default
-    return tft, tft2, buttons, switches, encoders, np
+    return tft, tft2, buttons, switches, encoders, np, mcp
 
 
 def create_ui(
@@ -169,13 +181,15 @@ def create_ui(
 # ---------------------------------------------------------------------------
 
 
-async def primary_task(manager, settings, inp, encoders):
+async def primary_task(manager, settings, inp, encoders, mcp):
     """Input scanning + primary display: ~30 ms tick."""
     print("primary_task started, debug_input={}".format(settings.get("debug_input")))
     frame = 0
     errors = 0
     while True:
         try:
+            if mcp:
+                mcp.refresh()
             manager.tick()
         except KeyboardInterrupt:
             raise
@@ -185,7 +199,7 @@ async def primary_task(manager, settings, inp, encoders):
 
         if settings.get("debug_input") and frame % 15 == 0:
             btns = "".join("1" if inp.btn_held[i] else "." for i in range(8))
-            sws = "".join("1" if inp.sw[i] else "." for i in range(4))
+            sws = "".join("1" if inp.sw[i] else "." for i in range(len(inp.sw)))
             enc_vals = " ".join("{}".format(inp.enc_pos[i]) for i in range(3))
             enc_raw = " ".join(
                 "C{}D{}S{}".format(
@@ -266,7 +280,7 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    tft, tft2, buttons, switches, encoders, np = create_hardware()
+    tft, tft2, buttons, switches, encoders, np, mcp = create_hardware()
     manager, secondary, inp = create_ui(
         session_mgr,
         settings,
@@ -280,7 +294,7 @@ async def main():
     )
 
     await asyncio.gather(
-        primary_task(manager, settings, inp, encoders),
+        primary_task(manager, settings, inp, encoders, mcp),
         secondary_task(secondary),
         housekeeping_task(session_mgr),
     )

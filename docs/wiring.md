@@ -9,10 +9,10 @@ Regenerate: `uv run python tools/pinout.py --md`
 graph LR
     ESP["ESP32-S3<br/>DevKit-Lipo"]
 
-    ["<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST<br/>GPIO 43 → BL</sub>"]
-     -.- ESP
+    SharesSPIbuswithsecondarydisplay["Shares SPI bus with secondary display<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST<br/>GPIO 43 → BL</sub>"]
+    ESP -- SPI --> SharesSPIbuswithsecondarydisplay
 
-    ST7735TFT["ST7735 TFT<br/><sub>GPIO 37 → TFT2_CS</sub>"]
+    ST7735TFT["ST7735 TFT<br/><sub>GPIO 39 → TFT2_CS</sub>"]
     ESP -- SPI --> ST7735TFT
 
     INMP441I2Smicrophone["INMP441 I2S microphone<br/><sub>GPIO 14 → SCK<br/>GPIO 15 → WS<br/>GPIO 38 → SD</sub>"]
@@ -21,21 +21,21 @@ graph LR
     MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 5 → DIN</sub>"]
     ESP -- I2S --> MAX98357AI2Samplifier
 
-    Buttons["Buttons<br/><sub>GPIO 1 → BTN 0<br/>GPIO 2 → BTN 1<br/>GPIO 4 → BTN 2<br/>GPIO 7 → BTN 3<br/>GPIO 20 → BTN 4<br/>GPIO 21 → BTN 5<br/>GPIO 35 → BTN 6<br/>GPIO 36 → BTN 7</sub>"]
-    Buttons -.- ESP
-
-    Toggleswitches["Toggle switches<br/><sub>GPIO 39 → SW 0<br/>GPIO 40 → SW 1<br/>GPIO 41 → SW 2<br/>GPIO 46 → SW 3</sub>"]
-    Toggleswitches -.- ESP
-
-    Rotaryencoders["Rotary encoders<br/><sub>GPIO 19 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 3 → DT<br/>GPIO 48 → SW<br/>GPIO 47 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
-    Rotaryencoders -.- ESP
+    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 19 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 3 → DT<br/>GPIO 40 → SW<br/>GPIO 41 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
+    RotaryencodersmuststayonnativeGPIOforIRQlatency -.- ESP
 
     WS2812BNeoPixelLEDs["WS2812B NeoPixel LEDs<br/><sub>GPIO 6 → PIN</sub>"]
     WS2812BNeoPixelLEDs -.- ESP
 
+    I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
+    I2CbuspUEXTconnector -.- ESP
+
+    GPIO3537arePSRAMreservedonrealhardwarebutusableinWokwi["GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi.<br/><sub>GPIO 1 → FALLBACK BTN 0<br/>GPIO 2 → FALLBACK BTN 1<br/>GPIO 4 → FALLBACK BTN 2<br/>GPIO 7 → FALLBACK BTN 3<br/>GPIO 20 → FALLBACK BTN 4<br/>GPIO 21 → FALLBACK BTN 5<br/>GPIO 35 → FALLBACK BTN 6<br/>GPIO 36 → FALLBACK BTN 7<br/>GPIO 37 → FALLBACK SW 0<br/>GPIO 44 → FALLBACK SW 1<br/>GPIO 46 → FALLBACK SW 2</sub>"]
+    GPIO3537arePSRAMreservedonrealhardwarebutusableinWokwi -.- ESP
+
 ```
 
-### 
+### Shares SPI bus with secondary display
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
@@ -50,7 +50,7 @@ graph LR
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
-| TFT2_CS | 37 | `TFT2_CS` |
+| TFT2_CS | 39 | `TFT2_CS` |
 
 ### INMP441 I2S microphone
 
@@ -68,29 +68,7 @@ graph LR
 | WS | 45 | `I2S_SPK_WS` |
 | DIN | 5 | `I2S_SPK_DIN` |
 
-### Buttons
-
-| Signal | GPIO | Config variable |
-|--------|------|-----------------|
-| BTN 0 | 1 | `BTN_PINS[0]` |
-| BTN 1 | 2 | `BTN_PINS[1]` |
-| BTN 2 | 4 | `BTN_PINS[2]` |
-| BTN 3 | 7 | `BTN_PINS[3]` |
-| BTN 4 | 20 | `BTN_PINS[4]` |
-| BTN 5 | 21 | `BTN_PINS[5]` |
-| BTN 6 | 35 | `BTN_PINS[6]` |
-| BTN 7 | 36 | `BTN_PINS[7]` |
-
-### Toggle switches
-
-| Signal | GPIO | Config variable |
-|--------|------|-----------------|
-| SW 0 | 39 | `SW_PINS[0]` |
-| SW 1 | 40 | `SW_PINS[1]` |
-| SW 2 | 41 | `SW_PINS[2]` |
-| SW 3 | 46 | `SW_PINS[3]` |
-
-### Rotary encoders
+### Rotary encoders — must stay on native GPIO for IRQ latency
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
@@ -99,8 +77,8 @@ graph LR
 | SW | 17 | `ENC1_SW` |
 | CLK | 16 | `ENC2_CLK` |
 | DT | 3 | `ENC2_DT` |
-| SW | 48 | `ENC2_SW` |
-| CLK | 47 | `ENC3_CLK` |
+| SW | 40 | `ENC2_SW` |
+| CLK | 41 | `ENC3_CLK` |
 | DT | 42 | `ENC3_DT` |
 | SW | 0 | `ENC3_SW` |
 
@@ -110,45 +88,69 @@ graph LR
 |--------|------|-----------------|
 | PIN | 6 | `NEOPIXEL_PIN` |
 
+### I2C bus — pUEXT connector
+
+| Signal | GPIO | Config variable |
+|--------|------|-----------------|
+| I2C_SCL | 47 | `I2C_SCL` |
+| I2C_SDA | 48 | `I2C_SDA` |
+
+### GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi.
+
+| Signal | GPIO | Config variable |
+|--------|------|-----------------|
+| FALLBACK BTN 0 | 1 | `FALLBACK_BTN_PINS[0]` |
+| FALLBACK BTN 1 | 2 | `FALLBACK_BTN_PINS[1]` |
+| FALLBACK BTN 2 | 4 | `FALLBACK_BTN_PINS[2]` |
+| FALLBACK BTN 3 | 7 | `FALLBACK_BTN_PINS[3]` |
+| FALLBACK BTN 4 | 20 | `FALLBACK_BTN_PINS[4]` |
+| FALLBACK BTN 5 | 21 | `FALLBACK_BTN_PINS[5]` |
+| FALLBACK BTN 6 | 35 | `FALLBACK_BTN_PINS[6]` |
+| FALLBACK BTN 7 | 36 | `FALLBACK_BTN_PINS[7]` |
+| FALLBACK SW 0 | 37 | `FALLBACK_SW_PINS[0]` |
+| FALLBACK SW 1 | 44 | `FALLBACK_SW_PINS[1]` |
+| FALLBACK SW 2 | 46 | `FALLBACK_SW_PINS[2]` |
+
 ### All GPIOs
 
 | GPIO | Component | Signal |
 |------|-----------|--------|
-| 0 | Rotary encoders | SW |
-| 1 | Buttons | BTN 0 |
-| 2 | Buttons | BTN 1 |
-| 3 | Rotary encoders | DT |
-| 4 | Buttons | BTN 2 |
+| 0 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
+| 1 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 0 |
+| 2 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 1 |
+| 3 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 4 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 2 |
 | 5 | MAX98357A I2S amplifier | DIN |
 | 6 | WS2812B NeoPixel LEDs | PIN |
-| 7 | Buttons | BTN 3 |
-| 8 |  | DC |
-| 9 |  | RST |
-| 10 |  | CS |
-| 11 |  | MOSI |
-| 12 |  | SCK |
+| 7 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 3 |
+| 8 | Shares SPI bus with secondary display | DC |
+| 9 | Shares SPI bus with secondary display | RST |
+| 10 | Shares SPI bus with secondary display | CS |
+| 11 | Shares SPI bus with secondary display | MOSI |
+| 12 | Shares SPI bus with secondary display | SCK |
 | 13 | MAX98357A I2S amplifier | BCK |
 | 14 | INMP441 I2S microphone | SCK |
 | 15 | INMP441 I2S microphone | WS |
-| 16 | Rotary encoders | CLK |
-| 17 | Rotary encoders | SW |
-| 18 | Rotary encoders | DT |
-| 19 | Rotary encoders | CLK |
-| 20 | Buttons | BTN 4 |
-| 21 | Buttons | BTN 5 |
-| 35 | Buttons | BTN 6 |
-| 36 | Buttons | BTN 7 |
-| 37 | ST7735 TFT | TFT2_CS |
+| 16 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
+| 17 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
+| 18 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 19 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
+| 20 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 4 |
+| 21 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 5 |
+| 35 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 6 |
+| 36 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK BTN 7 |
+| 37 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK SW 0 |
 | 38 | INMP441 I2S microphone | SD |
-| 39 | Toggle switches | SW 0 |
-| 40 | Toggle switches | SW 1 |
-| 41 | Toggle switches | SW 2 |
-| 42 | Rotary encoders | DT |
-| 43 |  | BL |
+| 39 | ST7735 TFT | TFT2_CS |
+| 40 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
+| 41 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
+| 42 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 43 | Shares SPI bus with secondary display | BL |
+| 44 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK SW 1 |
 | 45 | MAX98357A I2S amplifier | WS |
-| 46 | Toggle switches | SW 3 |
-| 47 | Rotary encoders | CLK |
-| 48 | Rotary encoders | SW |
+| 46 | GPIO 35-37 are PSRAM-reserved on real hardware but usable in Wokwi. | FALLBACK SW 2 |
+| 47 | I2C bus — pUEXT connector | I2C_SCL |
+| 48 | I2C bus — pUEXT connector | I2C_SDA |
 <!-- pinout:end -->
 
 ## Encoder roles and placement

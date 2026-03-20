@@ -71,11 +71,53 @@ class TestConfig:
     def test_config_imports(self):
         from bodn import config
 
-        assert isinstance(config.BTN_PINS, list)
-        assert len(config.BTN_PINS) == 8
+        assert isinstance(config.MCP_BTN_PINS, list)
+        assert len(config.MCP_BTN_PINS) == 8
 
     def test_pin_numbers_are_ints(self):
         from bodn import config
 
-        for pin in config.BTN_PINS:
+        for pin in config.MCP_BTN_PINS:
             assert isinstance(pin, int)
+
+    def test_no_psram_pins_used(self):
+        """GPIO 35, 36, 37 are reserved by OSPI PSRAM on N8R8."""
+        from bodn import config
+
+        psram_pins = {35, 36, 37}
+        # Check all native GPIO assignments
+        native_pins = [
+            config.TFT_SCK, config.TFT_MOSI, config.TFT_CS,
+            config.TFT_DC, config.TFT_RST, config.TFT_BL,
+            config.TFT2_CS,
+            config.I2S_MIC_SCK, config.I2S_MIC_WS, config.I2S_MIC_SD,
+            config.I2S_SPK_BCK, config.I2S_SPK_WS, config.I2S_SPK_DIN,
+            config.ENC1_CLK, config.ENC1_DT, config.ENC1_SW,
+            config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW,
+            config.ENC3_CLK, config.ENC3_DT, config.ENC3_SW,
+            config.NEOPIXEL_PIN,
+            config.I2C_SCL, config.I2C_SDA,
+        ]
+        for pin in native_pins:
+            assert pin not in psram_pins, f"GPIO {pin} is reserved by PSRAM"
+
+    def test_no_duplicate_native_pins(self):
+        """Each native GPIO should be assigned only once."""
+        from bodn import config
+
+        native_pins = [
+            config.TFT_SCK, config.TFT_MOSI, config.TFT_CS,
+            config.TFT_DC, config.TFT_RST, config.TFT_BL,
+            config.TFT2_CS,
+            config.I2S_MIC_SCK, config.I2S_MIC_WS, config.I2S_MIC_SD,
+            config.I2S_SPK_BCK, config.I2S_SPK_WS, config.I2S_SPK_DIN,
+            config.ENC1_CLK, config.ENC1_DT, config.ENC1_SW,
+            config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW,
+            config.ENC3_CLK, config.ENC3_DT, config.ENC3_SW,
+            config.NEOPIXEL_PIN,
+            config.I2C_SCL, config.I2C_SDA,
+        ]
+        seen = {}
+        for pin in native_pins:
+            assert pin not in seen, f"GPIO {pin} used twice"
+            seen[pin] = True

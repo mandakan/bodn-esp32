@@ -15,10 +15,11 @@
 | 8 | Push buttons | 7mm mini momentary, mixed colors (Gebildet 24-pack) | ~110 SEK |
 | 4 | Toggle switches | Mini SPST on/off (Gebildet 12-pack) | ~99 SEK |
 | 2 | LED sticks | WS2812 8-LED RGB modules (from 10-pack) | ~incl. |
+| 1 | GPIO expander | Waveshare MCP23017 I2C 16-IO expansion board | ~85 SEK |
 | — | Wiring | Dupont jumper wire kits M-M/F-M/F-F (AZDelivery 3×40) | ~89 SEK |
 | 1 | Breadboard | Olimex MAXI breadboard (prototyping) | ~40 SEK |
 
-**Estimated total: ~1 490 SEK** (within the 1 500 SEK budget)
+**Estimated total: ~1 575 SEK**
 
 ## Pin assignments
 
@@ -43,7 +44,7 @@ Touch controller (XPT2046) pins TBD — shares SPI bus with a separate CS.
 |--------|------|
 | SCK | 12 (shared) |
 | MOSI | 11 (shared) |
-| CS | 37 |
+| CS | 39 |
 | DC | 8 (shared) |
 | RST | 9 (shared) |
 
@@ -65,25 +66,25 @@ The secondary display shares SCK, MOSI, DC, and RST with the primary. Only CS is
 | LRCLK (WS) | 45 |
 | DIN | 5 |
 
-### Buttons
+### Buttons (MCP23017)
 
-8 × mini momentary push buttons (active low with internal pull-up):
+8 × mini momentary push buttons (active low with MCP23017 internal pull-ups):
 
-GPIOs: 1, 2, 4, 7, 20, 21, 35, 36
+MCP23017 pins: GPA0–GPA7 (config: `MCP_BTN_PINS`)
 
-### Toggle switches
+### Toggle switches (MCP23017)
 
-4 × SPST mini toggles (active low with internal pull-up):
+4 × SPST mini toggles (active low with MCP23017 internal pull-ups):
 
-GPIOs: 39, 40, 41, 46
+MCP23017 pins: GPB0–GPB3 (config: `MCP_SW_PINS`)
 
 ### Rotary encoders
 
 | Encoder | Role | CLK | DT | SW (button) |
 |---------|------|-----|----|-------------|
 | 1 (NAV) | Navigation | 19 | 18 | 17 |
-| 2 (ENC_A) | Parameter A | 16 | 3 | 48 |
-| 3 (ENC_B) | Parameter B | 47 | 42 | 0 |
+| 2 (ENC_A) | Parameter A | 16 | 3 | 40 |
+| 3 (ENC_B) | Parameter B | 41 | 42 | 0 |
 
 ### NeoPixel LEDs (WS2812B)
 
@@ -109,19 +110,122 @@ Both share SPI bus 2. The driver deasserts CS after each `show()`, so they can c
 - Both displays on SPI bus 2 with separate CS pins.
 - ILI9341 touch (XPT2046) will need a third CS pin on the same SPI bus (pin TBD).
 - INMP441 and MAX98357A on I2S (separate IN/OUT peripherals on ESP32-S3).
-- All buttons and toggle switches use internal pull-ups with software debouncing.
+- All buttons and toggle switches are on the MCP23017 I2C expander with its internal pull-ups and software debouncing.
 - NeoPixel strip on a single GPIO — data line chained through all 16 LEDs.
 - WS2812 LEDs run at 5V but the data line works reliably from 3.3V with short wires. If you get flicker, add a 330Ω series resistor on the data line.
 - Battery voltage can be read via the DevKit-Lipo's built-in ADC circuit.
 - GPIO 0 and 46 are strapping pins but safe as inputs with pull-up after boot.
 
-## ESP32-S3-DevKit-Lipo notes
+## ESP32-S3-DevKit-Lipo
 
-- USB-C for power, programming, and serial console.
-- Built-in LiPo charging circuit — just plug in the battery.
-- Battery voltage measurable via ADC (check Olimex docs for the specific ADC pin).
-- 8 MB PSRAM available for audio buffers, framebuffers, and larger assets.
+Board: **Olimex ESP32-S3-DevKit-LiPo** (Rev B)
+
+- Module: ESP32-S3-WROOM-1-N8R8 (8 MB flash + 8 MB PSRAM)
+- Dual-core Xtensa LX7 @ 240 MHz, 512 KB internal SRAM
+- Wi-Fi 802.11 b/g/n + Bluetooth 5 (LE)
+- Two USB-C ports: one for UART (programming/console via CH340X), one for OTG/JTAG
+- Built-in LiPo charger (BL4054B, 100 mA with default 10k prog resistor)
+- Battery voltage measurable via ADC on GPIO 6 (BAT_SENS, voltage divider R6/R7: 470k/150k)
+- External power sense on GPIO 5 (PWR_SENS, active low when USB power present)
+- On-board user LED on GPIO 38 (active high, accent green)
+- User button on GPIO 0, reset button on ESP_EN
+- pUEXT connector (1.0 mm pitch, 10-pin) exposing UART1, I2C, SPI3 — see below
+- Dimensions: 27.94 × 55.88 mm
+- Extension headers (J1/J3) are fully compatible with Espressif ESP32-S3-DevKitC-1
+
+Reference: [OLIMEX/ESP32-S3-DevKit-LiPo on GitHub](https://github.com/OLIMEX/ESP32-S3-DevKit-LiPo)
+
+### pUEXT connector pinout
+
+The on-board pUEXT connector (BM10B-SRSS-TB, 1.0 mm pitch) provides I2C, SPI, and UART
+on a single 10-pin connector with pull-ups already fitted on the board:
+
+| Pin | Signal | GPIO | Pull-up |
+|-----|--------|------|---------|
+| 1 | +3.3V | — | — |
+| 2 | GND | — | — |
+| 3 | U1TXD | 17 | — |
+| 4 | U1RXD | 18 | — |
+| 5 | I2C_SCL | 47 | 2.2k to 3.3V (R19) |
+| 6 | I2C_SDA | 48 | 2.2k to 3.3V (R20) |
+| 7 | SPI3_MISO | 13 | — |
+| 8 | SPI3_MOSI | 11 | — |
+| 9 | SPI3_CLK | 12 | — |
+| 10 | SPI3_CS0 | 10 | 10k to 3.3V (R21) |
+
+### Reserved / unavailable GPIOs
+
+The ESP32-S3-WROOM-1-**N8R8** module uses OSPI PSRAM which occupies three GPIOs internally:
+
+| GPIO | Reason | Note |
+|------|--------|------|
+| 35 | OSPI PSRAM (FSPID) | **Not available** — marked NC on extension headers |
+| 36 | OSPI PSRAM (FSPICLK) | **Not available** — marked NC on extension headers |
+| 37 | OSPI PSRAM (FSPIQ) | **Not available** — marked NC on extension headers |
+
+All three pins are avoided in `config.py`. Buttons and toggles have been moved to the
+MCP23017 I2C expander, and TFT2_CS has been reassigned to GPIO 39.
+
+Other GPIOs with board-level functions (usable but be aware):
+
+| GPIO | Board function |
+|------|----------------|
+| 0 | Strapping pin + USER button (safe as input after boot) |
+| 5 | PWR_SENS — external power detection (high-Z when on battery) |
+| 6 | BAT_SENS — battery ADC via voltage divider |
+| 38 | On-board user LED (accent green) |
+| 46 | Strapping pin (safe as input after boot) |
+
+## MCP23017 GPIO expander
+
+**Purpose:** Expand the available I/O for non-time-critical peripherals (buttons, toggle
+switches, LEDs, and other slow-changing signals) over I2C, freeing native ESP32 GPIOs
+for latency-sensitive tasks (encoders, SPI displays, I2S audio).
+
+### Module specs
+
+| Parameter | Value |
+|-----------|-------|
+| Board | Waveshare MCP23017 I2C 16-IO Expansion Board |
+| Chip | Microchip MCP23017 |
+| Interface | I2C (up to 1.7 MHz in fast-mode plus, 400 kHz standard) |
+| I/O pins | 16 (two 8-bit ports: GPA0–7, GPB0–7) |
+| Operating voltage | 1.8–5.5V (3.3V from ESP32) |
+| Default I2C address | 0x20 (configurable 0x20–0x27 via A0–A2 jumpers) |
+| Interrupt outputs | 2 open-drain (INTA, INTB) — optional |
+| Stackable | Up to 8 boards on the same I2C bus |
+
+### I2C bus connection
+
+The MCP23017 connects to the ESP32-S3 via I2C. The devkit provides hardware I2C with
+pull-ups on GPIO 47 (SCL) and GPIO 48 (SDA) via the pUEXT connector.
+
+Encoder pins that previously used GPIO 47 and 48 have been reassigned (ENC3_CLK → 41,
+ENC2_SW → 40) to free the I2C bus.
+
+### Pin mapping
+
+| MCP23017 pin | Peripheral | Notes |
+|--------------|-----------|-------|
+| GPA0–GPA7 | 8 push buttons | Active low with internal pull-ups (MCP23017 has configurable pull-ups) |
+| GPB0–GPB3 | 4 toggle switches | Active low with internal pull-ups |
+| GPB4–GPB7 | 4 × available | Future use (additional buttons, status LEDs, etc.) |
+
+This frees up 7 native ESP32 GPIOs for future use (1, 2, 4, 7, 20, 21, 46).
+
+### Why not put encoders on the expander?
+
+Rotary encoders generate rapid quadrature pulses that need low-latency IRQ handling.
+The I2C round-trip through the MCP23017 adds too much delay — missed edges cause phantom
+steps. Encoders must stay on native ESP32 GPIOs with hardware interrupts.
 
 ## GPIO budget
 
-35 of ~36 usable GPIOs allocated. 1 free (GPIO 44 — reserved for touch CS or future use).
+| Category | Details |
+|----------|---------|
+| Native GPIOs in use | 21 (SPI, I2S, encoders, NeoPixel, I2C) |
+| Native GPIOs free | 7 — GPIO 1, 2, 4, 7, 20, 21, 46 |
+| PSRAM-reserved (never use) | GPIO 35, 36, 37 |
+| UART console (avoid) | GPIO 43 (TX), 44 (RX) |
+| MCP23017 in use | 12 (8 buttons + 4 toggles) |
+| MCP23017 spare | 4 (GPB4–GPB7) |
