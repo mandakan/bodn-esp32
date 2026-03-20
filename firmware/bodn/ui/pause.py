@@ -15,7 +15,7 @@ _ITEMS = ["Resume", "Back to menu"]
 # Hold bar: redraw every N% to avoid full-screen redraws.
 # The bar draws directly over the existing framebuffer (4px at y=0)
 # and pushes show() itself — no game re-render needed.
-_HOLD_BAR_STEPS = 15  # ~15 visual updates over the hold duration
+_HOLD_BAR_STEPS = 4  # ~4 visual updates over the hold duration
 _HOLD_BAR_H = 4
 
 
