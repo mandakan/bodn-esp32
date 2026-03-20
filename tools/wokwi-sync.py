@@ -48,6 +48,7 @@ FILES = [
     ("bodn/ui/clock.py", FIRMWARE_DIR / "bodn" / "ui" / "clock.py"),
     ("bodn/ui/secondary.py", FIRMWARE_DIR / "bodn" / "ui" / "secondary.py"),
     ("bodn/ui/ambient.py", FIRMWARE_DIR / "bodn" / "ui" / "ambient.py"),
+    ("bodn/ui/catface.py", FIRMWARE_DIR / "bodn" / "ui" / "catface.py"),
     ("bodn/ui/mystery.py", FIRMWARE_DIR / "bodn" / "ui" / "mystery.py"),
     ("bodn/ui/pause.py", FIRMWARE_DIR / "bodn" / "ui" / "pause.py"),
     ("bodn/ui/settings.py", FIRMWARE_DIR / "bodn" / "ui" / "settings.py"),

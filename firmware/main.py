@@ -24,7 +24,7 @@ from bodn.ui.secondary import SecondaryDisplay
 from bodn.ui.home import HomeScreen
 from bodn.ui.demo import DemoScreen
 from bodn.ui.clock import ClockScreen
-from bodn.ui.ambient import AmbientClock
+from bodn.ui.ambient import AmbientClock, StatusStrip
 
 ENC_STEPS = 20
 N_LEDS = config.NEOPIXEL_COUNT
@@ -93,26 +93,34 @@ def create_ui(session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, en
     manager = ScreenManager(tft, theme, inp)
     manager.set_overlay(overlay)
 
+    # Secondary display — content + status strip
+    secondary = SecondaryDisplay(tft2, theme2)
+    secondary.set_content(AmbientClock())
+    secondary.set_status(StatusStrip(session_mgr))
+
+    def _reset_secondary():
+        secondary.set_content(AmbientClock())
+
     def _make_mystery():
         from bodn.ui.mystery import MysteryScreen
-        return MysteryScreen(np, overlay)
+        from bodn.ui.catface import CatFaceScreen
+        cat = CatFaceScreen()
+        secondary.set_content(cat)
+        return MysteryScreen(np, overlay, secondary_screen=cat, on_exit=_reset_secondary)
 
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
+        _reset_secondary()
         return SettingsScreen(settings, np, wifi_ctrl)
 
     mode_screens = {
         "mystery": _make_mystery,
-        "demo": lambda: DemoScreen(np, overlay, enc_steps=ENC_STEPS),
-        "clock": lambda: ClockScreen(),
+        "demo": lambda: (_reset_secondary(), DemoScreen(np, overlay, enc_steps=ENC_STEPS))[1],
+        "clock": lambda: (_reset_secondary(), ClockScreen())[1],
         "settings": _make_settings,
     }
     home = HomeScreen(mode_screens, session_mgr, order=["mystery", "demo", "clock", "settings"])
     manager.push(home)
-
-    # Secondary display — ambient clock
-    secondary = SecondaryDisplay(tft2, theme2)
-    secondary.set_screen(AmbientClock(session_mgr))
 
     # Clear LEDs
     for i in range(N_LEDS):
@@ -160,7 +168,11 @@ async def primary_task(manager, settings, inp, encoders):
 
 
 async def secondary_task(secondary):
-    """Secondary display (ambient clock): ~1000 ms tick."""
+    """Secondary display: ~200 ms tick.
+
+    Fast enough for game content updates (emotion changes), cheap when
+    idle thanks to per-zone dirty tracking in SecondaryDisplay.
+    """
     errors = 0
     while True:
         try:
@@ -168,7 +180,7 @@ async def secondary_task(secondary):
         except Exception as e:
             errors += 1
             print("secondary_task error #{}: {}".format(errors, e))
-        await asyncio.sleep_ms(1000)
+        await asyncio.sleep_ms(200)
 
 
 async def housekeeping_task(session_mgr):

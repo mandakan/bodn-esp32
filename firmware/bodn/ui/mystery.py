@@ -6,6 +6,7 @@ from bodn.ui.widgets import draw_centered, draw_button_grid
 from bodn.ui.pause import PauseMenu
 from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
 from bodn.patterns import N_LEDS
+from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = config.ENC_NAV
 
@@ -19,9 +20,11 @@ class MysteryScreen(Screen):
     Nav encoder button opens the pause menu (resume / back to menu).
     """
 
-    def __init__(self, np, overlay):
+    def __init__(self, np, overlay, secondary_screen=None, on_exit=None):
         self._np = np
         self._overlay = overlay
+        self._secondary = secondary_screen
+        self._on_exit = on_exit
         self._engine = MysteryEngine()
         self._manager = None
         self._pause = PauseMenu()
@@ -32,6 +35,10 @@ class MysteryScreen(Screen):
         self._manager = manager
         self._pause.set_manager(manager)
         self._dirty = True
+
+    def exit(self):
+        if self._on_exit:
+            self._on_exit()
 
     def needs_redraw(self):
         return self._dirty or self._pause.needs_render
@@ -75,6 +82,10 @@ class MysteryScreen(Screen):
         if out_type != self._prev_out_type:
             self._prev_out_type = out_type
             self._dirty = True
+            # Update secondary display cat face
+            if self._secondary:
+                emotion = {OUT_IDLE: NEUTRAL, OUT_MIX: CURIOUS, OUT_MAGIC: HAPPY}.get(out_type, NEUTRAL)
+                self._secondary.set_emotion(emotion)
         if btn >= 0:
             self._dirty = True
         # Animated states need continuous redraw
