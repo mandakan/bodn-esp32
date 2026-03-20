@@ -51,7 +51,8 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 | Encoders | KY-040 rotary encoder × 3 (with push button) | GPIO + pull-up |
 | Buttons | Mini momentary push buttons × 8 | GPIO + pull-up |
 | Toggle switches | SPST mini toggle switches × 4 | GPIO + pull-up |
-| LEDs | WS2812 8-LED sticks × 2 (16 addressable RGB) | NeoPixel (1 GPIO) |
+| LED sticks | WS2812 8-LED modules × 2 (on lid) | NeoPixel (1 GPIO, daisy-chained) |
+| LED strip | WS2812B 144 LED/m strip, 640 mm / ~92 LEDs (inside lid perimeter) | NeoPixel (chained after sticks) |
 | GPIO expander | Waveshare MCP23017 16-IO board | I2C (addr 0x20) |
 | Power switch | Panel-mount toggle switch | — |
 

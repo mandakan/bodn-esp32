@@ -49,10 +49,22 @@ ENC_NAV = 0  # index: navigation (home: scroll modes, modes: back button)
 ENC_A = 1  # index: mode parameter 1
 ENC_B = 2  # index: mode parameter 2
 
-# WS2812B NeoPixel LEDs (2 × 8-LED sticks chained)
+# WS2812B NeoPixel LEDs — three zones daisy-chained on one data line:
+#   Stick A (8 LEDs)  →  Stick B (8 LEDs)  →  Lid Ring (92 LEDs)
+# The two sticks sit on the lid (opposite sides or parallel).
+# The 144 LED/m strip runs around the inside of the translucent lid perimeter
+# (200×120 mm = 640 mm ≈ 92 LEDs).
 NEOPIXEL_PIN = 4  # GPIO 6 is BAT_SENS (board reserved)
-NEOPIXEL_COUNT = 16
-NEOPIXEL_BRIGHTNESS = 64  # 0-255, keep low for battery life and kid-safe eyes
+NEOPIXEL_COUNT = 108  # 8 + 8 + 92
+
+# LED zone boundaries (start, count) — indices into the NeoPixel chain
+LED_STICK_A = (0, 8)  # first 8-LED stick
+LED_STICK_B = (8, 8)  # second 8-LED stick
+LED_STICKS = (0, 16)  # both sticks combined
+LED_LID_RING = (16, 92)  # 144 LED/m strip around lid perimeter
+
+NEOPIXEL_BRIGHTNESS = 64  # 0-255, sticks — keep low for battery life and kid-safe eyes
+NEOPIXEL_LID_BRIGHTNESS = 32  # 0-255, lid ring — lower for ambient glow
 
 # DevKit-Lipo on-board power monitoring (board-reserved — do not reassign)
 BAT_SENS_PIN = 6  # BAT_SENS: LiPo voltage via voltage divider → ADC

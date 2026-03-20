@@ -216,18 +216,18 @@ def test_make_leds_returns_n_leds():
         eng.reset()
         state_setup()
         leds = eng.make_leds(frame=5, brightness=128)
-        assert len(leds) == N_LEDS
+        assert len(leds) == N_LEDS  # buffer is full size
 
 
 def test_make_leds_win_is_colorful():
-    from bodn.patterns import N_LEDS
+    from bodn.patterns import N_STICKS
 
     eng = SimonEngine()
     eng.state = WIN
     eng._state_frame = 0
     leds = eng.make_leds(frame=10, brightness=200)
-    # Should have diverse colors (rainbow)
-    unique = set(leds)
+    # Stick LEDs should have diverse colors (rainbow)
+    unique = set(leds[:N_STICKS])
     assert len(unique) > 1
 
 

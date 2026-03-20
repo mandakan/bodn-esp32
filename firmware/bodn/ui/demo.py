@@ -4,7 +4,7 @@ from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_progress_bar, draw_button_grid, draw_centered
 from bodn.ui.pause import PauseMenu
-from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS
+from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING
 
 NAV = config.ENC_NAV
 ENC_A = config.ENC_A
@@ -128,6 +128,17 @@ class DemoScreen(Screen):
                     for i in range(N_LEDS):
                         r, g, b = leds[i]
                         leds[i] = (255 - r, 255 - g, 255 - b)
+
+            # Dim the lid ring relative to the sticks
+            lid_ratio = config.NEOPIXEL_LID_BRIGHTNESS
+            ring_start, ring_count = ZONE_LID_RING
+            for i in range(ring_start, ring_start + ring_count):
+                r, g, b = leds[i]
+                leds[i] = (
+                    (r * lid_ratio) >> 8,
+                    (g * lid_ratio) >> 8,
+                    (b * lid_ratio) >> 8,
+                )
 
             # Session state LED override
             state = self._overlay.session_mgr.state
