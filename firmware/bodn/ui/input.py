@@ -32,6 +32,7 @@ class InputState:
         self.sw = [False] * len(switches)
         self.enc_pos = [0] * n_enc
         self.enc_delta = [0] * n_enc
+        self.enc_btn_held = [False] * n_enc
         self.enc_btn_pressed = [False] * n_enc
 
         self._prev_btn = [False] * n_btn
@@ -64,6 +65,7 @@ class InputState:
 
             prev_btn = self._prev_enc_btn[i]
             cur_btn = self._enc_btn_deb[i].update(enc.sw.value(), now)
+            self.enc_btn_held[i] = cur_btn
             self.enc_btn_pressed[i] = cur_btn and not prev_btn
             self._prev_enc_btn[i] = cur_btn
 

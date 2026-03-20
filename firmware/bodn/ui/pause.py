@@ -1,8 +1,9 @@
-# bodn/ui/pause.py — in-game pause menu overlay
+# bodn/ui/pause.py — in-game pause menu with hold-to-open
 
 from bodn import config
 from bodn.ui.screen import Screen
-from bodn.ui.widgets import draw_centered
+from bodn.ui.widgets import draw_centered, draw_hold_bar
+from bodn.hold_detector import HoldDetector
 
 NAV = config.ENC_NAV
 
@@ -13,34 +14,49 @@ _ITEMS = ["Resume", "Back to menu"]
 
 
 class PauseMenu(Screen):
-    """In-game pause menu triggered by nav encoder button.
+    """In-game pause menu with hold-to-open protection.
 
-    Shows two options: Resume (continue playing) or Back to menu.
-    Nav encoder rotates selection, nav encoder button confirms.
-    Any play button also confirms.
+    The nav encoder button must be held for ~1.5 seconds to open the
+    pause menu, preventing accidental exits during play.  A thin
+    progress bar at the top of the screen shows hold progress.
+
+    Once open, quick clicks navigate and confirm.
 
     Usage in a game screen's update():
-        if self._pause.is_open:
-            result = self._pause.update(inp, frame)
-            if result == "resume":
-                pass  # continue
-            elif result == "quit":
-                self._manager.pop()
-            return  # skip game logic while paused
-        if inp.enc_btn_pressed[NAV]:
-            self._pause.open()
-            return
+
+        result = self._pause.update(inp)
+        if result == "resume":
+            pass  # continue game
+        elif result == "quit":
+            self._manager.pop()
+        if self._pause.is_open or self._pause.is_holding:
+            return  # skip game logic
+
+    And in render(), after game content:
+
+        self._pause.render(tft, theme, frame)
     """
 
-    def __init__(self):
+    def __init__(self, hold_ms=1500):
         self._open = False
         self._index = _RESUME
         self._dirty = False
         self._manager = None
+        self._hold = HoldDetector(threshold_ms=hold_ms)
 
     @property
     def is_open(self):
         return self._open
+
+    @property
+    def is_holding(self):
+        """True while the user is holding the nav button (before menu opens)."""
+        return self._hold.holding and not self._open
+
+    @property
+    def hold_progress(self):
+        """0.0 to 1.0 — how far through the hold-to-open threshold."""
+        return self._hold.progress
 
     def open(self):
         self._open = True
@@ -49,16 +65,40 @@ class PauseMenu(Screen):
 
     def close(self):
         self._open = False
+        self._hold.reset()
         self._dirty = True
 
     def set_manager(self, manager):
         self._manager = manager
 
-    def update(self, inp, frame):
-        """Process input while paused. Returns 'resume', 'quit', or None."""
-        if not self._open:
+    def update(self, inp, frame=None):
+        """Process input every frame. Returns 'resume', 'quit', or None.
+
+        Handles both the hold-to-open detection AND menu navigation.
+        Game screens should call this unconditionally every frame.
+        """
+        if self._open:
+            return self._update_menu(inp)
+        return self._update_hold(inp)
+
+    def _update_hold(self, inp):
+        """Track nav encoder hold for opening the menu."""
+        was_holding = self._hold.holding
+        self._hold.update(inp.enc_btn_held[NAV], inp._time_ms())
+
+        if self._hold.triggered:
+            self.open()
+            self._hold.reset()
             return None
 
+        # Redraw needed when hold bar appears or disappears
+        if self._hold.holding or was_holding:
+            self._dirty = True
+
+        return None
+
+    def _update_menu(self, inp):
+        """Navigate the open pause menu."""
         # Nav encoder rotation scrolls
         delta = inp.enc_delta[NAV]
         if delta != 0:
@@ -72,6 +112,7 @@ class PauseMenu(Screen):
         # Nav encoder button or any play button = confirm
         if inp.enc_btn_pressed[NAV] or inp.any_btn_pressed():
             self._open = False
+            self._hold.reset()
             self._dirty = True
             if self._index == _RESUME:
                 return "resume"
@@ -85,9 +126,18 @@ class PauseMenu(Screen):
         return self._dirty
 
     def render(self, tft, theme, frame):
-        """Draw the pause menu. Call from the game screen's render()."""
+        """Draw hold bar or pause menu. Call from game screen's render().
+
+        When not open: draws the hold progress bar (if holding).
+        When open: draws the full pause menu overlay.
+        """
         if not self._open:
+            # Hold progress bar at top of screen
+            if self._hold.holding:
+                draw_hold_bar(tft, theme, self._hold.progress, theme.width)
+                self._dirty = False
             return
+
         self._dirty = False
 
         w = theme.width

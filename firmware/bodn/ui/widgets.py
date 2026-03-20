@@ -71,6 +71,21 @@ def draw_status_bar(tft, theme, y, left, right=None, color=None):
         tft.text(right, x, y, c)
 
 
+def draw_hold_bar(tft, theme, progress, w):
+    """Draw a thin hold-to-pause progress bar at the top of the screen.
+
+    progress: 0.0 to 1.0. Only draws when progress > 0.
+    """
+    if progress <= 0:
+        return
+    bar_h = 4
+    fill_w = max(1, int(w * progress))
+    # Gradient from cyan to white as it fills
+    tft.fill_rect(0, 0, fill_w, bar_h, theme.CYAN)
+    if progress >= 1.0:
+        tft.fill_rect(0, 0, w, bar_h, theme.WHITE)
+
+
 def draw_icon(tft, data, x, y, w, h, color, scale=1):
     """Draw a 1-bit bitmap (row-major, MSB-first)."""
     byte_idx = 0

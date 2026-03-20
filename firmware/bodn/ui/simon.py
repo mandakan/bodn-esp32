@@ -34,7 +34,7 @@ class SimonScreen(Screen):
     """Pattern Copy — watch the sequence, then repeat it!
 
     Buttons 0–5 are the play buttons (6 colors).
-    Nav encoder button opens the pause menu.
+    Hold nav encoder button to open the pause menu.
     """
 
     def __init__(self, np, overlay, secondary_screen=None, on_exit=None):
@@ -62,19 +62,14 @@ class SimonScreen(Screen):
         return self._dirty or self._pause.needs_render
 
     def update(self, inp, frame):
-        # Pause menu intercepts all input when open
-        if self._pause.is_open:
-            result = self._pause.update(inp, frame)
-            if result == "quit" and self._manager:
-                self._manager.pop()
-            elif result == "resume":
-                self._dirty = True
+        # Pause menu handles hold-to-open and menu navigation
+        result = self._pause.update(inp, frame)
+        if result == "quit" and self._manager:
+            self._manager.pop()
             return
-
-        # Nav encoder button → open pause menu
-        if inp.enc_btn_pressed[NAV]:
-            self._pause.open()
+        elif result == "resume":
             self._dirty = True
+        if self._pause.is_open or self._pause.is_holding:
             return
 
         # Find first just-pressed button
@@ -128,6 +123,9 @@ class SimonScreen(Screen):
 
         tft.fill(theme.BLACK)
         self._render_game(tft, theme, frame)
+
+        # Hold-to-pause progress bar (drawn on top by PauseMenu)
+        self._pause.render(tft, theme, frame)
 
     def _render_game(self, tft, theme, frame):
         landscape = theme.width > theme.height
