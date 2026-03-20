@@ -4,14 +4,15 @@ import time
 from bodn.session import PLAYING, WARN_5, WARN_2, IDLE
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_progress_bar
-from bodn.ui.secondary import STATUS_Y
+from bodn.ui.secondary import CONTENT_H, STATUS_Y, STATUS_H
 
 
 class AmbientClock(Screen):
     """Large clock display for the 128×128 content zone.
 
     Shows time and date in the centre of the content area.
-    Redraws when the minute changes.
+    Redraws when the minute changes.  Clears its own zone so the
+    SecondaryDisplay doesn't need to fill_rect on every normal redraw.
     """
 
     def __init__(self):
@@ -30,6 +31,7 @@ class AmbientClock(Screen):
 
     def render(self, tft, theme, frame):
         w = theme.width
+        tft.fill_rect(0, 0, w, CONTENT_H, theme.BLACK)
         t = time.localtime()
         clock = "{:02d}:{:02d}".format(t[3], t[4])
         date = "{:04d}-{:02d}-{:02d}".format(t[0], t[1], t[2])
@@ -80,6 +82,7 @@ class StatusStrip(Screen):
     def render(self, tft, theme, frame):
         w = theme.width
         y0 = STATUS_Y
+        tft.fill_rect(0, y0, w, STATUS_H, theme.BLACK)
         t = time.localtime()
 
         # Row 1: clock left, session info right

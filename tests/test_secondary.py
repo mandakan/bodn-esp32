@@ -226,6 +226,34 @@ def test_status_zone_cleared_at_correct_region():
     assert ("fill_rect", 0, 128, 128, 32, 0) in fill_rects
 
 
+def test_transition_clears_zone_but_normal_redraw_does_not():
+    """set_content() should clear the zone once; subsequent redraws should not.
+
+    This is critical for performance — screens handle their own partial
+    clearing on normal redraws, so SecondaryDisplay must not fill_rect
+    the entire zone every time.
+    """
+    d = make_display()
+    content = SpyScreen()
+    d.set_content(content)
+
+    # First tick — transition, should have fill_rect from SecondaryDisplay
+    d.tft.calls.clear()
+    d.tick()
+    fill_rects = [c for c in d.tft.calls if c[0] == "fill_rect"]
+    assert ("fill_rect", 0, 0, 128, 128, 0) in fill_rects
+
+    # Mark screen dirty again (simulating a normal redraw, not a transition)
+    content._dirty = True
+    d.tft.calls.clear()
+    d.tick()
+    fill_rects = [c for c in d.tft.calls if c[0] == "fill_rect"]
+    # SecondaryDisplay should NOT have issued a zone clear
+    assert ("fill_rect", 0, 0, 128, 128, 0) not in fill_rects
+    # But the screen's render() should still have been called
+    assert content.renders == 2
+
+
 # --- Legacy alias ---
 
 def test_set_screen_aliases_set_content():

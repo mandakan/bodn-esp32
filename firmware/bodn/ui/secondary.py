@@ -77,7 +77,12 @@ class SecondaryDisplay:
     # -- Tick --
 
     def tick(self, inp=None):
-        """One frame: update both zones, redraw only dirty ones, single show()."""
+        """One frame: update both zones, redraw only dirty ones, single show().
+
+        Full zone clears (fill_rect) only happen on transitions (set_content /
+        set_status).  Normal redraws delegate clearing to the screen itself,
+        so screens that track partial changes can skip unchanged regions.
+        """
         self._frame += 1
         redraw = False
 
@@ -96,10 +101,12 @@ class SecondaryDisplay:
             content_needs = nr() if nr else False
 
         if content_needs:
-            self.tft.fill_rect(0, 0, self.content_w, CONTENT_H, self.theme.BLACK)
+            # Full clear only on screen transitions, not normal redraws
+            if self._content_dirty:
+                self.tft.fill_rect(0, 0, self.content_w, CONTENT_H, self.theme.BLACK)
+                self._content_dirty = False
             if self._content:
                 self._content.render(self.tft, self.theme, self._frame)
-            self._content_dirty = False
             redraw = True
 
         # Status strip
@@ -111,10 +118,12 @@ class SecondaryDisplay:
             status_needs = nr() if nr else False
 
         if status_needs:
-            self.tft.fill_rect(0, STATUS_Y, self.content_w, STATUS_H, self.theme.BLACK)
+            # Full clear only on screen transitions, not normal redraws
+            if self._status_dirty:
+                self.tft.fill_rect(0, STATUS_Y, self.content_w, STATUS_H, self.theme.BLACK)
+                self._status_dirty = False
             if self._status:
                 self._status.render(self.tft, self.theme, self._frame)
-            self._status_dirty = False
             redraw = True
 
         if redraw:
