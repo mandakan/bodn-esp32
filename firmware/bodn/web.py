@@ -56,14 +56,6 @@ async def _read_body(reader):
     return {}
 
 
-async def _read_raw_body(reader, headers):
-    """Read HTTP body as raw bytes."""
-    cl = int(headers.get("content-length", 0))
-    if cl > 0:
-        return await reader.read(cl)
-    return b""
-
-
 def _check_pin(headers, settings):
     """Check if request has valid PIN cookie. Returns True if OK or no PIN set."""
     pin = settings.get("ui_pin", "")
@@ -108,11 +100,10 @@ async def _handle_request(reader, writer, session_mgr, settings):
         # Read headers
         headers = await _read_headers(reader)
 
-        # Parse body for POST (deferred for upload route)
+        # Parse body for POST (upload route streams directly to flash)
         body = None
-        raw_body = None
         if method == "POST" and path == "/api/upload":
-            raw_body = await _read_raw_body(reader, headers)
+            pass  # body read inline by upload handler below
         elif method == "POST":
             cl = int(headers.get("content-length", 0))
             if cl > 0:
@@ -213,9 +204,17 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 pass
 
         elif method == "POST" and path == "/api/upload":
-            # OTA file upload: PUT file content with X-Path header
+            # OTA file upload — streams body to flash in chunks so large
+            # files (media, audio) don't need to fit in RAM all at once.
             remote_path = headers.get("x-path", "")
-            if not remote_path or raw_body is None:
+            cl = int(headers.get("content-length", 0))
+            if not remote_path or cl == 0:
+                # Drain any unread body
+                if cl > 0:
+                    while cl > 0:
+                        n = min(cl, 512)
+                        await reader.read(n)
+                        cl -= n
                 await _send_json(writer, {"error": "need X-Path header and body"}, 400)
             else:
                 try:
@@ -226,16 +225,26 @@ async def _handle_request(reader, writer, session_mgr, settings):
                             os.mkdir(parent)
                         except OSError:
                             pass
+                    # Stream body to a temp file in 512-byte chunks
                     tmp = remote_path + ".tmp"
+                    written = 0
                     with open(tmp, "wb") as f:
-                        f.write(raw_body)
+                        remaining = cl
+                        while remaining > 0:
+                            n = min(remaining, 512)
+                            chunk = await reader.read(n)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            written += len(chunk)
+                            remaining -= len(chunk)
                     try:
                         os.remove(remote_path)
                     except OSError:
                         pass
                     os.rename(tmp, remote_path)
                     await _send_json(
-                        writer, {"ok": True, "path": remote_path, "size": len(raw_body)}
+                        writer, {"ok": True, "path": remote_path, "size": written}
                     )
                 except Exception as e:
                     await _send_json(writer, {"error": str(e)}, 500)
