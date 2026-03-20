@@ -6,7 +6,21 @@ set -euo pipefail
 
 STAGED=$(git diff --cached --name-only)
 
-# Only check when config.py is being committed
+# --- Format check: run on any staged .py file ---
+PY_FILES=$(echo "$STAGED" | grep '\.py$' || true)
+if [ -n "$PY_FILES" ]; then
+    if ! uv run ruff format --check $PY_FILES >/dev/null 2>&1; then
+        echo ""
+        echo "ERROR: Some staged Python files are not formatted."
+        echo ""
+        echo "  Run:  uv run ruff format firmware/ tests/"
+        echo "  Then: re-stage the changed files."
+        echo ""
+        exit 1
+    fi
+fi
+
+# --- Wiring sync check: only when config.py is being committed ---
 if ! echo "$STAGED" | grep -q 'firmware/bodn/config\.py'; then
     exit 0
 fi
