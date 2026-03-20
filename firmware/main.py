@@ -82,10 +82,8 @@ def create_hardware():
     return tft, tft2, buttons, switches, encoders, np
 
 
-async def ui_loop(session_mgr, settings, wifi_ctrl):
-    """Main UI coroutine — both displays driven from the same loop."""
-    tft, tft2, buttons, switches, encoders, np = create_hardware()
-
+def create_ui(session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, encoders, np):
+    """Wire up UI components. Returns (manager, secondary, inp, encoders)."""
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
     theme2 = Theme(config.TFT2_WIDTH, config.TFT2_HEIGHT, ST7735.rgb)
     inp = InputState(buttons, switches, encoders, time.ticks_ms)
@@ -121,18 +119,26 @@ async def ui_loop(session_mgr, settings, wifi_ctrl):
         np[i] = (0, 0, 0)
     np.write()
 
-    print("UI loop started, debug_input={}".format(settings.get("debug_input")))
+    return manager, secondary, inp
 
+
+# ---------------------------------------------------------------------------
+# Async tasks — each runs at its own tick rate so slow work in one task
+# doesn't block the others.  All tasks share objects (manager, inp, …)
+# through the same event loop, so no locking is needed.
+# ---------------------------------------------------------------------------
+
+async def primary_task(manager, settings, inp, encoders):
+    """Input scanning + primary display: ~30 ms tick."""
+    print("primary_task started, debug_input={}".format(settings.get("debug_input")))
     frame = 0
     errors = 0
     while True:
         try:
             manager.tick()
-            secondary.tick()
-            session_mgr.tick()
         except Exception as e:
             errors += 1
-            print("Frame error #{}: {}".format(errors, e))
+            print("primary_task error #{}: {}".format(errors, e))
 
         if settings.get("debug_input") and frame % 15 == 0:
             btns = "".join("1" if inp.btn_held[i] else "." for i in range(8))
@@ -151,6 +157,30 @@ async def ui_loop(session_mgr, settings, wifi_ctrl):
 
         frame += 1
         await asyncio.sleep_ms(30)
+
+
+async def secondary_task(secondary):
+    """Secondary display (ambient clock): ~1000 ms tick."""
+    errors = 0
+    while True:
+        try:
+            secondary.tick()
+        except Exception as e:
+            errors += 1
+            print("secondary_task error #{}: {}".format(errors, e))
+        await asyncio.sleep_ms(1000)
+
+
+async def housekeeping_task(session_mgr):
+    """Session management and periodic bookkeeping: ~500 ms tick."""
+    errors = 0
+    while True:
+        try:
+            session_mgr.tick()
+        except Exception as e:
+            errors += 1
+            print("housekeeping_task error #{}: {}".format(errors, e))
+        await asyncio.sleep_ms(500)
 
 
 async def main():
@@ -180,7 +210,17 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    await ui_loop(session_mgr, settings, wifi_ctrl)
+    tft, tft2, buttons, switches, encoders, np = create_hardware()
+    manager, secondary, inp = create_ui(
+        session_mgr, settings, wifi_ctrl,
+        tft, tft2, buttons, switches, encoders, np,
+    )
+
+    await asyncio.gather(
+        primary_task(manager, settings, inp, encoders),
+        secondary_task(secondary),
+        housekeeping_task(session_mgr),
+    )
 
 
 try:
