@@ -12,7 +12,6 @@
 
 import framebuf
 import time
-from machine import Pin
 
 # ST7735 commands
 _SWRESET = 0x01
@@ -30,7 +29,18 @@ _DISPON = 0x29
 class ST7735(framebuf.FrameBuffer):
     """Framebuf-based ST7735 driver. Draw with fill/text/rect/pixel/line, then call show()."""
 
-    def __init__(self, spi, cs, dc, rst, width=128, height=160, col_offset=0, row_offset=0, madctl=0x00):
+    def __init__(
+        self,
+        spi,
+        cs,
+        dc,
+        rst,
+        width=128,
+        height=160,
+        col_offset=0,
+        row_offset=0,
+        madctl=0x00,
+    ):
         self.spi = spi
         self.cs = cs
         self.dc = dc

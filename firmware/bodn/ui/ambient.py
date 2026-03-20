@@ -113,8 +113,16 @@ class StatusStrip(Screen):
             bar_y = y0 + 14
             bar_h = 8
             draw_progress_bar(
-                tft, bar_x, bar_y, bar_w, bar_h,
-                remaining, limit, bar_color, theme.BLACK, border=theme.WHITE,
+                tft,
+                bar_x,
+                bar_y,
+                bar_w,
+                bar_h,
+                remaining,
+                limit,
+                bar_color,
+                theme.BLACK,
+                border=theme.WHITE,
             )
 
         elif state == IDLE:

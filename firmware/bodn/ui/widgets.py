@@ -82,8 +82,11 @@ def draw_icon(tft, data, x, y, w, h, color, scale=1):
                     tft.pixel(x + col, y + row, color)
                 else:
                     tft.fill_rect(
-                        x + col * scale, y + row * scale,
-                        scale, scale, color,
+                        x + col * scale,
+                        y + row * scale,
+                        scale,
+                        scale,
+                        color,
                     )
             bit_idx -= 1
             if bit_idx < 0:

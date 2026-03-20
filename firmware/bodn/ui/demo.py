@@ -12,8 +12,14 @@ ENC_B = config.ENC_B
 
 # Colour palette per pattern index — module-level to avoid per-frame allocation
 _COLOUR_RGB = [
-    (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0),
-    (0, 255, 255), (255, 0, 255), (255, 128, 0), (128, 0, 255),
+    (255, 0, 0),
+    (0, 255, 0),
+    (0, 0, 255),
+    (255, 255, 0),
+    (0, 255, 255),
+    (255, 0, 255),
+    (255, 128, 0),
+    (128, 0, 255),
 ]
 
 
@@ -106,7 +112,12 @@ class DemoScreen(Screen):
 
             # Toggle switch modifiers (copy since patterns reuse a shared buffer)
             sw = inp.sw
-            any_toggle = sw[0] or sw[1] or (sw[2] and (frame // 4) % 2 == 0) or (len(sw) > 3 and sw[3])
+            any_toggle = (
+                sw[0]
+                or sw[1]
+                or (sw[2] and (frame // 4) % 2 == 0)
+                or (len(sw) > 3 and sw[3])
+            )
             if any_toggle:
                 leds = list(leds)
                 if sw[0]:
@@ -172,8 +183,15 @@ class DemoScreen(Screen):
         # Button grid (4x2)
         tft.text("Buttons", 0, 28, theme.WHITE)
         draw_button_grid(
-            tft, theme, theme.BTN_NAMES, held,
-            cols=4, x0=0, y0=42, cell_w=36, cell_h=22,
+            tft,
+            theme,
+            theme.BTN_NAMES,
+            held,
+            cols=4,
+            x0=0,
+            y0=42,
+            cell_w=36,
+            cell_h=22,
         )
 
         # Toggle indicators
@@ -205,7 +223,9 @@ class DemoScreen(Screen):
             bar_x = rx + 32
             bar_w = rw - 32
             tft.rect(bar_x, y, bar_w, 14, theme.WHITE)
-            draw_progress_bar(tft, bar_x, y, bar_w, 14, val, self._enc_steps, colour_565, theme.BLACK)
+            draw_progress_bar(
+                tft, bar_x, y, bar_w, 14, val, self._enc_steps, colour_565, theme.BLACK
+            )
 
         # Back hint
         tft.text("< back", rx, theme.height - 16, theme.MUTED)
@@ -233,7 +253,9 @@ class DemoScreen(Screen):
         for i, (label, colour_565, val) in enumerate(bar_info):
             y = 32 + i * 16
             tft.rect(24, y, 96, 10, theme.WHITE)
-            draw_progress_bar(tft, 24, y, 96, 10, val, self._enc_steps, colour_565, theme.BLACK)
+            draw_progress_bar(
+                tft, 24, y, 96, 10, val, self._enc_steps, colour_565, theme.BLACK
+            )
             tft.text(label, 0, y + 1, colour_565)
 
         tft.text("Toggles", 0, 70, theme.WHITE)
@@ -250,6 +272,13 @@ class DemoScreen(Screen):
 
         tft.text("Buttons", 0, 102, theme.WHITE)
         draw_button_grid(
-            tft, theme, theme.BTN_NAMES, held,
-            cols=4, x0=0, y0=114, cell_w=32, cell_h=16,
+            tft,
+            theme,
+            theme.BTN_NAMES,
+            held,
+            cols=4,
+            x0=0,
+            y0=114,
+            cell_w=32,
+            cell_h=16,
         )

@@ -5,6 +5,7 @@ from bodn.ui.input import InputState
 
 class FakePin:
     """Minimal pin stub with settable value."""
+
     def __init__(self, val=1):
         self._val = val
 
@@ -16,10 +17,10 @@ class FakePin:
 
 class FakeEncoder:
     """Minimal encoder stub with .value and .sw attributes."""
+
     def __init__(self, val=0):
         self.value = val
         self.sw = FakePin(1)  # not pressed
-
 
 
 def make_input(n_btn=8, n_sw=4, n_enc=3):

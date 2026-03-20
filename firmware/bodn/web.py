@@ -124,9 +124,13 @@ async def _handle_request(reader, writer, session_mgr, settings):
             pin = settings.get("ui_pin", "")
             submitted = (body or {}).get("pin", "")
             if not pin or submitted == pin:
-                await _send(writer, 200, "application/json",
-                            json.dumps({"ok": True}),
-                            ["Set-Cookie: bodn_pin={}; Path=/; SameSite=Strict".format(pin)])
+                await _send(
+                    writer,
+                    200,
+                    "application/json",
+                    json.dumps({"ok": True}),
+                    ["Set-Cookie: bodn_pin={}; Path=/; SameSite=Strict".format(pin)],
+                )
             else:
                 await _send_unauthorized(writer, "Wrong PIN")
             return
@@ -142,6 +146,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
             if not _check_pin(headers, settings):
                 # Serve the login page instead
                 from bodn.web_ui import LOGIN_HTML
+
                 await _send(writer, 200, "text/html", LOGIN_HTML)
                 return
 
@@ -185,6 +190,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
 
         elif method == "GET" and path == "/api/modes":
             from bodn.session import ALL_MODES
+
             mode_limits = settings.get("mode_limits", {})
             modes = []
             for m in ALL_MODES:
@@ -228,7 +234,9 @@ async def _handle_request(reader, writer, session_mgr, settings):
                     except OSError:
                         pass
                     os.rename(tmp, remote_path)
-                    await _send_json(writer, {"ok": True, "path": remote_path, "size": len(raw_body)})
+                    await _send_json(
+                        writer, {"ok": True, "path": remote_path, "size": len(raw_body)}
+                    )
                 except Exception as e:
                     await _send_json(writer, {"error": str(e)}, 500)
 
@@ -236,6 +244,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _send_json(writer, {"ok": True, "rebooting": True})
             try:
                 import machine
+
                 machine.reset()
             except Exception:
                 pass

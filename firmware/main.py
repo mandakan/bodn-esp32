@@ -73,16 +73,36 @@ def create_hardware():
     switches = [Pin(p, Pin.IN, Pin.PULL_UP) for p in config.SW_PINS]
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
-        Encoder(config.ENC1_CLK, config.ENC1_DT, config.ENC1_SW, min_val=0, max_val=ENC_STEPS),
-        Encoder(config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW, min_val=0, max_val=ENC_STEPS),
-        Encoder(config.ENC3_CLK, config.ENC3_DT, config.ENC3_SW, min_val=0, max_val=ENC_STEPS),
+        Encoder(
+            config.ENC1_CLK,
+            config.ENC1_DT,
+            config.ENC1_SW,
+            min_val=0,
+            max_val=ENC_STEPS,
+        ),
+        Encoder(
+            config.ENC2_CLK,
+            config.ENC2_DT,
+            config.ENC2_SW,
+            min_val=0,
+            max_val=ENC_STEPS,
+        ),
+        Encoder(
+            config.ENC3_CLK,
+            config.ENC3_DT,
+            config.ENC3_SW,
+            min_val=0,
+            max_val=ENC_STEPS,
+        ),
     ]
-    encoders[config.ENC_A].value = ENC_STEPS // 2   # brightness default
-    encoders[config.ENC_B].value = ENC_STEPS // 4   # speed default
+    encoders[config.ENC_A].value = ENC_STEPS // 2  # brightness default
+    encoders[config.ENC_B].value = ENC_STEPS // 4  # speed default
     return tft, tft2, buttons, switches, encoders, np
 
 
-def create_ui(session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, encoders, np):
+def create_ui(
+    session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, encoders, np
+):
     """Wire up UI components. Returns (manager, secondary, inp, encoders)."""
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
     theme2 = Theme(config.TFT2_WIDTH, config.TFT2_HEIGHT, ST7735.rgb)
@@ -104,22 +124,31 @@ def create_ui(session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, en
     def _make_mystery():
         from bodn.ui.mystery import MysteryScreen
         from bodn.ui.catface import CatFaceScreen
+
         cat = CatFaceScreen()
         secondary.set_content(cat)
-        return MysteryScreen(np, overlay, secondary_screen=cat, on_exit=_reset_secondary)
+        return MysteryScreen(
+            np, overlay, secondary_screen=cat, on_exit=_reset_secondary
+        )
 
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
+
         _reset_secondary()
         return SettingsScreen(settings, np, wifi_ctrl)
 
     mode_screens = {
         "mystery": _make_mystery,
-        "demo": lambda: (_reset_secondary(), DemoScreen(np, overlay, enc_steps=ENC_STEPS))[1],
+        "demo": lambda: (
+            _reset_secondary(),
+            DemoScreen(np, overlay, enc_steps=ENC_STEPS),
+        )[1],
         "clock": lambda: (_reset_secondary(), ClockScreen())[1],
         "settings": _make_settings,
     }
-    home = HomeScreen(mode_screens, session_mgr, order=["mystery", "demo", "clock", "settings"])
+    home = HomeScreen(
+        mode_screens, session_mgr, order=["mystery", "demo", "clock", "settings"]
+    )
     manager.push(home)
 
     # Clear LEDs
@@ -135,6 +164,7 @@ def create_ui(session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, en
 # doesn't block the others.  All tasks share objects (manager, inp, …)
 # through the same event loop, so no locking is needed.
 # ---------------------------------------------------------------------------
+
 
 async def primary_task(manager, settings, inp, encoders):
     """Input scanning + primary display: ~30 ms tick."""
@@ -160,8 +190,11 @@ async def primary_task(manager, settings, inp, encoders):
                 )
                 for i in range(3)
             )
-            print("INP btn[{}] sw[{}] enc[{}] raw[{}]".format(
-                btns, sws, enc_vals, enc_raw))
+            print(
+                "INP btn[{}] sw[{}] enc[{}] raw[{}]".format(
+                    btns, sws, enc_vals, enc_raw
+                )
+            )
 
         frame += 1
         await asyncio.sleep_ms(30)
@@ -212,7 +245,9 @@ async def main():
         except Exception as e:
             print("Failed to save session:", e)
 
-    session_mgr = SessionManager(settings, get_time, get_date, on_session_end=on_session_end)
+    session_mgr = SessionManager(
+        settings, get_time, get_date, on_session_end=on_session_end
+    )
     wifi_ctrl = WiFiController(settings)
 
     _server = None
@@ -224,8 +259,15 @@ async def main():
 
     tft, tft2, buttons, switches, encoders, np = create_hardware()
     manager, secondary, inp = create_ui(
-        session_mgr, settings, wifi_ctrl,
-        tft, tft2, buttons, switches, encoders, np,
+        session_mgr,
+        settings,
+        wifi_ctrl,
+        tft,
+        tft2,
+        buttons,
+        switches,
+        encoders,
+        np,
     )
 
     await asyncio.gather(
@@ -241,4 +283,5 @@ except KeyboardInterrupt:
     print("Bodn stopped.")
 except Exception as e:
     import sys
+
     sys.print_exception(e)

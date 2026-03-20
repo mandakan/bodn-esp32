@@ -67,7 +67,9 @@ class SettingsScreen(Screen):
                     self._np[i] = (0, 0, 0)
                 self._np.write()
         elif key == "sessions_enabled":
-            self._settings["sessions_enabled"] = not self._settings.get("sessions_enabled", True)
+            self._settings["sessions_enabled"] = not self._settings.get(
+                "sessions_enabled", True
+            )
         elif key == "debug_input":
             self._settings["debug_input"] = not self._settings.get("debug_input", False)
         self._dirty = True

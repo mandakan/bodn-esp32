@@ -86,6 +86,7 @@ def make_display():
 
 # --- Zone geometry ---
 
+
 def test_zone_constants():
     assert CONTENT_H == 128
     assert STATUS_Y == 128
@@ -93,6 +94,7 @@ def test_zone_constants():
 
 
 # --- set_content / set_status ---
+
 
 def test_set_content_calls_enter():
     d = make_display()
@@ -129,6 +131,7 @@ def test_replace_status_calls_exit():
 
 
 # --- Independent dirty tracking ---
+
 
 def test_tick_renders_both_zones_when_dirty():
     d = make_display()
@@ -256,6 +259,7 @@ def test_transition_clears_zone_but_normal_redraw_does_not():
 
 # --- Legacy alias ---
 
+
 def test_set_screen_aliases_set_content():
     d = make_display()
     s = SpyScreen()
@@ -266,6 +270,7 @@ def test_set_screen_aliases_set_content():
 
 
 # --- CatFaceScreen ---
+
 
 def test_catface_initial_emotion():
     cat = CatFaceScreen()

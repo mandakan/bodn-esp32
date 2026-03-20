@@ -74,8 +74,8 @@ class HomeScreen(Screen):
             msg = self._error
             y = 20
             while msg and y < theme.height - 16:
-                tft.text(msg[:theme.width // 8], 4, y, theme.WHITE)
-                msg = msg[theme.width // 8:]
+                tft.text(msg[: theme.width // 8], 4, y, theme.WHITE)
+                msg = msg[theme.width // 8 :]
                 y += 12
             tft.text("press to clear", 4, theme.height - 12, theme.MUTED)
             if self._manager and self._manager.inp.any_btn_pressed():

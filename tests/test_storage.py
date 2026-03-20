@@ -68,13 +68,17 @@ class TestSessions:
 
     def test_multiple_sessions_accumulate(self):
         for i in range(3):
-            save_session({"date": "2026-03-19", "start": 1000 + i * 1000, "duration": 600})
+            save_session(
+                {"date": "2026-03-19", "start": 1000 + i * 1000, "duration": 600}
+            )
         assert len(load_sessions()) == 3
 
     def test_ring_buffer_prunes_old_dates(self):
         """Only keep MAX_SESSION_DAYS days of history."""
         for day in range(10):
-            save_session({"date": f"2026-03-{day + 1:02d}", "start": 0, "duration": 600})
+            save_session(
+                {"date": f"2026-03-{day + 1:02d}", "start": 0, "duration": 600}
+            )
         sessions = load_sessions()
         dates = set(s["date"] for s in sessions)
         assert len(dates) <= 7
@@ -155,7 +159,7 @@ class TestComputeStats:
     def test_suggestions_high_usage_note(self):
         sessions = [
             {"date": "2026-03-19", "duration_s": 3600, "mode": "free_play"},  # 60 min
-            {"date": "2026-03-19", "duration_s": 600, "mode": "free_play"},   # 10 min
+            {"date": "2026-03-19", "duration_s": 600, "mode": "free_play"},  # 10 min
         ]
         stats = compute_stats(sessions)
         assert stats["suggestions"]["note"] is not None

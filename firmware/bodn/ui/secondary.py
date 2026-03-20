@@ -120,7 +120,9 @@ class SecondaryDisplay:
         if status_needs:
             # Full clear only on screen transitions, not normal redraws
             if self._status_dirty:
-                self.tft.fill_rect(0, STATUS_Y, self.content_w, STATUS_H, self.theme.BLACK)
+                self.tft.fill_rect(
+                    0, STATUS_Y, self.content_w, STATUS_H, self.theme.BLACK
+                )
                 self._status_dirty = False
             if self._status:
                 self._status.render(self.tft, self.theme, self._frame)

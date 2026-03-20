@@ -34,7 +34,9 @@ try:
         madctl=config.TFT_MADCTL,
     )
     np = neopixel.NeoPixel(
-        Pin(config.NEOPIXEL_PIN, Pin.OUT), config.NEOPIXEL_COUNT, timing=1,
+        Pin(config.NEOPIXEL_PIN, Pin.OUT),
+        config.NEOPIXEL_COUNT,
+        timing=1,
     )
 except Exception as e:
     print("Boot display init error:", e)
@@ -131,6 +133,7 @@ _show_progress(0, len(STEPS), STEPS[0][0], STEPS[0][1])
 
 try:
     from bodn.storage import load_settings
+
     settings = load_settings()
 except Exception as e:
     print("Settings load failed:", e)
@@ -157,13 +160,15 @@ _show_progress(1, len(STEPS), STEPS[1][0], STEPS[1][1])
 
 try:
     from bodn.wifi import connect
+
     ip = connect(settings)
     print("Bodn IP:", ip)
 except Exception as e:
     print("WiFi failed:", e)
 
-_show_progress(2, len(STEPS), STEPS[1][0], STEPS[1][1],
-               detail="IP: " + ip, detail_col=COL_WHITE)
+_show_progress(
+    2, len(STEPS), STEPS[1][0], STEPS[1][1], detail="IP: " + ip, detail_col=COL_WHITE
+)
 time.sleep(0.5)
 
 # --- Step 3: NTP sync ---
@@ -171,6 +176,7 @@ _show_progress(2, len(STEPS), STEPS[2][0], STEPS[2][1])
 
 try:
     import ntptime
+
     ntptime.settime()
     ntp_ok = True
     print("NTP synced")
@@ -181,13 +187,15 @@ except Exception as e:
 
 ntp_detail = "NTP OK" if ntp_ok else "NTP fail"
 ntp_col = COL_GREEN if ntp_ok else COL_AMBER
-_show_progress(3, len(STEPS), STEPS[2][0], STEPS[2][1],
-               detail=ntp_detail, detail_col=ntp_col)
+_show_progress(
+    3, len(STEPS), STEPS[2][0], STEPS[2][1], detail=ntp_detail, detail_col=ntp_col
+)
 time.sleep(0.5)
 
 # --- Step 4: Ready! ---
-_show_progress(4, len(STEPS), STEPS[3][0], STEPS[3][1],
-               detail="IP: " + ip, detail_col=COL_WHITE)
+_show_progress(
+    4, len(STEPS), STEPS[3][0], STEPS[3][1], detail="IP: " + ip, detail_col=COL_WHITE
+)
 
 # Clear LEDs before main.py takes over
 if np:
