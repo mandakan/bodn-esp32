@@ -146,6 +146,12 @@ def create_ui(
             np, overlay, secondary_screen=cat, on_exit=_reset_secondary
         )
 
+    def _make_simon():
+        from bodn.ui.simon import SimonScreen
+
+        _reset_secondary()
+        return SimonScreen(np, overlay, secondary_screen=cat, on_exit=_reset_secondary)
+
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
 
@@ -154,6 +160,7 @@ def create_ui(
 
     mode_screens = {
         "mystery": _make_mystery,
+        "simon": _make_simon,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, enc_steps=ENC_STEPS),
@@ -162,7 +169,9 @@ def create_ui(
         "settings": _make_settings,
     }
     home = HomeScreen(
-        mode_screens, session_mgr, order=["mystery", "demo", "clock", "settings"]
+        mode_screens,
+        session_mgr,
+        order=["mystery", "simon", "demo", "clock", "settings"],
     )
     manager.push(home)
 
