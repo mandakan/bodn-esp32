@@ -16,10 +16,12 @@ interrupt running code. Press Ctrl-C to re-sync, Ctrl-C twice to quit.
 import socket
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 WOKWI_HOST = "localhost"
 WOKWI_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5555
+WOKWI_HTTP_PORT = 9080
 
 FIRMWARE_DIR = Path(__file__).resolve().parent.parent / "firmware"
 
@@ -82,20 +84,50 @@ def drain(sock: socket.socket, timeout: float = 0.5) -> None:
         pass
 
 
+def try_http_reset() -> bool:
+    """Try to reset the board via the OTA /api/reboot endpoint.
+
+    If the web server is running (Wokwi Private Gateway forwarding to
+    port 80), this triggers a clean machine.reset(). After the reset
+    the board is in a fresh state where raw REPL entry works reliably.
+    """
+    url = f"http://{WOKWI_HOST}:{WOKWI_HTTP_PORT}/api/reboot"
+    req = urllib.request.Request(url, data=b"{}", method="POST")
+    try:
+        urllib.request.urlopen(req, timeout=3)
+    except Exception:
+        pass  # device reboots mid-response, connection drops — that's fine
+    else:
+        return True
+    return True  # even on error, the reboot may have worked
+
+
 def enter_raw_repl(sock: socket.socket) -> bool:
     """Interrupt any running program and enter raw REPL mode.
 
-    uasyncio needs multiple Ctrl-C bursts with pauses in between —
-    the first one raises KeyboardInterrupt inside the event loop,
-    the second one actually stops execution.
+    First tries an HTTP reset via the OTA endpoint (clean, reliable).
+    Falls back to Ctrl-C bursts if the web server isn't reachable.
     """
+    # Try HTTP reset first — much more reliable than Ctrl-C
+    print("  Trying HTTP reset...", end=" ")
+    try_http_reset()
+    time.sleep(2)  # wait for board to reboot and reach REPL prompt
+    drain(sock, 1.0)
+
+    # After HTTP reset the board is at the normal REPL prompt
+    sock.sendall(b"\x01")  # Ctrl-A = raw REPL
+    resp = read_until(sock, b"raw REPL; CTRL-B to exit\r\n>", timeout=3)
+    if b"raw REPL" in resp:
+        print("ok")
+        return True
+    print("no response, falling back to Ctrl-C")
+
+    # Fallback: Ctrl-C bursts for when HTTP isn't available
     for attempt in range(8):
-        # Send a burst of Ctrl-C to break out of running code / uasyncio
         for _ in range(10):
             sock.sendall(b"\x03")
             time.sleep(0.05)
 
-        # Give the interpreter time to unwind (uasyncio needs longer)
         time.sleep(0.5)
         drain(sock)
 

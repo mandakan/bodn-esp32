@@ -19,34 +19,30 @@ from pathlib import Path
 
 FIRMWARE_DIR = Path(__file__).resolve().parent.parent / "firmware"
 
-# Files to upload, in order (remote path relative to /)
-FILES = [
-    "boot.py",
-    "st7735.py",
-    "bodn/__init__.py",
-    "bodn/config.py",
-    "bodn/debounce.py",
-    "bodn/encoder.py",
-    "bodn/patterns.py",
-    "bodn/storage.py",
-    "bodn/session.py",
-    "bodn/wifi.py",
-    "bodn/web_ui.py",
-    "bodn/web.py",
-    "bodn/ui/__init__.py",
-    "bodn/ui/theme.py",
-    "bodn/ui/input.py",
-    "bodn/ui/widgets.py",
-    "bodn/ui/screen.py",
-    "bodn/ui/icons.py",
-    "bodn/ui/overlay.py",
-    "bodn/ui/home.py",
-    "bodn/ui/demo.py",
-    "bodn/ui/clock.py",
-    "bodn/ui/secondary.py",
-    "bodn/ui/ambient.py",
-    "main.py",
-]
+# Auto-discover firmware files (same logic as wokwi-sync.py)
+EXCLUDE = {"__pycache__"}
+
+
+def discover_files() -> list[str]:
+    """Walk firmware/ and return remote paths in upload order."""
+    files = []
+    for p in sorted(FIRMWARE_DIR.rglob("*.py")):
+        if any(part in EXCLUDE for part in p.parts):
+            continue
+        files.append(str(p.relative_to(FIRMWARE_DIR)))
+
+    def _sort_key(remote: str) -> tuple[int, str]:
+        if remote == "main.py":
+            return (2, remote)
+        if remote.endswith("__init__.py"):
+            return (0, remote)
+        return (1, remote)
+
+    files.sort(key=_sort_key)
+    return files
+
+
+FILES = discover_files()
 
 
 def push(base_url: str, token: str = "") -> bool:
