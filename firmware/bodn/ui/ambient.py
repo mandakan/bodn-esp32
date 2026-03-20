@@ -4,7 +4,7 @@ import time
 from bodn.session import PLAYING, WARN_5, WARN_2, IDLE
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_progress_bar, draw_battery_icon
-from bodn.ui.secondary import CONTENT_H, STATUS_Y, STATUS_H
+from bodn.ui.secondary import STATUS_Y, STATUS_H
 import bodn.battery as battery
 
 

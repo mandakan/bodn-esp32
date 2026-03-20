@@ -45,10 +45,11 @@ class FakeI2S:
     MONO = 0
     STEREO = 1
 
-    def __init__(self, _id, **kwargs):
+    def __init__(self, _id=0, **kwargs):
         self.id = _id
         self.kwargs = kwargs
         self._buf = bytearray()
+        self.writes = []  # track individual write calls for testing
 
     def readinto(self, buf):
         for i in range(len(buf)):
@@ -57,6 +58,7 @@ class FakeI2S:
 
     def write(self, buf):
         self._buf.extend(buf)
+        self.writes.append(bytes(buf))
         return len(buf)
 
     def deinit(self):
