@@ -171,8 +171,8 @@ class ScreenManager:
             self._perf_report()
 
     def _perf_report(self):
-        """Print perf stats every 100 frames."""
-        if self._perf_total % 100 != 0:
+        """Print perf stats every 50 frames (~1.5s)."""
+        if self._perf_total < 50:
             return
         total = self._perf_total
         drawn = self._perf_drawn

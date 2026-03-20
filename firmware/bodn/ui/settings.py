@@ -78,6 +78,7 @@ class SettingsScreen(Screen):
             self._settings["debug_perf"] = val
             if self._manager:
                 self._manager.debug_perf = val
+                print("debug_perf={}".format(val))
         self._dirty = True
 
     def update(self, inp, frame):
