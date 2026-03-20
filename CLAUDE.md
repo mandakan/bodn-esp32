@@ -11,6 +11,14 @@
 - **Pin assignments**: `firmware/bodn/config.py` is the single source of truth. Never hardcode GPIO numbers elsewhere.
 - **Wiring docs**: `docs/wiring.md` is auto-generated. After changing `config.py`, run `uv run python tools/pinout.py --md` and commit both files. A pre-commit hook enforces this.
 - **Wokwi sync**: `tools/wokwi-sync.py` auto-discovers all `.py` files under `firmware/`. New files are picked up automatically — no manual list to maintain. (`sync.sh` also copies the whole directory.)
+- **Wokwi custom chip**: The MCP23017 GPIO expander is simulated via a custom Wokwi chip. The relevant files in the project root are:
+  - `mcp23017.chip.json` — pin definitions
+  - `mcp23017.chip.c` — C source implementing the register-addressed I2C protocol (`IODIRA/B`, `GPPUA/B`, `GPIOA/B`, `OLATA/B`)
+  - `mcp23017.chip.wasm` — compiled binary that Wokwi loads (committed, must be kept in sync with the `.c` source)
+  - `wokwi.toml` contains `[[chip]] name="mcp23017" binary="mcp23017.chip.wasm"` to register it
+  - `wokwi-api.h` is a build artefact downloaded by the CLI — it is gitignored, do not commit it
+  - If `mcp23017.chip.c` is changed, recompile and commit the new `.wasm`: `~/bin/wokwi-cli chip compile mcp23017.chip.c -o mcp23017.chip.wasm`
+  - The `diagram.json` wires all 8 buttons (GPA0–7) and all 4 toggle switches (GPB0–3) through `mcp1` — do not bypass these with direct ESP GPIO connections in the diagram
 - **UX design**: when designing screens, game modes, interactions, or feedback, follow `docs/UX_GUIDELINES.md`. Key rules: one concept per screen, large icons over text, immediate multimodal feedback, max 3–4 active choices, no complex gestures. Games should target executive functions (working memory, inhibition, cognitive flexibility) at a 4-year-old level.
 - **Performance**: follow `docs/PERFORMANCE_GUIDELINES.md`. Key rules: event-driven over polling, no full-screen redraws every frame, cooperative async tasks, minimal per-frame allocations, sparse `print()` usage. The review checklist (section 10) applies to all code changes.
 
