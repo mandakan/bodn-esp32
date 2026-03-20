@@ -24,7 +24,8 @@ from bodn.ui.secondary import SecondaryDisplay
 from bodn.ui.home import HomeScreen
 from bodn.ui.demo import DemoScreen
 from bodn.ui.clock import ClockScreen
-from bodn.ui.ambient import AmbientClock, StatusStrip
+from bodn.ui.ambient import StatusStrip
+from bodn.ui.catface import CatFaceScreen
 
 ENC_STEPS = 20
 N_LEDS = config.NEOPIXEL_COUNT
@@ -113,20 +114,21 @@ def create_ui(
     manager = ScreenManager(tft, theme, inp)
     manager.set_overlay(overlay)
 
-    # Secondary display — content + status strip
+    # Secondary display — cat face (default) + status strip
     secondary = SecondaryDisplay(tft2, theme2)
-    secondary.set_content(AmbientClock())
+    cat = CatFaceScreen()
+    secondary.set_content(cat)
     secondary.set_status(StatusStrip(session_mgr))
 
     def _reset_secondary():
-        secondary.set_content(AmbientClock())
+        nonlocal cat
+        cat = CatFaceScreen()
+        secondary.set_content(cat)
 
     def _make_mystery():
         from bodn.ui.mystery import MysteryScreen
-        from bodn.ui.catface import CatFaceScreen
 
-        cat = CatFaceScreen()
-        secondary.set_content(cat)
+        _reset_secondary()
         return MysteryScreen(
             np, overlay, secondary_screen=cat, on_exit=_reset_secondary
         )

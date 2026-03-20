@@ -23,38 +23,35 @@ WOKWI_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5555
 
 FIRMWARE_DIR = Path(__file__).resolve().parent.parent / "firmware"
 
-FILES = [
-    ("boot.py", FIRMWARE_DIR / "boot.py"),
-    ("st7735.py", FIRMWARE_DIR / "st7735.py"),
-    ("bodn/__init__.py", FIRMWARE_DIR / "bodn" / "__init__.py"),
-    ("bodn/config.py", FIRMWARE_DIR / "bodn" / "config.py"),
-    ("bodn/debounce.py", FIRMWARE_DIR / "bodn" / "debounce.py"),
-    ("bodn/encoder.py", FIRMWARE_DIR / "bodn" / "encoder.py"),
-    ("bodn/patterns.py", FIRMWARE_DIR / "bodn" / "patterns.py"),
-    ("bodn/storage.py", FIRMWARE_DIR / "bodn" / "storage.py"),
-    ("bodn/session.py", FIRMWARE_DIR / "bodn" / "session.py"),
-    ("bodn/wifi.py", FIRMWARE_DIR / "bodn" / "wifi.py"),
-    ("bodn/web_ui.py", FIRMWARE_DIR / "bodn" / "web_ui.py"),
-    ("bodn/web.py", FIRMWARE_DIR / "bodn" / "web.py"),
-    ("bodn/ui/__init__.py", FIRMWARE_DIR / "bodn" / "ui" / "__init__.py"),
-    ("bodn/ui/theme.py", FIRMWARE_DIR / "bodn" / "ui" / "theme.py"),
-    ("bodn/ui/input.py", FIRMWARE_DIR / "bodn" / "ui" / "input.py"),
-    ("bodn/ui/widgets.py", FIRMWARE_DIR / "bodn" / "ui" / "widgets.py"),
-    ("bodn/ui/screen.py", FIRMWARE_DIR / "bodn" / "ui" / "screen.py"),
-    ("bodn/ui/icons.py", FIRMWARE_DIR / "bodn" / "ui" / "icons.py"),
-    ("bodn/ui/overlay.py", FIRMWARE_DIR / "bodn" / "ui" / "overlay.py"),
-    ("bodn/ui/home.py", FIRMWARE_DIR / "bodn" / "ui" / "home.py"),
-    ("bodn/ui/demo.py", FIRMWARE_DIR / "bodn" / "ui" / "demo.py"),
-    ("bodn/ui/clock.py", FIRMWARE_DIR / "bodn" / "ui" / "clock.py"),
-    ("bodn/ui/secondary.py", FIRMWARE_DIR / "bodn" / "ui" / "secondary.py"),
-    ("bodn/ui/ambient.py", FIRMWARE_DIR / "bodn" / "ui" / "ambient.py"),
-    ("bodn/ui/catface.py", FIRMWARE_DIR / "bodn" / "ui" / "catface.py"),
-    ("bodn/ui/mystery.py", FIRMWARE_DIR / "bodn" / "ui" / "mystery.py"),
-    ("bodn/ui/pause.py", FIRMWARE_DIR / "bodn" / "ui" / "pause.py"),
-    ("bodn/ui/settings.py", FIRMWARE_DIR / "bodn" / "ui" / "settings.py"),
-    ("bodn/mystery_rules.py", FIRMWARE_DIR / "bodn" / "mystery_rules.py"),
-    ("main.py", FIRMWARE_DIR / "main.py"),  # last, so it runs after reset
-]
+# Auto-discover all .py files under firmware/.
+# __init__.py files sort first (packages must exist before modules),
+# main.py sorts last (it runs on soft-reset, so everything else must be
+# uploaded first).  No manual list to maintain.
+EXCLUDE = {"__pycache__"}
+
+
+def discover_files() -> list[tuple[str, Path]]:
+    """Walk firmware/ and return (remote_path, local_path) pairs."""
+    files = []
+    for p in sorted(FIRMWARE_DIR.rglob("*.py")):
+        if any(part in EXCLUDE for part in p.parts):
+            continue
+        remote = str(p.relative_to(FIRMWARE_DIR))
+        files.append((remote, p))
+
+    def _sort_key(entry: tuple[str, Path]) -> tuple[int, str]:
+        remote = entry[0]
+        if remote == "main.py":
+            return (2, remote)  # last
+        if remote.endswith("__init__.py"):
+            return (0, remote)  # first (create packages)
+        return (1, remote)
+
+    files.sort(key=_sort_key)
+    return files
+
+
+FILES = discover_files()
 
 
 def read_until(sock: socket.socket, marker: bytes, timeout: float = 5.0) -> bytes:
@@ -127,7 +124,9 @@ def upload_file(sock: socket.socket, remote_path: str, local_path: Path) -> bool
 
     if "/" in remote_path:
         parent = remote_path.rsplit("/", 1)[0]
-        raw_exec(sock, f"import os\ntry:\n os.mkdir('/{parent}')\nexcept OSError:\n pass")
+        raw_exec(
+            sock, f"import os\ntry:\n os.mkdir('/{parent}')\nexcept OSError:\n pass"
+        )
 
     chunk_size = 256
     raw_exec(sock, f"_f=open('/{remote_path}','wb')")
@@ -207,7 +206,9 @@ def main() -> None:
             if not sync(sock):
                 sock.close()
                 sys.exit(1)
-            print("Board running. Watching — Ctrl-C to re-sync, Ctrl-C twice to quit.\n")
+            print(
+                "Board running. Watching — Ctrl-C to re-sync, Ctrl-C twice to quit.\n"
+            )
 
     print("Done.")
 
