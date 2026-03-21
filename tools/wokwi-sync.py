@@ -13,6 +13,8 @@ Wokwi only allows one TCP client at a time, and a new connection cannot
 interrupt running code. Press Ctrl-C to re-sync, Ctrl-C twice to quit.
 """
 
+import hashlib
+import json
 import socket
 import sys
 import time
@@ -22,6 +24,7 @@ WOKWI_HOST = "localhost"
 WOKWI_PORT = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 5555
 
 FIRMWARE_DIR = Path(__file__).resolve().parent.parent / "firmware"
+HASH_FILE = Path(__file__).resolve().parent.parent / ".ota-hashes.json"
 
 # Auto-discover all .py files under firmware/.
 # __init__.py files sort first (packages must exist before modules),
@@ -135,6 +138,20 @@ def upload_file(sock: socket.socket, remote_path: str, local_path: Path) -> bool
     return True
 
 
+def update_ota_hashes() -> None:
+    """Compute and save OTA hashes for all firmware files.
+
+    Keeps .ota-hashes.json in sync so a subsequent OTA push
+    won't re-upload files that were already deployed via USB/serial.
+    """
+    hashes = {}
+    for remote_path, local_path in FILES:
+        if local_path.exists():
+            hashes[remote_path] = hashlib.md5(local_path.read_bytes()).hexdigest()
+    HASH_FILE.write_text(json.dumps(hashes, indent=2) + "\n")
+    print(f"Updated {HASH_FILE.name} ({len(hashes)} files)")
+
+
 def sync(sock: socket.socket) -> bool:
     """Upload all firmware files and soft-reset."""
     print("Entering raw REPL...")
@@ -149,6 +166,9 @@ def sync(sock: socket.socket) -> bool:
             continue
         print(f"  {remote_path}")
         upload_file(sock, remote_path, local_path)
+
+    # Update OTA hashes so next ota-push.py won't re-upload everything
+    update_ota_hashes()
 
     print("Soft-resetting board...")
     sock.sendall(b"\x02")  # Ctrl-B = exit raw REPL

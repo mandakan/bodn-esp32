@@ -173,6 +173,18 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_flode():
+        from bodn.ui.flode import FlodeScreen
+
+        _reset_secondary()
+        return FlodeScreen(
+            np,
+            overlay,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
+        )
+
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
 
@@ -183,6 +195,7 @@ def create_ui(
         "mystery": _make_mystery,
         "simon": _make_simon,
         "rulefollow": _make_rulefollow,
+        "flode": _make_flode,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, enc_steps=ENC_STEPS, settings=settings),
@@ -193,7 +206,7 @@ def create_ui(
     home = HomeScreen(
         mode_screens,
         session_mgr,
-        order=["mystery", "simon", "rulefollow", "demo", "clock", "settings"],
+        order=["mystery", "simon", "rulefollow", "flode", "demo", "clock", "settings"],
     )
     manager.push(home)
 
