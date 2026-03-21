@@ -95,6 +95,13 @@ class RuleFollowScreen(Screen):
 
         # Find first just-pressed button
         btn = inp.first_btn_pressed()
+
+        # Buttons 4-7 are inactive in this mode — give gentle feedback
+        if btn >= NUM_BUTTONS:
+            if self._audio:
+                self._audio.boop()
+            btn = -1  # don't feed to engine
+
         prev_state = self._engine.state
         self._engine.update(btn, frame)
 
@@ -159,9 +166,14 @@ class RuleFollowScreen(Screen):
             if 0 <= btn < len(_STIM_TONES):
                 audio.tone(_STIM_TONES[btn], 200, channel=1)
         elif new_state == CORRECT:
+            # Immediate press feedback + result tone
             audio.tone(_CORRECT_TONE, 150, channel=1)
-        elif new_state == WRONG:
+        elif new_state == WRONG and prev_state == STIMULUS:
+            # Immediate press feedback + gentle wrong tone
             audio.tone(_WRONG_TONE, 250, channel=1)
+        elif new_state == WRONG:
+            # Timeout — softer cue
+            audio.tone(_WRONG_TONE, 150, channel=1)
         elif new_state == RULE_SWITCH:
             audio.tone(_SWITCH_TONE, 300, channel=1)
 
@@ -414,17 +426,25 @@ class RuleFollowScreen(Screen):
 
     def _draw_rule_icon(self, tft, theme, cx, cy, rule, color):
         """Draw a large procedural rule pictogram centered at (cx, cy)."""
-        size = 30
+        r = 30
         if rule == RULE_MATCH:
-            # Filled circle (approximated with concentric rects)
-            for r in range(size, 0, -2):
-                tft.fill_rect(cx - r, cy - r, r * 2, r * 2, color)
+            # Filled circle via horizontal spans (x^2 + y^2 <= r^2)
+            r_sq = r * r
+            for dy in range(-r, r + 1):
+                # half-width at this row: floor(sqrt(r^2 - dy^2))
+                dx_sq = r_sq - dy * dy
+                # integer sqrt via Newton's method (3 iterations suffice for r<=30)
+                dx = r
+                dx = (dx + dx_sq // dx) >> 1
+                dx = (dx + dx_sq // dx) >> 1
+                dx = (dx + dx_sq // dx) >> 1
+                tft.fill_rect(cx - dx, cy + dy, dx * 2, 1, color)
         else:
-            # X cross for "opposite"
+            # X cross for "opposite" — two thick diagonal bars
             thick = 6
-            for i in range(size * 2):
-                x = cx - size + i
-                y1 = cy - size + i
-                y2 = cy + size - i
+            for i in range(r * 2):
+                x = cx - r + i
+                y1 = cy - r + i
+                y2 = cy + r - i
                 tft.fill_rect(x, y1, 1, thick, color)
                 tft.fill_rect(x, y2 - thick, 1, thick, color)
