@@ -15,7 +15,6 @@ except ImportError:
 from bodn.web_ui import HTML
 from bodn import storage
 
-
 OTA_STAGE = "/.ota"
 
 
@@ -139,9 +138,9 @@ async def _handle_upload(reader, writer, headers):
     remote_path = headers.get("x-path", "")
     cl = int(headers.get("content-length", 0))
 
-    if not remote_path or cl == 0:
+    if not remote_path:
         await _drain_body(reader, cl)
-        await _send_json(writer, {"error": "need X-Path header and body"}, 400)
+        await _send_json(writer, {"error": "need X-Path header"}, 400)
         return
 
     # Check free space (keep 4 KB reserve for filesystem metadata)

@@ -85,6 +85,9 @@ def push(base_url: str, token: str = "", force: bool = False) -> bool:
             continue
 
         data = local.read_bytes()
+        if len(data) == 0:
+            skipped += 1
+            continue
         remote = "/" + rel_path
         url = base_url.rstrip("/") + "/api/upload"
         hdrs = {
@@ -123,8 +126,8 @@ def push(base_url: str, token: str = "", force: bool = False) -> bool:
         if not success:
             ok = False
 
-    if ok:
-        save_hashes(new_hashes)
+    # Save hashes for files that did upload (even if some failed)
+    save_hashes(new_hashes)
 
     if skipped and not uploaded:
         print(f"  All {skipped} files unchanged.")
