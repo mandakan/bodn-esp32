@@ -100,27 +100,21 @@ def make_home(n_modes=4):
 
 
 def test_slow_turn_needs_multiple_detents():
-    """Slow turn: accumulator requires ~3 detents per mode step."""
+    """Slow turn: accumulator requires ~2 raw detents per mode step."""
     home, mgr = make_home()
     inp = mgr.inp
     assert home._index == 0
 
-    # 1 detent at low velocity → no change
+    # 1 raw detent at low velocity → not enough
     inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._index == 0
 
-    # 2nd detent
+    # 2nd raw detent → triggers mode change (detents_per_unit=2)
     inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 2)
-    assert home._index == 0
-
-    # 3rd detent → triggers mode change
-    inp.enc_delta[0] = 1
-    inp.enc_velocity[0] = 50
-    home.update(inp, 3)
     assert home._index == 1
 
 
@@ -129,8 +123,8 @@ def test_fast_spin_skips_modes():
     home, mgr = make_home(n_modes=6)
     inp = mgr.inp
 
-    # 3 detents at high velocity → 3*2=6 effective, 6//3=2 units
-    inp.enc_delta[0] = 3
+    # 2 detents at high velocity → 2*2=4 effective, 4//2=2 units
+    inp.enc_delta[0] = 2
     inp.enc_velocity[0] = 500
     home.update(inp, 1)
     assert home._index == 2
@@ -141,8 +135,8 @@ def test_mode_change_starts_animation():
     home, mgr = make_home()
     inp = mgr.inp
 
-    # Trigger a mode change
-    inp.enc_delta[0] = 3
+    # Trigger a mode change (2 raw detents = 1 unit at dpu=2)
+    inp.enc_delta[0] = 2
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._anim_step == 0
@@ -155,7 +149,7 @@ def test_animation_advances_each_frame():
     inp = mgr.inp
 
     # Trigger mode change
-    inp.enc_delta[0] = 3
+    inp.enc_delta[0] = 2
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._anim_step == 0
@@ -174,7 +168,7 @@ def test_animation_stops_redraws_when_done():
     inp = mgr.inp
 
     # Trigger mode change
-    inp.enc_delta[0] = 3
+    inp.enc_delta[0] = 2
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
 
@@ -199,8 +193,8 @@ def test_mid_animation_encoder_restarts():
     home, mgr = make_home()
     inp = mgr.inp
 
-    # Trigger first mode change
-    inp.enc_delta[0] = 3
+    # Trigger first mode change (2 raw detents = 1 unit)
+    inp.enc_delta[0] = 2
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._index == 1
@@ -213,7 +207,7 @@ def test_mid_animation_encoder_restarts():
     assert home._anim_step == 2
 
     # New encoder input mid-animation → restarts
-    inp.enc_delta[0] = 3
+    inp.enc_delta[0] = 2
     inp.enc_velocity[0] = 50
     home.update(inp, 4)
     assert home._index == 2
@@ -225,7 +219,7 @@ def test_backward_turn_animation_direction():
     home, mgr = make_home()
     inp = mgr.inp
 
-    inp.enc_delta[0] = -3
+    inp.enc_delta[0] = -2
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._anim_dir == -1
@@ -237,7 +231,7 @@ def test_circular_wrapping():
     inp = mgr.inp
 
     # Go backward from index 0 → should wrap to last
-    inp.enc_delta[0] = -3
+    inp.enc_delta[0] = -2
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._index == 2
@@ -248,8 +242,8 @@ def test_accumulator_reset_on_enter():
     home, mgr = make_home()
     inp = mgr.inp
 
-    # Accumulate some detents without triggering a step
-    inp.enc_delta[0] = 2
+    # Accumulate 1 detent without triggering a step (dpu=2)
+    inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._index == 0
@@ -257,7 +251,7 @@ def test_accumulator_reset_on_enter():
     # Re-enter screen
     home.enter(mgr)
 
-    # Should need full 3 detents again
+    # Should need full 2 detents again (reset cleared the 1 accumulated)
     inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 2)
@@ -284,6 +278,22 @@ def test_enc_button_still_enters_mode():
     assert len(mgr.pushed) == 1
 
 
+def test_encoder_recentered_on_every_raw_delta():
+    """Encoder is re-centered on every raw delta, not just on accumulator fire."""
+    home, mgr = make_home()
+    inp = mgr.inp
+
+    # Single raw detent (not enough for accumulator to fire)
+    inp.enc_delta[0] = 1
+    inp.enc_velocity[0] = 50
+    home.update(inp, 1)
+    assert home._index == 0  # no mode change yet
+    # But encoder should already be re-centered
+    mid = mgr.inp._encoders[0]._max // 2
+    assert mgr.inp._encoders[0].value == mid
+    assert mgr.inp._prev_enc_pos[0] == mid
+
+
 def test_anim_offset_idle_is_zero():
     """When animation is idle, offset is 0."""
     home, _ = make_home()
@@ -295,7 +305,7 @@ def test_anim_offset_during_animation():
     home, mgr = make_home()
     inp = mgr.inp
 
-    inp.enc_delta[0] = 3
+    inp.enc_delta[0] = 2
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
 

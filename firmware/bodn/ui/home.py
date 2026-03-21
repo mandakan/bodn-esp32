@@ -34,9 +34,10 @@ class HomeScreen(Screen):
         self._error = None
         self._error_mode = None
         self._dirty = True
-        # Velocity-aware accumulator: ~3 detents per mode step
+        # Velocity-aware accumulator: ~2 raw detents per mode step
+        # (KY-040 IRQ fires on both edges, so 1 physical click ≈ 2 raw detents)
         self._accumulator = EncoderAccumulator(
-            detents_per_unit=3, fast_threshold=400, fast_multiplier=2
+            detents_per_unit=2, fast_threshold=400, fast_multiplier=2
         )
         # Animation state
         self._anim_step = _ANIM_STEPS  # >= _ANIM_STEPS means idle
@@ -55,26 +56,6 @@ class HomeScreen(Screen):
         if not self._names:
             return
 
-        # Advance animation if active
-        if self._anim_step < _ANIM_STEPS:
-            self._anim_step += 1
-            self._dirty = True
-
-        # Nav encoder rotation cycles modes via accumulator
-        delta = inp.enc_delta[NAV]
-        velocity = inp.enc_velocity[NAV]
-        units = self._accumulator.update(delta, velocity)
-        if units != 0:
-            self._index = (self._index + units) % len(self._names)
-            # Re-center encoder so it never hits the clamp limits
-            mid = self._manager.inp._encoders[NAV]._max // 2
-            self._manager.inp._encoders[NAV].value = mid
-            self._manager.inp._prev_enc_pos[NAV] = mid
-            # Start slide animation: incoming from direction of turn
-            self._anim_step = 0
-            self._anim_dir = 1 if units > 0 else -1
-            self._dirty = True
-
         # Nav encoder button or any play button → enter mode
         if inp.any_btn_pressed() or inp.enc_btn_pressed[NAV]:
             name = self._names[self._index]
@@ -88,6 +69,29 @@ class HomeScreen(Screen):
                 self._error = str(e)
                 self._error_mode = name
                 self._dirty = True
+            return
+
+        # Advance animation if active
+        if self._anim_step < _ANIM_STEPS:
+            self._anim_step += 1
+            self._dirty = True
+
+        # Nav encoder rotation cycles modes via accumulator
+        delta = inp.enc_delta[NAV]
+        if delta != 0:
+            # Re-center encoder on every raw delta to prevent hitting clamp limits
+            mid = self._manager.inp._encoders[NAV]._max // 2
+            self._manager.inp._encoders[NAV].value = mid
+            self._manager.inp._prev_enc_pos[NAV] = mid
+
+        velocity = inp.enc_velocity[NAV]
+        units = self._accumulator.update(delta, velocity)
+        if units != 0:
+            self._index = (self._index + units) % len(self._names)
+            # Start slide animation: incoming from direction of turn
+            self._anim_step = 0
+            self._anim_dir = 1 if units > 0 else -1
+            self._dirty = True
 
     def _anim_offset(self, width):
         """Return the current x-offset for the slide animation."""
