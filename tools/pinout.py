@@ -41,7 +41,9 @@ def parse_config(path: Path) -> list[Group]:
             current_comment = line.lstrip("# ")
             continue
 
-        # Skip non-pin constants and MCP23017 expander pins (not ESP32 GPIOs)
+        # Skip non-pin constants, MCP23017 expander pins, and import lines
+        if line.startswith("from ") or line.startswith("import "):
+            continue
         if (
             re.match(
                 r"^[A-Z][A-Z0-9_]*(WIDTH|HEIGHT|RATE|SIZE|LEN|COUNT|MAX|MIN|MADCTL|OFFSET|BRIGHTNESS|ADDR|_NAV|_A\b|_B\b)\s*=",
@@ -52,13 +54,15 @@ def parse_config(path: Path) -> list[Group]:
         ):
             continue
 
-        # Single assignment: NAME = 42  (optional trailing inline comment)
-        m = re.match(r"^([A-Z][A-Z0-9_]+)\s*=\s*(\d+)\s*(?:#.*)?$", line)
+        # Single assignment: NAME = 42  or  NAME = const(42)  (optional trailing inline comment)
+        m = re.match(
+            r"^([A-Z][A-Z0-9_]+)\s*=\s*(?:const\()?\s*(\d+)\s*\)?\s*(?:#.*)?$", line
+        )
         if m:
             current_pins.append((m.group(1), int(m.group(2))))
             continue
 
-        # Tuple assignment: A, B, C = 1, 2, 3  (optional trailing inline comment)
+        # Tuple assignment: A, B, C = 1, 2, 3  or  A, B, C = const(1), const(2), const(3)
         m = re.match(r"^([A-Z][A-Z0-9_,\s]+?)\s*=\s*([\d,\s]+?)\s*(?:#.*)?$", line)
         if m:
             names = [n.strip() for n in m.group(1).split(",")]

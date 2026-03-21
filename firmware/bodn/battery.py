@@ -9,17 +9,23 @@
 # divided LiPo range of 0.73 V (3.0 V empty) to 1.02 V (4.2 V full).
 
 import time
+from micropython import const
 from machine import ADC, Pin
 from bodn import config
 
-_DIVIDER = (470 + 150) / 150  # R6+R7 / R7 = 4.133
-_ADC_VREF = 1.25  # ATTN_2_5DB full-scale voltage (V) — may need calibration
-_ADC_MAX = 4095
-_VBAT_FULL = 4.2  # LiPo 100 %
-_VBAT_EMPTY = 3.0  # LiPo 0 %
+# Integer-scaled constants to avoid float math:
+#   V_bat = V_adc × (470+150)/150 = V_adc × 4.1333
+#   V_adc = raw × 1.25 / 4095
+#   V_bat_mV = raw × 1250 × 4133 / (4095 × 1000) ≈ raw × 5167 / 4095
+#   Simplified: V_bat_mV = raw * 5167 // 4095
+_VBAT_MV_NUM = const(5167)  # 1250 * 4133 // 1000
+_ADC_MAX = const(4095)
+_VBAT_FULL_MV = const(4200)  # LiPo 100 %
+_VBAT_EMPTY_MV = const(3000)  # LiPo 0 %
+_VBAT_RANGE_MV = const(1200)  # 4200 - 3000
 
-_SAMPLES = 4  # ADC readings to average per measurement
-_CACHE_MS = 30_000  # re-read at most once every 30 s
+_SAMPLES = const(4)  # ADC readings to average per measurement
+_CACHE_MS = const(30_000)  # re-read at most once every 30 s
 
 _adc = None
 _pwr_pin = None
@@ -52,10 +58,12 @@ def read():
 
     _init()
 
-    raw = sum(_adc.read() for _ in range(_SAMPLES)) // _SAMPLES
-    v_adc = raw * _ADC_VREF / _ADC_MAX
-    v_bat = v_adc * _DIVIDER
-    pct = int((v_bat - _VBAT_EMPTY) / (_VBAT_FULL - _VBAT_EMPTY) * 100)
+    raw = 0
+    for _ in range(_SAMPLES):
+        raw += _adc.read()
+    raw //= _SAMPLES
+    v_bat_mv = raw * _VBAT_MV_NUM // _ADC_MAX
+    pct = (v_bat_mv - _VBAT_EMPTY_MV) * 100 // _VBAT_RANGE_MV
     pct = max(0, min(100, pct))
 
     # PWR_SENS is high-Z (reads high via internal pull-down on the board)

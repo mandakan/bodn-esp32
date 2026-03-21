@@ -1,11 +1,11 @@
 # bodn/ui/home.py — home screen with mode selection
 
-from bodn import config
+from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.icons import MODE_ICONS
 from bodn.ui.widgets import draw_icon, draw_centered
 
-NAV = config.ENC_NAV
+NAV = const(0)  # config.ENC_NAV
 
 
 class HomeScreen(Screen):

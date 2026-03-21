@@ -1,22 +1,22 @@
 # bodn/ui/pause.py — in-game pause menu with hold-to-open
 
-from bodn import config
+from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_hold_bar
 from bodn.hold_detector import HoldDetector
 
-NAV = config.ENC_NAV
+NAV = const(0)  # config.ENC_NAV
 
 # Menu items
-_RESUME = 0
-_QUIT = 1
+_RESUME = const(0)
+_QUIT = const(1)
 _ITEMS = ["Resume", "Back to menu"]
 
 # Hold bar: redraw every N% to avoid full-screen redraws.
 # The bar draws directly over the existing framebuffer (4px at y=0)
 # and pushes show() itself — no game re-render needed.
-_HOLD_BAR_STEPS = 4  # ~4 visual updates over the hold duration
-_HOLD_BAR_H = 4
+_HOLD_BAR_STEPS = const(4)  # ~4 visual updates over the hold duration
+_HOLD_BAR_H = const(4)
 
 
 class PauseMenu(Screen):

@@ -4,10 +4,11 @@
 #   Content zone: y=0..127   (128×128 square — game visuals, ambient clock, etc.)
 #   Status strip: y=128..159 (128×32 — always-visible clock + session timer)
 
+from micropython import const
 
-CONTENT_H = 128
-STATUS_Y = 128
-STATUS_H = 32
+CONTENT_H = const(128)
+STATUS_Y = const(128)
+STATUS_H = const(32)
 
 
 class SecondaryDisplay:

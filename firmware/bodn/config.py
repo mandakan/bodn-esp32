@@ -5,57 +5,65 @@
 # GPIO 47 (SCL) and 48 (SDA) are reserved for the I2C bus (pUEXT pull-ups).
 # Buttons and toggle switches are on the MCP23017 I2C GPIO expander.
 
+from micropython import const
+
 # Primary display: 2.8" ILI9341 TFT (SPI bus — shared with secondary display)
-TFT_SCK = 12
-TFT_MOSI = 11
-TFT_CS = 10
-TFT_DC = 8
-TFT_RST = 9
-TFT_BL = 1  # GPIO 43 is UART TX — would flicker backlight on every print()
-TFT_WIDTH = 320
-TFT_HEIGHT = 240
-TFT_MADCTL = 0x68  # MV + MX + BGR (landscape)
-TFT_COL_OFFSET = 0
-TFT_ROW_OFFSET = 0
+TFT_SCK = const(12)
+TFT_MOSI = const(11)
+TFT_CS = const(10)
+TFT_DC = const(8)
+TFT_RST = const(9)
+TFT_BL = const(1)  # GPIO 43 is UART TX — would flicker backlight on every print()
+TFT_WIDTH = const(320)
+TFT_HEIGHT = const(240)
+TFT_MADCTL = const(0x68)  # MV + MX + BGR (landscape)
+TFT_COL_OFFSET = const(0)
+TFT_ROW_OFFSET = const(0)
 
 # Secondary display: 1.8" ST7735 TFT (shares SPI bus, separate CS)
-TFT2_CS = 39
-TFT2_WIDTH = 128
-TFT2_HEIGHT = 160
-TFT2_MADCTL = 0x08  # BGR only (may need MX depending on module)
-TFT2_COL_OFFSET = 0
-TFT2_ROW_OFFSET = 0
+TFT2_CS = const(39)
+TFT2_WIDTH = const(128)
+TFT2_HEIGHT = const(160)
+TFT2_MADCTL = const(0x08)  # BGR only (may need MX depending on module)
+TFT2_COL_OFFSET = const(0)
+TFT2_ROW_OFFSET = const(0)
 
 # INMP441 I2S microphone (I2S IN)
-I2S_MIC_SCK = 14
-I2S_MIC_WS = 15
-I2S_MIC_SD = 2  # GPIO 38 is on-board LED — LED load (~15 mA) corrupts I2S signal
+I2S_MIC_SCK = const(14)
+I2S_MIC_WS = const(15)
+I2S_MIC_SD = const(2)  # GPIO 38 is on-board LED — LED load (~15 mA) corrupts I2S signal
 
 # MAX98357A I2S amplifier (I2S OUT)
-I2S_SPK_BCK = 13
-I2S_SPK_WS = 45
-I2S_SPK_DIN = 7  # GPIO 5 is PWR_SENS (board reserved)
+I2S_SPK_BCK = const(13)
+I2S_SPK_WS = const(45)
+I2S_SPK_DIN = const(7)  # GPIO 5 is PWR_SENS (board reserved)
 
 # Rotary encoders (KY-040) — must stay on native GPIO for IRQ latency
-ENC1_CLK, ENC1_DT, ENC1_SW = 21, 18, 17  # CLK was 19 (USB OTG D−) → moved to 21
-ENC2_CLK, ENC2_DT, ENC2_SW = 16, 3, 40
-ENC3_CLK, ENC3_DT, ENC3_SW = 41, 42, 0
+ENC1_CLK = const(21)  # CLK was 19 (USB OTG D−) → moved to 21
+ENC1_DT = const(18)
+ENC1_SW = const(17)
+ENC2_CLK = const(16)
+ENC2_DT = const(3)
+ENC2_SW = const(40)
+ENC3_CLK = const(41)
+ENC3_DT = const(42)
+ENC3_SW = const(0)
 
 # Encoder role indices — mount left-to-right next to the display:
 #   ENC1 = NAV   (left,   nearest display — menu scroll + back button)
 #   ENC2 = ENC_A (middle, mode parameter 1 — e.g. brightness)
 #   ENC3 = ENC_B (right,  mode parameter 2 — e.g. speed)
-ENC_NAV = 0  # index: navigation (home: scroll modes, modes: back button)
-ENC_A = 1  # index: mode parameter 1
-ENC_B = 2  # index: mode parameter 2
+ENC_NAV = const(0)  # index: navigation (home: scroll modes, modes: back button)
+ENC_A = const(1)  # index: mode parameter 1
+ENC_B = const(2)  # index: mode parameter 2
 
 # WS2812B NeoPixel LEDs — three zones daisy-chained on one data line:
 #   Stick A (8 LEDs)  →  Stick B (8 LEDs)  →  Lid Ring (92 LEDs)
 # The two sticks sit on the lid (opposite sides or parallel).
 # The 144 LED/m strip runs around the inside of the translucent lid perimeter
 # (200×120 mm = 640 mm ≈ 92 LEDs).
-NEOPIXEL_PIN = 4  # GPIO 6 is BAT_SENS (board reserved)
-NEOPIXEL_COUNT = 108  # 8 + 8 + 92
+NEOPIXEL_PIN = const(4)  # GPIO 6 is BAT_SENS (board reserved)
+NEOPIXEL_COUNT = const(108)  # 8 + 8 + 92
 
 # LED zone boundaries (start, count) — indices into the NeoPixel chain
 LED_STICK_A = (0, 8)  # first 8-LED stick
@@ -63,18 +71,18 @@ LED_STICK_B = (8, 8)  # second 8-LED stick
 LED_STICKS = (0, 16)  # both sticks combined
 LED_LID_RING = (16, 92)  # 144 LED/m strip around lid perimeter
 
-NEOPIXEL_BRIGHTNESS = 64  # 0-255, sticks — keep low for battery life and kid-safe eyes
-NEOPIXEL_LID_BRIGHTNESS = 32  # 0-255, lid ring — lower for ambient glow
+NEOPIXEL_BRIGHTNESS = const(64)  # 0-255, sticks — low for battery + kid eyes
+NEOPIXEL_LID_BRIGHTNESS = const(32)  # 0-255, lid ring — lower for ambient glow
 
 # DevKit-Lipo on-board power monitoring (board-reserved — do not reassign)
-BAT_SENS_PIN = 6  # BAT_SENS: LiPo voltage via voltage divider → ADC
-PWR_SENS_PIN = 5  # PWR_SENS: high-Z on battery, driven low when USB power present
+BAT_SENS_PIN = const(6)  # BAT_SENS: LiPo voltage via voltage divider → ADC
+PWR_SENS_PIN = const(5)  # PWR_SENS: high-Z on battery, low when USB present
 
 # I2C bus — pUEXT connector (2.2 kΩ pull-ups on devkit)
-I2C_SCL = 47
-I2C_SDA = 48
+I2C_SCL = const(47)
+I2C_SDA = const(48)
 
 # MCP23017 GPIO expander — buttons and toggles over I2C
-MCP23017_ADDR = 0x20  # A0-A2 jumpers all low
+MCP23017_ADDR = const(0x20)  # A0-A2 jumpers all low
 MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
 MCP_SW_PINS = [8, 9, 10, 11]

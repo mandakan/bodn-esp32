@@ -1,5 +1,6 @@
 # bodn/ui/simon.py — Pattern Copy (Simon) game screen
 
+from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_button_grid
@@ -17,7 +18,7 @@ from bodn.simon_rules import (
 from bodn.patterns import N_LEDS, zone_pulse, zone_rainbow, zone_clear, ZONE_LID_RING
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
-NAV = config.ENC_NAV
+NAV = const(0)  # config.ENC_NAV
 
 # Map game states to cat emotions
 _STATE_EMOTIONS = {
@@ -130,9 +131,11 @@ class SimonScreen(Screen):
             ses_state = self._overlay.session_mgr.state
             leds = self._overlay.static_led_override(ses_state, leds, brightness)
 
-            for i in range(N_LEDS):
-                self._np[i] = leds[i]
-            self._np.write()
+            np = self._np
+            n = N_LEDS
+            for i in range(n):
+                np[i] = leds[i]
+            np.write()
 
     def _push_dot_row(self):
         """Partial push of just the sequence dot row during SHOWING.

@@ -1,14 +1,15 @@
 # bodn/ui/demo.py — LED playground (Demo mode screen)
 
+from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_progress_bar, draw_button_grid, draw_centered
 from bodn.ui.pause import PauseMenu
-from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING
+from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING, _BLACK
 
-NAV = config.ENC_NAV
-ENC_A = config.ENC_A
-ENC_B = config.ENC_B
+NAV = const(0)  # config.ENC_NAV
+ENC_A = const(1)  # config.ENC_A
+ENC_B = const(2)  # config.ENC_B
 
 # Colour palette per pattern index — module-level to avoid per-frame allocation
 _COLOUR_RGB = [
@@ -105,29 +106,27 @@ class DemoScreen(Screen):
                 colour = _COLOUR_RGB[self._active_pattern]
                 leds = pat_fn(frame, speed, colour, brightness)
 
-            # Toggle switch modifiers (copy since patterns reuse a shared buffer)
+            # Toggle switch modifiers (operate in-place on shared _led_buf)
             sw = inp.sw
-            any_toggle = (
-                sw[0]
-                or sw[1]
-                or (sw[2] and (frame // 4) % 2 == 0)
-                or (len(sw) > 3 and sw[3])
-            )
-            if any_toggle:
-                leds = list(leds)
-                if sw[0]:
-                    leds.reverse()
-                if sw[1]:
-                    half = N_LEDS // 2
-                    for i in range(half):
-                        leds[N_LEDS - 1 - i] = leds[i]
-                if sw[2] and (frame // 4) % 2 == 0:
-                    for i in range(N_LEDS):
-                        leds[i] = (0, 0, 0)
-                if len(sw) > 3 and sw[3]:
-                    for i in range(N_LEDS):
-                        r, g, b = leds[i]
-                        leds[i] = (255 - r, 255 - g, 255 - b)
+            n = N_LEDS
+            black = _BLACK
+            if sw[0]:
+                # Reverse: swap in-place
+                half = n // 2
+                for i in range(half):
+                    j = n - 1 - i
+                    leds[i], leds[j] = leds[j], leds[i]
+            if sw[1]:
+                half = n // 2
+                for i in range(half):
+                    leds[n - 1 - i] = leds[i]
+            if sw[2] and (frame // 4) % 2 == 0:
+                for i in range(n):
+                    leds[i] = black
+            if len(sw) > 3 and sw[3]:
+                for i in range(n):
+                    r, g, b = leds[i]
+                    leds[i] = (255 - r, 255 - g, 255 - b)
 
             # Dim the lid ring relative to the sticks
             lid_ratio = config.NEOPIXEL_LID_BRIGHTNESS
@@ -144,9 +143,10 @@ class DemoScreen(Screen):
             state = self._overlay.session_mgr.state
             leds = self._overlay.led_override(state, frame, leds, brightness)
 
-            for i in range(N_LEDS):
-                self._np[i] = leds[i]
-            self._np.write()
+            np = self._np
+            for i in range(n):
+                np[i] = leds[i]
+            np.write()
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:
