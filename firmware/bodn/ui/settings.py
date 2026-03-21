@@ -15,6 +15,7 @@ _ITEMS = [
     ("leds", "LEDs", "bool"),
     ("debug_input", "Debug log", "bool"),
     ("debug_perf", "Perf stats", "bool"),
+    ("diag", "Diagnostics", "action"),
     ("back", "< Back", "action"),
 ]
 
@@ -56,6 +57,12 @@ class SettingsScreen(Screen):
         if key == "back":
             if self._manager:
                 self._manager.pop()
+            return
+        if key == "diag":
+            if self._manager:
+                from bodn.ui.diag import DiagScreen
+
+                self._manager.push(DiagScreen())
             return
         if key == "wifi":
             if self._wifi_ctrl.is_active():

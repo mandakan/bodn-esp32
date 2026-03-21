@@ -237,75 +237,9 @@ _show_progress(4, STEPS[3][1], STEPS[3][2], detail="IP: " + ip, detail_col=COL_W
 
 # --- Diagnostic boot screen (hold NAV encoder button to activate) ---
 if _diag_requested and tft:
-    _diag_info = []
+    from bodn.diag import gather as _diag_gather
 
-    # Platform and MicroPython version
-    import sys
-
-    _diag_info.append(
-        ("uPy", sys.version.split(";")[0] if ";" in sys.version else sys.version[:20])
-    )
-    _diag_info.append(("Platform", sys.platform))
-
-    # CPU frequency
-    try:
-        from machine import freq as _cpu_freq
-
-        _diag_info.append(("CPU", "{} MHz".format(_cpu_freq() // 1_000_000)))
-    except Exception:
-        pass
-
-    # Memory
-    gc.collect()
-    _free = gc.mem_free()
-    _alloc = gc.mem_alloc()
-    _diag_info.append(("RAM free", "{} KB".format(_free // 1024)))
-    _diag_info.append(("RAM used", "{} KB".format(_alloc // 1024)))
-
-    # Flash filesystem
-    try:
-        import os
-
-        _st = os.statvfs("/")
-        _fs_total = _st[0] * _st[2] // 1024
-        _fs_free = _st[0] * _st[3] // 1024
-        _diag_info.append(("Flash", "{}/{} KB".format(_fs_free, _fs_total)))
-    except Exception:
-        pass
-
-    # WiFi MAC
-    try:
-        import network
-
-        _mac = network.WLAN(network.STA_IF).config("mac")
-        _mac_str = ":".join("{:02X}".format(b) for b in _mac)
-        _diag_info.append(("MAC", _mac_str))
-    except Exception:
-        pass
-
-    # IP
-    _diag_info.append(("IP", ip))
-
-    # Battery
-    try:
-        from bodn.battery import read as _bat_read
-
-        _pct, _chg = _bat_read()
-        _bat_str = "{}%{}".format(_pct, " CHG" if _chg else "")
-        _diag_info.append(("Battery", _bat_str))
-    except Exception:
-        pass
-
-    # NTP / time
-    if _results[2] == "ok":
-        _t = time.localtime()
-        _diag_info.append(("Time", "{:02d}:{:02d}:{:02d}".format(_t[3], _t[4], _t[5])))
-
-    # Boot results
-    _step_summary = " ".join(
-        "{}:{}".format(STEPS[i][0], _results[i] or "?") for i in range(len(STEPS))
-    )
-    _diag_info.append(("Boot", _step_summary))
+    _diag_info = _diag_gather(ip=ip, boot_results=_results, boot_steps=STEPS)
 
     # --- Draw diagnostic screen ---
     tft.fill(COL_BLACK)
@@ -318,22 +252,29 @@ if _diag_requested and tft:
 
     for _label, _val in _diag_info:
         tft.text(_label, 4, _y, COL_AMBER)
-        # Value starts after label column (max ~9 chars label + colon)
         _vx = min(80, (len(_label) + 1) * 8 + 4)
         tft.text(str(_val), _vx, _y, COL_WHITE)
         _y += _line_h
 
     # Hint at bottom
-    _hint = "Release to continue"
+    _hint = "Press any button"
     _hx = (tft.width - len(_hint) * 8) // 2
     tft.text(_hint, _hx, tft.height - 16, COL_CYAN)
     tft.show()
 
-    # Wait for button release
-    _diag_btn = Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP)
-    while _diag_btn.value() == 0:
+    # Wait for any encoder button press (MCP23017 not available yet)
+    _enc_btns = [
+        Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP),
+        Pin(config.ENC2_SW, Pin.IN, Pin.PULL_UP),
+        Pin(config.ENC3_SW, Pin.IN, Pin.PULL_UP),
+    ]
+    # First wait for the held button to be released
+    while _enc_btns[0].value() == 0:
         time.sleep_ms(50)
-    _diag_btn = None
+    # Then wait for any encoder button press to dismiss
+    while all(b.value() == 1 for b in _enc_btns):
+        time.sleep_ms(50)
+    _enc_btns = None
 
     print("BOOT [DIAG] screen shown")
 
