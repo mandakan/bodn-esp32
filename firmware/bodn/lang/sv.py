@@ -82,6 +82,12 @@ STRINGS = {
     "rf_best_streak": "Bästa svit: {}",
     "rf_press_again": "Tryck för att spela igen",
     "rf_press_again_short": "Tryck igen",
+    # Flöde game
+    "mode_flode": "flöde",
+    "flode_level": "Nivå {}",
+    "flode_complete": "BRA!",
+    "flode_next": "Nivå {}",
+    "flode_all_done": "ALLA KLARA!",
     # Mystery Box
     "mystery_magic": "MAGI!",
     "mystery_mix": "Mixa!",

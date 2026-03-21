@@ -342,6 +342,44 @@ ICON_RULEFOLLOW = bytes(
     ]
 )
 
+# Horizontal flow through gaps — Flöde mode
+ICON_FLODE = bytes(
+    [
+        0x00,
+        0x00,  # ................
+        0x7C,
+        0x3E,  # .#####....#####.
+        0x7C,
+        0x3E,  # .#####....#####.
+        0x00,
+        0x00,  # ................
+        0x00,
+        0x00,  # ......>>>>......
+        0x00,
+        0x00,  # ......>>>>......
+        0x7C,
+        0x00,  # .#####..........
+        0x7C,
+        0x00,  # .#####..........
+        0x00,
+        0x00,  # ................
+        0x00,
+        0x3E,  # ..........#####.
+        0x00,
+        0x3E,  # ..........#####.
+        0x00,
+        0x00,  # ......>>>>......
+        0x00,
+        0x00,  # ......>>>>......
+        0x7C,
+        0x3E,  # .#####....#####.
+        0x7C,
+        0x3E,  # .#####....#####.
+        0x00,
+        0x00,  # ................
+    ]
+)
+
 MODE_ICONS = {
     "demo": ICON_DEMO,
     "sound": ICON_SOUND,
@@ -352,4 +390,5 @@ MODE_ICONS = {
     "settings": ICON_SETTINGS,
     "simon": ICON_SIMON,
     "rulefollow": ICON_RULEFOLLOW,
+    "flode": ICON_FLODE,
 }

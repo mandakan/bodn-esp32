@@ -82,6 +82,12 @@ STRINGS = {
     "rf_best_streak": "Best streak: {}",
     "rf_press_again": "Press to play again",
     "rf_press_again_short": "Press again",
+    # Flöde game
+    "mode_flode": "flow",
+    "flode_level": "Level {}",
+    "flode_complete": "GREAT!",
+    "flode_next": "Level {}",
+    "flode_all_done": "ALL DONE!",
     # Mystery Box
     "mystery_magic": "MAGIC!",
     "mystery_mix": "Mix!",
