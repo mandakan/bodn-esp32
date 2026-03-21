@@ -87,6 +87,16 @@ class InputState:
             enc_btn_pressed[i] = cur_btn and not p_btn
             prev_enc_btn[i] = cur_btn
 
+    def has_activity(self):
+        """Return True if any input changed this frame (for idle tracking)."""
+        if any(self.btn_just_pressed) or any(self.btn_just_released):
+            return True
+        if any(d != 0 for d in self.enc_delta):
+            return True
+        if any(self.enc_btn_pressed):
+            return True
+        return False
+
     def any_btn_pressed(self):
         """Return True if any button was just pressed this frame."""
         return any(self.btn_just_pressed)

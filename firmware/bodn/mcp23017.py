@@ -7,8 +7,15 @@ from micropython import const
 
 _IODIRA = const(0x00)
 _IODIRB = const(0x01)
+_GPINTENA = const(0x04)
+_GPINTENB = const(0x05)
+_INTCONA = const(0x08)
+_INTCONB = const(0x09)
+_IOCONA = const(0x0A)
 _GPPUA = const(0x0C)
 _GPPUB = const(0x0D)
+_INTCAPA = const(0x10)
+_INTCAPB = const(0x11)
 _GPIOA = const(0x12)
 _GPIOB = const(0x13)
 
@@ -64,6 +71,34 @@ class MCP23017:
             return (self._porta >> pin) & 1
         else:
             return (self._portb >> (pin - 8)) & 1
+
+    def enable_interrupts(self):
+        """Enable interrupt-on-change for all pins on both ports.
+
+        Configures MIRROR=1 (INTA+INTB OR'd), ODR=1 (open-drain),
+        INTPOL=0 (active-low). Compares to previous value (not DEFVAL).
+        """
+        # IOCON: MIRROR=1 (bit6), ODR=1 (bit2) → 0x44
+        self._write_reg(_IOCONA, 0x44)
+        # Compare to previous pin value
+        self._write_reg(_INTCONA, 0x00)
+        self._write_reg(_INTCONB, 0x00)
+        # Enable interrupts on all pins
+        self._write_reg(_GPINTENA, 0xFF)
+        self._write_reg(_GPINTENB, 0xFF)
+        # Clear any pending interrupts
+        self._read_reg(_INTCAPA)
+        self._read_reg(_INTCAPB)
+
+    def disable_interrupts(self):
+        """Disable all MCP23017 interrupts."""
+        self._write_reg(_GPINTENA, 0x00)
+        self._write_reg(_GPINTENB, 0x00)
+
+    def clear_interrupts(self):
+        """Clear pending interrupts by reading capture registers."""
+        self._read_reg(_INTCAPA)
+        self._read_reg(_INTCAPB)
 
     def pin(self, pin_num):
         """Return a Pin-like object for the given MCP23017 pin.

@@ -26,6 +26,7 @@ DEFAULT_SETTINGS = {
     "mode_limits": {},
     "debug_input": False,
     "language": "sv",
+    "sleep_timeout_s": 300,
 }
 
 # Keep 7 days of session history
