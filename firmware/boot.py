@@ -1,6 +1,7 @@
 # boot.py — runs before main.py
 # WiFi setup, NTP sync, load settings — with animated boot screen.
 # Each step shows a status dot: green=ok, amber=skipped, red=failed.
+# Hold NAV encoder button (ENC1_SW) during power-on for diagnostic screen.
 
 import gc
 import time
@@ -11,11 +12,17 @@ ip = "0.0.0.0"
 # --- Init display + LEDs early so we can show progress ---
 tft = None
 np = None
+_diag_requested = False
 try:
     from machine import Pin, SPI
     import neopixel
     from bodn import config
     from st7735 import ST7735
+
+    # Check NAV encoder button (active-low with pull-up) for diagnostic mode
+    _diag_btn = Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP)
+    _diag_requested = _diag_btn.value() == 0
+    _diag_btn = None  # release pin — encoder driver will reclaim it
 
     spi = SPI(
         2,
@@ -227,6 +234,49 @@ time.sleep(0.5)
 # --- Step 3: Ready! ---
 _results[3] = "ok"
 _show_progress(4, STEPS[3][1], STEPS[3][2], detail="IP: " + ip, detail_col=COL_WHITE)
+
+# --- Diagnostic boot screen (hold NAV encoder button to activate) ---
+if _diag_requested and tft:
+    from bodn.diag import gather as _diag_gather
+
+    _diag_info = _diag_gather(ip=ip, boot_results=_results, boot_steps=STEPS)
+
+    # --- Draw diagnostic screen ---
+    tft.fill(COL_BLACK)
+    _line_h = 14
+    _y = 4
+    _title = "~ Diagnostics ~"
+    _tx = (tft.width - len(_title) * 8) // 2
+    tft.text(_title, _tx, _y, COL_TITLE)
+    _y += _line_h + 4
+
+    for _label, _val in _diag_info:
+        tft.text(_label, 4, _y, COL_AMBER)
+        _vx = min(80, (len(_label) + 1) * 8 + 4)
+        tft.text(str(_val), _vx, _y, COL_WHITE)
+        _y += _line_h
+
+    # Hint at bottom
+    _hint = "Press any button"
+    _hx = (tft.width - len(_hint) * 8) // 2
+    tft.text(_hint, _hx, tft.height - 16, COL_CYAN)
+    tft.show()
+
+    # Wait for any encoder button press (MCP23017 not available yet)
+    _enc_btns = [
+        Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP),
+        Pin(config.ENC2_SW, Pin.IN, Pin.PULL_UP),
+        Pin(config.ENC3_SW, Pin.IN, Pin.PULL_UP),
+    ]
+    # First wait for the held button to be released
+    while _enc_btns[0].value() == 0:
+        time.sleep_ms(50)
+    # Then wait for any encoder button press to dismiss
+    while all(b.value() == 1 for b in _enc_btns):
+        time.sleep_ms(50)
+    _enc_btns = None
+
+    print("BOOT [DIAG] screen shown")
 
 # Free boot screen objects before main.py starts — the 240×320
 # framebuffer alone is ~150 KB of RAM.
