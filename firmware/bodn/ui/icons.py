@@ -304,6 +304,44 @@ ICON_SIMON = bytes(
     ]
 )
 
+# Two arrows crossing — Rule Follow mode
+ICON_RULEFOLLOW = bytes(
+    [
+        0x00,
+        0x00,  # ................
+        0x60,
+        0x00,  # .##.............
+        0x70,
+        0x00,  # .###............
+        0x78,
+        0x00,  # .####...........
+        0x7F,
+        0xF0,  # .###########....
+        0x3F,
+        0xF0,  # ..##########....
+        0x00,
+        0x00,  # ................
+        0x00,
+        0x00,  # ................
+        0x00,
+        0x00,  # ................
+        0x00,
+        0x00,  # ................
+        0x0F,
+        0xFC,  # ....##########..
+        0x0F,
+        0xFE,  # ....###########.
+        0x00,
+        0x1E,  # ...........####.
+        0x00,
+        0x0E,  # ............###.
+        0x00,
+        0x06,  # .............##.
+        0x00,
+        0x00,  # ................
+    ]
+)
+
 MODE_ICONS = {
     "demo": ICON_DEMO,
     "sound": ICON_SOUND,
@@ -313,4 +351,5 @@ MODE_ICONS = {
     "mystery": ICON_MYSTERY,
     "settings": ICON_SETTINGS,
     "simon": ICON_SIMON,
+    "rulefollow": ICON_RULEFOLLOW,
 }
