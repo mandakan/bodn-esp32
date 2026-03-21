@@ -1,6 +1,54 @@
 # bodn/ui/input.py — unified input state with debouncing
 
+from micropython import const
+
 from bodn.debounce import Debouncer
+
+_VELOCITY_TIMEOUT_MS = const(200)  # velocity decays to 0 after this idle time
+
+
+class EncoderAccumulator:
+    """Accumulates raw encoder detents into logical units with velocity scaling.
+
+    Consumers instantiate with their own settings. Call update() each frame
+    with the raw delta and velocity from InputState.
+
+    Args:
+        detents_per_unit: raw detent clicks needed for one logical unit.
+        fast_threshold: velocity (steps/s) above which fast_multiplier applies.
+        fast_multiplier: detent scaling factor at high velocity.
+    """
+
+    def __init__(self, detents_per_unit=3, fast_threshold=400, fast_multiplier=2):
+        self._dpu = detents_per_unit
+        self._fast_thresh = fast_threshold
+        self._fast_mult = fast_multiplier
+        self._accum = 0
+
+    def update(self, delta, velocity):
+        """Feed raw delta and velocity, returns logical units to move."""
+        if delta == 0:
+            return 0
+        if velocity >= self._fast_thresh:
+            self._accum += delta * self._fast_mult
+        else:
+            self._accum += delta
+        # Truncate toward zero: extract whole units, keep remainder
+        a = self._accum
+        dpu = self._dpu
+        if a >= dpu:
+            units = a // dpu
+            self._accum = a - units * dpu
+            return units
+        if a <= -dpu:
+            units = -((-a) // dpu)
+            self._accum = a - units * dpu
+            return units
+        return 0
+
+    def reset(self):
+        """Clear accumulated detents (e.g. on screen transition)."""
+        self._accum = 0
 
 
 class InputState:
@@ -32,12 +80,14 @@ class InputState:
         self.sw = [False] * len(switches)
         self.enc_pos = [0] * n_enc
         self.enc_delta = [0] * n_enc
+        self.enc_velocity = [0] * n_enc  # steps/second per encoder
         self.enc_btn_held = [False] * n_enc
         self.enc_btn_pressed = [False] * n_enc
 
         self._prev_btn = [False] * n_btn
         self._prev_enc_pos = [0] * n_enc
         self._prev_enc_btn = [False] * n_enc
+        self._enc_last_step_ms = [0] * n_enc
 
     def scan(self):
         """Read all inputs. Call once per frame."""
@@ -69,17 +119,29 @@ class InputState:
         encoders = self._encoders
         enc_pos = self.enc_pos
         enc_delta = self.enc_delta
+        enc_velocity = self.enc_velocity
         prev_enc_pos = self._prev_enc_pos
         enc_btn_held = self.enc_btn_held
         enc_btn_pressed = self.enc_btn_pressed
         prev_enc_btn = self._prev_enc_btn
         enc_btn_deb = self._enc_btn_deb
+        enc_last_step = self._enc_last_step_ms
 
         for i, enc in enumerate(encoders):
             pos = enc.value
             enc_pos[i] = pos
-            enc_delta[i] = pos - prev_enc_pos[i]
+            d = pos - prev_enc_pos[i]
+            enc_delta[i] = d
             prev_enc_pos[i] = pos
+
+            if d != 0:
+                elapsed = now - enc_last_step[i]
+                if elapsed > 0:
+                    # steps/second: abs(delta) * 1000 / elapsed
+                    enc_velocity[i] = abs(d) * 1000 // elapsed
+                enc_last_step[i] = now
+            elif now - enc_last_step[i] > _VELOCITY_TIMEOUT_MS:
+                enc_velocity[i] = 0
 
             p_btn = prev_enc_btn[i]
             cur_btn = enc_btn_deb[i].update(enc.sw.value(), now)
