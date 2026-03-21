@@ -6,6 +6,7 @@ from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_button_grid
 from bodn.ui.pause import PauseMenu
 from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
+from bodn.i18n import t
 from bodn.patterns import N_LEDS, zone_pulse, zone_chase, ZONE_LID_RING
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
@@ -21,14 +22,14 @@ class MysteryScreen(Screen):
     Hold nav encoder button to open the pause menu (resume / back to menu).
     """
 
-    def __init__(self, np, overlay, secondary_screen=None, on_exit=None):
+    def __init__(self, np, overlay, settings=None, secondary_screen=None, on_exit=None):
         self._np = np
         self._overlay = overlay
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = MysteryEngine()
         self._manager = None
-        self._pause = PauseMenu()
+        self._pause = PauseMenu(settings=settings)
         self._prev_out_type = OUT_IDLE
         self._dirty = True
         self._leds_dirty = True
@@ -176,11 +177,21 @@ class MysteryScreen(Screen):
                     py = ((frame * 11 + i * 23) * 41) % (swatch_h - 8) + swatch_y + 4
                     tft.fill_rect(px, py, 5, 5, theme.WHITE)
                 draw_centered(
-                    tft, "MAGIC!", swatch_y + swatch_h + 4, theme.YELLOW, w, scale=2
+                    tft,
+                    t("mystery_magic"),
+                    swatch_y + swatch_h + 4,
+                    theme.YELLOW,
+                    w,
+                    scale=2,
                 )
             elif out_type == OUT_MIX:
                 draw_centered(
-                    tft, "Mix!", swatch_y + swatch_h + 4, theme.WHITE, w, scale=2
+                    tft,
+                    t("mystery_mix"),
+                    swatch_y + swatch_h + 4,
+                    theme.WHITE,
+                    w,
+                    scale=2,
                 )
         else:
             draw_centered(tft, "?", swatch_y + swatch_h // 4, theme.MUTED, w, scale=4)
@@ -229,11 +240,21 @@ class MysteryScreen(Screen):
                     py = ((frame * 11 + i * 23) * 41) % (swatch_h - 16) + swatch_y + 8
                     tft.fill_rect(px, py, 5, 5, theme.WHITE)
                 draw_centered(
-                    tft, "MAGIC!", swatch_y + swatch_h + 8, theme.YELLOW, w, scale=2
+                    tft,
+                    t("mystery_magic"),
+                    swatch_y + swatch_h + 8,
+                    theme.YELLOW,
+                    w,
+                    scale=2,
                 )
             elif out_type == OUT_MIX:
                 draw_centered(
-                    tft, "Mix!", swatch_y + swatch_h + 8, theme.WHITE, w, scale=2
+                    tft,
+                    t("mystery_mix"),
+                    swatch_y + swatch_h + 8,
+                    theme.WHITE,
+                    w,
+                    scale=2,
                 )
         else:
             draw_centered(tft, "?", swatch_y + swatch_h // 3, theme.MUTED, w, scale=4)

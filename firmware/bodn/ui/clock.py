@@ -24,9 +24,9 @@ class ClockScreen(Screen):
     _TEXT_REL_Y = -20  # offset from CENTER_Y
     _TEXT_H = 38
 
-    def __init__(self):
+    def __init__(self, settings=None):
         self._manager = None
-        self._pause = PauseMenu()
+        self._pause = PauseMenu(settings=settings)
         self._last_sec = -1
         self._dirty = True
 

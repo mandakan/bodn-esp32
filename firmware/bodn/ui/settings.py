@@ -4,19 +4,21 @@ from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered
+from bodn.i18n import t, get_language, set_language, available
 
 NAV = const(0)  # config.ENC_NAV
 
-# Setting definitions: (key, label, type)
-# type: "bool" = toggle, "action" = triggers an action
+# Setting definitions: (key, label_key, type)
+# type: "bool" = toggle, "action" = triggers an action, "lang" = language cycler
 _ITEMS = [
-    ("sessions_enabled", "Sessions", "bool"),
-    ("wifi", "WiFi", "bool"),
-    ("leds", "LEDs", "bool"),
-    ("debug_input", "Debug log", "bool"),
-    ("debug_perf", "Perf stats", "bool"),
-    ("diag", "Diagnostics", "action"),
-    ("back", "< Back", "action"),
+    ("sessions_enabled", "settings_sessions", "bool"),
+    ("wifi", "settings_wifi", "bool"),
+    ("leds", "settings_leds", "bool"),
+    ("language", "pause_lang", "lang"),
+    ("debug_input", "settings_debug", "bool"),
+    ("debug_perf", "settings_perf", "bool"),
+    ("diag", "settings_diag", "action"),
+    ("back", "settings_back", "action"),
 ]
 
 
@@ -63,6 +65,25 @@ class SettingsScreen(Screen):
                 from bodn.ui.diag import DiagScreen
 
                 self._manager.push(DiagScreen())
+            return
+        if key == "language":
+            langs = available()
+            cur = get_language()
+            idx = 0
+            for i in range(len(langs)):
+                if langs[i] == cur:
+                    idx = i
+                    break
+            new_lang = langs[(idx + 1) % len(langs)]
+            set_language(new_lang)
+            self._settings["language"] = new_lang
+            try:
+                from bodn.storage import save_settings
+
+                save_settings(self._settings)
+            except Exception:
+                pass
+            self._dirty = True
             return
         if key == "wifi":
             if self._wifi_ctrl.is_active():
@@ -118,13 +139,13 @@ class SettingsScreen(Screen):
         landscape = w > h
 
         # Title
-        draw_centered(tft, "Settings", 8, theme.WHITE, w, scale=2)
+        draw_centered(tft, t("settings_title"), 8, theme.WHITE, w, scale=2)
 
         # Menu items
         y_start = 40 if landscape else 30
         row_h = 24 if landscape else 20
 
-        for i, (key, label, item_type) in enumerate(_ITEMS):
+        for i, (key, label_key, item_type) in enumerate(_ITEMS):
             y = y_start + i * row_h
             selected = i == self._index
 
@@ -134,6 +155,10 @@ class SettingsScreen(Screen):
 
             # Label
             color = theme.WHITE if selected else theme.MUTED
+            if item_type == "lang":
+                label = t(label_key, get_language().upper())
+            else:
+                label = t(label_key)
             tft.text(label, 12, y + 2, color)
 
             # Value indicator (only for bool items)
@@ -141,7 +166,7 @@ class SettingsScreen(Screen):
                 value = self._get_value(key)
                 if value:
                     tft.fill_rect(w - 40, y, 28, row_h - 6, theme.GREEN)
-                    tft.text("ON", w - 36, y + 2, theme.BLACK)
+                    tft.text(t("on"), w - 36, y + 2, theme.BLACK)
                 else:
                     tft.fill_rect(w - 40, y, 28, row_h - 6, theme.RED)
-                    tft.text("OFF", w - 38, y + 2, theme.BLACK)
+                    tft.text(t("off"), w - 38, y + 2, theme.BLACK)

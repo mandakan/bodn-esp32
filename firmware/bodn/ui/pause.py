@@ -4,13 +4,15 @@ from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_hold_bar
 from bodn.hold_detector import HoldDetector
+from bodn.i18n import t, set_language, get_language, available
 
 NAV = const(0)  # config.ENC_NAV
 
 # Menu items
 _RESUME = const(0)
 _QUIT = const(1)
-_ITEMS = ["Resume", "Back to menu"]
+_LANG = const(2)
+_N_ITEMS = const(3)
 
 # Hold bar: redraw every N% to avoid full-screen redraws.
 # The bar draws directly over the existing framebuffer (4px at y=0)
@@ -47,11 +49,12 @@ class PauseMenu(Screen):
         self._pause.render(tft, theme, frame)
     """
 
-    def __init__(self, hold_ms=1500):
+    def __init__(self, hold_ms=1500, settings=None):
         self._open = False
         self._index = _RESUME
         self._dirty = False
         self._manager = None
+        self._settings = settings
         self._hold = HoldDetector(threshold_ms=hold_ms)
         self._last_hold_step = -1
         self._bar_visible = False  # True when bar pixels are on screen
@@ -137,7 +140,8 @@ class PauseMenu(Screen):
         # Nav encoder rotation scrolls
         delta = inp.enc_delta[NAV]
         if delta != 0:
-            self._index = _QUIT if self._index == _RESUME else _RESUME
+            step = 1 if delta > 0 else -1
+            self._index = (self._index + step) % _N_ITEMS
             if self._manager:
                 mid = self._manager.inp._encoders[NAV]._max // 2
                 self._manager.inp._encoders[NAV].value = mid
@@ -146,6 +150,10 @@ class PauseMenu(Screen):
 
         # Nav encoder button or any play button = confirm
         if inp.enc_btn_pressed[NAV] or inp.any_btn_pressed():
+            if self._index == _LANG:
+                self._cycle_language()
+                self._dirty = True
+                return None
             self._open = False
             self._hold.reset()
             self._dirty = True
@@ -155,6 +163,26 @@ class PauseMenu(Screen):
                 return "quit"
 
         return None
+
+    def _cycle_language(self):
+        """Cycle to the next available language and persist."""
+        langs = available()
+        cur = get_language()
+        idx = 0
+        for i in range(len(langs)):
+            if langs[i] == cur:
+                idx = i
+                break
+        new_lang = langs[(idx + 1) % len(langs)]
+        set_language(new_lang)
+        if self._settings is not None:
+            self._settings["language"] = new_lang
+            try:
+                from bodn.storage import save_settings
+
+                save_settings(self._settings)
+            except Exception:
+                pass
 
     @property
     def needs_render(self):
@@ -179,10 +207,15 @@ class PauseMenu(Screen):
         tft.rect(w // 6, h // 4, w * 2 // 3, h // 2, theme.WHITE)
 
         # Title
-        draw_centered(tft, "PAUSED", h // 4 + 12, theme.WHITE, w, scale=2)
+        draw_centered(tft, t("pause_title"), h // 4 + 12, theme.WHITE, w, scale=2)
 
         # Menu items
-        for i, label in enumerate(_ITEMS):
+        items = [
+            t("pause_resume"),
+            t("pause_quit"),
+            t("pause_lang", get_language().upper()),
+        ]
+        for i, label in enumerate(items):
             y = h // 4 + 48 + i * 24
             selected = i == self._index
             if selected:

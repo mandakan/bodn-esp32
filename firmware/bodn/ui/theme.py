@@ -1,5 +1,7 @@
 # bodn/ui/theme.py — colours and layout constants
 
+from bodn.i18n import t
+
 
 class Theme:
     """Colour palette and layout metrics for the Bodn UI.
@@ -48,8 +50,6 @@ class Theme:
             (255, 128, 0),
             (128, 0, 255),
         ]
-        self.BTN_NAMES = ["Red", "Grn", "Blu", "Yel", "Cyn", "Mag", "Org", "Pur"]
-
         # Layout metrics
         self.FONT_W = 8
         self.FONT_H = 8
@@ -58,3 +58,17 @@ class Theme:
         self.CONTENT_Y = 16
         self.CENTER_X = width // 2
         self.CENTER_Y = height // 2
+
+    @property
+    def BTN_NAMES(self):
+        """Button colour labels — translated on access so language switches take effect."""
+        return [
+            t("btn_red"),
+            t("btn_green"),
+            t("btn_blue"),
+            t("btn_yellow"),
+            t("btn_cyan"),
+            t("btn_magenta"),
+            t("btn_orange"),
+            t("btn_purple"),
+        ]

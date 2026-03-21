@@ -273,6 +273,14 @@ async def _handle_request(reader, writer, session_mgr, settings):
             if body:
                 settings.update(body)
                 storage.save_settings(settings)
+                # Apply language change immediately if included
+                if "language" in body:
+                    try:
+                        from bodn.i18n import set_language
+
+                        set_language(body["language"])
+                    except Exception:
+                        pass
             await _send_json(writer, {"ok": True})
 
         elif method == "POST" and path == "/api/lockdown":

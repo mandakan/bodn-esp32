@@ -5,6 +5,7 @@ from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_button_grid
 from bodn.ui.pause import PauseMenu
+from bodn.i18n import t
 from bodn.simon_rules import (
     SimonEngine,
     READY,
@@ -38,14 +39,14 @@ class SimonScreen(Screen):
     Hold nav encoder button to open the pause menu.
     """
 
-    def __init__(self, np, overlay, secondary_screen=None, on_exit=None):
+    def __init__(self, np, overlay, settings=None, secondary_screen=None, on_exit=None):
         self._np = np
         self._overlay = overlay
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = SimonEngine()
         self._manager = None
-        self._pause = PauseMenu()
+        self._pause = PauseMenu(settings=settings)
         self._prev_state = None
         self._prev_active_btn = -1
         self._dirty = True
@@ -206,13 +207,13 @@ class SimonScreen(Screen):
         held = self._manager.inp.btn_held if self._manager else [False] * 8
 
         if eng.state == READY:
-            draw_centered(tft, "PATTERN COPY", 20, theme.CYAN, w, scale=2)
-            draw_centered(tft, "Watch & repeat!", h // 2 - 8, theme.WHITE, w)
-            draw_centered(tft, "Press any button", h // 2 + 16, theme.MUTED, w)
+            draw_centered(tft, t("simon_title"), 20, theme.CYAN, w, scale=2)
+            draw_centered(tft, t("simon_watch_repeat"), h // 2 - 8, theme.WHITE, w)
+            draw_centered(tft, t("simon_press_start"), h // 2 + 16, theme.MUTED, w)
             if eng.high_score > 0:
                 draw_centered(
                     tft,
-                    "Best: {}".format(eng.high_score),
+                    t("simon_best", eng.high_score),
                     h - 30,
                     theme.YELLOW,
                     w,
@@ -220,10 +221,10 @@ class SimonScreen(Screen):
             return
 
         if eng.state == GAME_OVER:
-            draw_centered(tft, "GREAT JOB!", 30, theme.YELLOW, w, scale=2)
+            draw_centered(tft, t("simon_great"), 30, theme.YELLOW, w, scale=2)
             draw_centered(
                 tft,
-                "Score: {}".format(eng.score),
+                t("simon_score", eng.score),
                 h // 2 - 8,
                 theme.WHITE,
                 w,
@@ -231,9 +232,9 @@ class SimonScreen(Screen):
             )
             if eng.high_score > 0:
                 draw_centered(
-                    tft, "Best: {}".format(eng.high_score), h // 2 + 24, theme.CYAN, w
+                    tft, t("simon_best", eng.high_score), h // 2 + 24, theme.CYAN, w
                 )
-            draw_centered(tft, "Press to play again", h - 30, theme.MUTED, w)
+            draw_centered(tft, t("simon_press_again"), h - 30, theme.MUTED, w)
             return
 
         # --- Active game states ---
@@ -241,13 +242,13 @@ class SimonScreen(Screen):
         # Top: state label + round info
         round_num = eng.sequence_length
         if eng.state == SHOWING:
-            draw_centered(tft, "WATCH!", 8, theme.YELLOW, w, scale=2)
+            draw_centered(tft, t("simon_watch"), 8, theme.YELLOW, w, scale=2)
         elif eng.state == WAITING:
-            draw_centered(tft, "YOUR TURN!", 8, theme.GREEN, w, scale=2)
+            draw_centered(tft, t("simon_your_turn"), 8, theme.GREEN, w, scale=2)
         elif eng.state == WIN:
-            draw_centered(tft, "YES!", 8, theme.YELLOW, w, scale=2)
+            draw_centered(tft, t("simon_yes"), 8, theme.YELLOW, w, scale=2)
         elif eng.state == FAIL:
-            draw_centered(tft, "TRY AGAIN", 8, theme.RED, w, scale=2)
+            draw_centered(tft, t("simon_try_again"), 8, theme.RED, w, scale=2)
 
         # Sequence display: colored dots showing the pattern
         dot_y = 40
@@ -301,9 +302,9 @@ class SimonScreen(Screen):
         )
 
         # Bottom bar: score
-        tft.text("Round {}".format(round_num), 8, h - 14, theme.MUTED)
+        tft.text(t("simon_round", round_num), 8, h - 14, theme.MUTED)
         if eng.high_score > 0:
-            hs_text = "Best:{}".format(eng.high_score)
+            hs_text = t("simon_best_short", eng.high_score)
             tft.text(hs_text, w - len(hs_text) * 8 - 8, h - 14, theme.YELLOW)
 
     def _render_portrait(self, tft, theme, frame):
@@ -313,30 +314,30 @@ class SimonScreen(Screen):
         held = self._manager.inp.btn_held if self._manager else [False] * 8
 
         if eng.state == READY:
-            draw_centered(tft, "PATTERN", 20, theme.CYAN, w, scale=2)
-            draw_centered(tft, "COPY", 40, theme.CYAN, w, scale=2)
-            draw_centered(tft, "Watch &", h // 2 - 16, theme.WHITE, w)
-            draw_centered(tft, "repeat!", h // 2, theme.WHITE, w)
-            draw_centered(tft, "Press to start", h - 30, theme.MUTED, w)
+            draw_centered(tft, t("simon_title_p1"), 20, theme.CYAN, w, scale=2)
+            draw_centered(tft, t("simon_title_p2"), 40, theme.CYAN, w, scale=2)
+            draw_centered(tft, t("simon_watch_repeat_p1"), h // 2 - 16, theme.WHITE, w)
+            draw_centered(tft, t("simon_watch_repeat_p2"), h // 2, theme.WHITE, w)
+            draw_centered(tft, t("simon_press_start_short"), h - 30, theme.MUTED, w)
             return
 
         if eng.state == GAME_OVER:
-            draw_centered(tft, "GREAT!", 20, theme.YELLOW, w, scale=2)
+            draw_centered(tft, t("simon_great_short"), 20, theme.YELLOW, w, scale=2)
             draw_centered(
-                tft, "Score:{}".format(eng.score), h // 2, theme.WHITE, w, scale=2
+                tft, t("simon_score_short", eng.score), h // 2, theme.WHITE, w, scale=2
             )
-            draw_centered(tft, "Press again", h - 20, theme.MUTED, w)
+            draw_centered(tft, t("simon_press_again_short"), h - 20, theme.MUTED, w)
             return
 
         # State label
         if eng.state == SHOWING:
-            draw_centered(tft, "WATCH!", 4, theme.YELLOW, w)
+            draw_centered(tft, t("simon_watch"), 4, theme.YELLOW, w)
         elif eng.state == WAITING:
-            draw_centered(tft, "YOUR TURN!", 4, theme.GREEN, w)
+            draw_centered(tft, t("simon_your_turn"), 4, theme.GREEN, w)
         elif eng.state == WIN:
-            draw_centered(tft, "YES!", 4, theme.YELLOW, w)
+            draw_centered(tft, t("simon_yes"), 4, theme.YELLOW, w)
         elif eng.state == FAIL:
-            draw_centered(tft, "TRY AGAIN", 4, theme.RED, w)
+            draw_centered(tft, t("simon_try_again"), 4, theme.RED, w)
 
         # Sequence dots
         round_num = eng.sequence_length
@@ -385,4 +386,4 @@ class SimonScreen(Screen):
         )
 
         # Score
-        tft.text("R{}".format(round_num), 4, h - 12, theme.MUTED)
+        tft.text(t("simon_round_short", round_num), 4, h - 12, theme.MUTED)

@@ -25,6 +25,7 @@ DEFAULT_SETTINGS = {
     "sessions_enabled": True,
     "mode_limits": {},
     "debug_input": False,
+    "language": "sv",
 }
 
 # Keep 7 days of session history

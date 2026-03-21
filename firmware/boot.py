@@ -78,22 +78,35 @@ BAR_Y = _h * 5 // 8
 BAR_H = max(10, _h // 16)
 N_LEDS = config.NEOPIXEL_COUNT if tft else 0
 
-# Boot steps: (label, message, LED colour)
+# Boot steps: (label, message_key, LED colour)
+# message_key is used with i18n.t() after settings are loaded;
+# before that, the raw key is shown (acceptable for a brief moment).
 STEPS = [
-    ("CFG", "Waking up...", (80, 40, 120)),
-    ("NET", "Finding friends...", (0, 120, 200)),
-    ("NTP", "What time is it?", (200, 120, 0)),
-    ("GO!", "Let's go!", (0, 200, 80)),
+    ("CFG", "boot_cfg", (80, 40, 120)),
+    ("NET", "boot_net", (0, 120, 200)),
+    ("NTP", "boot_ntp", (200, 120, 0)),
+    ("GO!", "boot_go", (0, 200, 80)),
 ]
 
 # Per-step result: None=pending, "ok", "warn", "fail", "skip"
 _results = [None] * len(STEPS)
 
 
-def _show_progress(step, message, led_rgb, detail=None, detail_col=None):
+def _translate(key):
+    """Try to translate a boot message key; return key itself if i18n not ready."""
+    try:
+        from bodn.i18n import t
+
+        return t(key)
+    except Exception:
+        return key
+
+
+def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
     """Draw boot screen with progress bar and status dots."""
     if not tft:
         return
+    message = _translate(message_key)
 
     total = len(STEPS)
     tft.fill(COL_BLACK)
@@ -171,6 +184,13 @@ try:
 
     settings = load_settings()
     _results[0] = "ok"
+    # Init i18n early so boot messages can be translated
+    try:
+        from bodn.i18n import init as _i18n_init
+
+        _i18n_init(settings.get("language", "sv"))
+    except Exception:
+        pass
 except Exception as e:
     print("Settings load failed:", e)
     _results[0] = "fail"

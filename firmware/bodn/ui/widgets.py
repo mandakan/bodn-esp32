@@ -2,28 +2,71 @@
 
 
 import framebuf
+from bodn.ui.font_ext import GLYPHS as _EXT_GLYPHS
 
 # Pre-allocated buffer for scaled text rendering (8×8 RGB565 = 128 bytes)
 _char_buf = bytearray(8 * 8 * 2)
 _char_fb = framebuf.FrameBuffer(_char_buf, 8, 8, framebuf.RGB565)
 
 
+def _draw_ext_char(tft, glyph, x, y, color, scale):
+    """Draw an 8×8 extended glyph (bytes, 1bpp row-major, MSB-first)."""
+    for row in range(8):
+        byte = glyph[row]
+        if byte == 0:
+            continue
+        for col in range(8):
+            if byte & (0x80 >> col):
+                if scale <= 1:
+                    tft.pixel(x + col, y + row, color)
+                else:
+                    tft.fill_rect(x + col * scale, y + row * scale, scale, scale, color)
+
+
 def draw_label(tft, text, x, y, color, scale=1):
-    """Draw text at (x, y). scale=1 uses built-in font, scale>1 enlarges."""
+    """Draw text at (x, y). scale=1 uses built-in font, scale>1 enlarges.
+
+    Supports Swedish characters (å ä ö Å Ä Ö) via extended font glyphs.
+    """
     if scale <= 1:
-        tft.text(text, x, y, color)
+        # Fast path: render ASCII spans with built-in font, extended chars individually
+        cx = x
+        ascii_start = cx
+        ascii_buf = []
+        for ch in text:
+            glyph = _EXT_GLYPHS.get(ch)
+            if glyph:
+                # Flush any pending ASCII characters
+                if ascii_buf:
+                    tft.text("".join(ascii_buf), ascii_start, y, color)
+                    ascii_buf = []
+                _draw_ext_char(tft, glyph, cx, y, color, 1)
+                cx += 8
+                ascii_start = cx
+            else:
+                ascii_buf.append(ch)
+                cx += 8
+        if ascii_buf:
+            tft.text("".join(ascii_buf), ascii_start, y, color)
         return
+
     # Scale > 1: draw each character enlarged via fill_rect per pixel.
     # MicroPython framebuf font is 8×8.  We render into a tiny 1-char
     # buffer and read pixels back to scale them up.
     cx = x
     for ch in text:
-        _char_fb.fill(0)
-        _char_fb.text(ch, 0, 0, 0xFFFF)
-        for py in range(8):
-            for px in range(8):
-                if _char_fb.pixel(px, py) != 0:
-                    tft.fill_rect(cx + px * scale, y + py * scale, scale, scale, color)
+        glyph = _EXT_GLYPHS.get(ch)
+        if glyph:
+            _draw_ext_char(tft, glyph, cx, y, color, scale)
+        else:
+            _char_fb.fill(0)
+            _char_fb.text(ch, 0, 0, 0xFFFF)
+            for py in range(8):
+                for px in range(8):
+                    if _char_fb.pixel(px, py) != 0:
+                        tft.fill_rect(
+                            cx + px * scale, y + py * scale, scale, scale, color
+                        )
         cx += 8 * scale
 
 

@@ -27,6 +27,7 @@ from bodn.ui.home import HomeScreen
 from bodn.ui.demo import DemoScreen
 from bodn.ui.clock import ClockScreen
 from bodn.ui.ambient import StatusStrip
+from bodn import i18n
 
 ENC_STEPS = const(20)
 N_LEDS = const(108)  # config.NEOPIXEL_COUNT
@@ -140,21 +141,35 @@ def create_ui(
 
         _reset_secondary()
         return MysteryScreen(
-            np, overlay, secondary_screen=cat, on_exit=_reset_secondary
+            np,
+            overlay,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
         )
 
     def _make_simon():
         from bodn.ui.simon import SimonScreen
 
         _reset_secondary()
-        return SimonScreen(np, overlay, secondary_screen=cat, on_exit=_reset_secondary)
+        return SimonScreen(
+            np,
+            overlay,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
+        )
 
     def _make_rulefollow():
         from bodn.ui.rulefollow import RuleFollowScreen
 
         _reset_secondary()
         return RuleFollowScreen(
-            np, overlay, secondary_screen=cat, on_exit=_reset_secondary
+            np,
+            overlay,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
         )
 
     def _make_settings():
@@ -169,9 +184,9 @@ def create_ui(
         "rulefollow": _make_rulefollow,
         "demo": lambda: (
             _reset_secondary(),
-            DemoScreen(np, overlay, enc_steps=ENC_STEPS),
+            DemoScreen(np, overlay, enc_steps=ENC_STEPS, settings=settings),
         )[1],
-        "clock": lambda: (_reset_secondary(), ClockScreen())[1],
+        "clock": lambda: (_reset_secondary(), ClockScreen(settings=settings))[1],
         "settings": _make_settings,
     }
     home = HomeScreen(
@@ -269,6 +284,7 @@ async def housekeeping_task(session_mgr):
 async def main():
     """Entry point: start web server + UI loop concurrently."""
     settings = storage.load_settings()
+    i18n.init(settings.get("language", "sv"))
 
     def get_time():
         return time.time()
