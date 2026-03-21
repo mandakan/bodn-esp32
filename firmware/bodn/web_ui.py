@@ -127,6 +127,7 @@ th{color:#aaa}
 <div class="field"><label>Break between sessions <span class="rv" id="rv-brk">15 min</span></label><input type="range" id="break_min" min="1" max="60" value="15" oninput="updRv(this,'rv-brk',' min')"></div>
 <div class="field"><label>Quiet start (HH:MM, empty=off)</label><input class="input-field" type="text" id="quiet_start" placeholder="21:00"></div>
 <div class="field"><label>Quiet end (HH:MM)</label><input class="input-field" type="text" id="quiet_end" placeholder="07:00"></div>
+<div class="field"><label>Device language</label><select id="language" class="input-field"><option value="sv">Svenska</option><option value="en">English</option></select></div>
 <h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Per-mode limits</h3>
 <p style="font-size:0.75em;color:#666;margin:4px 0">Minutes per session. Empty = use global. 0 = unlimited.</p>
 <div id="mode-limits"></div>
@@ -218,7 +219,7 @@ var r=await fetch('/api/settings');var d=await r.json();
 ['max_session_min','max_sessions_day','break_min'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k];
 });
-['quiet_start','quiet_end','wifi_ssid','wifi_pass','wifi_mode','ui_pin','ota_token'].forEach(function(k){
+['quiet_start','quiet_end','wifi_ssid','wifi_pass','wifi_mode','ui_pin','ota_token','language'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k]||'';
 });
 var se=document.getElementById('sessions-enabled');if(se)se.checked=d.sessions_enabled!==false;
@@ -248,6 +249,7 @@ body[k]=parseInt(document.getElementById(k).value);
 var v=document.getElementById(k).value.trim();
 body[k]=v||null;
 });
+var langEl=document.getElementById('language');if(langEl)body.language=langEl.value;
 var ml={};
 ['free_play','sound_mixer','recorder','sequencer'].forEach(function(m){
 var el=document.getElementById('ml_'+m);

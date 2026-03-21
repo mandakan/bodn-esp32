@@ -78,22 +78,72 @@ BAR_Y = _h * 5 // 8
 BAR_H = max(10, _h // 16)
 N_LEDS = config.NEOPIXEL_COUNT if tft else 0
 
-# Boot steps: (label, message, LED colour)
+# Boot steps: (label, message_key, LED colour)
+# message_key is used with i18n.t() after settings are loaded;
+# before that, the raw key is shown (acceptable for a brief moment).
 STEPS = [
-    ("CFG", "Waking up...", (80, 40, 120)),
-    ("NET", "Finding friends...", (0, 120, 200)),
-    ("NTP", "What time is it?", (200, 120, 0)),
-    ("GO!", "Let's go!", (0, 200, 80)),
+    ("CFG", "boot_cfg", (80, 40, 120)),
+    ("NET", "boot_net", (0, 120, 200)),
+    ("NTP", "boot_ntp", (200, 120, 0)),
+    ("GO!", "boot_go", (0, 200, 80)),
 ]
 
 # Per-step result: None=pending, "ok", "warn", "fail", "skip"
 _results = [None] * len(STEPS)
 
 
-def _show_progress(step, message, led_rgb, detail=None, detail_col=None):
+def _translate(key):
+    """Try to translate a boot message key; return key itself if i18n not ready."""
+    try:
+        from bodn.i18n import t
+
+        return t(key)
+    except Exception:
+        return key
+
+
+# Load extended font glyphs for Swedish characters (å ä ö etc.)
+try:
+    from bodn.ui.font_ext import GLYPHS as _EXT_GLYPHS
+except ImportError:
+    _EXT_GLYPHS = {}
+
+
+def _boot_text(tft, text, x, y, color):
+    """Draw text with extended glyph support (boot screen version).
+
+    Like widgets.draw_label() but standalone — no widget imports needed.
+    """
+    cx = x
+    ascii_start = cx
+    ascii_buf = []
+    for ch in text:
+        glyph = _EXT_GLYPHS.get(ch)
+        if glyph:
+            if ascii_buf:
+                tft.text("".join(ascii_buf), ascii_start, y, color)
+                ascii_buf = []
+            for row in range(8):
+                byte = glyph[row]
+                if byte == 0:
+                    continue
+                for col in range(8):
+                    if byte & (0x80 >> col):
+                        tft.pixel(cx + col, y + row, color)
+            cx += 8
+            ascii_start = cx
+        else:
+            ascii_buf.append(ch)
+            cx += 8
+    if ascii_buf:
+        tft.text("".join(ascii_buf), ascii_start, y, color)
+
+
+def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
     """Draw boot screen with progress bar and status dots."""
     if not tft:
         return
+    message = _translate(message_key)
 
     total = len(STEPS)
     tft.fill(COL_BLACK)
@@ -104,11 +154,11 @@ def _show_progress(step, message, led_rgb, detail=None, detail_col=None):
     # Title — centered
     title = "~ Bodn ~"
     tx = (w - len(title) * 8) // 2
-    tft.text(title, tx, h // 8, COL_TITLE)
+    _boot_text(tft, title, tx, h // 8, COL_TITLE)
 
     # Whimsical message — centered
     mx = max(0, (w - len(message) * 8) // 2)
-    tft.text(message, mx, h * 3 // 8, COL_WHITE)
+    _boot_text(tft, message, mx, h * 3 // 8, COL_WHITE)
 
     # Progress bar
     tft.fill_rect(BAR_X, BAR_Y, BAR_W, BAR_H, COL_BAR_BG)
@@ -171,6 +221,13 @@ try:
 
     settings = load_settings()
     _results[0] = "ok"
+    # Init i18n early so boot messages can be translated
+    try:
+        from bodn.i18n import init as _i18n_init
+
+        _i18n_init(settings.get("language", "sv"))
+    except Exception:
+        pass
 except Exception as e:
     print("Settings load failed:", e)
     _results[0] = "fail"

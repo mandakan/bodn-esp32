@@ -6,6 +6,7 @@ from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_progress_bar, draw_battery_icon
 from bodn.ui.secondary import STATUS_Y, STATUS_H
 import bodn.battery as battery
+from bodn.i18n import t as _t
 
 _AMBIENT_TEXT_Y = 38  # 2px above clock at y=40 (scale=3, h=24)
 _AMBIENT_TEXT_H = 52  # covers clock (40..64) and date (80..88) with margin
@@ -142,7 +143,7 @@ class StatusStrip(Screen):
         elif state == IDLE:
             remaining = self._session_mgr.sessions_remaining
             color = theme.GREEN if remaining > 0 else theme.RED
-            label = "{} plays".format(remaining)
+            label = _t("plays", remaining)
             x_right = w - len(label) * 8 - 2
             tft.text(label, x_right, y0 + 2, color)
 

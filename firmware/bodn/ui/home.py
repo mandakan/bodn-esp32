@@ -4,6 +4,7 @@ from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.icons import MODE_ICONS
 from bodn.ui.widgets import draw_icon, draw_centered
+from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
 
@@ -69,7 +70,7 @@ class HomeScreen(Screen):
 
         # Show error on screen if a mode failed to load
         if self._error:
-            tft.text("ERR: " + self._error_mode, 4, 4, theme.RED)
+            tft.text("ERR: " + str(self._error_mode), 4, 4, theme.RED)
             # Word-wrap error message
             msg = self._error
             y = 20
@@ -77,14 +78,16 @@ class HomeScreen(Screen):
                 tft.text(msg[: theme.width // 8], 4, y, theme.WHITE)
                 msg = msg[theme.width // 8 :]
                 y += 12
-            tft.text("press to clear", 4, theme.height - 12, theme.MUTED)
+            tft.text(t("home_press_clear"), 4, theme.height - 12, theme.MUTED)
             if self._manager and self._manager.inp.any_btn_pressed():
                 self._error = None
                 self._dirty = True
             return
 
         if not self._names:
-            draw_centered(tft, "No modes", theme.CENTER_Y, theme.MUTED, theme.width)
+            draw_centered(
+                tft, t("home_no_modes"), theme.CENTER_Y, theme.MUTED, theme.width
+            )
             return
 
         name = self._names[self._index]
@@ -101,7 +104,7 @@ class HomeScreen(Screen):
         h = theme.height
 
         # Title — centered at top
-        draw_centered(tft, "~ Bodn ~", 8, theme.WHITE, w, scale=2)
+        draw_centered(tft, t("home_title"), 8, theme.WHITE, w, scale=2)
 
         # Icon — centered
         icon_data = MODE_ICONS.get(name)
@@ -114,21 +117,21 @@ class HomeScreen(Screen):
 
         # Mode name — centered below icon
         name_y = 40 + icon_size + 12
-        draw_centered(tft, name.upper(), name_y, theme.CYAN, w, scale=2)
+        draw_centered(tft, t("mode_" + name).upper(), name_y, theme.CYAN, w, scale=2)
 
         # Arrow hints
         n = len(self._names)
         if n > 1:
-            draw_centered(tft, "< turn to browse >", name_y + 24, theme.MUTED, w)
+            draw_centered(tft, t("home_browse"), name_y + 24, theme.MUTED, w)
 
         # Sessions remaining — bottom center
         remaining = self._session_mgr.sessions_remaining
         color = theme.GREEN if remaining > 0 else theme.RED
-        draw_centered(tft, "{} plays left".format(remaining), h - 20, color, w)
+        draw_centered(tft, t("home_plays_left", remaining), h - 20, color, w)
 
     def _render_portrait(self, tft, theme, frame, name):
         """Portrait layout: icon centered, stacked vertically."""
-        draw_centered(tft, "~ Bodn ~", theme.HEADER_Y, theme.WHITE, theme.width)
+        draw_centered(tft, t("home_title"), theme.HEADER_Y, theme.WHITE, theme.width)
 
         icon_data = MODE_ICONS.get(name)
         if icon_data:
@@ -138,7 +141,13 @@ class HomeScreen(Screen):
             iy = theme.CENTER_Y - icon_size // 2 - 8
             draw_icon(tft, icon_data, ix, iy, 16, 16, theme.CYAN, scale=icon_scale)
 
-        draw_centered(tft, name.upper(), theme.CENTER_Y + 24, theme.WHITE, theme.width)
+        draw_centered(
+            tft,
+            t("mode_" + name).upper(),
+            theme.CENTER_Y + 24,
+            theme.WHITE,
+            theme.width,
+        )
 
         n = len(self._names)
         if n > 1:
@@ -147,4 +156,4 @@ class HomeScreen(Screen):
 
         remaining = self._session_mgr.sessions_remaining
         color = theme.GREEN if remaining > 0 else theme.RED
-        tft.text("{} plays left".format(remaining), 16, theme.height - 16, color)
+        tft.text(t("home_plays_left", remaining), 16, theme.height - 16, color)

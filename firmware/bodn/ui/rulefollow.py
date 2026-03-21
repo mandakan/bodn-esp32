@@ -5,6 +5,7 @@ from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_button_grid
 from bodn.ui.pause import PauseMenu
+from bodn.i18n import t
 from bodn.rulefollow_rules import (
     RuleFollowEngine,
     READY,
@@ -56,7 +57,15 @@ class RuleFollowScreen(Screen):
     Hold nav encoder button to open the pause menu.
     """
 
-    def __init__(self, np, overlay, audio=None, secondary_screen=None, on_exit=None):
+    def __init__(
+        self,
+        np,
+        overlay,
+        audio=None,
+        settings=None,
+        secondary_screen=None,
+        on_exit=None,
+    ):
         self._np = np
         self._overlay = overlay
         self._audio = audio
@@ -64,7 +73,7 @@ class RuleFollowScreen(Screen):
         self._on_exit = on_exit
         self._engine = RuleFollowEngine()
         self._manager = None
-        self._pause = PauseMenu()
+        self._pause = PauseMenu(settings=settings)
         self._prev_state = None
         self._dirty = True
         self._leds_dirty = True
@@ -207,14 +216,14 @@ class RuleFollowScreen(Screen):
         held = self._manager.inp.btn_held if self._manager else [False] * 8
 
         if eng.state == READY:
-            draw_centered(tft, "RULE FOLLOW", 20, theme.CYAN, w, scale=2)
-            draw_centered(tft, "Watch the rule,", h // 2 - 16, theme.WHITE, w)
-            draw_centered(tft, "press the color!", h // 2 + 4, theme.WHITE, w)
-            draw_centered(tft, "Press any button", h - 30, theme.MUTED, w)
+            draw_centered(tft, t("rf_title"), 20, theme.CYAN, w, scale=2)
+            draw_centered(tft, t("rf_instructions1"), h // 2 - 16, theme.WHITE, w)
+            draw_centered(tft, t("rf_instructions2"), h // 2 + 4, theme.WHITE, w)
+            draw_centered(tft, t("rf_press_start"), h - 30, theme.MUTED, w)
             return
 
         if eng.state == GAME_OVER:
-            draw_centered(tft, "GREAT JOB!", 20, theme.YELLOW, w, scale=2)
+            draw_centered(tft, t("rf_great"), 20, theme.YELLOW, w, scale=2)
             draw_centered(
                 tft,
                 "{}/{}".format(eng.score, eng.total),
@@ -226,19 +235,21 @@ class RuleFollowScreen(Screen):
             if eng.best_streak > 0:
                 draw_centered(
                     tft,
-                    "Best streak: {}".format(eng.best_streak),
+                    t("rf_best_streak", eng.best_streak),
                     h // 2 + 20,
                     theme.CYAN,
                     w,
                 )
-            draw_centered(tft, "Press to play again", h - 30, theme.MUTED, w)
+            draw_centered(tft, t("rf_press_again"), h - 30, theme.MUTED, w)
             return
 
         # --- Active game states ---
         rule_565 = theme.rgb(*RULE_COLORS[eng.current_rule])
 
         if eng.state == SHOW_RULE:
-            rule_name = "MATCH!" if eng.current_rule == RULE_MATCH else "OPPOSITE!"
+            rule_name = (
+                t("rf_match") if eng.current_rule == RULE_MATCH else t("rf_opposite")
+            )
             draw_centered(tft, rule_name, 20, rule_565, w, scale=2)
             # Draw rule pictogram: circle for match, X for opposite
             cx = w // 2
@@ -247,14 +258,20 @@ class RuleFollowScreen(Screen):
             return
 
         if eng.state == RULE_SWITCH:
-            draw_centered(tft, "NEW RULE!", 20, theme.YELLOW, w, scale=2)
-            rule_name = "MATCH!" if eng.current_rule == RULE_MATCH else "OPPOSITE!"
+            draw_centered(tft, t("rf_new_rule"), 20, theme.YELLOW, w, scale=2)
+            rule_name = (
+                t("rf_match") if eng.current_rule == RULE_MATCH else t("rf_opposite")
+            )
             draw_centered(tft, rule_name, h // 2 - 8, rule_565, w, scale=2)
             return
 
         if eng.state == STIMULUS:
             # Rule reminder at top
-            rule_label = "Match" if eng.current_rule == RULE_MATCH else "Opposite"
+            rule_label = (
+                t("rf_match_short")
+                if eng.current_rule == RULE_MATCH
+                else t("rf_opposite_short")
+            )
             draw_centered(tft, rule_label, 4, rule_565, w)
 
             # Big stimulus color block
@@ -293,7 +310,7 @@ class RuleFollowScreen(Screen):
             return
 
         if eng.state == CORRECT:
-            draw_centered(tft, "YES!", 30, theme.GREEN, w, scale=2)
+            draw_centered(tft, t("rf_yes"), 30, theme.GREEN, w, scale=2)
             # Show what the correct answer was
             stim_color = theme.rgb(*BTN_COLORS[eng.stimulus_button])
             block = min(40, h // 4)
@@ -302,7 +319,7 @@ class RuleFollowScreen(Screen):
             )
             draw_centered(
                 tft,
-                "Streak: {}".format(eng.streak),
+                t("rf_streak", eng.streak),
                 h - 30,
                 theme.CYAN,
                 w,
@@ -310,7 +327,7 @@ class RuleFollowScreen(Screen):
             return
 
         if eng.state == WRONG:
-            draw_centered(tft, "TRY AGAIN", 30, theme.RED, w, scale=2)
+            draw_centered(tft, t("rf_try_again"), 30, theme.RED, w, scale=2)
             # Show what the correct color was
             if eng.correct_button >= 0:
                 correct_color = theme.rgb(*BTN_COLORS[eng.correct_button])
@@ -334,15 +351,15 @@ class RuleFollowScreen(Screen):
         held = self._manager.inp.btn_held if self._manager else [False] * 8
 
         if eng.state == READY:
-            draw_centered(tft, "RULE", 20, theme.CYAN, w, scale=2)
-            draw_centered(tft, "FOLLOW", 40, theme.CYAN, w, scale=2)
-            draw_centered(tft, "Watch &", h // 2 - 16, theme.WHITE, w)
-            draw_centered(tft, "press!", h // 2, theme.WHITE, w)
-            draw_centered(tft, "Press to start", h - 20, theme.MUTED, w)
+            draw_centered(tft, t("rf_title_p1"), 20, theme.CYAN, w, scale=2)
+            draw_centered(tft, t("rf_title_p2"), 40, theme.CYAN, w, scale=2)
+            draw_centered(tft, t("rf_instructions_p1"), h // 2 - 16, theme.WHITE, w)
+            draw_centered(tft, t("rf_instructions_p2"), h // 2, theme.WHITE, w)
+            draw_centered(tft, t("rf_press_start"), h - 20, theme.MUTED, w)
             return
 
         if eng.state == GAME_OVER:
-            draw_centered(tft, "GREAT!", 20, theme.YELLOW, w, scale=2)
+            draw_centered(tft, t("rf_great_short"), 20, theme.YELLOW, w, scale=2)
             draw_centered(
                 tft,
                 "{}/{}".format(eng.score, eng.total),
@@ -354,18 +371,20 @@ class RuleFollowScreen(Screen):
             if eng.best_streak > 0:
                 draw_centered(
                     tft,
-                    "Streak:{}".format(eng.best_streak),
+                    t("rf_streak_short", eng.best_streak),
                     h // 2 + 20,
                     theme.CYAN,
                     w,
                 )
-            draw_centered(tft, "Press again", h - 16, theme.MUTED, w)
+            draw_centered(tft, t("rf_press_again_short"), h - 16, theme.MUTED, w)
             return
 
         rule_565 = theme.rgb(*RULE_COLORS[eng.current_rule])
 
         if eng.state == SHOW_RULE:
-            rule_name = "MATCH!" if eng.current_rule == RULE_MATCH else "OPPOSITE!"
+            rule_name = (
+                t("rf_match") if eng.current_rule == RULE_MATCH else t("rf_opposite")
+            )
             draw_centered(tft, rule_name, 8, rule_565, w, scale=2)
             cx = w // 2
             cy = h // 2
@@ -373,14 +392,20 @@ class RuleFollowScreen(Screen):
             return
 
         if eng.state == RULE_SWITCH:
-            draw_centered(tft, "NEW", 20, theme.YELLOW, w, scale=2)
-            draw_centered(tft, "RULE!", 44, theme.YELLOW, w, scale=2)
-            rule_name = "MATCH!" if eng.current_rule == RULE_MATCH else "OPPOSITE!"
+            draw_centered(tft, t("rf_new_rule_p1"), 20, theme.YELLOW, w, scale=2)
+            draw_centered(tft, t("rf_new_rule_p2"), 44, theme.YELLOW, w, scale=2)
+            rule_name = (
+                t("rf_match") if eng.current_rule == RULE_MATCH else t("rf_opposite")
+            )
             draw_centered(tft, rule_name, h // 2, rule_565, w)
             return
 
         if eng.state == STIMULUS:
-            rule_label = "Match" if eng.current_rule == RULE_MATCH else "Opposite"
+            rule_label = (
+                t("rf_match_short")
+                if eng.current_rule == RULE_MATCH
+                else t("rf_opposite_short")
+            )
             draw_centered(tft, rule_label, 2, rule_565, w)
 
             stim_color = theme.rgb(*BTN_COLORS[eng.stimulus_button])
@@ -411,11 +436,11 @@ class RuleFollowScreen(Screen):
             return
 
         if eng.state == CORRECT:
-            draw_centered(tft, "YES!", 20, theme.GREEN, w, scale=2)
+            draw_centered(tft, t("rf_yes"), 20, theme.GREEN, w, scale=2)
             return
 
         if eng.state == WRONG:
-            draw_centered(tft, "TRY AGAIN", 20, theme.RED, w)
+            draw_centered(tft, t("rf_try_again"), 20, theme.RED, w)
             if eng.correct_button >= 0:
                 correct_color = theme.rgb(*BTN_COLORS[eng.correct_button])
                 block = min(30, w // 3)

@@ -2,6 +2,7 @@
 
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered
+from bodn.i18n import t
 
 
 class DiagScreen(Screen):
@@ -41,7 +42,7 @@ class DiagScreen(Screen):
         self._dirty = False
         tft.fill(theme.BLACK)
 
-        draw_centered(tft, "~ Diagnostics ~", 4, theme.AMBER, theme.width)
+        draw_centered(tft, t("diag_title"), 4, theme.AMBER, theme.width)
 
         line_h = 14
         y = 22
@@ -52,5 +53,5 @@ class DiagScreen(Screen):
             y += line_h
 
         draw_centered(
-            tft, "Press any button", theme.height - 16, theme.CYAN, theme.width
+            tft, t("diag_dismiss"), theme.height - 16, theme.CYAN, theme.width
         )

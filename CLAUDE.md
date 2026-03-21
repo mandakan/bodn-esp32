@@ -21,6 +21,7 @@
   - The `diagram.json` wires all 8 buttons (GPA0–7) and all 4 toggle switches (GPB0–3) through `mcp1` — do not bypass these with direct ESP GPIO connections in the diagram
 - **UX design**: when designing screens, game modes, interactions, or feedback, follow `docs/UX_GUIDELINES.md`. Key rules: one concept per screen, large icons over text, immediate multimodal feedback, max 3–4 active choices, no complex gestures. Games should target executive functions (working memory, inhibition, cognitive flexibility) at a 4-year-old level.
 - **Performance**: follow `docs/PERFORMANCE_GUIDELINES.md`. Key rules: event-driven over polling, no full-screen redraws every frame, cooperative async tasks, minimal per-frame allocations, sparse `print()` usage. The review checklist (section 10) applies to all code changes.
+- **i18n**: all user-facing UI strings go through `bodn/i18n.py`. Never hardcode display text in screen modules — use `from bodn.i18n import t` and `t("key")` or `t("key", arg)`. Swedish is the default language. String keys follow `screen_concept` naming (e.g. `simon_watch`, `pause_resume`). Translation files live in `firmware/bodn/lang/sv.py` and `firmware/bodn/lang/en.py`. When adding new strings, add to **both** language files. The `test_i18n.py` test enforces key parity. Extended font glyphs for å, ä, ö, Å, Ä, Ö are in `bodn/ui/font_ext.py`. The web UI stays in English (parent-facing).
 
 ## Project overview
 
@@ -69,6 +70,10 @@ bodn-esp32/
 │     ├─ audio.py           # async AudioEngine (3-channel priority playback)
 │     ├─ config.py          # pin assignments, constants
 │     ├─ debounce.py        # generic debounce logic
+│     ├─ i18n.py            # internationalisation: t(), set_language(), init()
+│     ├─ lang/
+│     │  ├─ sv.py           # Swedish string table (default)
+│     │  └─ en.py           # English string table
 │     ├─ encoder.py         # IRQ-based rotary encoder reader
 │     ├─ patterns.py        # LED animation patterns (shared buffer)
 │     ├─ mystery_rules.py   # Mystery Box rule engine (pure logic)
@@ -82,6 +87,7 @@ bodn-esp32/
 │     └─ ui/
 │        ├─ screen.py       # Screen base class + ScreenManager
 │        ├─ theme.py        # colour palette and layout constants
+│        ├─ font_ext.py     # 8×8 bitmap glyphs for å ä ö Å Ä Ö
 │        ├─ input.py        # unified input state with debouncing
 │        ├─ widgets.py      # stateless draw helpers
 │        ├─ icons.py        # 16×16 bitmap icons

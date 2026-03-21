@@ -6,6 +6,7 @@ from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_progress_bar, draw_button_grid, draw_centered
 from bodn.ui.pause import PauseMenu
 from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING, _BLACK
+from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
 ENC_A = const(1)  # config.ENC_A
@@ -35,13 +36,13 @@ class DemoScreen(Screen):
     happens on NeoPixel-write frames (every 3rd frame).
     """
 
-    def __init__(self, np, overlay, enc_steps=20):
+    def __init__(self, np, overlay, enc_steps=20, settings=None):
         self._np = np
         self._overlay = overlay
         self._enc_steps = enc_steps
         self._active_pattern = 0
         self._manager = None
-        self._pause = PauseMenu()
+        self._pause = PauseMenu(settings=settings)
         self._dirty = True
         # Snapshot of input state for dirty detection
         self._prev_enc = [0, 0, 0]
@@ -190,7 +191,7 @@ class DemoScreen(Screen):
         tft.text(PATTERN_NAMES[self._active_pattern], 4, 6, theme.BLACK)
 
         # Button grid (4x2)
-        tft.text("Buttons", 0, 28, theme.WHITE)
+        tft.text(t("demo_buttons"), 0, 28, theme.WHITE)
         draw_button_grid(
             tft,
             theme,
@@ -204,8 +205,13 @@ class DemoScreen(Screen):
         )
 
         # Toggle indicators
-        tft.text("Toggles", 0, 90, theme.WHITE)
-        toggle_labels = ["Rev", "Mir", "Str", "Inv"]
+        tft.text(t("demo_toggles"), 0, 90, theme.WHITE)
+        toggle_labels = [
+            t("tog_reverse"),
+            t("tog_mirror"),
+            t("tog_strobe"),
+            t("tog_invert"),
+        ]
         for i in range(len(toggle_labels)):
             x = i * 36
             y = 104
@@ -220,11 +226,11 @@ class DemoScreen(Screen):
         rx = mid_x + 8
         rw = theme.width - rx - 4
 
-        draw_centered(tft, "~ Bodn ~", 6, theme.WHITE, theme.width)
+        draw_centered(tft, t("home_title"), 6, theme.WHITE, theme.width)
 
         bar_info = [
-            ("Bri", theme.CYAN, inp_enc[ENC_A]),
-            ("Spd", theme.ORANGE, inp_enc[ENC_B]),
+            (t("demo_bri"), theme.CYAN, inp_enc[ENC_A]),
+            (t("demo_spd"), theme.ORANGE, inp_enc[ENC_B]),
         ]
         for i, (label, colour_565, val) in enumerate(bar_info):
             y = 40 + i * 28
@@ -237,7 +243,7 @@ class DemoScreen(Screen):
             )
 
         # Back hint
-        tft.text("< back", rx, theme.height - 16, theme.MUTED)
+        tft.text(t("demo_back"), rx, theme.height - 16, theme.MUTED)
 
     def _render_portrait(self, tft, theme, frame):
         """Stacked layout for portrait displays."""
@@ -249,15 +255,15 @@ class DemoScreen(Screen):
             sw = self._manager.inp.sw
             held = self._manager.inp.btn_held
 
-        tft.text("~ Bodn ~", 32, 3, theme.WHITE)
+        tft.text(t("home_title"), 32, 3, theme.WHITE)
 
         pat_colour = theme.BTN_565[self._active_pattern]
         tft.fill_rect(0, 16, theme.width, 12, pat_colour)
         tft.text(PATTERN_NAMES[self._active_pattern], 4, 18, theme.BLACK)
 
         bar_info = [
-            ("Bri", theme.CYAN, inp_enc[ENC_A]),
-            ("Spd", theme.ORANGE, inp_enc[ENC_B]),
+            (t("demo_bri"), theme.CYAN, inp_enc[ENC_A]),
+            (t("demo_spd"), theme.ORANGE, inp_enc[ENC_B]),
         ]
         for i, (label, colour_565, val) in enumerate(bar_info):
             y = 32 + i * 16
@@ -267,8 +273,13 @@ class DemoScreen(Screen):
             )
             tft.text(label, 0, y + 1, colour_565)
 
-        tft.text("Toggles", 0, 70, theme.WHITE)
-        toggle_labels = ["Rev", "Mir", "Str", "Inv"]
+        tft.text(t("demo_toggles"), 0, 70, theme.WHITE)
+        toggle_labels = [
+            t("tog_reverse"),
+            t("tog_mirror"),
+            t("tog_strobe"),
+            t("tog_invert"),
+        ]
         for i in range(len(toggle_labels)):
             x = i * 32
             y = 82
@@ -279,7 +290,7 @@ class DemoScreen(Screen):
                 tft.rect(x, y, 28, 14, theme.WHITE)
                 tft.text(toggle_labels[i], x + 2, y + 3, theme.WHITE)
 
-        tft.text("Buttons", 0, 102, theme.WHITE)
+        tft.text(t("demo_buttons"), 0, 102, theme.WHITE)
         draw_button_grid(
             tft,
             theme,

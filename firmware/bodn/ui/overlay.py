@@ -11,6 +11,7 @@ from bodn.session import (
 )
 from bodn.patterns import scale, N_LEDS, _BLACK
 from bodn.ui.screen import Screen
+from bodn.i18n import t
 
 
 class SessionOverlay(Screen):
@@ -56,15 +57,15 @@ class SessionOverlay(Screen):
 
         if state == WINDDOWN:
             if (frame // 20) % 2 == 0:
-                tft.text("Zzz...", 40, 70, theme.AMBER)
+                tft.text(t("overlay_zzz"), 40, 70, theme.AMBER)
 
         elif state in (SLEEPING, COOLDOWN):
-            tft.text("Zzz", 52, 60, theme.BLUE)
-            tft.text("See you", 36, 80, theme.WHITE)
-            tft.text("soon!", 44, 96, theme.WHITE)
+            tft.text(t("overlay_zzz_short"), 52, 60, theme.BLUE)
+            tft.text(t("overlay_see_you"), 36, 80, theme.WHITE)
+            tft.text(t("overlay_soon"), 44, 96, theme.WHITE)
 
         elif state == LOCKDOWN:
-            tft.text("Goodnight!", 24, 70, theme.MAGENTA)
+            tft.text(t("overlay_goodnight"), 24, 70, theme.MAGENTA)
 
     def static_led_override(self, state, leds, brightness):
         """Override LEDs with static colors based on session state.
