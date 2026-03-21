@@ -102,6 +102,43 @@ def _translate(key):
         return key
 
 
+# Load extended font glyphs for Swedish characters (å ä ö etc.)
+try:
+    from bodn.ui.font_ext import GLYPHS as _EXT_GLYPHS
+except ImportError:
+    _EXT_GLYPHS = {}
+
+
+def _boot_text(tft, text, x, y, color):
+    """Draw text with extended glyph support (boot screen version).
+
+    Like widgets.draw_label() but standalone — no widget imports needed.
+    """
+    cx = x
+    ascii_start = cx
+    ascii_buf = []
+    for ch in text:
+        glyph = _EXT_GLYPHS.get(ch)
+        if glyph:
+            if ascii_buf:
+                tft.text("".join(ascii_buf), ascii_start, y, color)
+                ascii_buf = []
+            for row in range(8):
+                byte = glyph[row]
+                if byte == 0:
+                    continue
+                for col in range(8):
+                    if byte & (0x80 >> col):
+                        tft.pixel(cx + col, y + row, color)
+            cx += 8
+            ascii_start = cx
+        else:
+            ascii_buf.append(ch)
+            cx += 8
+    if ascii_buf:
+        tft.text("".join(ascii_buf), ascii_start, y, color)
+
+
 def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
     """Draw boot screen with progress bar and status dots."""
     if not tft:
@@ -117,11 +154,11 @@ def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
     # Title — centered
     title = "~ Bodn ~"
     tx = (w - len(title) * 8) // 2
-    tft.text(title, tx, h // 8, COL_TITLE)
+    _boot_text(tft, title, tx, h // 8, COL_TITLE)
 
     # Whimsical message — centered
     mx = max(0, (w - len(message) * 8) // 2)
-    tft.text(message, mx, h * 3 // 8, COL_WHITE)
+    _boot_text(tft, message, mx, h * 3 // 8, COL_WHITE)
 
     # Progress bar
     tft.fill_rect(BAR_X, BAR_Y, BAR_W, BAR_H, COL_BAR_BG)
