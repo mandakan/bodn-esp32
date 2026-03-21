@@ -84,5 +84,10 @@ I2C_SDA = const(48)
 
 # MCP23017 GPIO expander — buttons and toggles over I2C
 MCP23017_ADDR = const(0x20)  # A0-A2 jumpers all low
+MCP_INT_PIN = const(46)  # MCP23017 INTA/INTB → GPIO 46 (active-low, open-drain)
 MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
 MCP_SW_PINS = [8, 9, 10, 11]
+MCP_MASTER_SW_PIN = const(12)  # GPB4 — red-cover flip switch (active-low: 0 = ON)
+
+# Power save
+SLEEP_TIMEOUT_S = 300  # default 5 minutes of inactivity before light sleep

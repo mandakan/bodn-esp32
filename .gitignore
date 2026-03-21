@@ -13,11 +13,17 @@ __pycache__/
 # Wokwi / MicroPython firmware binaries
 *.bin
 
+# MicroPython compiled bytecode
+*.mpy
+
 # Wokwi chip build artefacts (downloaded by wokwi-cli, not source)
 wokwi-api.h
 
 # OTA change tracking
 .ota-hashes.json
+
+# Backup files
+*.bak
 
 # OS
 .DS_Store

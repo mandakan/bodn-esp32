@@ -27,6 +27,7 @@ from bodn.ui.home import HomeScreen
 from bodn.ui.demo import DemoScreen
 from bodn.ui.clock import ClockScreen
 from bodn.ui.ambient import StatusStrip
+from bodn.power import IdleTracker, PowerManager
 from bodn import i18n
 
 ENC_STEPS = const(20)
@@ -211,7 +212,7 @@ def create_ui(
 # ---------------------------------------------------------------------------
 
 
-async def primary_task(manager, settings, inp, encoders, mcp):
+async def primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr):
     """Input scanning + primary display: ~30 ms tick."""
     print("primary_task started, debug_input={}".format(settings.get("debug_input")))
     frame = 0
@@ -226,6 +227,31 @@ async def primary_task(manager, settings, inp, encoders, mcp):
         except Exception as e:
             errors += 1
             print("primary_task error #{}: {}".format(errors, e))
+
+        # Power management
+        if inp.has_activity():
+            idle_tracker.poke()
+
+        # Master switch OFF → sleep until flipped back ON
+        if power_mgr.master_switch_off():
+            power_mgr.sleep_until_master_on()
+            idle_tracker.wake()
+            manager.invalidate()
+        # Menu standby request
+        elif settings.get("_sleep_now"):
+            settings["_sleep_now"] = False
+            power_mgr.sleep_and_wake()
+            idle_tracker.wake()
+            manager.invalidate()
+        # Idle timeout
+        elif idle_tracker.tick():
+            power_mgr.sleep_and_wake()
+            idle_tracker.wake()
+            manager.invalidate()
+
+        # Sync sleep timeout from settings periodically
+        if frame % 150 == 0:
+            idle_tracker.timeout_s = settings.get("sleep_timeout_s", 300)
 
         if settings.get("debug_input") and frame % 15 == 0:
             btns = "".join("1" if inp.btn_held[i] else "." for i in range(8))
@@ -324,8 +350,15 @@ async def main():
         np,
     )
 
+    # Power management
+    idle_tracker = IdleTracker(
+        timeout_s=settings.get("sleep_timeout_s", config.SLEEP_TIMEOUT_S),
+        time_fn=time.time,
+    )
+    power_mgr = PowerManager(tft, tft2, np, mcp)
+
     await asyncio.gather(
-        primary_task(manager, settings, inp, encoders, mcp),
+        primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr),
         secondary_task(secondary),
         housekeeping_task(session_mgr),
     )

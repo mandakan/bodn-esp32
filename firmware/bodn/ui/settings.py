@@ -12,14 +12,18 @@ NAV = const(0)  # config.ENC_NAV
 # type: "bool" = toggle, "action" = triggers an action, "lang" = language cycler
 _ITEMS = [
     ("sessions_enabled", "settings_sessions", "bool"),
+    ("sleep_timeout_s", "settings_sleep", "cycle"),
     ("wifi", "settings_wifi", "bool"),
     ("leds", "settings_leds", "bool"),
     ("language", "pause_lang", "lang"),
     ("debug_input", "settings_debug", "bool"),
     ("debug_perf", "settings_perf", "bool"),
+    ("standby", "settings_standby", "action"),
     ("diag", "settings_diag", "action"),
     ("back", "settings_back", "action"),
 ]
+
+_SLEEP_OPTIONS = [0, 60, 120, 300, 600]
 
 
 class SettingsScreen(Screen):
@@ -51,6 +55,11 @@ class SettingsScreen(Screen):
             return self._wifi_ctrl.is_active()
         if key == "leds":
             return self._leds_on
+        if key == "sleep_timeout_s":
+            val = self._settings.get("sleep_timeout_s", 300)
+            if val == 0:
+                return t("off")
+            return t("sleep_min", val // 60)
         if key in ("debug_input", "debug_perf", "sessions_enabled"):
             return self._settings.get(key, key == "sessions_enabled")
         return False
@@ -65,6 +74,27 @@ class SettingsScreen(Screen):
                 from bodn.ui.diag import DiagScreen
 
                 self._manager.push(DiagScreen())
+            return
+        if key == "standby":
+            self._settings["_sleep_now"] = True
+            return
+        if key == "sleep_timeout_s":
+            cur = self._settings.get("sleep_timeout_s", 300)
+            idx = 0
+            for i in range(len(_SLEEP_OPTIONS)):
+                if _SLEEP_OPTIONS[i] == cur:
+                    idx = i
+                    break
+            self._settings["sleep_timeout_s"] = _SLEEP_OPTIONS[
+                (idx + 1) % len(_SLEEP_OPTIONS)
+            ]
+            try:
+                from bodn.storage import save_settings
+
+                save_settings(self._settings)
+            except Exception:
+                pass
+            self._dirty = True
             return
         if key == "language":
             langs = available()
@@ -161,7 +191,7 @@ class SettingsScreen(Screen):
                 label = t(label_key)
             tft.text(label, 12, y + 2, color)
 
-            # Value indicator (only for bool items)
+            # Value indicator
             if item_type == "bool":
                 value = self._get_value(key)
                 if value:
@@ -170,3 +200,7 @@ class SettingsScreen(Screen):
                 else:
                     tft.fill_rect(w - 40, y, 28, row_h - 6, theme.RED)
                     tft.text(t("off"), w - 38, y + 2, theme.BLACK)
+            elif item_type == "cycle":
+                val_str = str(self._get_value(key))
+                tx = w - 8 - len(val_str) * 8
+                tft.text(val_str, tx, y + 2, theme.WHITE if selected else theme.MUTED)
