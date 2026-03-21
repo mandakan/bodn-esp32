@@ -19,7 +19,6 @@ except ImportError:
 from bodn import tones
 from bodn.wav import WavReader
 
-
 # Channel priorities (higher number = higher priority)
 CH_MUSIC = const(0)
 CH_SFX = const(1)

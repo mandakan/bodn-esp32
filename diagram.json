@@ -9,7 +9,8 @@
       "top": 143.82,
       "left": -24.23,
       "attrs": {
-        "psramSize": "8"
+        "psramSize": "8",
+        "flashSize": "8"
       }
     },
     {
