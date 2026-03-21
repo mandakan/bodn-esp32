@@ -1,6 +1,7 @@
 # boot.py — runs before main.py
 # WiFi setup, NTP sync, load settings — with animated boot screen.
 # Each step shows a status dot: green=ok, amber=skipped, red=failed.
+# Hold NAV encoder button (ENC1_SW) during power-on for diagnostic screen.
 
 import gc
 import time
@@ -11,11 +12,17 @@ ip = "0.0.0.0"
 # --- Init display + LEDs early so we can show progress ---
 tft = None
 np = None
+_diag_requested = False
 try:
     from machine import Pin, SPI
     import neopixel
     from bodn import config
     from st7735 import ST7735
+
+    # Check NAV encoder button (active-low with pull-up) for diagnostic mode
+    _diag_btn = Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP)
+    _diag_requested = _diag_btn.value() == 0
+    _diag_btn = None  # release pin — encoder driver will reclaim it
 
     spi = SPI(
         2,
@@ -227,6 +234,108 @@ time.sleep(0.5)
 # --- Step 3: Ready! ---
 _results[3] = "ok"
 _show_progress(4, STEPS[3][1], STEPS[3][2], detail="IP: " + ip, detail_col=COL_WHITE)
+
+# --- Diagnostic boot screen (hold NAV encoder button to activate) ---
+if _diag_requested and tft:
+    _diag_info = []
+
+    # Platform and MicroPython version
+    import sys
+
+    _diag_info.append(
+        ("uPy", sys.version.split(";")[0] if ";" in sys.version else sys.version[:20])
+    )
+    _diag_info.append(("Platform", sys.platform))
+
+    # CPU frequency
+    try:
+        from machine import freq as _cpu_freq
+
+        _diag_info.append(("CPU", "{} MHz".format(_cpu_freq() // 1_000_000)))
+    except Exception:
+        pass
+
+    # Memory
+    gc.collect()
+    _free = gc.mem_free()
+    _alloc = gc.mem_alloc()
+    _diag_info.append(("RAM free", "{} KB".format(_free // 1024)))
+    _diag_info.append(("RAM used", "{} KB".format(_alloc // 1024)))
+
+    # Flash filesystem
+    try:
+        import os
+
+        _st = os.statvfs("/")
+        _fs_total = _st[0] * _st[2] // 1024
+        _fs_free = _st[0] * _st[3] // 1024
+        _diag_info.append(("Flash", "{}/{} KB".format(_fs_free, _fs_total)))
+    except Exception:
+        pass
+
+    # WiFi MAC
+    try:
+        import network
+
+        _mac = network.WLAN(network.STA_IF).config("mac")
+        _mac_str = ":".join("{:02X}".format(b) for b in _mac)
+        _diag_info.append(("MAC", _mac_str))
+    except Exception:
+        pass
+
+    # IP
+    _diag_info.append(("IP", ip))
+
+    # Battery
+    try:
+        from bodn.battery import read as _bat_read
+
+        _pct, _chg = _bat_read()
+        _bat_str = "{}%{}".format(_pct, " CHG" if _chg else "")
+        _diag_info.append(("Battery", _bat_str))
+    except Exception:
+        pass
+
+    # NTP / time
+    if _results[2] == "ok":
+        _t = time.localtime()
+        _diag_info.append(("Time", "{:02d}:{:02d}:{:02d}".format(_t[3], _t[4], _t[5])))
+
+    # Boot results
+    _step_summary = " ".join(
+        "{}:{}".format(STEPS[i][0], _results[i] or "?") for i in range(len(STEPS))
+    )
+    _diag_info.append(("Boot", _step_summary))
+
+    # --- Draw diagnostic screen ---
+    tft.fill(COL_BLACK)
+    _line_h = 14
+    _y = 4
+    _title = "~ Diagnostics ~"
+    _tx = (tft.width - len(_title) * 8) // 2
+    tft.text(_title, _tx, _y, COL_TITLE)
+    _y += _line_h + 4
+
+    for _label, _val in _diag_info:
+        tft.text(_label, 4, _y, COL_AMBER)
+        # Value starts after label column (max ~9 chars label + colon)
+        _vx = min(80, (len(_label) + 1) * 8 + 4)
+        tft.text(str(_val), _vx, _y, COL_WHITE)
+        _y += _line_h
+
+    # Hint at bottom
+    _hint = "Release to continue"
+    _hx = (tft.width - len(_hint) * 8) // 2
+    tft.text(_hint, _hx, tft.height - 16, COL_CYAN)
+    tft.show()
+
+    # Wait for button release
+    _diag_btn = Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP)
+    while _diag_btn.value() == 0:
+        time.sleep_ms(50)
+    _diag_btn = None
+
+    print("BOOT [DIAG] screen shown")
 
 # Free boot screen objects before main.py starts — the 240×320
 # framebuffer alone is ~150 KB of RAM.
