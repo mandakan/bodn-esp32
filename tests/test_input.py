@@ -1,6 +1,6 @@
 """Tests for InputState — debouncing, edge detection, encoder tracking."""
 
-from bodn.ui.input import InputState
+from bodn.ui.input import EncoderAccumulator, InputState
 
 
 class FakePin:
@@ -202,3 +202,149 @@ def test_switch_states():
     sws[0]._val = 1
     inp.scan()
     assert not inp.sw[0]
+
+
+# --- Encoder velocity tracking ---
+
+
+def test_enc_velocity_computed_on_step():
+    inp, _, _, encs, t = make_input()
+    t[0] = 0
+    inp.scan()
+
+    # Move 1 step after 50ms → 1000/50 = 20 steps/s
+    encs[0].value = 1
+    t[0] = 50
+    inp.scan()
+    assert inp.enc_velocity[0] == 20
+
+
+def test_enc_velocity_fast_spin():
+    inp, _, _, encs, t = make_input()
+    t[0] = 0
+    inp.scan()
+
+    # Move 3 steps in 10ms → 3000/10 = 300 steps/s
+    encs[0].value = 3
+    t[0] = 10
+    inp.scan()
+    assert inp.enc_velocity[0] == 300
+
+
+def test_enc_velocity_decays_after_timeout():
+    inp, _, _, encs, t = make_input()
+    t[0] = 0
+    inp.scan()
+
+    encs[0].value = 1
+    t[0] = 50
+    inp.scan()
+    assert inp.enc_velocity[0] > 0
+
+    # No movement for 201ms → velocity should decay to 0
+    t[0] = 251
+    inp.scan()
+    assert inp.enc_velocity[0] == 0
+
+
+def test_enc_velocity_persists_within_timeout():
+    inp, _, _, encs, t = make_input()
+    t[0] = 0
+    inp.scan()
+
+    encs[0].value = 1
+    t[0] = 50
+    inp.scan()
+    vel = inp.enc_velocity[0]
+    assert vel > 0
+
+    # No movement but within 200ms timeout → velocity stays
+    t[0] = 200
+    inp.scan()
+    assert inp.enc_velocity[0] == vel
+
+
+def test_enc_velocity_independent_per_encoder():
+    inp, _, _, encs, t = make_input()
+    t[0] = 0
+    inp.scan()
+
+    encs[0].value = 1
+    t[0] = 100
+    inp.scan()
+    assert inp.enc_velocity[0] == 10
+    assert inp.enc_velocity[1] == 0
+
+    encs[1].value = 2
+    t[0] = 110
+    inp.scan()
+    assert inp.enc_velocity[1] == 2 * 1000 // 110  # 2 steps since t=0 (init)
+
+
+# --- EncoderAccumulator ---
+
+
+def test_accumulator_basic_accumulation():
+    acc = EncoderAccumulator(detents_per_unit=3)
+    # 1 detent → not enough
+    assert acc.update(1, 0) == 0
+    # 2nd detent → not enough
+    assert acc.update(1, 0) == 0
+    # 3rd detent → triggers 1 unit
+    assert acc.update(1, 0) == 1
+
+
+def test_accumulator_negative_direction():
+    acc = EncoderAccumulator(detents_per_unit=3)
+    assert acc.update(-1, 0) == 0
+    assert acc.update(-1, 0) == 0
+    assert acc.update(-1, 0) == -1
+
+
+def test_accumulator_fast_velocity_multiplier():
+    acc = EncoderAccumulator(detents_per_unit=3, fast_threshold=400, fast_multiplier=3)
+    # 1 detent at high velocity → 1*3 = 3 effective → 1 unit immediately
+    assert acc.update(1, 500) == 1
+
+
+def test_accumulator_slow_velocity_no_multiplier():
+    acc = EncoderAccumulator(detents_per_unit=3, fast_threshold=400, fast_multiplier=3)
+    # 1 detent at slow velocity → 1 effective → not enough
+    assert acc.update(1, 100) == 0
+    assert acc.update(1, 100) == 0
+    assert acc.update(1, 100) == 1
+
+
+def test_accumulator_remainder_carries():
+    acc = EncoderAccumulator(detents_per_unit=3)
+    # 5 detents at once → 1 unit with 2 remainder
+    assert acc.update(5, 0) == 1
+    # 1 more → remainder 2 + 1 = 3 → another unit
+    assert acc.update(1, 0) == 1
+
+
+def test_accumulator_zero_delta_returns_zero():
+    acc = EncoderAccumulator(detents_per_unit=3)
+    assert acc.update(0, 0) == 0
+    assert acc.update(0, 500) == 0
+
+
+def test_accumulator_reset():
+    acc = EncoderAccumulator(detents_per_unit=3)
+    acc.update(2, 0)  # accumulate 2
+    acc.reset()
+    # After reset, need full 3 detents again
+    assert acc.update(1, 0) == 0
+    assert acc.update(1, 0) == 0
+    assert acc.update(1, 0) == 1
+
+
+def test_accumulator_direction_change():
+    acc = EncoderAccumulator(detents_per_unit=3)
+    acc.update(2, 0)  # accumulate +2
+    # Reverse direction: +2 + (-2) = 0
+    acc.update(-2, 0)
+    # Now 3 forward should trigger
+    assert acc.update(1, 0) == 0
+    assert acc.update(1, 0) == 0
+    assert acc.update(1, 0) == 1
