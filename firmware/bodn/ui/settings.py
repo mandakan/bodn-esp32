@@ -1,10 +1,11 @@
 # bodn/ui/settings.py — parent-facing settings screen
 
+from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered
 
-NAV = config.ENC_NAV
+NAV = const(0)  # config.ENC_NAV
 
 # Setting definitions: (key, label, type)
 # type: "bool" = toggle, "action" = triggers an action

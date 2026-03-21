@@ -7,11 +7,11 @@ except ImportError:
 
 import time
 import neopixel
-from machine import Pin, SPI, SoftI2C, I2S
+from machine import Pin, SPI, SoftI2C
+from micropython import const
 from bodn import config
 from bodn.encoder import Encoder
 from bodn.mcp23017 import MCP23017
-from bodn.audio import AudioEngine
 from bodn.session import SessionManager
 from bodn.web import start_server
 from bodn.wifi import WiFiController
@@ -28,8 +28,8 @@ from bodn.ui.demo import DemoScreen
 from bodn.ui.clock import ClockScreen
 from bodn.ui.ambient import StatusStrip
 
-ENC_STEPS = 20
-N_LEDS = config.NEOPIXEL_COUNT
+ENC_STEPS = const(20)
+N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 
 
 def create_hardware():
@@ -103,24 +103,11 @@ def create_hardware():
     encoders[config.ENC_A].value = ENC_STEPS // 2  # brightness default
     encoders[config.ENC_B].value = ENC_STEPS // 4  # speed default
 
-    # I2S output for MAX98357A amplifier
-    i2s_out = I2S(
-        0,
-        sck=Pin(config.I2S_SPK_BCK),
-        ws=Pin(config.I2S_SPK_WS),
-        sd=Pin(config.I2S_SPK_DIN),
-        mode=I2S.TX,
-        bits=16,
-        format=I2S.MONO,
-        rate=16000,
-        ibuf=2048,
-    )
-
-    return tft, tft2, buttons, switches, encoders, np, mcp, i2s_out
+    return tft, tft2, buttons, switches, encoders, np, mcp
 
 
 def create_ui(
-    session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, encoders, np, audio
+    session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, encoders, np
 ):
     """Wire up UI components. Returns (manager, secondary, inp)."""
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
@@ -299,8 +286,7 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    tft, tft2, buttons, switches, encoders, np, mcp, i2s_out = create_hardware()
-    audio = AudioEngine(i2s_out)
+    tft, tft2, buttons, switches, encoders, np, mcp = create_hardware()
     manager, secondary, inp = create_ui(
         session_mgr,
         settings,
@@ -311,14 +297,12 @@ async def main():
         switches,
         encoders,
         np,
-        audio,
     )
 
     await asyncio.gather(
         primary_task(manager, settings, inp, encoders, mcp),
         secondary_task(secondary),
         housekeeping_task(session_mgr),
-        audio.start(),
     )
 
 
@@ -329,4 +313,5 @@ except KeyboardInterrupt:
 except Exception as e:
     import sys
 
+    print("FATAL:", e)
     sys.print_exception(e)

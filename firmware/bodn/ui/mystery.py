@@ -1,5 +1,6 @@
 # bodn/ui/mystery.py — Mystery Box game screen (Color Alchemy)
 
+from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_button_grid
@@ -8,7 +9,7 @@ from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
 from bodn.patterns import N_LEDS, zone_pulse, zone_chase, ZONE_LID_RING
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
-NAV = config.ENC_NAV
+NAV = const(0)  # config.ENC_NAV
 
 
 class MysteryScreen(Screen):
@@ -122,9 +123,11 @@ class MysteryScreen(Screen):
             ses_state = self._overlay.session_mgr.state
             leds = self._overlay.static_led_override(ses_state, leds, brightness)
 
-            for i in range(N_LEDS):
-                self._np[i] = leds[i]
-            self._np.write()
+            np = self._np
+            n = N_LEDS
+            for i in range(n):
+                np[i] = leds[i]
+            np.write()
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:

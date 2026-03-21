@@ -9,7 +9,7 @@ from bodn.session import (
     LOCKDOWN,
     IDLE,
 )
-from bodn.patterns import scale, N_LEDS
+from bodn.patterns import scale, N_LEDS, _BLACK
 from bodn.ui.screen import Screen
 
 
@@ -72,37 +72,40 @@ class SessionOverlay(Screen):
         No animation — solid colors only. For game screens that update
         LEDs only on state changes.
         """
+        n = N_LEDS
         if state == WARN_5:
             c = scale((255, 191, 0), brightness)
-            for i in range(N_LEDS):
+            for i in range(n):
                 leds[i] = c
             return leds
 
         elif state == WARN_2:
             c = scale((255, 100, 0), brightness // 2)
-            for i in range(N_LEDS):
+            for i in range(n):
                 leds[i] = c
             return leds
 
         elif state == WINDDOWN:
             c = scale((40, 40, 80), brightness // 4)
-            for i in range(N_LEDS):
+            for i in range(n):
                 leds[i] = c
             return leds
 
         elif state in (SLEEPING, COOLDOWN, LOCKDOWN):
-            for i in range(N_LEDS):
-                leds[i] = (0, 0, 0)
+            black = _BLACK
+            for i in range(n):
+                leds[i] = black
             return leds
 
         return leds
 
     def led_override(self, state, frame, leds, brightness):
         """Modify LED output based on session state. Writes into leds in-place."""
+        n = N_LEDS
         if state == WARN_5:
             if (frame // 30) % 2 == 0:
                 c = scale((255, 191, 0), brightness)
-                for i in range(N_LEDS):
+                for i in range(n):
                     leds[i] = c
             return leds
 
@@ -111,20 +114,21 @@ class SessionOverlay(Screen):
             v = phase if phase < 128 else 255 - phase
             dim = max(10, (v * brightness) >> 8)
             c = scale((255, 100, 0), dim)
-            for i in range(N_LEDS):
+            for i in range(n):
                 leds[i] = c
             return leds
 
         elif state == WINDDOWN:
             fade = max(0, 255 - (frame % 1000) * 255 // 1000)
             c = scale((40, 40, 80), (fade * brightness) >> 8)
-            for i in range(N_LEDS):
+            for i in range(n):
                 leds[i] = c
             return leds
 
         elif state in (SLEEPING, COOLDOWN, LOCKDOWN):
-            for i in range(N_LEDS):
-                leds[i] = (0, 0, 0)
+            black = _BLACK
+            for i in range(n):
+                leds[i] = black
             return leds
 
         return leds

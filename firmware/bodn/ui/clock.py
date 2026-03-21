@@ -1,12 +1,12 @@
 # bodn/ui/clock.py — simple clock screen (time + date)
 
 import time
-from bodn import config
+from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered
 from bodn.ui.pause import PauseMenu
 
-NAV = config.ENC_NAV
+NAV = const(0)  # config.ENC_NAV
 
 
 class ClockScreen(Screen):

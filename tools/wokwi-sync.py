@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 WOKWI_HOST = "localhost"
-WOKWI_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5555
+WOKWI_PORT = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 5555
 
 FIRMWARE_DIR = Path(__file__).resolve().parent.parent / "firmware"
 

@@ -211,6 +211,11 @@ except ImportError:
     pass
 
 # Stub other common MicroPython modules
-for mod_name in ("micropython", "uos", "usys", "utime"):
+for mod_name in ("uos", "usys", "utime"):
     if mod_name not in sys.modules:
         sys.modules[mod_name] = types.ModuleType(mod_name)
+
+# Stub 'micropython' module with const() identity function
+_micropython = types.ModuleType("micropython")
+_micropython.const = lambda x: x
+sys.modules["micropython"] = _micropython

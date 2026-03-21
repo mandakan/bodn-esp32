@@ -11,20 +11,20 @@
 #   SW3: add white to the mix (lightens all colors)
 #   ENC_B: hue shift — rotates output colors around the wheel
 
-from bodn.patterns import N_STICKS, scale, _led_buf
-
+from micropython import const
+from bodn.patterns import N_STICKS, scale, _led_buf, _BLACK
 
 # Output types
-OUT_IDLE = 0
-OUT_SINGLE = 1  # single button → solid color
-OUT_MIX = 2  # two-button combo → blended color
-OUT_MAGIC = 3  # special combo → sparkle animation
+OUT_IDLE = const(0)
+OUT_SINGLE = const(1)  # single button → solid color
+OUT_MIX = const(2)  # two-button combo → blended color
+OUT_MAGIC = const(3)  # special combo → sparkle animation
 
 # How long a combo window lasts (in frames, ~33 fps)
-COMBO_WINDOW = 33  # ~1 second
+COMBO_WINDOW = const(33)  # ~1 second
 # How long an output stays visible
-DISPLAY_HOLD = 50  # ~1.5 seconds
-MAGIC_HOLD = 80  # ~2.5 seconds for magic combos
+DISPLAY_HOLD = const(50)  # ~1.5 seconds
+MAGIC_HOLD = const(80)  # ~2.5 seconds for magic combos
 
 
 def mix_rgb(a, b):
@@ -222,36 +222,29 @@ class MysteryEngine:
         No animation — solid colors only. Writes into the shared _led_buf.
         Applies modifier transforms (invert, lighten, hue shift, mirror).
         """
+        buf = _led_buf
+        n = N_STICKS
         if self._output == OUT_IDLE:
             idle_color = self._apply_color_mods((60, 20, 80))
             c = scale(idle_color, brightness // 3)
-            for i in range(N_STICKS):
-                _led_buf[i] = c
-            return _led_buf
+            for i in range(n):
+                buf[i] = c
+            return buf
 
         color = self._apply_color_mods(self._output_color)
         c = scale(color, brightness)
 
-        if self._output == OUT_MAGIC:
-            # Bright solid color
-            for i in range(N_STICKS):
-                _led_buf[i] = c
-        elif self._output == OUT_MIX:
-            # Solid mixed color
-            for i in range(N_STICKS):
-                _led_buf[i] = c
-        else:
-            # OUT_SINGLE: solid color
-            for i in range(N_STICKS):
-                _led_buf[i] = c
+        # All active output types use the same solid fill
+        for i in range(n):
+            buf[i] = c
 
         # Mirror: copy first half to second half (reversed)
         if self.sw_mirror:
-            half = N_STICKS // 2
+            half = n // 2
             for i in range(half):
-                _led_buf[N_STICKS - 1 - i] = _led_buf[i]
+                buf[n - 1 - i] = buf[i]
 
-        return _led_buf
+        return buf
 
     def make_leds(self, frame, brightness=128):
         """Generate LED colors for the current output state.
@@ -259,6 +252,9 @@ class MysteryEngine:
         Writes into the shared _led_buf to avoid per-frame allocations.
         Applies modifier transforms (invert, lighten, hue shift, mirror, shimmer).
         """
+        buf = _led_buf
+        n = N_STICKS
+        black = _BLACK
         if self._output == OUT_IDLE:
             # Gentle single-color breathing
             phase = (frame * 2) & 0xFF
@@ -266,9 +262,9 @@ class MysteryEngine:
             v = (v * brightness) >> 8
             idle_color = self._apply_color_mods((60, 20, 80))
             c = scale(idle_color, v)
-            for i in range(N_STICKS):
-                _led_buf[i] = c
-            return _led_buf
+            for i in range(n):
+                buf[i] = c
+            return buf
 
         # Apply color modifiers to the output
         color = self._apply_color_mods(self._output_color)
@@ -276,39 +272,39 @@ class MysteryEngine:
         if self._output == OUT_MAGIC:
             # Sparkle: some LEDs bright, rest dim underglow
             glow = scale(color, brightness // 4)
-            bright = scale(color, brightness)
-            for i in range(N_STICKS):
+            bright_c = scale(color, brightness)
+            for i in range(n):
                 v = ((frame * 21 + i * 53) * 131) & 0xFF
-                _led_buf[i] = bright if v > 200 else glow
+                buf[i] = bright_c if v > 200 else glow
 
         elif self._output == OUT_MIX:
             # Expand from center
             age = frame - self._output_frame
-            mid = N_STICKS // 2
+            mid = n // 2
             c = scale(color, brightness)
-            for i in range(N_STICKS):
+            for i in range(n):
                 dist = abs(i - mid)
-                _led_buf[i] = c if dist <= age else (0, 0, 0)
+                buf[i] = c if dist <= age else black
 
         else:
             # OUT_SINGLE: solid flash
             c = scale(color, brightness)
-            for i in range(N_STICKS):
-                _led_buf[i] = c
+            for i in range(n):
+                buf[i] = c
 
         # Shimmer: modulate brightness with a pulse
         if self.sw_shimmer and self._output != OUT_IDLE:
             phase = (frame * 4) & 0xFF
             v = phase if phase < 128 else 255 - phase
             dim = max(30, (v * brightness) >> 8)
-            for i in range(N_STICKS):
-                r, g, b = _led_buf[i]
-                _led_buf[i] = ((r * dim) >> 8, (g * dim) >> 8, (b * dim) >> 8)
+            for i in range(n):
+                r, g, b = buf[i]
+                buf[i] = ((r * dim) >> 8, (g * dim) >> 8, (b * dim) >> 8)
 
         # Mirror: copy first half to second half (reversed)
         if self.sw_mirror:
-            half = N_STICKS // 2
+            half = n // 2
             for i in range(half):
-                _led_buf[N_STICKS - 1 - i] = _led_buf[i]
+                buf[n - 1 - i] = buf[i]
 
-        return _led_buf
+        return buf

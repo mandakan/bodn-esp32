@@ -7,7 +7,6 @@ from bodn.ui.widgets import draw_centered, draw_progress_bar, draw_battery_icon
 from bodn.ui.secondary import STATUS_Y, STATUS_H
 import bodn.battery as battery
 
-
 _AMBIENT_TEXT_Y = 38  # 2px above clock at y=40 (scale=3, h=24)
 _AMBIENT_TEXT_H = 52  # covers clock (40..64) and date (80..88) with margin
 

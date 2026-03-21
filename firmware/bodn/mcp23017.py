@@ -3,12 +3,14 @@
 # Provides Pin-compatible objects so buttons/toggles on the expander
 # can be used with InputState without any code changes.
 
-_IODIRA = 0x00
-_IODIRB = 0x01
-_GPPUA = 0x0C
-_GPPUB = 0x0D
-_GPIOA = 0x12
-_GPIOB = 0x13
+from micropython import const
+
+_IODIRA = const(0x00)
+_IODIRB = const(0x01)
+_GPPUA = const(0x0C)
+_GPPUB = const(0x0D)
+_GPIOA = const(0x12)
+_GPIOB = const(0x13)
 
 
 class MCP23017:

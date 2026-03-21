@@ -7,26 +7,27 @@
 
 import os
 
-from bodn.patterns import N_STICKS, scale, _led_buf
+from micropython import const
+from bodn.patterns import N_STICKS, scale, _led_buf, _BLACK
 
 # Game states
-READY = 0  # waiting to start
-SHOWING = 1  # playing the sequence
-WAITING = 2  # child's turn
-WIN = 3  # round complete — celebration
-FAIL = 4  # wrong button — gentle cue
-GAME_OVER = 5  # optional: after too many fails
+READY = const(0)  # waiting to start
+SHOWING = const(1)  # playing the sequence
+WAITING = const(2)  # child's turn
+WIN = const(3)  # round complete — celebration
+FAIL = const(4)  # wrong button — gentle cue
+GAME_OVER = const(5)  # optional: after too many fails
 
 # Timing (in frames, ~33 fps)
-SHOW_STEP_FRAMES = 25  # how long each step lights up (~0.75s)
-SHOW_GAP_FRAMES = 10  # gap between steps (~0.3s)
-WIN_FRAMES = 60  # celebration duration (~1.8s)
-FAIL_FRAMES = 45  # fail cue duration (~1.4s)
+SHOW_STEP_FRAMES = const(25)  # how long each step lights up (~0.75s)
+SHOW_GAP_FRAMES = const(10)  # gap between steps (~0.3s)
+WIN_FRAMES = const(60)  # celebration duration (~1.8s)
+FAIL_FRAMES = const(45)  # fail cue duration (~1.4s)
 
 # Game config
-NUM_BUTTONS = 6  # use buttons 0–5
-START_LENGTH = 2  # initial sequence length (age 4 sweet spot)
-MAX_FAILS = 3  # replays before game over
+NUM_BUTTONS = const(6)  # use buttons 0–5
+START_LENGTH = const(2)  # initial sequence length (age 4 sweet spot)
+MAX_FAILS = const(3)  # replays before game over
 
 # Button colors (RGB, matching theme.BTN_RGB for buttons 0–5)
 BTN_COLORS = [
@@ -210,47 +211,50 @@ class SimonEngine:
         No animation — solid colors only, updated on state changes.
         Buttons 0–5 map to LEDs 0–5 (first 6). LEDs 6–15 for accent.
         """
+        buf = _led_buf
+        n = N_STICKS
+        black = _BLACK
+        _scale = scale
+
         if self.state == READY:
             # Dim rainbow — each LED a different color
-            for i in range(N_STICKS):
-                h = i * 255 // N_STICKS
+            dim = brightness // 4
+            for i in range(n):
+                h = i * 255 // n
                 if h < 85:
-                    c = (brightness // 4, 0, 0)
+                    buf[i] = (dim, 0, 0)
                 elif h < 170:
-                    c = (0, brightness // 4, 0)
+                    buf[i] = (0, dim, 0)
                 else:
-                    c = (0, 0, brightness // 4)
-                _led_buf[i] = c
-            return _led_buf
+                    buf[i] = (0, 0, dim)
+            return buf
 
         elif self.state == SHOWING:
             # Light up the active button's LED, rest off
-            for i in range(N_STICKS):
-                _led_buf[i] = (0, 0, 0)
+            for i in range(n):
+                buf[i] = black
             if self._active_btn >= 0:
                 color = BTN_COLORS[self._active_btn]
-                c = scale(color, brightness)
-                _led_buf[self._active_btn] = c
-                mirror = N_STICKS - 1 - self._active_btn
+                buf[self._active_btn] = _scale(color, brightness)
+                mirror = n - 1 - self._active_btn
                 if mirror != self._active_btn:
-                    _led_buf[mirror] = scale(color, brightness // 3)
-            return _led_buf
+                    buf[mirror] = _scale(color, brightness // 3)
+            return buf
 
         elif self.state == WAITING:
             # Dim glow on valid buttons, bright on last correct press
-            for i in range(N_STICKS):
-                _led_buf[i] = (0, 0, 0)
+            for i in range(n):
+                buf[i] = black
             for i in range(NUM_BUTTONS):
-                _led_buf[i] = scale(BTN_COLORS[i], brightness // 8)
+                buf[i] = _scale(BTN_COLORS[i], brightness // 8)
             if self._active_btn >= 0 and self._input_pos > 0:
-                c = scale(BTN_COLORS[self._active_btn], brightness)
-                _led_buf[self._active_btn] = c
-            return _led_buf
+                buf[self._active_btn] = _scale(BTN_COLORS[self._active_btn], brightness)
+            return buf
 
         elif self.state == WIN:
             # Static rainbow — all LEDs bright, spread across hues
-            for i in range(N_STICKS):
-                h = i * 255 // N_STICKS
+            for i in range(n):
+                h = i * 255 // n
                 if h < 85:
                     r, g, b = 255 - h * 3, h * 3, 0
                 elif h < 170:
@@ -259,28 +263,28 @@ class SimonEngine:
                 else:
                     h2 = h - 170
                     r, g, b = h2 * 3, 0, 255 - h2 * 3
-                _led_buf[i] = scale((r, g, b), brightness)
-            return _led_buf
+                buf[i] = _scale((r, g, b), brightness)
+            return buf
 
         elif self.state == FAIL:
             # Solid dim red
-            c = scale((255, 0, 0), brightness // 3)
-            for i in range(N_STICKS):
-                _led_buf[i] = c
-            return _led_buf
+            c = _scale((255, 0, 0), brightness // 3)
+            for i in range(n):
+                buf[i] = c
+            return buf
 
         elif self.state == GAME_OVER:
             # Dim warm glow
             v = max(10, brightness // 6)
             c = (v, v // 2, 0)
-            for i in range(N_STICKS):
-                _led_buf[i] = c
-            return _led_buf
+            for i in range(n):
+                buf[i] = c
+            return buf
 
         # Fallback: all off
-        for i in range(N_STICKS):
-            _led_buf[i] = (0, 0, 0)
-        return _led_buf
+        for i in range(n):
+            buf[i] = black
+        return buf
 
     def make_leds(self, frame, brightness=128):
         """Generate animated LED colors for the current game state.
@@ -288,50 +292,53 @@ class SimonEngine:
         Buttons 0–5 map to LEDs 0–5 (first 6). LEDs 6–15 used for effects.
         Only used by Demo mode — game screens use make_static_leds() instead.
         """
+        buf = _led_buf
+        n = N_STICKS
+        black = _BLACK
+        _scale = scale
         elapsed = frame - self._state_frame
 
         if self.state == READY:
             phase = (frame * 3) & 0xFF
             v = phase if phase < 128 else 255 - phase
             v = (v * brightness) >> 8
-            for i in range(N_STICKS):
-                h = (i * 255 // N_STICKS + frame) & 0xFF
+            for i in range(n):
+                h = (i * 255 // n + frame) & 0xFF
                 if h < 85:
-                    c = (v, 0, 0)
+                    buf[i] = (v, 0, 0)
                 elif h < 170:
-                    c = (0, v, 0)
+                    buf[i] = (0, v, 0)
                 else:
-                    c = (0, 0, v)
-                _led_buf[i] = c
-            return _led_buf
+                    buf[i] = (0, 0, v)
+            return buf
 
         elif self.state == SHOWING:
-            for i in range(N_STICKS):
-                _led_buf[i] = (0, 0, 0)
+            for i in range(n):
+                buf[i] = black
             if self._active_btn >= 0:
                 color = BTN_COLORS[self._active_btn]
-                c = scale(color, brightness)
-                _led_buf[self._active_btn] = c
-                mirror = N_STICKS - 1 - self._active_btn
+                buf[self._active_btn] = _scale(color, brightness)
+                mirror = n - 1 - self._active_btn
                 if mirror != self._active_btn:
-                    _led_buf[mirror] = scale(color, brightness // 3)
-            return _led_buf
+                    buf[mirror] = _scale(color, brightness // 3)
+            return buf
 
         elif self.state == WAITING:
-            for i in range(N_STICKS):
-                _led_buf[i] = (0, 0, 0)
+            for i in range(n):
+                buf[i] = black
             for i in range(NUM_BUTTONS):
-                _led_buf[i] = scale(BTN_COLORS[i], brightness // 8)
+                buf[i] = _scale(BTN_COLORS[i], brightness // 8)
             if self._active_btn >= 0 and self._input_pos > 0:
                 fade = max(0, 255 - elapsed * 20)
                 if fade > 0:
-                    c = scale(BTN_COLORS[self._active_btn], (fade * brightness) >> 8)
-                    _led_buf[self._active_btn] = c
-            return _led_buf
+                    buf[self._active_btn] = _scale(
+                        BTN_COLORS[self._active_btn], (fade * brightness) >> 8
+                    )
+            return buf
 
         elif self.state == WIN:
-            for i in range(N_STICKS):
-                h = (i * 255 // N_STICKS + elapsed * 8) & 0xFF
+            for i in range(n):
+                h = (i * 255 // n + elapsed * 8) & 0xFF
                 if h < 85:
                     r, g, b = 255 - h * 3, h * 3, 0
                 elif h < 170:
@@ -340,25 +347,25 @@ class SimonEngine:
                 else:
                     h2 = h - 170
                     r, g, b = h2 * 3, 0, 255 - h2 * 3
-                _led_buf[i] = scale((r, g, b), brightness)
-            return _led_buf
+                buf[i] = _scale((r, g, b), brightness)
+            return buf
 
         elif self.state == FAIL:
             phase = (elapsed * 6) & 0xFF
             v = phase if phase < 128 else 255 - phase
             v = (v * brightness) >> 8
             c = (v, 0, 0)
-            for i in range(N_STICKS):
-                _led_buf[i] = c
-            return _led_buf
+            for i in range(n):
+                buf[i] = c
+            return buf
 
         elif self.state == GAME_OVER:
             v = max(10, brightness // 6)
             c = (v, v // 2, 0)
-            for i in range(N_STICKS):
-                _led_buf[i] = c
-            return _led_buf
+            for i in range(n):
+                buf[i] = c
+            return buf
 
-        for i in range(N_STICKS):
-            _led_buf[i] = (0, 0, 0)
-        return _led_buf
+        for i in range(n):
+            buf[i] = black
+        return buf

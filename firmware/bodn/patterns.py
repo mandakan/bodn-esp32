@@ -8,10 +8,11 @@
 # Full-strip pattern functions (pattern_*) write the whole _led_buf.
 # Zone-aware helpers (zone_fill, zone_pattern) operate on a (start, count) slice.
 
+from micropython import const
 from bodn import config
 
-N_LEDS = config.NEOPIXEL_COUNT
-N_STICKS = config.LED_STICKS[1]  # 16 — total LEDs in both sticks
+N_LEDS = const(108)  # config.NEOPIXEL_COUNT
+N_STICKS = const(16)  # config.LED_STICKS[1]
 
 # Zone constants re-exported for convenience
 ZONE_STICK_A = config.LED_STICK_A
@@ -55,80 +56,101 @@ def scale(rgb, bright):
 
 def pattern_rainbow(frame, speed, hue_off, bright):
     """Smooth rainbow flowing across the strip."""
-    for i in range(N_LEDS):
-        h = (hue_off + i * 255 // N_LEDS + frame * speed) & 0xFF
-        _led_buf[i] = scale(hsv_to_rgb(h, 255, 255), bright)
-    return _led_buf
+    buf = _led_buf
+    n = N_LEDS
+    _scale = scale
+    _hsv = hsv_to_rgb
+    for i in range(n):
+        h = (hue_off + i * 255 // n + frame * speed) & 0xFF
+        buf[i] = _scale(_hsv(h, 255, 255), bright)
+    return buf
 
 
 def pattern_pulse(frame, speed, colour, bright):
     """All LEDs pulse together in one colour."""
+    buf = _led_buf
     phase = (frame * speed) & 0xFF
     v = phase if phase < 128 else 255 - phase
     v = (v * bright) >> 7
     c = scale(colour, v)
     for i in range(N_LEDS):
-        _led_buf[i] = c
-    return _led_buf
+        buf[i] = c
+    return buf
 
 
 def pattern_chase(frame, speed, colour, bright):
     """A bright dot chases around the strip, leaving a fading tail."""
-    pos = (frame * speed // 2) % N_LEDS
-    for i in range(N_LEDS):
-        dist = (pos - i) % N_LEDS
+    buf = _led_buf
+    n = N_LEDS
+    _scale = scale
+    black = _BLACK
+    pos = (frame * speed // 2) % n
+    for i in range(n):
+        dist = (pos - i) % n
         if dist == 0:
-            _led_buf[i] = scale(colour, bright)
+            buf[i] = _scale(colour, bright)
         elif dist < 4:
-            _led_buf[i] = scale(colour, bright >> dist)
+            buf[i] = _scale(colour, bright >> dist)
         else:
-            _led_buf[i] = _BLACK
-    return _led_buf
+            buf[i] = black
+    return buf
 
 
 def pattern_sparkle(frame, speed, colour, bright):
     """Random-ish sparkle — deterministic from frame number."""
+    buf = _led_buf
+    _scale = scale
+    black = _BLACK
+    bright_c = _scale(colour, bright)
     for i in range(N_LEDS):
         v = ((frame * speed * 7 + i * 53) * 131) & 0xFF
-        if v > 200:
-            _led_buf[i] = scale(colour, bright)
-        else:
-            _led_buf[i] = _BLACK
-    return _led_buf
+        buf[i] = bright_c if v > 200 else black
+    return buf
 
 
 def pattern_bounce(frame, speed, colour, bright):
     """A dot bounces back and forth."""
-    cycle = (N_LEDS - 1) * 2
+    buf = _led_buf
+    n = N_LEDS
+    _scale = scale
+    black = _BLACK
+    cycle = (n - 1) * 2
     pos = (frame * speed // 2) % cycle
-    if pos >= N_LEDS:
+    if pos >= n:
         pos = cycle - pos
-    for i in range(N_LEDS):
+    for i in range(n):
         dist = abs(i - pos)
         if dist == 0:
-            _led_buf[i] = scale(colour, bright)
+            buf[i] = _scale(colour, bright)
         elif dist == 1:
-            _led_buf[i] = scale(colour, bright >> 1)
+            buf[i] = _scale(colour, bright >> 1)
         else:
-            _led_buf[i] = _BLACK
-    return _led_buf
+            buf[i] = black
+    return buf
 
 
 def pattern_wave(frame, speed, colour, bright):
     """Sine-like wave of brightness across the strip."""
-    for i in range(N_LEDS):
-        phase = (i * 255 // N_LEDS + frame * speed) & 0xFF
+    buf = _led_buf
+    n = N_LEDS
+    _scale = scale
+    for i in range(n):
+        phase = (i * 255 // n + frame * speed) & 0xFF
         v = phase if phase < 128 else 255 - phase
         v = (v * bright) >> 7
-        _led_buf[i] = scale(colour, v)
-    return _led_buf
+        buf[i] = _scale(colour, v)
+    return buf
 
 
 def pattern_split(frame, speed, colour, bright):
     """Two dots start from center and expand outward, then collapse."""
-    for i in range(N_LEDS):
-        _led_buf[i] = _BLACK
-    mid = N_LEDS // 2
+    buf = _led_buf
+    n = N_LEDS
+    _scale = scale
+    black = _BLACK
+    for i in range(n):
+        buf[i] = black
+    mid = n // 2
     cycle = mid + 1
     pos = (frame * speed // 2) % (cycle * 2)
     if pos >= cycle:
@@ -137,24 +159,26 @@ def pattern_split(frame, speed, colour, bright):
         v = bright if offset == pos else bright >> 2
         a = mid + offset
         b = mid - offset
-        if 0 <= a < N_LEDS:
-            _led_buf[a] = scale(colour, v)
-        if 0 <= b < N_LEDS:
-            _led_buf[b] = scale(colour, v)
-    return _led_buf
+        if 0 <= a < n:
+            buf[a] = _scale(colour, v)
+        if 0 <= b < n:
+            buf[b] = _scale(colour, v)
+    return buf
 
 
 def pattern_fill(frame, speed, colour, bright):
     """LEDs fill up one by one, then empty."""
-    cycle = N_LEDS * 2
+    buf = _led_buf
+    n = N_LEDS
+    _scale = scale
+    black = _BLACK
+    cycle = n * 2
     pos = (frame * speed // 2) % cycle
-    fill = pos if pos < N_LEDS else cycle - pos
-    for i in range(N_LEDS):
-        if i < fill:
-            _led_buf[i] = scale(colour, bright)
-        else:
-            _led_buf[i] = _BLACK
-    return _led_buf
+    fill = pos if pos < n else cycle - pos
+    c = _scale(colour, bright)
+    for i in range(n):
+        buf[i] = c if i < fill else black
+    return buf
 
 
 # --- Zone-aware helpers ---
@@ -162,9 +186,10 @@ def pattern_fill(frame, speed, colour, bright):
 
 def zone_fill(zone, colour):
     """Fill a zone with a solid colour. zone = (start, count)."""
+    buf = _led_buf
     start, count = zone
     for i in range(start, start + count):
-        _led_buf[i] = colour
+        buf[i] = colour
 
 
 def zone_clear(zone):
@@ -174,35 +199,42 @@ def zone_clear(zone):
 
 def zone_rainbow(zone, frame, speed, hue_off, bright):
     """Rainbow pattern within a zone."""
+    buf = _led_buf
+    _scale = scale
+    _hsv = hsv_to_rgb
     start, count = zone
     for i in range(count):
         h = (hue_off + i * 255 // count + frame * speed) & 0xFF
-        _led_buf[start + i] = scale(hsv_to_rgb(h, 255, 255), bright)
+        buf[start + i] = _scale(_hsv(h, 255, 255), bright)
 
 
 def zone_pulse(zone, frame, speed, colour, bright):
     """Pulse pattern within a zone."""
+    buf = _led_buf
     phase = (frame * speed) & 0xFF
     v = phase if phase < 128 else 255 - phase
     v = (v * bright) >> 7
     c = scale(colour, v)
     start, count = zone
     for i in range(start, start + count):
-        _led_buf[i] = c
+        buf[i] = c
 
 
 def zone_chase(zone, frame, speed, colour, bright):
     """Chase pattern within a zone."""
+    buf = _led_buf
+    _scale = scale
+    black = _BLACK
     start, count = zone
     pos = (frame * speed // 2) % count
     for i in range(count):
         dist = (pos - i) % count
         if dist == 0:
-            _led_buf[start + i] = scale(colour, bright)
+            buf[start + i] = _scale(colour, bright)
         elif dist < 4:
-            _led_buf[start + i] = scale(colour, bright >> dist)
+            buf[start + i] = _scale(colour, bright >> dist)
         else:
-            _led_buf[start + i] = _BLACK
+            buf[start + i] = black
 
 
 PATTERNS = [
