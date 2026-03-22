@@ -3,7 +3,6 @@
 from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_hold_bar
-from bodn.hold_detector import HoldDetector
 from bodn.i18n import t, set_language, get_language, available
 
 NAV = const(0)  # config.ENC_NAV
@@ -55,7 +54,10 @@ class PauseMenu(Screen):
         self._dirty = False
         self._manager = None
         self._settings = settings
-        self._hold = HoldDetector(threshold_ms=hold_ms)
+        self._hold_ms = hold_ms
+        self._hold_channel = -1  # set by set_manager()
+        self._is_holding = False
+        self._hold_progress = 0.0
         self._last_hold_step = -1
         self._bar_visible = False  # True when bar pixels are on screen
 
@@ -66,12 +68,12 @@ class PauseMenu(Screen):
     @property
     def is_holding(self):
         """True while the user is holding the nav button (before menu opens)."""
-        return self._hold.holding and not self._open
+        return self._is_holding
 
     @property
     def hold_progress(self):
         """0.0 to 1.0 — how far through the hold-to-open threshold."""
-        return self._hold.progress
+        return self._hold_progress
 
     def open(self):
         self._open = True
@@ -80,11 +82,15 @@ class PauseMenu(Screen):
 
     def close(self):
         self._open = False
-        self._hold.reset()
+        self._is_holding = False
+        self._hold_progress = 0.0
+        if self._hold_channel >= 0 and self._manager:
+            self._manager.inp.gestures.reset_channel(self._hold_channel)
         self._dirty = True
 
     def set_manager(self, manager):
         self._manager = manager
+        self._hold_channel = manager.inp.gesture_enc(NAV)
 
     def update(self, inp, frame=None):
         """Process input every frame. Returns 'resume', 'quit', or None.
@@ -102,25 +108,29 @@ class PauseMenu(Screen):
         Draws the hold bar as a direct partial update — no _dirty flag,
         no full-screen redraw. Only the top 4px strip is touched.
         """
-        was_holding = self._hold.holding
-        self._hold.update(inp.enc_btn_held[NAV], inp._time_ms())
+        ch = self._hold_channel
+        g = inp.gestures
+        was_holding = self._is_holding
 
-        if self._hold.triggered:
+        self._is_holding = g.holding[ch] and not self._open
+        self._hold_progress = g.long_progress[ch]
+
+        if g.long_press[ch]:
             # Clear bar before opening menu (menu will redraw everything)
             self._last_hold_step = -1
             self._bar_visible = False
             self.open()
-            self._hold.reset()
+            g.reset_channel(ch)
             return None
 
-        if self._hold.holding and self._manager:
-            step = int(self._hold.progress * _HOLD_BAR_STEPS)
+        if self._is_holding and self._manager:
+            step = int(self._hold_progress * _HOLD_BAR_STEPS)
             if step != self._last_hold_step:
                 self._last_hold_step = step
                 # Draw bar directly into framebuffer — no game re-render
                 tft = self._manager.tft
                 theme = self._manager.theme
-                draw_hold_bar(tft, theme, self._hold.progress, theme.width)
+                draw_hold_bar(tft, theme, self._hold_progress, theme.width)
                 self._manager.request_show(0, 0, theme.width, _HOLD_BAR_H)
                 self._bar_visible = True
         elif was_holding and self._manager:
@@ -155,7 +165,10 @@ class PauseMenu(Screen):
                 self._dirty = True
                 return None
             self._open = False
-            self._hold.reset()
+            self._is_holding = False
+            self._hold_progress = 0.0
+            if self._hold_channel >= 0:
+                inp.gestures.reset_channel(self._hold_channel)
             self._dirty = True
             if self._index == _RESUME:
                 return "resume"

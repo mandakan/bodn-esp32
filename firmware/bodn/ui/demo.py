@@ -70,11 +70,13 @@ class DemoScreen(Screen):
         if self._pause.is_open or self._pause.is_holding:
             return
 
-        # Button press → select pattern
-        first = inp.first_btn_pressed()
-        if first >= 0:
-            self._active_pattern = first % len(PATTERNS)
-            self._dirty = True
+        # Button tap → select pattern (uses gesture layer)
+        g = inp.gestures
+        for i in range(8):
+            if g.tap[i]:
+                self._active_pattern = i % len(PATTERNS)
+                self._dirty = True
+                break
 
         # Encoder A or B button → cycle pattern
         if inp.enc_btn_pressed[ENC_A] or inp.enc_btn_pressed[ENC_B]:

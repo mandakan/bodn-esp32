@@ -224,7 +224,7 @@ When generating or reviewing code, check:
      Does it stay within zone bounds (content: y<128, status: y≥128)?
 3. **Input**:
    - Debouncing implemented? No polling at insane rates?
-   - Hold-to-pause: does the game screen use `PauseMenu.update()` (which owns `HoldDetector`) instead of rolling its own hold logic? No per-frame allocations in the hold path?
+   - Hold-to-pause: does the game screen use `PauseMenu.update()` (which reads from `GestureDetector`) instead of rolling its own hold logic? No per-frame allocations in the hold path?
 4. **Audio**:
    - Reasonable sample rate & buffer size? No per-sample Python loops?
 5. **WiFi**:

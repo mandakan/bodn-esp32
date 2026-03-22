@@ -74,7 +74,7 @@ In game modes, the nav encoder button requires a **~1.5 second hold** to open th
 - **During the hold**, a thin cyan progress bar fills across the top of the screen, giving clear feedback that something is happening.
 - **On completion**, the bar flashes white and the pause menu opens.
 - The **home screen keeps quick-click** for entering modes — hold-to-pause only applies inside game/activity screens.
-- Implementation: `PauseMenu` owns the hold detection via `HoldDetector`, the progress bar rendering, and the menu navigation. Game screens call `self._pause.update(inp, frame)` every frame and check `is_open` / `is_holding` to skip game logic. No per-screen hold management needed.
+- Implementation: `PauseMenu` reads hold detection from `GestureDetector` (via `InputState.gestures`), handles the progress bar rendering, and the menu navigation. Game screens call `self._pause.update(inp, frame)` every frame and check `is_open` / `is_holding` to skip game logic. No per-screen hold management needed.
 - New game modes **must** use `PauseMenu` for the nav encoder instead of checking `enc_btn_pressed[NAV]` directly.
 
 ### 3.2 Feedback
