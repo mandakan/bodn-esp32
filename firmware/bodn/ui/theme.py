@@ -13,6 +13,7 @@ class Theme:
     def __init__(self, width, height, rgb_fn):
         self.width = width
         self.height = height
+        self.rgb = rgb_fn
 
         # Semantic colours (RGB565, byte-swapped)
         self.BLACK = rgb_fn(0, 0, 0)
