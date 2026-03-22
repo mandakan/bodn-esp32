@@ -245,22 +245,26 @@ async def primary_task(manager, settings, inp, encoders, mcp, idle_tracker, powe
         if inp.has_activity():
             idle_tracker.poke()
 
-        # Master switch OFF → sleep until flipped back ON
-        if power_mgr.master_switch_off():
-            power_mgr.sleep_until_master_on()
-            idle_tracker.wake()
-            manager.invalidate()
-        # Menu standby request
-        elif settings.get("_sleep_now"):
-            settings["_sleep_now"] = False
-            power_mgr.sleep_and_wake()
-            idle_tracker.wake()
-            manager.invalidate()
-        # Idle timeout
-        elif idle_tracker.tick():
-            power_mgr.sleep_and_wake()
-            idle_tracker.wake()
-            manager.invalidate()
+        try:
+            # Master switch OFF → sleep until flipped back ON
+            if power_mgr.master_switch_off():
+                power_mgr.sleep_until_master_on()
+                idle_tracker.wake()
+                manager.invalidate()
+            # Menu standby request
+            elif settings.get("_sleep_now"):
+                settings["_sleep_now"] = False
+                power_mgr.sleep_and_wake()
+                idle_tracker.wake()
+                manager.invalidate()
+            # Idle timeout
+            elif idle_tracker.tick():
+                power_mgr.sleep_and_wake()
+                idle_tracker.wake()
+                manager.invalidate()
+        except Exception as e:
+            errors += 1
+            print("power_mgr error #{}: {}".format(errors, e))
 
         # Sync sleep timeout from settings periodically
         if frame % 150 == 0:

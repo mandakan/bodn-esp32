@@ -297,7 +297,7 @@ def test_encoder_recentered_on_every_raw_delta():
 def test_anim_offset_idle_is_zero():
     """When animation is idle, offset is 0."""
     home, _ = make_home()
-    assert home._anim_offset(320) == 0
+    assert home._anim_x(320) == 0
 
 
 def test_anim_offset_during_animation():
@@ -311,7 +311,7 @@ def test_anim_offset_during_animation():
 
     offsets = []
     for step in range(_ANIM_STEPS):
-        offsets.append(home._anim_offset(320))
+        offsets.append(home._anim_x(320))
         inp.enc_delta[0] = 0
         home.update(inp, step + 2)
 
@@ -319,4 +319,4 @@ def test_anim_offset_during_animation():
     abs_offsets = [abs(o) for o in offsets]
     assert abs_offsets[0] > abs_offsets[-1]
     # Final position after animation completes
-    assert home._anim_offset(320) == 0
+    assert home._anim_x(320) == 0

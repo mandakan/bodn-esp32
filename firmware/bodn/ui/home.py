@@ -3,16 +3,20 @@
 from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.icons import MODE_ICONS
-from bodn.ui.widgets import draw_icon, draw_centered, draw_label
-from bodn.ui.input import EncoderAccumulator
+from bodn.ui.widgets import draw_icon, draw_centered
 from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
 
 # Animation: ease-out x-offsets as fraction of screen width (numerator / 4)
-# Represents positions: [full off-screen, 2/3 off, 1/4 off, settled]
+# Positions: [full off-screen, 2/3 off, 1/4 off, settled]
 _ANIM_STEPS = const(4)
 _ANIM_FRAC = (4, 3, 1, 0)  # multiplied by width//4
+
+# Accumulator settings
+_DPU = const(2)  # raw detents per unit (KY-040 dual-edge ≈ 2 per click)
+_FAST_THRESH = const(400)  # velocity threshold for fast multiplier
+_FAST_MULT = const(2)  # multiplier at high velocity
 
 
 class HomeScreen(Screen):
@@ -34,23 +38,39 @@ class HomeScreen(Screen):
         self._error = None
         self._error_mode = None
         self._dirty = True
-        # Velocity-aware accumulator: ~2 raw detents per mode step
-        # (KY-040 IRQ fires on both edges, so 1 physical click ≈ 2 raw detents)
-        self._accumulator = EncoderAccumulator(
-            detents_per_unit=2, fast_threshold=400, fast_multiplier=2
-        )
+        # Inline accumulator state
+        self._accum = 0
         # Animation state
         self._anim_step = _ANIM_STEPS  # >= _ANIM_STEPS means idle
         self._anim_dir = 1  # +1 = incoming from right, -1 = from left
 
     def enter(self, manager):
         self._manager = manager
-        self._accumulator.reset()
+        self._accum = 0
         self._anim_step = _ANIM_STEPS
         self._dirty = True
 
     def needs_redraw(self):
         return self._dirty
+
+    def _accumulate(self, delta, velocity):
+        """Accumulate raw detents into logical units with velocity scaling."""
+        if delta == 0:
+            return 0
+        if velocity >= _FAST_THRESH:
+            self._accum += delta * _FAST_MULT
+        else:
+            self._accum += delta
+        a = self._accum
+        if a >= _DPU:
+            units = a // _DPU
+            self._accum = a - units * _DPU
+            return units
+        if a <= -_DPU:
+            units = -((-a) // _DPU)
+            self._accum = a - units * _DPU
+            return units
+        return 0
 
     def update(self, inp, frame):
         if not self._names:
@@ -85,7 +105,7 @@ class HomeScreen(Screen):
             self._manager.inp._prev_enc_pos[NAV] = mid
 
         velocity = inp.enc_velocity[NAV]
-        units = self._accumulator.update(delta, velocity)
+        units = self._accumulate(delta, velocity)
         if units != 0:
             self._index = (self._index + units) % len(self._names)
             # Start slide animation: incoming from direction of turn
@@ -93,7 +113,7 @@ class HomeScreen(Screen):
             self._anim_dir = 1 if units > 0 else -1
             self._dirty = True
 
-    def _anim_offset(self, width):
+    def _anim_x(self, width):
         """Return the current x-offset for the slide animation."""
         if self._anim_step >= _ANIM_STEPS:
             return 0
@@ -138,7 +158,7 @@ class HomeScreen(Screen):
         """Landscape layout: centered, icon above mode name."""
         w = theme.width
         h = theme.height
-        ox = self._anim_offset(w)
+        ox = self._anim_x(w)
 
         # Title — centered at top (static, no slide)
         draw_centered(tft, t("home_title"), 8, theme.WHITE, w, scale=2)
@@ -154,11 +174,9 @@ class HomeScreen(Screen):
 
         # Mode name — centered below icon, offset by animation
         name_y = 40 + icon_size + 12
-        label = t("mode_" + name).upper()
-        char_w = 8 * 2
-        text_w = len(label) * char_w
-        lx = (w - text_w) // 2 + ox
-        draw_label(tft, label, lx, name_y, theme.CYAN, scale=2)
+        draw_centered(
+            tft, t("mode_" + name).upper(), name_y, theme.CYAN, w + ox * 2, scale=2
+        )
 
         # Arrow hints
         n = len(self._names)
@@ -173,7 +191,7 @@ class HomeScreen(Screen):
     def _render_portrait(self, tft, theme, frame, name):
         """Portrait layout: icon centered, stacked vertically."""
         w = theme.width
-        ox = self._anim_offset(w)
+        ox = self._anim_x(w)
 
         draw_centered(tft, t("home_title"), theme.HEADER_Y, theme.WHITE, w)
 
@@ -185,11 +203,13 @@ class HomeScreen(Screen):
             iy = theme.CENTER_Y - icon_size // 2 - 8
             draw_icon(tft, icon_data, ix, iy, 16, 16, theme.CYAN, scale=icon_scale)
 
-        label = t("mode_" + name).upper()
-        char_w = 8
-        text_w = len(label) * char_w
-        lx = (w - text_w) // 2 + ox
-        draw_label(tft, label, lx, theme.CENTER_Y + 24, theme.WHITE)
+        draw_centered(
+            tft,
+            t("mode_" + name).upper(),
+            theme.CENTER_Y + 24,
+            theme.WHITE,
+            w + ox * 2,
+        )
 
         n = len(self._names)
         if n > 1:

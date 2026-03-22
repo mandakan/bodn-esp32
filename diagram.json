@@ -163,6 +163,13 @@
       "attrs": {}
     },
     {
+      "type": "wokwi-slide-switch",
+      "id": "master_sw",
+      "top": 420,
+      "left": 620,
+      "attrs": { "value": "1" }
+    },
+    {
       "type": "wokwi-led-strip",
       "id": "stickA",
       "top": -55.5,
@@ -629,6 +636,18 @@
     ],
     [
       "sw3:2",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "master_sw:1",
+      "mcp1:GPB4",
+      "red",
+      []
+    ],
+    [
+      "master_sw:2",
       "esp:GND.2",
       "black",
       []
