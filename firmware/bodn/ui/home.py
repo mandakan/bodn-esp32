@@ -4,6 +4,7 @@ from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.icons import MODE_ICONS
 from bodn.ui.widgets import draw_icon, draw_centered
+from bodn.chord import ChordDetector
 from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
@@ -43,6 +44,12 @@ class HomeScreen(Screen):
         # Animation state
         self._anim_step = _ANIM_STEPS  # >= _ANIM_STEPS means idle
         self._anim_dir = 1  # +1 = incoming from right, -1 = from left
+        # Chord: hold btn 0 + press btn 7 → jump to settings
+        self._chords = (
+            ChordDetector({(0, 7): "settings"})
+            if "settings" in self._mode_screens
+            else None
+        )
 
     def enter(self, manager):
         self._manager = manager
@@ -75,6 +82,21 @@ class HomeScreen(Screen):
     def update(self, inp, frame):
         if not self._names:
             return
+
+        # Chord shortcut: hold btn 0 + press btn 7 → settings
+        if self._chords:
+            chord = self._chords.update(inp.btn_held, inp.btn_just_pressed)
+            if chord:
+                for idx in self._chords.suppressed:
+                    inp.gestures.tap[idx] = False
+                if chord in self._mode_screens:
+                    try:
+                        self._manager.push(self._mode_screens[chord]())
+                    except Exception as e:
+                        self._error = str(e)
+                        self._error_mode = chord
+                        self._dirty = True
+                    return
 
         # Nav encoder button or any play button → enter mode
         if inp.any_btn_pressed() or inp.enc_btn_pressed[NAV]:
