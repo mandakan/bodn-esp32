@@ -3,6 +3,7 @@
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
+from bodn.ui.input import BrightnessControl
 from bodn.ui.widgets import draw_progress_bar, draw_button_grid, draw_centered
 from bodn.ui.pause import PauseMenu
 from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING, _BLACK
@@ -36,10 +37,10 @@ class DemoScreen(Screen):
     happens on NeoPixel-write frames (every 3rd frame).
     """
 
-    def __init__(self, np, overlay, enc_steps=20, settings=None):
+    def __init__(self, np, overlay, settings=None):
         self._np = np
         self._overlay = overlay
-        self._enc_steps = enc_steps
+        self._brightness = BrightnessControl()
         self._active_pattern = 0
         self._manager = None
         self._pause = PauseMenu(settings=settings)
@@ -52,6 +53,7 @@ class DemoScreen(Screen):
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
+        self._brightness.reset()
         self._dirty = True
 
     def needs_redraw(self):
@@ -79,8 +81,14 @@ class DemoScreen(Screen):
             self._active_pattern = (self._active_pattern + 1) % len(PATTERNS)
             self._dirty = True
 
-        # Detect input changes for display redraw
-        for i in range(3):
+        # Update brightness from encoder A (velocity-aware)
+        prev_bri = self._brightness.value
+        self._brightness.update(inp.enc_delta[ENC_A], inp.enc_velocity[ENC_A])
+        if self._brightness.value != prev_bri:
+            self._dirty = True
+
+        # Detect encoder changes for display redraw
+        for i in (NAV, ENC_B):
             if inp.enc_pos[i] != self._prev_enc[i]:
                 self._prev_enc[i] = inp.enc_pos[i]
                 self._dirty = True
@@ -95,9 +103,8 @@ class DemoScreen(Screen):
 
         # Only compute and write LEDs on NeoPixel-write frames
         if frame % 3 == 0:
-            enc_pos = inp.enc_pos
-            brightness = min(255, max(10, enc_pos[ENC_A] * 255 // self._enc_steps))
-            speed = max(1, enc_pos[ENC_B])
+            brightness = self._brightness.value
+            speed = max(1, inp.enc_pos[ENC_B])
 
             _name, pat_fn = PATTERNS[self._active_pattern]
 
@@ -175,13 +182,13 @@ class DemoScreen(Screen):
 
     def _render_landscape(self, tft, theme, frame):
         """Split layout: pattern name + buttons left, encoder bars + toggles right."""
-        inp_enc = [0, 0, 0]
         sw = [False] * 4
         held = [False] * 8
+        enc_spd = 0
         if self._manager:
-            inp_enc = self._manager.inp.enc_pos
             sw = self._manager.inp.sw
             held = self._manager.inp.btn_held
+            enc_spd = self._manager.inp.enc_pos[ENC_B]
 
         mid_x = theme.width // 2
 
@@ -229,17 +236,17 @@ class DemoScreen(Screen):
         draw_centered(tft, t("home_title"), 6, theme.WHITE, theme.width)
 
         bar_info = [
-            (t("demo_bri"), theme.CYAN, inp_enc[ENC_A]),
-            (t("demo_spd"), theme.ORANGE, inp_enc[ENC_B]),
+            (t("demo_bri"), theme.CYAN, self._brightness.value, 255),
+            (t("demo_spd"), theme.ORANGE, enc_spd, 20),
         ]
-        for i, (label, colour_565, val) in enumerate(bar_info):
+        for i, (label, colour_565, val, max_val) in enumerate(bar_info):
             y = 40 + i * 28
             tft.text(label, rx, y, colour_565)
             bar_x = rx + 32
             bar_w = rw - 32
             tft.rect(bar_x, y, bar_w, 14, theme.WHITE)
             draw_progress_bar(
-                tft, bar_x, y, bar_w, 14, val, self._enc_steps, colour_565, theme.BLACK
+                tft, bar_x, y, bar_w, 14, val, max_val, colour_565, theme.BLACK
             )
 
         # Back hint
@@ -247,13 +254,13 @@ class DemoScreen(Screen):
 
     def _render_portrait(self, tft, theme, frame):
         """Stacked layout for portrait displays."""
-        inp_enc = [0, 0, 0]
         sw = [False] * 4
         held = [False] * 8
+        enc_spd = 0
         if self._manager:
-            inp_enc = self._manager.inp.enc_pos
             sw = self._manager.inp.sw
             held = self._manager.inp.btn_held
+            enc_spd = self._manager.inp.enc_pos[ENC_B]
 
         tft.text(t("home_title"), 32, 3, theme.WHITE)
 
@@ -262,15 +269,13 @@ class DemoScreen(Screen):
         tft.text(PATTERN_NAMES[self._active_pattern], 4, 18, theme.BLACK)
 
         bar_info = [
-            (t("demo_bri"), theme.CYAN, inp_enc[ENC_A]),
-            (t("demo_spd"), theme.ORANGE, inp_enc[ENC_B]),
+            (t("demo_bri"), theme.CYAN, self._brightness.value, 255),
+            (t("demo_spd"), theme.ORANGE, enc_spd, 20),
         ]
-        for i, (label, colour_565, val) in enumerate(bar_info):
+        for i, (label, colour_565, val, max_val) in enumerate(bar_info):
             y = 32 + i * 16
             tft.rect(24, y, 96, 10, theme.WHITE)
-            draw_progress_bar(
-                tft, 24, y, 96, 10, val, self._enc_steps, colour_565, theme.BLACK
-            )
+            draw_progress_bar(tft, 24, y, 96, 10, val, max_val, colour_565, theme.BLACK)
             tft.text(label, 0, y + 1, colour_565)
 
         tft.text(t("demo_toggles"), 0, 70, theme.WHITE)

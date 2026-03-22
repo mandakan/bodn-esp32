@@ -51,6 +51,47 @@ class EncoderAccumulator:
         self._accum = 0
 
 
+class BrightnessControl:
+    """Velocity-aware brightness from encoder delta.
+
+    Wraps EncoderAccumulator to produce a clamped brightness value.
+    Slow turns give fine adjustment; fast spins jump to extremes.
+
+    Args:
+        initial: starting brightness (0–255).
+        minimum: floor brightness (default 10, never fully off).
+        maximum: ceiling brightness (default 255).
+        step: brightness change per logical encoder unit.
+    """
+
+    def __init__(self, initial=128, minimum=10, maximum=255, step=20):
+        self._acc = EncoderAccumulator(
+            detents_per_unit=3, fast_threshold=400, fast_multiplier=3
+        )
+        self._value = initial
+        self._min = minimum
+        self._max = maximum
+        self._step = step
+
+    @property
+    def value(self):
+        return self._value
+
+    def update(self, delta, velocity):
+        """Feed encoder delta and velocity; returns current brightness."""
+        units = self._acc.update(delta, velocity)
+        if units:
+            v = self._value + units * self._step
+            self._value = min(self._max, max(self._min, v))
+        return self._value
+
+    def reset(self, value=None):
+        """Reset accumulator; optionally set a new brightness value."""
+        self._acc.reset()
+        if value is not None:
+            self._value = value
+
+
 class InputState:
     """Wraps buttons, switches and encoders into a single scannable state.
 

@@ -3,6 +3,7 @@
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
+from bodn.ui.input import BrightnessControl
 from bodn.ui.widgets import draw_centered, draw_button_grid
 from bodn.ui.pause import PauseMenu
 from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
@@ -28,6 +29,7 @@ class MysteryScreen(Screen):
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = MysteryEngine()
+        self._brightness = BrightnessControl()
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._prev_out_type = OUT_IDLE
@@ -37,6 +39,7 @@ class MysteryScreen(Screen):
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
+        self._brightness.reset()
         self._dirty = True
 
     def exit(self):
@@ -102,10 +105,18 @@ class MysteryScreen(Screen):
             self._dirty = True
             self._leds_dirty = True
 
+        # Update brightness from encoder A (velocity-aware)
+        prev_bri = self._brightness.value
+        self._brightness.update(
+            inp.enc_delta[config.ENC_A], inp.enc_velocity[config.ENC_A]
+        )
+        if self._brightness.value != prev_bri:
+            self._leds_dirty = True
+
         # Write LEDs only when state changes (static patterns, no animation)
         if self._leds_dirty:
             self._leds_dirty = False
-            brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
+            brightness = self._brightness.value
             lid_bright = min(brightness, config.NEOPIXEL_LID_BRIGHTNESS)
 
             # Sticks: game feedback (engine writes indices 0–15)

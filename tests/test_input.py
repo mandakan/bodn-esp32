@@ -1,6 +1,6 @@
 """Tests for InputState — debouncing, edge detection, encoder tracking."""
 
-from bodn.ui.input import EncoderAccumulator, InputState
+from bodn.ui.input import BrightnessControl, EncoderAccumulator, InputState
 
 
 class FakePin:
@@ -348,3 +348,71 @@ def test_accumulator_direction_change():
     assert acc.update(1, 0) == 0
     assert acc.update(1, 0) == 0
     assert acc.update(1, 0) == 1
+
+
+# --- BrightnessControl ---
+
+
+def test_brightness_initial_value():
+    bc = BrightnessControl(initial=128)
+    assert bc.value == 128
+
+
+def test_brightness_slow_turn_fine_adjustment():
+    bc = BrightnessControl(initial=128, step=20)
+    # 3 slow detents (below fast threshold) → 1 unit → +20 brightness
+    bc.update(1, 100)
+    bc.update(1, 100)
+    assert bc.value == 128  # not yet
+    bc.update(1, 100)
+    assert bc.value == 148  # +20
+
+
+def test_brightness_fast_spin_big_jump():
+    bc = BrightnessControl(initial=128, step=20)
+    # 1 detent at high velocity → multiplied by 3 → 1 unit → +20
+    bc.update(1, 500)
+    assert bc.value == 148
+
+
+def test_brightness_clamps_to_max():
+    bc = BrightnessControl(initial=240, step=20)
+    bc.update(1, 500)  # +20 → 260, clamped to 255
+    assert bc.value == 255
+
+
+def test_brightness_clamps_to_min():
+    bc = BrightnessControl(initial=20, step=20)
+    bc.update(-1, 500)  # -20 → 0, clamped to 10
+    assert bc.value == 10
+
+
+def test_brightness_reset_clears_accumulator():
+    bc = BrightnessControl(initial=128, step=20)
+    bc.update(1, 100)  # accumulate 1 detent
+    bc.reset(value=200)
+    assert bc.value == 200
+    # After reset, need full 3 detents again
+    assert bc.update(1, 100) == 200
+    assert bc.update(1, 100) == 200
+    bc.update(1, 100)
+    assert bc.value == 220
+
+
+def test_brightness_decrease_direction():
+    bc = BrightnessControl(initial=128, step=20)
+    bc.update(-1, 100)
+    bc.update(-1, 100)
+    bc.update(-1, 100)
+    assert bc.value == 108
+
+
+def test_brightness_consistent_across_instances():
+    """All instances with same params produce identical behavior."""
+    controls = [BrightnessControl() for _ in range(4)]
+    deltas = [(1, 100), (1, 100), (1, 100), (-1, 500), (1, 500)]
+    for d, v in deltas:
+        for bc in controls:
+            bc.update(d, v)
+    values = [bc.value for bc in controls]
+    assert len(set(values)) == 1  # all identical

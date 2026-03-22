@@ -5,7 +5,7 @@ from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered
 from bodn.ui.pause import PauseMenu
-from bodn.ui.input import EncoderAccumulator
+from bodn.ui.input import BrightnessControl, EncoderAccumulator
 from bodn.i18n import t
 from bodn.flode_rules import FlodeEngine, PLAYING, COMPLETE, CELEBRATE
 from bodn.patterns import N_LEDS, zone_fill, zone_pulse, zone_clear, ZONE_LID_RING
@@ -81,7 +81,8 @@ class FlodeScreen(Screen):
 
         self._engine = FlodeEngine(rand_fn=_rand)
 
-        # Encoder accumulators
+        # Brightness and encoder accumulators
+        self._brightness = BrightnessControl()
         self._select_acc = EncoderAccumulator(
             detents_per_unit=2, fast_threshold=300, fast_multiplier=2
         )
@@ -105,6 +106,7 @@ class FlodeScreen(Screen):
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
+        self._brightness.reset()
         # Seed RNG from a somewhat unpredictable source
         import time
 
@@ -280,16 +282,22 @@ class FlodeScreen(Screen):
         if self._tick_anim():
             self._dirty = True
 
+        # Update brightness from encoder A (velocity-aware)
+        prev_bri = self._brightness.value
+        self._brightness.update(inp.enc_delta[ENC_A], inp.enc_velocity[ENC_A])
+        if self._brightness.value != prev_bri:
+            self._leds_dirty = True
+
         # Update LEDs on state change
         if self._leds_dirty:
             self._leds_dirty = False
-            self._update_leds(inp, frame)
+            self._update_leds(frame)
 
-    def _update_leds(self, inp, frame):
+    def _update_leds(self, frame):
         """Write LED state based on game state."""
         np = self._np
         eng = self._engine
-        brightness = min(255, max(10, inp.enc_pos[config.ENC_A] * 255 // 20))
+        brightness = self._brightness.value
         lid_bright = min(brightness, config.NEOPIXEL_LID_BRIGHTNESS)
 
         if eng.state == CELEBRATE:
