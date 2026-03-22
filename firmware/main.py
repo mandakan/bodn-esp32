@@ -91,8 +91,8 @@ def create_hardware():
             config.ENC2_CLK,
             config.ENC2_DT,
             config.ENC2_SW,
-            min_val=0,
-            max_val=ENC_STEPS,
+            min_val=-10000,
+            max_val=10000,
         ),
         Encoder(
             config.ENC3_CLK,
@@ -102,7 +102,6 @@ def create_hardware():
             max_val=ENC_STEPS,
         ),
     ]
-    encoders[config.ENC_A].value = ENC_STEPS // 2  # brightness default
     encoders[config.ENC_B].value = ENC_STEPS // 4  # speed default
 
     return tft, tft2, buttons, switches, encoders, np, mcp
@@ -198,7 +197,7 @@ def create_ui(
         "flode": _make_flode,
         "demo": lambda: (
             _reset_secondary(),
-            DemoScreen(np, overlay, enc_steps=ENC_STEPS, settings=settings),
+            DemoScreen(np, overlay, settings=settings),
         )[1],
         "clock": lambda: (_reset_secondary(), ClockScreen(settings=settings))[1],
         "settings": _make_settings,
