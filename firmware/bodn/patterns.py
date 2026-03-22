@@ -184,10 +184,15 @@ def pattern_fill(frame, speed, colour, bright):
 # --- Zone-aware helpers ---
 
 
-def zone_fill(zone, colour):
-    """Fill a zone with a solid colour. zone = (start, count)."""
+def zone_fill(zone, colour, bright=255):
+    """Fill a zone with a solid colour, optionally scaled by brightness."""
     buf = _led_buf
     start, count = zone
+    if bright < 255:
+        r = colour[0] * bright // 255
+        g = colour[1] * bright // 255
+        b = colour[2] * bright // 255
+        colour = (r, g, b)
     for i in range(start, start + count):
         buf[i] = colour
 
