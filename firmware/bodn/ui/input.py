@@ -3,6 +3,7 @@
 from micropython import const
 
 from bodn.debounce import Debouncer
+from bodn.gesture import GestureDetector
 
 _VELOCITY_TIMEOUT_MS = const(200)  # velocity decays to 0 after this idle time
 
@@ -124,11 +125,19 @@ class InputState:
         self.enc_velocity = [0] * n_enc  # steps/second per encoder
         self.enc_btn_held = [False] * n_enc
         self.enc_btn_pressed = [False] * n_enc
+        self.enc_btn_just_released = [False] * n_enc
 
         self._prev_btn = [False] * n_btn
         self._prev_enc_pos = [0] * n_enc
         self._prev_enc_btn = [False] * n_enc
         self._enc_last_step_ms = [0] * n_enc
+
+        # Gesture detection for all buttons + encoder buttons
+        n_total = n_btn + n_enc
+        self.gestures = GestureDetector(n_total)
+        self._g_held = [False] * n_total
+        self._g_pressed = [False] * n_total
+        self._g_released = [False] * n_total
 
     def scan(self):
         """Read all inputs. Call once per frame."""
@@ -164,7 +173,10 @@ class InputState:
         prev_enc_pos = self._prev_enc_pos
         enc_btn_held = self.enc_btn_held
         enc_btn_pressed = self.enc_btn_pressed
+        enc_btn_just_released = self.enc_btn_just_released
         prev_enc_btn = self._prev_enc_btn
+        n_btn = len(buttons)
+        n_enc = len(encoders)
         enc_btn_deb = self._enc_btn_deb
         enc_last_step = self._enc_last_step_ms
 
@@ -188,7 +200,23 @@ class InputState:
             cur_btn = enc_btn_deb[i].update(enc.sw.value(), now)
             enc_btn_held[i] = cur_btn
             enc_btn_pressed[i] = cur_btn and not p_btn
+            enc_btn_just_released[i] = not cur_btn and p_btn
             prev_enc_btn[i] = cur_btn
+
+        # Update gesture detector with combined button + encoder state
+        gh = self._g_held
+        gp = self._g_pressed
+        gr = self._g_released
+        for i in range(n_btn):
+            gh[i] = btn_held[i]
+            gp[i] = btn_just_pressed[i]
+            gr[i] = btn_just_released[i]
+        off = n_btn
+        for i in range(n_enc):
+            gh[off + i] = enc_btn_held[i]
+            gp[off + i] = enc_btn_pressed[i]
+            gr[off + i] = enc_btn_just_released[i]
+        self.gestures.update(gh, gp, gr, now)
 
     def has_activity(self):
         """Return True if any input changed this frame (for idle tracking)."""
@@ -210,3 +238,7 @@ class InputState:
             if p:
                 return i
         return -1
+
+    def gesture_enc(self, enc_idx):
+        """Return gesture channel index for an encoder button."""
+        return len(self._buttons) + enc_idx

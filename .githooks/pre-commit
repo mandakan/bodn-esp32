@@ -8,8 +8,13 @@ STAGED=$(git diff --cached --name-only)
 
 # --- Format check: run on any staged .py file ---
 PY_FILES=$(echo "$STAGED" | grep '\.py$' || true)
-if [ -n "$PY_FILES" ]; then
-    if ! uv run ruff format --check $PY_FILES >/dev/null 2>&1; then
+# Filter to only existing files (deleted files would cause ruff to error)
+EXISTING_PY=""
+for f in $PY_FILES; do
+    [ -f "$f" ] && EXISTING_PY="$EXISTING_PY $f"
+done
+if [ -n "$EXISTING_PY" ]; then
+    if ! uv run ruff format --check $EXISTING_PY >/dev/null 2>&1; then
         echo ""
         echo "ERROR: Some staged Python files are not formatted."
         echo ""
