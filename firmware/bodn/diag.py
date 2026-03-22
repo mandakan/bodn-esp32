@@ -6,6 +6,15 @@
 import gc
 import time
 
+# Hardware status — set once by main.py after create_hardware().
+_hw_status = {}
+
+
+def set_hw_status(status):
+    """Store hardware detection results for the diagnostic screen."""
+    global _hw_status
+    _hw_status = status
+
 
 def gather(ip="0.0.0.0", boot_results=None, boot_steps=None):
     """Collect system diagnostics. Returns list of (label, value) pairs."""
@@ -78,5 +87,12 @@ def gather(ip="0.0.0.0", boot_results=None, boot_steps=None):
             for i in range(len(boot_steps))
         )
         info.append(("Boot", summary))
+
+    # Hardware detection (set by main.py after create_hardware)
+    if _hw_status:
+        parts = []
+        for name, ok in sorted(_hw_status.items()):
+            parts.append("{}:{}".format(name.upper(), "ok" if ok else "--"))
+        info.append(("Hardware", " ".join(parts)))
 
     return info

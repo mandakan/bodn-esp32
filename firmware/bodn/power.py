@@ -99,21 +99,20 @@ class PowerManager:
         from bodn import config
 
         # Enable MCP23017 interrupts (any button/toggle change pulls INT low)
-        self._mcp.enable_interrupts()
+        if self._mcp:
+            self._mcp.enable_interrupts()
 
-        # Wake sources: MCP INT + encoder buttons (all active-low)
-        wake_pins = [
-            config.MCP_INT_PIN,
-            config.ENC1_SW,
-            config.ENC2_SW,
-            config.ENC3_SW,
-        ]
+        # Wake sources: encoder buttons (all active-low) + MCP INT if present
+        wake_pins = [config.ENC1_SW, config.ENC2_SW, config.ENC3_SW]
+        if self._mcp:
+            wake_pins.append(config.MCP_INT_PIN)
         for pin_num in wake_pins:
             p = Pin(pin_num, Pin.IN, Pin.PULL_UP)
             esp32.gpio_wakeup(p, esp32.WAKEUP_ANY_LOW)
 
         # Clear pending MCP interrupts before sleeping
-        self._mcp.clear_interrupts()
+        if self._mcp:
+            self._mcp.clear_interrupts()
 
         print("POWER: entering light sleep")
         machine.lightsleep()
@@ -125,8 +124,9 @@ class PowerManager:
         from bodn import config
 
         # Clear MCP23017 interrupt state and disable interrupts
-        self._mcp.clear_interrupts()
-        self._mcp.disable_interrupts()
+        if self._mcp:
+            self._mcp.clear_interrupts()
+            self._mcp.disable_interrupts()
 
         # Wake displays (SLPOUT)
         self._tft._cmd(0x11)
@@ -139,6 +139,8 @@ class PowerManager:
 
     def master_switch_off(self):
         """Return True if the master switch is in the OFF position (high = off)."""
+        if not self._mcp:
+            return False  # assume device ON when MCP is absent
         from bodn import config
 
         self._mcp.refresh()
@@ -163,5 +165,6 @@ class PowerManager:
             if not self.master_switch_off():
                 break
             # Still off — clear interrupts and sleep again
-            self._mcp.clear_interrupts()
+            if self._mcp:
+                self._mcp.clear_interrupts()
         self.post_wake()

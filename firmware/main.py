@@ -35,7 +35,15 @@ N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 
 
 def create_hardware():
-    """Initialise all hardware peripherals. Returns (tft, tft2, buttons, switches, encoders, np, mcp, i2s_out)."""
+    """Initialise all hardware peripherals.
+
+    Returns (tft, tft2, buttons, switches, encoders, np, mcp, hw_status).
+    Components that fail to initialise degrade gracefully:
+    - MCP23017 missing → buttons/switches are empty lists, mcp is None.
+    - SPI displays can't be probed (push-only) so are always assumed present.
+    """
+    hw_status = {"mcp": False}
+
     spi = SPI(
         2,
         baudrate=26_000_000,
@@ -74,10 +82,18 @@ def create_hardware():
     )
 
     # MCP23017 GPIO expander for buttons and toggles (I2C)
-    i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
-    mcp = MCP23017(i2c, config.MCP23017_ADDR)
-    buttons = [mcp.pin(p) for p in config.MCP_BTN_PINS]
-    switches = [mcp.pin(p) for p in config.MCP_SW_PINS]
+    mcp = None
+    buttons = []
+    switches = []
+    try:
+        i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+        mcp = MCP23017(i2c, config.MCP23017_ADDR)
+        buttons = [mcp.pin(p) for p in config.MCP_BTN_PINS]
+        switches = [mcp.pin(p) for p in config.MCP_SW_PINS]
+        hw_status["mcp"] = True
+    except Exception as e:
+        print("MCP23017 not found, buttons/switches disabled:", e)
+
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
         Encoder(
@@ -104,7 +120,7 @@ def create_hardware():
     ]
     encoders[config.ENC_B].value = ENC_STEPS // 4  # speed default
 
-    return tft, tft2, buttons, switches, encoders, np, mcp
+    return tft, tft2, buttons, switches, encoders, np, mcp, hw_status
 
 
 def create_ui(
@@ -353,7 +369,12 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    tft, tft2, buttons, switches, encoders, np, mcp = create_hardware()
+    tft, tft2, buttons, switches, encoders, np, mcp, hw_status = create_hardware()
+
+    # Publish hardware status for diagnostics
+    from bodn.diag import set_hw_status
+
+    set_hw_status(hw_status)
     manager, secondary, inp = create_ui(
         session_mgr,
         settings,
