@@ -195,15 +195,22 @@ def test_custom_birth_rule():
 
 def test_new_cell_mixes_parent_colors():
     """New cells should get the nearest palette color to the RGB average of parents."""
+    from bodn.life_rules import CELL_COLORS
+
     g = clear(5, 5)
     # Place 3 cells around (2,1) — 2 red (255,0,0), 1 blue (0,0,255)
-    # Average RGB = (170, 0, 85) → nearest palette color is red (255,0,0)
+    # Average RGB = (170, 0, 85) → nearest palette color is plum (128,0,128)
     place(g, 1, 0, 5, 1)  # red
     place(g, 2, 0, 5, 1)  # red
     place(g, 3, 0, 5, 3)  # blue
     new, births, deaths = step(g, 5, 5)
     if (2, 1) in births:
-        assert new[1 * 5 + 2] == 1  # closest to red
+        child_idx = new[1 * 5 + 2]
+        child_rgb = CELL_COLORS[child_idx - 1]
+        # Should be a reddish-purple mix (significant red, some blue, low green)
+        assert child_rgb[0] > 100  # red component
+        assert child_rgb[1] < 50  # low green
+        assert child_rgb[2] > 50  # some blue
 
 
 def test_color_mixing_produces_blend():

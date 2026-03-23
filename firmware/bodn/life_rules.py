@@ -22,17 +22,33 @@ FRIENDLY_SURVIVE = frozenset((1, 2, 3))
 GRID_W = const(16)
 GRID_H = const(12)
 
-# Button-to-color mapping (1-indexed: cell value 1–8 = button 0–7)
+# Color palette — first 8 are button colors (1-indexed: cell value 1–8),
+# followed by intermediate mix colors for smoother blending.
 CELL_COLORS = [
-    (255, 0, 0),  # btn 0: red
-    (0, 255, 0),  # btn 1: green
-    (0, 0, 255),  # btn 2: blue
-    (255, 255, 0),  # btn 3: yellow
-    (0, 255, 255),  # btn 4: cyan
-    (255, 0, 255),  # btn 5: magenta
-    (255, 128, 0),  # btn 6: orange
-    (128, 0, 255),  # btn 7: purple
+    # Button colors (indices 1–8)
+    (255, 0, 0),  # 1: red
+    (0, 255, 0),  # 2: green
+    (0, 0, 255),  # 3: blue
+    (255, 255, 0),  # 4: yellow
+    (0, 255, 255),  # 5: cyan
+    (255, 0, 255),  # 6: magenta
+    (255, 128, 0),  # 7: orange
+    (128, 0, 255),  # 8: purple
+    # Mix colors (indices 9+, only produced by blending)
+    (255, 128, 128),  # 9: pink (red + white-ish)
+    (128, 255, 0),  # 10: lime (green + yellow)
+    (0, 128, 255),  # 11: sky blue (blue + cyan)
+    (255, 200, 0),  # 12: gold (yellow + orange)
+    (0, 255, 128),  # 13: mint (green + cyan)
+    (255, 0, 128),  # 14: rose (red + magenta)
+    (128, 0, 128),  # 15: plum (blue + red dark)
+    (128, 128, 0),  # 16: olive (red + green dark)
+    (0, 128, 128),  # 17: teal (green + blue dark)
+    (200, 100, 50),  # 18: rust (warm brown-ish)
+    (128, 128, 255),  # 19: lavender (blue + white-ish)
+    (255, 180, 100),  # 20: peach (orange + light)
 ]
+N_BUTTON_COLORS = 8  # first 8 are directly plantable via buttons
 
 # Preset garden plots — 8 highlighted positions for button planting (tier 1)
 GARDEN_PLOTS = [
@@ -128,7 +144,7 @@ def _mixed_color(grid, x, y, w, h, wrap):
                     continue
             c = grid[ny * w + nx]
             if c:
-                r, g, b = CELL_COLORS[min(c - 1, 7)]
+                r, g, b = CELL_COLORS[min(c - 1, len(CELL_COLORS) - 1)]
                 r_sum += r
                 g_sum += g
                 b_sum += b

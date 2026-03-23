@@ -349,12 +349,13 @@ class GardenScreen(Screen):
 
     def _dominant_grid_color(self):
         """Find the most common cell color in the grid."""
-        counts = [0] * 9  # index 0 unused, 1–8 for colors
+        n_colors = len(CELL_COLORS) + 1  # index 0 unused
+        counts = [0] * n_colors
         for c in self._grid:
-            if c:
+            if c and c < n_colors:
                 counts[c] += 1
         best = 1
-        for i in range(1, 9):
+        for i in range(1, n_colors):
             if counts[i] > counts[best]:
                 best = i
         if best - 1 < len(CELL_COLORS):
