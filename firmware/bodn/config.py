@@ -22,11 +22,23 @@ TFT_ROW_OFFSET = const(0)
 
 # Secondary display: 1.8" ST7735 TFT (shares SPI bus, separate CS)
 TFT2_CS = const(39)
-TFT2_WIDTH = const(128)
-TFT2_HEIGHT = const(160)
-TFT2_MADCTL = const(0x08)  # BGR only (may need MX depending on module)
-TFT2_COL_OFFSET = const(0)
-TFT2_ROW_OFFSET = const(0)
+TFT2_PANEL_W = 128  # physical panel short side (not a GPIO — no const)
+TFT2_PANEL_H = 160  # physical panel long side (not a GPIO — no const)
+TFT2_LANDSCAPE = False  # set True when display is mounted sideways
+
+# Effective dimensions after rotation
+if TFT2_LANDSCAPE:
+    TFT2_WIDTH = 160
+    TFT2_HEIGHT = 128
+    TFT2_MADCTL = 0x68  # MV + MX + BGR (90° CW — adjust MX/MY to match mounting)
+    TFT2_COL_OFFSET = 0
+    TFT2_ROW_OFFSET = 0
+else:
+    TFT2_WIDTH = 128
+    TFT2_HEIGHT = 160
+    TFT2_MADCTL = 0x08  # BGR only (may need MX depending on module)
+    TFT2_COL_OFFSET = 0
+    TFT2_ROW_OFFSET = 0
 
 # INMP441 I2S microphone (I2S IN)
 I2S_MIC_SCK = const(14)
