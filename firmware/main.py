@@ -31,7 +31,6 @@ from bodn.ui.ambient import StatusStrip
 from bodn.power import IdleTracker, PowerManager
 from bodn import i18n
 
-ENC_STEPS = const(20)
 N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 
 
@@ -122,29 +121,10 @@ def create_hardware():
 
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
-        Encoder(
-            config.ENC1_CLK,
-            config.ENC1_DT,
-            config.ENC1_SW,
-            min_val=0,
-            max_val=ENC_STEPS,
-        ),
-        Encoder(
-            config.ENC2_CLK,
-            config.ENC2_DT,
-            config.ENC2_SW,
-            min_val=-10000,
-            max_val=10000,
-        ),
-        Encoder(
-            config.ENC3_CLK,
-            config.ENC3_DT,
-            config.ENC3_SW,
-            min_val=0,
-            max_val=ENC_STEPS,
-        ),
+        Encoder(config.ENC1_CLK, config.ENC1_DT, config.ENC1_SW),
+        Encoder(config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW),
+        Encoder(config.ENC3_CLK, config.ENC3_DT, config.ENC3_SW),
     ]
-    encoders[config.ENC_B].value = ENC_STEPS // 4  # speed default
 
     return tft, tft2, buttons, switches, encoders, np, mcp, pwm, hw_status
 

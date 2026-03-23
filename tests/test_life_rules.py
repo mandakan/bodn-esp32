@@ -16,7 +16,6 @@ from bodn.life_rules import (
     load_preset,
     GRID_W,
     GRID_H,
-    CONWAY_BIRTH,
     CONWAY_SURVIVE,
     FRIENDLY_BIRTH,
     FRIENDLY_SURVIVE,

@@ -152,10 +152,6 @@ class PauseMenu(Screen):
         if delta != 0:
             step = 1 if delta > 0 else -1
             self._index = (self._index + step) % _N_ITEMS
-            if self._manager:
-                mid = self._manager.inp._encoders[NAV]._max // 2
-                self._manager.inp._encoders[NAV].value = mid
-                self._manager.inp._prev_enc_pos[NAV] = mid
             self._dirty = True
 
         # Nav encoder button or any play button = confirm

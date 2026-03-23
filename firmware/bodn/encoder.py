@@ -8,13 +8,11 @@ class Encoder:
     value increments/decrements on each detent. Read it from the main loop.
     """
 
-    def __init__(self, clk_pin, dt_pin, sw_pin, min_val=0, max_val=20):
+    def __init__(self, clk_pin, dt_pin, sw_pin):
         self.clk = Pin(clk_pin, Pin.IN, Pin.PULL_UP)
         self.dt = Pin(dt_pin, Pin.IN, Pin.PULL_UP)
         self.sw = Pin(sw_pin, Pin.IN, Pin.PULL_UP)
         self.value = 0
-        self._min = min_val
-        self._max = max_val
         self._last_clk = self.clk.value()
         self.clk.irq(
             trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING,
@@ -25,9 +23,9 @@ class Encoder:
         clk_val = self.clk.value()
         if clk_val != self._last_clk:
             if clk_val != self.dt.value():
-                self.value = min(self._max, self.value + 1)
+                self.value += 1
             else:
-                self.value = max(self._min, self.value - 1)
+                self.value -= 1
             self._last_clk = clk_val
 
     def pressed(self):
