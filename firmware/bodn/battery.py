@@ -7,6 +7,13 @@
 #
 # ADC attenuation: ATTN_2_5DB gives ~0–1.25 V full scale, which covers the
 # divided LiPo range of 0.73 V (3.0 V empty) to 1.02 V (4.2 V full).
+#
+# No-battery detection:
+#   When USB-powered with no LiPo attached, the BAT_SENS divider floats and
+#   produces noisy / very low readings.  We detect this by checking both that
+#   USB power is present AND the voltage is below the plausible LiPo minimum
+#   (< 2.5 V, well below the 3.0 V "empty" threshold).  In this state read()
+#   returns (None, True) so the UI can hide the battery indicator.
 
 import time
 from micropython import const
@@ -24,12 +31,16 @@ _VBAT_FULL_MV = const(4200)  # LiPo 100 %
 _VBAT_EMPTY_MV = const(3000)  # LiPo 0 %
 _VBAT_RANGE_MV = const(1200)  # 4200 - 3000
 
+# Below this voltage (mV) with USB power present → no battery connected.
+# A real LiPo never drops below ~2.8 V under load; 2500 mV gives margin.
+_NO_BAT_THRESH_MV = const(2500)
+
 _SAMPLES = const(4)  # ADC readings to average per measurement
 _CACHE_MS = const(30_000)  # re-read at most once every 30 s
 
 _adc = None
 _pwr_pin = None
-_cached_pct = 0
+_cached_pct = None  # None means no battery detected
 _cached_charging = False
 _next_read_ms = 0
 
@@ -44,9 +55,9 @@ def _init():
 
 
 def read():
-    """Return (percent: int, charging: bool).
+    """Return (percent, charging).
 
-    percent  — battery charge level 0–100.
+    percent  — battery charge level 0–100, or None if no battery detected.
     charging — True when USB / charger power is detected.
 
     Results are cached for 30 s to avoid hammering the ADC.
@@ -63,12 +74,18 @@ def read():
         raw += _adc.read()
     raw //= _SAMPLES
     v_bat_mv = raw * _VBAT_MV_NUM // _ADC_MAX
-    pct = (v_bat_mv - _VBAT_EMPTY_MV) * 100 // _VBAT_RANGE_MV
-    pct = max(0, min(100, pct))
 
     # PWR_SENS is high-Z (reads high via internal pull-down on the board)
     # when on battery, and driven low when USB power / charger is active.
     charging = _pwr_pin.value() == 0
+
+    # No-battery heuristic: USB powered but divider reads below plausible
+    # LiPo voltage → the BAT pin is floating (no cell attached).
+    if charging and v_bat_mv < _NO_BAT_THRESH_MV:
+        pct = None
+    else:
+        pct = (v_bat_mv - _VBAT_EMPTY_MV) * 100 // _VBAT_RANGE_MV
+        pct = max(0, min(100, pct))
 
     _cached_pct = pct
     _cached_charging = charging
