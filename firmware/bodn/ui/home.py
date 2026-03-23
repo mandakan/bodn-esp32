@@ -120,12 +120,6 @@ class HomeScreen(Screen):
 
         # Nav encoder rotation cycles modes via accumulator
         delta = inp.enc_delta[NAV]
-        if delta != 0:
-            # Re-center encoder on every raw delta to prevent hitting clamp limits
-            mid = self._manager.inp._encoders[NAV]._max // 2
-            self._manager.inp._encoders[NAV].value = mid
-            self._manager.inp._prev_enc_pos[NAV] = mid
-
         velocity = inp.enc_velocity[NAV]
         units = self._accumulate(delta, velocity)
         if units != 0:

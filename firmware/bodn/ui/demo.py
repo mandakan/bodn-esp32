@@ -106,7 +106,7 @@ class DemoScreen(Screen):
         # Only compute and write LEDs on NeoPixel-write frames
         if frame % 3 == 0:
             brightness = self._brightness.value
-            speed = max(1, inp.enc_pos[ENC_B])
+            speed = max(1, min(20, inp.enc_pos[ENC_B]))
 
             _name, pat_fn = PATTERNS[self._active_pattern]
 
@@ -190,7 +190,7 @@ class DemoScreen(Screen):
         if self._manager:
             sw = self._manager.inp.sw
             held = self._manager.inp.btn_held
-            enc_spd = self._manager.inp.enc_pos[ENC_B]
+            enc_spd = max(0, min(20, self._manager.inp.enc_pos[ENC_B]))
 
         mid_x = theme.width // 2
 
@@ -262,7 +262,7 @@ class DemoScreen(Screen):
         if self._manager:
             sw = self._manager.inp.sw
             held = self._manager.inp.btn_held
-            enc_spd = self._manager.inp.enc_pos[ENC_B]
+            enc_spd = max(0, min(20, self._manager.inp.enc_pos[ENC_B]))
 
         tft.text(t("home_title"), 32, 3, theme.WHITE)
 

@@ -91,6 +91,12 @@ STRINGS = {
     # Mystery Box
     "mystery_magic": "MAGIC!",
     "mystery_mix": "Mix!",
+    # Garden of Life
+    "mode_garden": "garden",
+    "garden_plant": "Plant!",
+    "garden_empty": "Plant again!",
+    "garden_success": "GREAT!",
+    "garden_almost": "Almost!",
     # Session overlay
     "overlay_zzz": "Zzz...",
     "overlay_zzz_short": "Zzz",

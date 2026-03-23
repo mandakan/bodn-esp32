@@ -31,7 +31,6 @@ from bodn.ui.ambient import StatusStrip
 from bodn.power import IdleTracker, PowerManager
 from bodn import i18n
 
-ENC_STEPS = const(20)
 N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 
 
@@ -122,29 +121,10 @@ def create_hardware():
 
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
-        Encoder(
-            config.ENC1_CLK,
-            config.ENC1_DT,
-            config.ENC1_SW,
-            min_val=0,
-            max_val=ENC_STEPS,
-        ),
-        Encoder(
-            config.ENC2_CLK,
-            config.ENC2_DT,
-            config.ENC2_SW,
-            min_val=-10000,
-            max_val=10000,
-        ),
-        Encoder(
-            config.ENC3_CLK,
-            config.ENC3_DT,
-            config.ENC3_SW,
-            min_val=0,
-            max_val=ENC_STEPS,
-        ),
+        Encoder(config.ENC1_CLK, config.ENC1_DT, config.ENC1_SW),
+        Encoder(config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW),
+        Encoder(config.ENC3_CLK, config.ENC3_DT, config.ENC3_SW),
     ]
-    encoders[config.ENC_B].value = ENC_STEPS // 4  # speed default
 
     return tft, tft2, buttons, switches, encoders, np, mcp, pwm, hw_status
 
@@ -226,6 +206,20 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_garden():
+        from bodn.ui.garden import GardenScreen
+        from bodn.ui.garden_secondary import GardenSecondary
+
+        garden_sec = GardenSecondary()
+        secondary.set_content(garden_sec)
+        return GardenScreen(
+            np,
+            overlay,
+            settings=settings,
+            secondary_screen=garden_sec,
+            on_exit=_reset_secondary,
+        )
+
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
 
@@ -237,6 +231,7 @@ def create_ui(
         "simon": _make_simon,
         "rulefollow": _make_rulefollow,
         "flode": _make_flode,
+        "garden": _make_garden,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, settings=settings),
@@ -247,7 +242,16 @@ def create_ui(
     home = HomeScreen(
         mode_screens,
         session_mgr,
-        order=["mystery", "simon", "rulefollow", "flode", "demo", "clock", "settings"],
+        order=[
+            "mystery",
+            "simon",
+            "rulefollow",
+            "flode",
+            "garden",
+            "demo",
+            "clock",
+            "settings",
+        ],
     )
     manager.push(home)
 

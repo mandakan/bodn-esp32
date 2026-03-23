@@ -14,9 +14,8 @@ class FakePin:
 
 
 class FakeEncoder:
-    def __init__(self, val=0, max_val=20):
+    def __init__(self, val=0):
         self.value = val
-        self._max = max_val
         self.sw = FakePin(1)
 
 
@@ -68,7 +67,7 @@ class FakeInp:
         self.enc_velocity = [0, 0, 0]
         self.btn_just_pressed = [False] * 8
         self.enc_btn_pressed = [False, False, False]
-        self._encoders = [FakeEncoder(val=10, max_val=20) for _ in range(3)]
+        self._encoders = [FakeEncoder(val=10) for _ in range(3)]
         self._prev_enc_pos = [10, 10, 10]
 
     def any_btn_pressed(self):
@@ -276,22 +275,6 @@ def test_enc_button_still_enters_mode():
     inp.enc_btn_pressed[0] = True
     home.update(inp, 1)
     assert len(mgr.pushed) == 1
-
-
-def test_encoder_recentered_on_every_raw_delta():
-    """Encoder is re-centered on every raw delta, not just on accumulator fire."""
-    home, mgr = make_home()
-    inp = mgr.inp
-
-    # Single raw detent (not enough for accumulator to fire)
-    inp.enc_delta[0] = 1
-    inp.enc_velocity[0] = 50
-    home.update(inp, 1)
-    assert home._index == 0  # no mode change yet
-    # But encoder should already be re-centered
-    mid = mgr.inp._encoders[0]._max // 2
-    assert mgr.inp._encoders[0].value == mid
-    assert mgr.inp._prev_enc_pos[0] == mid
 
 
 def test_anim_offset_idle_is_zero():
