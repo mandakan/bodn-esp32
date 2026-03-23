@@ -51,6 +51,7 @@ def parse_config(path: Path) -> list[Group]:
             )
             or re.match(r"^MCP", line)
             or re.match(r"^ENC_(NAV|A|B)\s*=", line)
+            or re.match(r"^PWM_CH_", line)
         ):
             continue
 

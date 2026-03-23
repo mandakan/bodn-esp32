@@ -12,6 +12,7 @@ from micropython import const
 from bodn import config
 from bodn.encoder import Encoder
 from bodn.mcp23017 import MCP23017
+from bodn.pca9685 import PCA9685
 from bodn.session import SessionManager
 from bodn.web import start_server
 from bodn.wifi import WiFiController
@@ -37,12 +38,13 @@ N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 def create_hardware():
     """Initialise all hardware peripherals.
 
-    Returns (tft, tft2, buttons, switches, encoders, np, mcp, hw_status).
+    Returns (tft, tft2, buttons, switches, encoders, np, mcp, pwm, hw_status).
     Components that fail to initialise degrade gracefully:
     - MCP23017 missing → buttons/switches are empty lists, mcp is None.
+    - PCA9685 missing → pwm is None (no LED dimming).
     - SPI displays can't be probed (push-only) so are always assumed present.
     """
-    hw_status = {"mcp": False}
+    hw_status = {"mcp": False, "pca": False}
 
     spi = SPI(
         2,
@@ -81,18 +83,29 @@ def create_hardware():
         madctl=config.TFT2_MADCTL,
     )
 
-    # MCP23017 GPIO expander for buttons and toggles (I2C)
+    # Shared I2C bus for MCP23017 and PCA9685
+    i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+
+    # MCP23017 GPIO expander for buttons and toggles
     mcp = None
+    pwm = None
     buttons = []
     switches = []
     try:
-        i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
         mcp = MCP23017(i2c, config.MCP23017_ADDR)
         buttons = [mcp.pin(p) for p in config.MCP_BTN_PINS]
         switches = [mcp.pin(p) for p in config.MCP_SW_PINS]
         hw_status["mcp"] = True
     except Exception as e:
         print("MCP23017 not found, buttons/switches disabled:", e)
+
+    # PCA9685 PWM driver for LED dimming
+    try:
+        pwm = PCA9685(i2c, config.PCA9685_ADDR)
+        pwm.set_freq(1000)
+        hw_status["pca"] = True
+    except Exception as e:
+        print("PCA9685 not found, PWM dimming disabled:", e)
 
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
@@ -120,7 +133,7 @@ def create_hardware():
     ]
     encoders[config.ENC_B].value = ENC_STEPS // 4  # speed default
 
-    return tft, tft2, buttons, switches, encoders, np, mcp, hw_status
+    return tft, tft2, buttons, switches, encoders, np, mcp, pwm, hw_status
 
 
 def create_ui(
@@ -369,7 +382,7 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    tft, tft2, buttons, switches, encoders, np, mcp, hw_status = create_hardware()
+    tft, tft2, buttons, switches, encoders, np, mcp, pwm, hw_status = create_hardware()
 
     # Publish hardware status for diagnostics
     from bodn.diag import set_hw_status

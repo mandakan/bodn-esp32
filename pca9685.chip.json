@@ -1,0 +1,14 @@
+{
+  "name": "PCA9685",
+  "author": "Bodn",
+  "pins": [
+    "SDA", "SCL", "OE",
+    "A0", "A1", "A2", "A3", "A4", "A5",
+    "PWM0", "PWM1", "PWM2", "PWM3",
+    "PWM4", "PWM5", "PWM6", "PWM7",
+    "PWM8", "PWM9", "PWM10", "PWM11",
+    "PWM12", "PWM13", "PWM14", "PWM15",
+    "VDD", "VSS"
+  ],
+  "controls": []
+}

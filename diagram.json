@@ -205,6 +205,13 @@
       "top": 430,
       "left": 640,
       "attrs": {}
+    },
+    {
+      "type": "chip-pca9685",
+      "id": "pca1",
+      "top": 430,
+      "left": 850,
+      "attrs": {}
     }
   ],
   "connections": [
@@ -649,6 +656,72 @@
     [
       "master_sw:2",
       "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "pca1:SCL",
+      "esp:47",
+      "cyan",
+      []
+    ],
+    [
+      "pca1:SDA",
+      "esp:48",
+      "cyan",
+      []
+    ],
+    [
+      "pca1:VDD",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "pca1:VSS",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "pca1:OE",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "pca1:A0",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "pca1:A1",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "pca1:A2",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "pca1:A3",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "pca1:A4",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "pca1:A5",
+      "esp:GND.1",
       "black",
       []
     ]
