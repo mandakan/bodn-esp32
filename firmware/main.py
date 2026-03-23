@@ -44,7 +44,7 @@ def create_hardware():
     - PCA9685 missing → pwm is None (no LED dimming).
     - SPI displays can't be probed (push-only) so are always assumed present.
     """
-    hw_status = {"mcp": False, "pca": False}
+    hw_status = {"mcp": False, "pca": False, "temp": False}
 
     spi = SPI(
         2,
@@ -107,6 +107,19 @@ def create_hardware():
     except Exception as e:
         print("PCA9685 not found, PWM dimming disabled:", e)
 
+    # DS18B20 temperature sensors (1-Wire)
+    try:
+        from bodn.temperature import scan as temp_scan
+
+        n_sensors = temp_scan()
+        if n_sensors > 0:
+            hw_status["temp"] = True
+            print("DS18B20: {} sensor(s) found".format(n_sensors))
+        else:
+            print("DS18B20: no sensors on 1-Wire bus")
+    except Exception as e:
+        print("DS18B20 init failed:", e)
+
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
         Encoder(
@@ -143,7 +156,7 @@ def create_ui(
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
     theme2 = Theme(config.TFT2_WIDTH, config.TFT2_HEIGHT, ST7735.rgb)
     inp = InputState(buttons, switches, encoders, time.ticks_ms)
-    overlay = SessionOverlay(session_mgr)
+    overlay = SessionOverlay(session_mgr, settings=settings)
 
     # Primary display — full screen manager with navigation
     manager = ScreenManager(tft, theme, inp)
@@ -338,9 +351,36 @@ async def secondary_task(secondary):
         await asyncio.sleep_ms(200)
 
 
-async def housekeeping_task(session_mgr):
-    """Session management and periodic bookkeeping: ~500 ms tick."""
+async def housekeeping_task(session_mgr, np, settings):
+    """Session management, temperature + battery monitoring: ~500 ms tick.
+
+    Temperature overwatch (thresholds in config.py):
+      OK       (< 40 °C): normal operation.
+      WARNING  (≥ 40 °C): log, amber banner, reduce LED brightness.
+      CRITICAL (≥ 50 °C): kill LEDs, dim backlight, full-screen alert.
+      EMERGENCY(≥ 60 °C): forced deep sleep (5 min cycle).
+
+    Battery overwatch (thresholds in config.py, mV-based):
+      OK       (> 3.4 V): normal operation.
+      WARNING  (≤ 3.4 V): log, amber banner, reduce LED brightness.
+      CRITICAL (≤ 3.2 V): kill LEDs, full-screen "CHARGE ME!" alert.
+      SHUTDOWN (≤ 3.1 V): forced light sleep to protect the cell.
+
+    Shared settings keys for UI:
+      _temp_status / _temp_c   — temperature state + reading.
+      _bat_status  / _bat_mv   — battery state + voltage.
+    """
+    from bodn import temperature
+    from bodn import battery
+
     errors = 0
+    _prev_temp = "ok"
+    _prev_bat = "ok"
+    settings["_temp_status"] = "ok"
+    settings["_temp_c"] = None
+    settings["_bat_status"] = "ok"
+    settings["_bat_mv"] = 0
+
     while True:
         try:
             session_mgr.tick()
@@ -349,6 +389,136 @@ async def housekeeping_task(session_mgr):
         except Exception as e:
             errors += 1
             print("housekeeping_task error #{}: {}".format(errors, e))
+
+        # Temperature overwatch — poll is cheap (cached 30 s in temperature.py)
+        try:
+            if temperature.sensor_count() > 0:
+                temp_status = temperature.status()
+                t_max = temperature.max_temp()
+                settings["_temp_status"] = temp_status
+                settings["_temp_c"] = t_max
+
+                # Emergency: forced deep sleep — only way to cut power draw
+                if temp_status == "emergency":
+                    print(
+                        "TEMP EMERGENCY ({}C >= {}C): FORCED DEEP SLEEP".format(
+                            int(t_max), config.TEMP_EMERGENCY_C
+                        )
+                    )
+                    # Kill everything before sleeping
+                    for i in range(N_LEDS):
+                        np[i] = (0, 0, 0)
+                    np.write()
+                    try:
+                        from machine import Pin, deepsleep
+
+                        Pin(config.TFT_BL, Pin.OUT).value(0)
+                        # Deep sleep for 5 minutes, then wake to re-check
+                        deepsleep(300_000)
+                    except Exception:
+                        pass
+
+                if temp_status == "critical" and _prev_temp != "critical":
+                    print(
+                        "TEMP CRITICAL ({}C >= {}C): "
+                        "killing NeoPixels, dimming backlight".format(
+                            int(t_max), config.TEMP_CRIT_C
+                        )
+                    )
+                    # Kill NeoPixels — biggest heat contributor
+                    for i in range(N_LEDS):
+                        np[i] = (0, 0, 0)
+                    np.write()
+                    # Dim display backlight to minimum
+                    try:
+                        from machine import Pin
+
+                        Pin(config.TFT_BL, Pin.OUT).value(0)
+                    except Exception:
+                        pass
+
+                elif temp_status == "warn" and _prev_temp == "ok":
+                    print(
+                        "TEMP WARNING ({}C >= {}C): "
+                        "reducing NeoPixel brightness".format(
+                            int(t_max), config.TEMP_WARN_C
+                        )
+                    )
+
+                elif temp_status == "ok" and _prev_temp != "ok":
+                    print("TEMP OK ({}C): resumed normal operation".format(int(t_max)))
+                    # Restore backlight
+                    try:
+                        from machine import Pin
+
+                        Pin(config.TFT_BL, Pin.OUT).value(1)
+                    except Exception:
+                        pass
+
+                _prev_temp = temp_status
+        except Exception as e:
+            errors += 1
+            print("temp_monitor error #{}: {}".format(errors, e))
+
+        # Battery overwatch — only meaningful when on battery (not USB)
+        try:
+            bat_status = battery.status()
+            settings["_bat_status"] = bat_status
+            settings["_bat_mv"] = battery.voltage_mv()
+
+            if bat_status == "shutdown":
+                mv = battery.voltage_mv()
+                print(
+                    "BAT SHUTDOWN ({}mV <= {}mV): FORCED LIGHT SLEEP".format(
+                        mv, config.BAT_SHUTDOWN_MV
+                    )
+                )
+                # Kill LEDs + backlight, then sleep
+                for i in range(N_LEDS):
+                    np[i] = (0, 0, 0)
+                np.write()
+                try:
+                    from machine import Pin
+                    import machine as _machine
+
+                    Pin(config.TFT_BL, Pin.OUT).value(0)
+                    # Light sleep (not deep) — preserves RAM, wakes on
+                    # USB plug (PWR_SENS goes low) or button press.
+                    import esp32
+
+                    pwr_pin = Pin(config.PWR_SENS_PIN, Pin.IN)
+                    esp32.gpio_wakeup(pwr_pin, esp32.WAKEUP_ANY_LOW)
+                    _machine.lightsleep(60_000)  # re-check every 60 s
+                except Exception:
+                    pass
+
+            elif bat_status == "critical" and _prev_bat != "critical":
+                mv = battery.voltage_mv()
+                print(
+                    "BAT CRITICAL ({}mV <= {}mV): killing NeoPixels".format(
+                        mv, config.BAT_CRIT_MV
+                    )
+                )
+                for i in range(N_LEDS):
+                    np[i] = (0, 0, 0)
+                np.write()
+
+            elif bat_status == "warn" and _prev_bat == "ok":
+                mv = battery.voltage_mv()
+                print(
+                    "BAT WARNING ({}mV <= {}mV): reducing NeoPixel brightness".format(
+                        mv, config.BAT_WARN_MV
+                    )
+                )
+
+            elif bat_status in ("ok", "usb") and _prev_bat not in ("ok", "usb"):
+                print("BAT OK: resumed normal operation")
+
+            _prev_bat = bat_status
+        except Exception as e:
+            errors += 1
+            print("bat_monitor error #{}: {}".format(errors, e))
+
         await asyncio.sleep_ms(500)
 
 
@@ -410,7 +580,7 @@ async def main():
     await asyncio.gather(
         primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr),
         secondary_task(secondary),
-        housekeeping_task(session_mgr),
+        housekeeping_task(session_mgr, np, settings),
     )
 
 

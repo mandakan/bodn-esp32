@@ -134,7 +134,28 @@
       "attrs": { "pixels": "16", "pixelShape": "circle" }
     },
     { "type": "chip-mcp23017", "id": "mcp1", "top": 500.22, "left": 158.4, "attrs": {} },
-    { "type": "chip-pca9685", "id": "pca1", "top": 289.02, "left": -388.8, "attrs": {} }
+    { "type": "chip-pca9685", "id": "pca1", "top": 289.02, "left": -388.8, "attrs": {} },
+    {
+      "type": "wokwi-ds18b20",
+      "id": "temp_bat",
+      "top": 500,
+      "left": -300,
+      "attrs": { "label": "Battery" }
+    },
+    {
+      "type": "wokwi-ds18b20",
+      "id": "temp_enc",
+      "top": 500,
+      "left": -170,
+      "attrs": { "label": "Enclosure" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_ow",
+      "top": 460,
+      "left": -240,
+      "attrs": { "value": "4700" }
+    }
   ],
   "connections": [
     [ "esp:12", "lcd:SCK", "green", [] ],
@@ -221,7 +242,15 @@
     [ "pca1:A2", "esp:GND.1", "black", [] ],
     [ "pca1:A3", "esp:GND.1", "black", [] ],
     [ "pca1:A4", "esp:GND.1", "black", [] ],
-    [ "pca1:A5", "esp:GND.1", "black", [] ]
+    [ "pca1:A5", "esp:GND.1", "black", [] ],
+    [ "temp_bat:DQ", "esp:20", "gold", [] ],
+    [ "temp_enc:DQ", "esp:20", "gold", [] ],
+    [ "temp_bat:VCC", "esp:3V3", "red", [] ],
+    [ "temp_bat:GND", "esp:GND.2", "black", [] ],
+    [ "temp_enc:VCC", "esp:3V3", "red", [] ],
+    [ "temp_enc:GND", "esp:GND.2", "black", [] ],
+    [ "r_ow:1", "esp:20", "gold", [] ],
+    [ "r_ow:2", "esp:3V3", "red", [] ]
   ],
   "dependencies": {}
 }

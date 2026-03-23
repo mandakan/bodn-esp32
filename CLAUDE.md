@@ -21,6 +21,7 @@
   - The `diagram.json` wires all 8 buttons (GPA0–7) and all 4 toggle switches (GPB0–3) through `mcp1` — do not bypass these with direct ESP GPIO connections in the diagram
 - **UX design**: when designing screens, game modes, interactions, or feedback, follow `docs/UX_GUIDELINES.md`. Key rules: one concept per screen, large icons over text, immediate multimodal feedback, max 3–4 active choices, no complex gestures. Games should target executive functions (working memory, inhibition, cognitive flexibility) at a 4-year-old level.
 - **Performance**: follow `docs/PERFORMANCE_GUIDELINES.md`. Key rules: event-driven over polling, no full-screen redraws every frame, cooperative async tasks, minimal per-frame allocations, sparse `print()` usage. The review checklist (section 10) applies to all code changes.
+- **Thermal safety**: the LiPo charger (BL4054B) and battery have NO hardware thermal protection — software is the only safeguard. Any new peripheral that draws significant power (LEDs, motors, RF) **must** be added to the power-shedding logic in `main.py` `housekeeping_task()`. Non-critical loads are disabled at ≥ 50 °C (critical) and the device deep-sleeps at ≥ 60 °C (emergency). See `docs/hardware.md` § "Thermal protection" for the escalation table.
 - **i18n**: all user-facing UI strings go through `bodn/i18n.py`. Never hardcode display text in screen modules — use `from bodn.i18n import t` and `t("key")` or `t("key", arg)`. Swedish is the default language. String keys follow `screen_concept` naming (e.g. `simon_watch`, `pause_resume`). Translation files live in `firmware/bodn/lang/sv.py` and `firmware/bodn/lang/en.py`. When adding new strings, add to **both** language files. The `test_i18n.py` test enforces key parity. Extended font glyphs for å, ä, ö, Å, Ä, Ö are in `bodn/ui/font_ext.py`. The web UI stays in English (parent-facing).
 
 ## Project overview
@@ -55,6 +56,8 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 | LED sticks | WS2812 8-LED modules × 2 (on lid) | NeoPixel (1 GPIO, daisy-chained) |
 | LED strip | WS2812B 144 LED/m strip, 640 mm / ~92 LEDs (inside lid perimeter) | NeoPixel (chained after sticks) |
 | GPIO expander | Waveshare MCP23017 16-IO board | I2C (addr 0x20) |
+| DC-DC converter | Buck-boost 3–16 V → 5 V / 2 A | LiPo → 5 V for NeoPixels |
+| Temperature sensors | DS18B20 × 2 (battery + enclosure) | 1-Wire (GPIO 20) |
 | Power switch | Panel-mount toggle switch | — |
 
 ## Repository layout
@@ -79,6 +82,7 @@ bodn-esp32/
 │     ├─ mystery_rules.py   # Mystery Box rule engine (pure logic)
 │     ├─ session.py         # play session state machine (pure logic)
 │     ├─ storage.py         # JSON settings & session history on flash
+│     ├─ temperature.py     # DS18B20 1-Wire temperature monitoring
 │     ├─ tones.py           # procedural tone generation (pure logic)
 │     ├─ wav.py             # WAV header parser + streaming reader (pure logic)
 │     ├─ wifi.py            # WiFi connect (STA / AP) + runtime control

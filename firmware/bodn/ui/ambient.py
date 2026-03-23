@@ -6,6 +6,7 @@ from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_progress_bar, draw_battery_icon
 from bodn.ui.secondary import CONTENT_SIZE
 import bodn.battery as battery
+from bodn import temperature
 from bodn.i18n import t as _t
 
 _AMBIENT_TEXT_Y = 38  # 2px above clock at y=40 (scale=3, h=24)
@@ -60,6 +61,7 @@ class StatusStrip(Screen):
         self._prev_remaining_min = -1
         self._prev_bat_pct = -1
         self._prev_charging = None
+        self._prev_temp_status = "ok"
         self._landscape = False
 
     def enter(self, display):
@@ -68,6 +70,7 @@ class StatusStrip(Screen):
         self._prev_remaining_min = -1
         self._prev_bat_pct = -1
         self._prev_charging = None
+        self._prev_temp_status = "ok"
         self._landscape = getattr(display, "landscape", False)
 
     def needs_redraw(self):
@@ -96,6 +99,12 @@ class StatusStrip(Screen):
         if bat_pct != self._prev_bat_pct or charging != self._prev_charging:
             self._prev_bat_pct = bat_pct
             self._prev_charging = charging
+            changed = True
+
+        # Temperature status
+        temp_st = temperature.status()
+        if temp_st != self._prev_temp_status:
+            self._prev_temp_status = temp_st
             changed = True
 
         return changed
@@ -158,30 +167,53 @@ class StatusStrip(Screen):
             x_right = w - len(label) * 8 - 2
             tft.text(label, x_right, 2, color)
 
-        # Battery icon — row 2 (hidden when no battery detected)
-        if bat_pct is not None:
-            if bat_pct >= 50:
-                bat_color = theme.GREEN
-            elif bat_pct >= 20:
-                bat_color = theme.AMBER
-            else:
-                bat_color = theme.RED
-            icon_w, icon_h = 20, 10
-            icon_x = w - icon_w - 2
-            icon_y = 18
-            draw_battery_icon(
-                tft,
-                icon_x,
-                icon_y,
-                icon_w,
-                icon_h,
-                bat_pct,
-                bat_color,
-                theme.BLACK,
-                theme.WHITE,
-            )
-            if charging:
-                tft.text("+", icon_x + icon_w // 2 - 4, icon_y + 1, theme.YELLOW)
+        # Row 2: safety alerts > battery icon (priority order)
+        temp_st = temperature.status()
+        bat_st = battery.status()
+        if temp_st == "critical":
+            tft.fill_rect(0, 14, w, 18, theme.RED)
+            label = _t("temp_critical")
+            lx = (w - len(label) * 8) // 2
+            tft.text(label, max(0, lx), 18, theme.WHITE)
+        elif bat_st == "critical":
+            tft.fill_rect(0, 14, w, 18, theme.RED)
+            label = _t("bat_critical")
+            lx = (w - len(label) * 8) // 2
+            tft.text(label, max(0, lx), 18, theme.WHITE)
+        elif temp_st == "warn":
+            t_c = temperature.max_temp()
+            label = _t("temp_warn")
+            if t_c is not None:
+                label = "{}C {}".format(int(t_c), label)
+            tft.text(label, 2, 22, theme.AMBER)
+        elif bat_st == "warn":
+            label = _t("bat_low")
+            tft.text(label, 2, 22, theme.AMBER)
+        else:
+            # Battery icon — row 2 (hidden when no battery detected)
+            if bat_pct is not None:
+                if bat_pct >= 50:
+                    bat_color = theme.GREEN
+                elif bat_pct >= 20:
+                    bat_color = theme.AMBER
+                else:
+                    bat_color = theme.RED
+                icon_w, icon_h = 20, 10
+                icon_x = w - icon_w - 2
+                icon_y = 18
+                draw_battery_icon(
+                    tft,
+                    icon_x,
+                    icon_y,
+                    icon_w,
+                    icon_h,
+                    bat_pct,
+                    bat_color,
+                    theme.BLACK,
+                    theme.WHITE,
+                )
+                if charging:
+                    tft.text("+", icon_x + icon_w // 2 - 4, icon_y + 1, theme.YELLOW)
 
     def _render_vertical(self, tft, theme):
         """Landscape layout: 32×128 vertical strip."""
@@ -247,8 +279,23 @@ class StatusStrip(Screen):
             lx = (w - len(label) * 8) // 2
             tft.text(label, max(0, lx), y_session, color)
 
-        # Bottom: battery icon (hidden when no battery detected)
-        if bat_pct is not None:
+        # Bottom: safety alerts > battery icon (priority order)
+        temp_st = temperature.status()
+        bat_st = battery.status()
+        if temp_st == "critical":
+            tft.fill_rect(0, h - 16, w, 16, theme.RED)
+            tft.text("HOT", (w - 24) // 2, h - 14, theme.WHITE)
+        elif bat_st == "critical":
+            tft.fill_rect(0, h - 16, w, 16, theme.RED)
+            tft.text("LOW", (w - 24) // 2, h - 14, theme.WHITE)
+        elif temp_st == "warn":
+            t_c = temperature.max_temp()
+            label = "{}C".format(int(t_c)) if t_c is not None else "?"
+            lx = (w - len(label) * 8) // 2
+            tft.text(label, max(0, lx), h - 12, theme.AMBER)
+        elif bat_st == "warn":
+            tft.text("BAT", (w - 24) // 2, h - 12, theme.AMBER)
+        elif bat_pct is not None:
             if bat_pct >= 50:
                 bat_color = theme.GREEN
             elif bat_pct >= 20:

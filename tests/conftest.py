@@ -219,3 +219,36 @@ for mod_name in ("uos", "usys", "utime"):
 _micropython = types.ModuleType("micropython")
 _micropython.const = lambda x: x
 sys.modules["micropython"] = _micropython
+
+# Stub 'onewire' and 'ds18x20' modules for temperature sensor tests
+_onewire = types.ModuleType("onewire")
+
+
+class FakeOneWire:
+    def __init__(self, pin):
+        self.pin = pin
+
+
+_onewire.OneWire = FakeOneWire
+sys.modules["onewire"] = _onewire
+
+_ds18x20 = types.ModuleType("ds18x20")
+
+
+class FakeDS18X20:
+    def __init__(self, ow):
+        self._ow = ow
+        self._temps = {}
+
+    def scan(self):
+        return list(self._temps.keys())
+
+    def convert_temp(self):
+        pass
+
+    def read_temp(self, rom):
+        return self._temps.get(rom, 25.0)
+
+
+_ds18x20.DS18X20 = FakeDS18X20
+sys.modules["ds18x20"] = _ds18x20

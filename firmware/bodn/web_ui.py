@@ -118,6 +118,17 @@ th{color:#aaa}
 <div class="stat"><label>Sessions today</label><span id="s-count" class="val">0</span> / <span id="s-max" class="val">5</span></div>
 <div class="stat"><label>Time remaining</label><div class="progress"><div id="time-bar" class="bar" style="width:0%"></div></div><div id="time-text" style="text-align:center;font-size:0.85em;margin-top:4px">--</div></div>
 <div class="toggle"><input type="checkbox" id="sessions-enabled" checked onchange="toggleSessions()"><label>Session limits enabled</label></div>
+<div class="stats-grid">
+<div id="bat-card" class="stat-card" style="display:none">
+<div class="val" id="bat-val">--</div>
+<div class="lbl" id="bat-lbl">Battery</div>
+</div>
+<div id="temp-card" class="stat-card" style="display:none">
+<div class="val" id="temp-val">--</div>
+<div class="lbl" id="temp-lbl">Temperature</div>
+</div>
+</div>
+<div id="safety-alert" style="display:none;margin:8px 0;padding:10px;border-radius:8px;font-size:0.85em;font-weight:bold"></div>
 <button class="btn btn-danger" id="lockdown-btn" onclick="toggleLockdown()">Lockdown</button>
 </div>
 
@@ -211,6 +222,31 @@ if(d.time_remaining_s>0)pct=Math.round(d.time_remaining_s*100/maxS);
 document.getElementById('time-bar').style.width=pct+'%';
 document.getElementById('time-text').textContent=d.time_remaining_s>0?fmtTime(d.time_remaining_s):'--';
 document.getElementById('lockdown-btn').textContent=d.state==='LOCKDOWN'?'Unlock':'Lockdown';
+var tc=document.getElementById('temp-card'),tv=document.getElementById('temp-val');
+var bc=document.getElementById('bat-card'),bv=document.getElementById('bat-val'),bl=document.getElementById('bat-lbl');
+var sa=document.getElementById('safety-alert');sa.style.display='none';
+if(d.temp_c!=null){tc.style.display='';tv.textContent=d.temp_c+'\u00b0C';
+var ts=d.temp_status||'ok';
+tc.style.borderLeft=ts==='critical'?'4px solid #e94560':ts==='warn'?'4px solid #f39c12':'4px solid #27ae60';
+tv.style.color=ts==='critical'?'#e94560':ts==='warn'?'#f39c12':'#27ae60';
+}else{tc.style.display='none'}
+if(d.bat_pct!=null){bc.style.display='';bv.textContent=d.bat_pct+'%';
+bl.textContent='Battery'+(d.bat_charging?' \u26a1':'');
+var bs=d.bat_status||'ok';
+bc.style.borderLeft=bs==='critical'||bs==='shutdown'?'4px solid #e94560':bs==='warn'?'4px solid #f39c12':'4px solid #27ae60';
+bv.style.color=bs==='critical'||bs==='shutdown'?'#e94560':bs==='warn'?'#f39c12':'#27ae60';
+}else if(d.bat_charging){bc.style.display='';bv.textContent='USB';bv.style.color='#27ae60';
+bl.textContent='Battery \u26a1';bc.style.borderLeft='4px solid #27ae60';
+}else{bc.style.display='none'}
+var alert='';
+if((d.temp_status||'')==='critical')alert='\u26a0 OVERHEATING \u2014 LEDs and backlight disabled. Let the device cool down.';
+else if((d.bat_status||'')==='critical')alert='\u26a0 BATTERY CRITICAL \u2014 LEDs disabled. Please charge the device now.';
+else if((d.bat_status||'')==='shutdown')alert='\u26a0 BATTERY EMPTY \u2014 Device is sleeping to protect the battery. Plug in charger.';
+else if((d.temp_status||'')==='warn')alert='\u26a0 Device is warm. LED brightness reduced.';
+else if((d.bat_status||'')==='warn')alert='\u26a0 Battery is getting low. LED brightness reduced.';
+if(alert){sa.style.display='block';sa.textContent=alert;
+var sev=(d.temp_status==='critical'||d.bat_status==='critical'||d.bat_status==='shutdown');
+sa.style.background=sev?'#e94560':'#f39c12';sa.style.color=sev?'#fff':'#000';}
 }catch(e){}
 }
 async function loadSettings(){

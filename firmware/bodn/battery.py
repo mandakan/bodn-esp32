@@ -41,6 +41,7 @@ _CACHE_MS = const(30_000)  # re-read at most once every 30 s
 _adc = None
 _pwr_pin = None
 _cached_pct = None  # None means no battery detected
+_cached_mv = 0  # last voltage reading in mV
 _cached_charging = False
 _next_read_ms = 0
 
@@ -62,7 +63,7 @@ def read():
 
     Results are cached for 30 s to avoid hammering the ADC.
     """
-    global _cached_pct, _cached_charging, _next_read_ms
+    global _cached_pct, _cached_mv, _cached_charging, _next_read_ms
     now = time.ticks_ms()
     if time.ticks_diff(now, _next_read_ms) < 0:
         return _cached_pct, _cached_charging
@@ -88,6 +89,33 @@ def read():
         pct = max(0, min(100, pct))
 
     _cached_pct = pct
+    _cached_mv = v_bat_mv
     _cached_charging = charging
     _next_read_ms = time.ticks_add(now, _CACHE_MS)
     return pct, charging
+
+
+def voltage_mv():
+    """Return the last measured battery voltage in mV."""
+    read()  # ensure cache is populated
+    return _cached_mv
+
+
+def status():
+    """Return battery status: 'shutdown', 'critical', 'warn', 'ok', or 'usb'.
+
+    Returns 'usb' when on USB power (charging or no battery) — no low-battery
+    concern. Returns 'ok' when no battery detected and not on USB (shouldn't
+    happen, but fail-safe).
+    """
+    pct, charging = read()
+    if pct is None or charging:
+        return "usb"
+    mv = _cached_mv
+    if mv <= config.BAT_SHUTDOWN_MV:
+        return "shutdown"
+    if mv <= config.BAT_CRIT_MV:
+        return "critical"
+    if mv <= config.BAT_WARN_MV:
+        return "warn"
+    return "ok"

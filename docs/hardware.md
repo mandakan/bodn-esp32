@@ -18,10 +18,12 @@
 | 1 | LED strip | WS2812B 144 LED/m RGBIC strip, cut to 640 mm (~92 LEDs) | ~169 SEK |
 | 1 | GPIO expander | Waveshare MCP23017 I2C 16-IO expansion board | ~85 SEK |
 | 1 | PWM driver | PCA9685 16-channel 12-bit PWM I2C breakout ([Adafruit 815](https://www.adafruit.com/product/815)) | ~120 SEK |
+| 1 | DC-DC converter | Buck-boost 3–16V → 5V/2A ([Electrokit](https://www.electrokit.com/dcdc-omvandlare-step-up/step-down-3.3/5v)) | ~99 SEK |
+| 2 | Temperature sensor | DS18B20 1-Wire digital ([Electrokit](https://www.electrokit.com/temperatursensor-ds18b20)) | ~78 SEK |
 | — | Wiring | Dupont jumper wire kits M-M/F-M/F-F (AZDelivery 3×40) | ~89 SEK |
 | 1 | Breadboard | Olimex MAXI breadboard (prototyping) | ~40 SEK |
 
-**Estimated total: ~1 865 SEK**
+**Estimated total: ~2 042 SEK**
 
 ## Pin assignments
 
@@ -106,6 +108,8 @@ Chain order: Stick A DOUT → Stick B DIN → Stick B DOUT → Lid Ring DIN.
 
 Brightness is capped in software per zone: sticks at 25% (64/255), lid ring at 12.5% (32/255) for ambient glow. For strips longer than ~0.5 m, inject 5V power at the midpoint to prevent voltage drop and color shift at the far end.
 
+NeoPixel VDD is powered from the DC-DC converter's 5V output (see [Power distribution](#power-distribution) below), ensuring stable voltage on both USB and battery.
+
 ## Display architecture
 
 The two displays serve different purposes:
@@ -122,9 +126,10 @@ Both share SPI bus 2. The driver deasserts CS after each `show()`, so they can c
 - INMP441 and MAX98357A on I2S (separate IN/OUT peripherals on ESP32-S3).
 - All buttons and toggle switches are on the MCP23017 I2C expander with its internal pull-ups and software debouncing.
 - NeoPixel chain on a single GPIO — data line through 108 LEDs (2 sticks + lid ring).
-- WS2812 LEDs run at 5V but the data line works reliably from 3.3V with short wires. If you get flicker, add a 330Ω series resistor on the data line.
+- WS2812 LEDs powered from the DC-DC converter's 5V output. The 3.3V data line from GPIO 4 works reliably with short wires. If you get flicker, add a 330Ω series resistor on the data line.
 - Battery voltage can be read via the DevKit-Lipo's built-in ADC circuit.
 - GPIO 0 and 46 are strapping pins but safe as inputs with pull-up after boot.
+- DS18B20 temperature sensors share a single 1-Wire bus on GPIO 20 with a 4.7 kΩ pull-up to 3.3V. Mount one sensor against the LiPo pouch (Kapton thermal tape), one inside the enclosure near the DC-DC converter.
 
 ## Schematics
 
@@ -198,7 +203,7 @@ Other GPIOs with board-level functions — see [`docs/schematics/`](schematics/)
 | 5 | PWR_SENS | `PWR_SENS_PIN` (battery module) | Active low when USB power present; **do not drive** |
 | 6 | BAT_SENS | `BAT_SENS_PIN` (battery module) | R8/R9 divider; ADC only |
 | 19 | USB_D− | ENC1_CLK | USB OTG D−; safe when OTG port unused ⚠ |
-| 20 | USB_D+ | free | USB OTG D+; same caveat ⚠ |
+| 20 | USB_D+ | ONEWIRE_PIN (DS18B20) | 1-Wire bus; conflicts with OTG port (not used) |
 | 38 | LED1 (green) | — (freed) | On-board LED; previously conflicted with I2S mic |
 | 43 | U0TXD | — (freed) | UART TX; previously conflicted with TFT backlight |
 | 44 | U0RXD | — | UART RX; avoid driving |
@@ -299,15 +304,128 @@ GND           ──▶ OE  (active-low: GND = outputs enabled)
                   V+ ← external LED supply or 3V3 for low-power LEDs
 ```
 
+## Power distribution
+
+The Olimex DevKit-Lipo has no boost converter. On battery the only rails are the
+raw LiPo voltage (3.0–4.2 V) and the on-board 3.3 V regulator. WS2812B NeoPixels
+require ≥ 3.5 V VDD and behave best at 5 V, so a buck-boost DC-DC converter
+provides a stable 5 V rail from either USB or battery power.
+
+### DC-DC converter
+
+| Parameter | Value |
+|-----------|-------|
+| Module | Buck-boost 3–16 V → 5 V / 2 A ([Electrokit](https://www.electrokit.com/dcdc-omvandlare-step-up/step-down-3.3/5v)) |
+| Efficiency | Up to 95 % |
+| Input | LiPo BAT+ (3.0–4.2 V) or USB VBUS (5 V) |
+| Output | 5 V regulated |
+| Consumers | NeoPixel VDD, PCA9685 V+ |
+
+```
+LiPo BAT+ ──▶ VIN (converter)
+               VOUT (5 V) ──▶ NeoPixel VDD (all 108 LEDs)
+                           ──▶ PCA9685 V+ (LED power rail)
+GND ────────▶ GND (converter) ──▶ NeoPixel GND
+                               ──▶ PCA9685 GND
+```
+
+The ESP32 and all 3.3 V logic components (displays, audio, MCP23017) remain on
+the on-board 3.3 V regulator. Only the NeoPixels and PCA9685 LED outputs use
+the 5 V rail.
+
+## DS18B20 temperature sensors
+
+**Purpose:** Monitor battery and enclosure temperature to detect overheating
+and protect the LiPo cell. Two sensors share a single 1-Wire bus on GPIO 20.
+
+### Module specs
+
+| Parameter | Value |
+|-----------|-------|
+| Chip | Maxim DS18B20 |
+| Interface | 1-Wire (multiple sensors on one GPIO) |
+| Operating voltage | 3.0–5.5 V (powered from 3.3 V rail) |
+| Temperature range | −55 °C to +125 °C |
+| Accuracy | ±0.5 °C (−10 °C to +85 °C) |
+| Resolution | 9–12 bit configurable (12-bit default, ~750 ms conversion) |
+
+### Wiring
+
+Both sensors connect to the same 1-Wire bus with a shared 4.7 kΩ pull-up:
+
+```
+ESP32-S3               DS18B20 sensors
+─────────              ───────────────
+GPIO 20 (1-Wire) ──┬──▶ DQ (sensor 1 — battery)
+                   ├──▶ DQ (sensor 2 — enclosure)
+                   └── 4.7 kΩ ──▶ 3V3
+3V3              ──▶ VDD (both sensors)
+GND              ──▶ GND (both sensors)
+```
+
+### Sensor placement
+
+| Sensor | Location | Purpose |
+|--------|----------|---------|
+| Battery | Against LiPo pouch, secured with Kapton thermal tape | Detect cell overheating |
+| Enclosure | Near DC-DC converter / electronics | Detect general overheating inside the box |
+
+### Software — thermal protection
+
+Firmware module: `bodn/temperature.py`. Sensors are auto-discovered by ROM
+address on the 1-Wire bus. Readings are cached for 30 s.
+
+**Important:** The BL4054B charger IC on the DevKit-Lipo has **no NTC thermistor
+input** and the Olimex battery has **no temperature wire**. This software watchdog
+is the **only thermal protection** for the LiPo cell. The hardware provides no
+automatic charge/discharge cutoff based on temperature.
+
+#### Threshold escalation
+
+| Level | Threshold | Action | Recovery |
+|-------|-----------|--------|----------|
+| OK | < 40 °C | Normal operation | — |
+| Warning | ≥ 40 °C | Log to serial, amber banner on both displays, web UI alert. NeoPixel brightness halved (biggest heat source). | Clears when temp drops below 40 °C |
+| Critical | ≥ 50 °C | Kill all NeoPixels, dim display backlight. Full-screen "TOO HOT" takeover on primary display. Red alert on secondary + web UI. | Restores when temp drops below 40 °C |
+| Emergency | ≥ 60 °C | **Forced deep sleep** (ESP32 powers down all peripherals). Wakes after 5 min to re-check; re-sleeps if still hot. | Automatic after cool-down |
+
+Thresholds are defined in `config.py` as `TEMP_WARN_C`, `TEMP_CRIT_C`, and
+`TEMP_EMERGENCY_C`.
+
+### Software — low-battery protection
+
+Firmware module: `bodn/battery.py`. Reads BAT_SENS (GPIO 6) via ADC with
+voltage divider. The battery pack's hardware over-discharge cutoff (3.0 V)
+is listed but not explicitly confirmed, so software enforces shutdown well
+above that level.
+
+#### Battery threshold escalation
+
+| Level | Voltage | Action | Recovery |
+|-------|---------|--------|----------|
+| OK | > 3.4 V | Normal operation | — |
+| Warning | ≤ 3.4 V (~15 %) | Log to serial, amber "BATTERY LOW" banner on displays, web UI alert. NeoPixel brightness reduced. | Clears when voltage rises (charging) |
+| Critical | ≤ 3.2 V (~5 %) | Kill NeoPixels. Full-screen "CHARGE ME!" takeover. Red alert on secondary + web UI. | Restores when voltage rises |
+| Shutdown | ≤ 3.1 V (~2 %) | **Forced light sleep** (preserves RAM). Wakes on USB power (charger plugged in) or every 60 s to re-check. | Automatic when charger connected |
+
+Thresholds are defined in `config.py` as `BAT_WARN_MV`, `BAT_CRIT_MV`, and
+`BAT_SHUTDOWN_MV`.
+
+**Adding new power-drawing peripherals:** Any new component that draws
+significant power (LEDs, motors, RF modules, heaters) **must** be registered
+in the power-shedding logic in `main.py` `housekeeping_task()`. Both thermal
+and battery escalation should disable non-critical loads. See section 9 of
+`docs/PERFORMANCE_GUIDELINES.md`.
+
 ## GPIO budget
 
 | Category | Details |
 |----------|---------|
-| Native GPIOs in use | 23 (SPI, I2S, encoders, NeoPixel, I2C, battery, backlight) |
-| Native GPIOs free | 3 — GPIO 20, 21, 46 |
+| Native GPIOs in use | 24 (SPI, I2S, encoders, NeoPixel, I2C, battery, backlight, 1-Wire) |
+| Native GPIOs free | 2 — GPIO 19 (USB OTG caveat), 46 |
 | PSRAM-reserved (never use) | GPIO 35, 36, 37 |
 | UART console (avoid) | GPIO 43 (TX), 44 (RX) |
-| MCP23017 in use | 12 (8 buttons + 4 toggles) |
-| MCP23017 spare | 4 (GPB4–GPB7) |
+| MCP23017 in use | 13 (8 buttons + 4 toggles + master switch) |
+| MCP23017 spare | 3 (GPB5–GPB7) |
 | PCA9685 in use | 1 (backlight) |
 | PCA9685 spare | 15 (channels 1–15) |

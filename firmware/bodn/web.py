@@ -264,6 +264,29 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 "max_session_s": settings["max_session_min"] * 60,
                 "mode": session_mgr.mode,
             }
+            try:
+                from bodn import temperature
+
+                t_max = temperature.max_temp()
+                if t_max is not None:
+                    data["temp_c"] = round(t_max, 1)
+                    data["temp_status"] = temperature.status()
+            except Exception:
+                pass
+            try:
+                from bodn import battery
+
+                pct, charging = battery.read()
+                if pct is not None:
+                    data["bat_pct"] = pct
+                    data["bat_mv"] = battery.voltage_mv()
+                    data["bat_status"] = battery.status()
+                    data["bat_charging"] = charging
+                else:
+                    data["bat_status"] = "usb"
+                    data["bat_charging"] = charging
+            except Exception:
+                pass
             await _send_json(writer, data)
 
         elif method == "GET" and path == "/api/settings":

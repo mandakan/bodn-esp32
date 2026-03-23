@@ -1,7 +1,8 @@
 # bodn/config.py — pin assignments and constants for ESP32-S3-DevKit-Lipo
 #
 # GPIO 35, 36, 37 are reserved by OSPI PSRAM on the N8R8 module — never use.
-# GPIO 19, 20 are USB OTG D−/D+ — left unassigned so OTG port remains usable.
+# GPIO 19 is USB OTG D− — left unassigned so OTG port remains usable.
+# GPIO 20 (USB OTG D+) is used for 1-Wire (OTG port not used in this project).
 # GPIO 47 (SCL) and 48 (SDA) are reserved for the I2C bus (pUEXT pull-ups).
 # Buttons and toggle switches are on the MCP23017 I2C GPIO expander.
 
@@ -89,6 +90,19 @@ NEOPIXEL_LID_BRIGHTNESS = const(32)  # 0-255, lid ring — lower for ambient glo
 # DevKit-Lipo on-board power monitoring (board-reserved — do not reassign)
 BAT_SENS_PIN = const(6)  # BAT_SENS: LiPo voltage via voltage divider → ADC
 PWR_SENS_PIN = const(5)  # PWR_SENS: high-Z on battery, low when USB present
+
+# DS18B20 1-Wire temperature sensors (battery + enclosure monitoring)
+ONEWIRE_PIN = const(20)  # 1-Wire bus — multiple sensors share one GPIO
+TEMP_WARN_C = const(40)  # warn threshold (°C) — LiPo degradation accelerates above 40°C
+TEMP_CRIT_C = const(50)  # critical threshold (°C) — kill LEDs + dim backlight
+TEMP_EMERGENCY_C = const(60)  # emergency (°C) — forced deep sleep (hardware off)
+
+# Low-battery thresholds (mV) — escalation mirrors thermal protection.
+# The pack may have a hardware cutoff at ~3.0 V but this is not confirmed,
+# so we treat software as the only reliable protection.
+BAT_WARN_MV = const(3400)  # ~15 % — show warning, dim LEDs
+BAT_CRIT_MV = const(3200)  # ~5 % — kill LEDs, show low-battery screen
+BAT_SHUTDOWN_MV = const(3100)  # ~2 % — forced light sleep to protect cell
 
 # I2C bus — pUEXT connector (2.2 kΩ pull-ups on devkit)
 I2C_SCL = const(47)

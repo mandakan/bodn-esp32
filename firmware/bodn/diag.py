@@ -68,13 +68,49 @@ def gather(ip="0.0.0.0", boot_results=None, boot_steps=None):
 
     # Battery
     try:
-        from bodn.battery import read as bat_read
+        from bodn.battery import (
+            read as bat_read,
+            voltage_mv as bat_mv,
+            status as bat_status,
+        )
 
         pct, chg = bat_read()
         if pct is None:
             info.append(("Battery", "N/A (USB)"))
         else:
-            info.append(("Battery", "{}%{}".format(pct, " CHG" if chg else "")))
+            mv = bat_mv()
+            st = bat_status()
+            flag = ""
+            if chg:
+                flag = " CHG"
+            if st == "warn":
+                flag += " LOW"
+            elif st == "critical":
+                flag += " CRIT"
+            elif st == "shutdown":
+                flag += " DEAD"
+            info.append(
+                (
+                    "Battery",
+                    "{}% {}.{}V{}".format(pct, mv // 1000, (mv % 1000) // 100, flag),
+                )
+            )
+    except Exception:
+        pass
+
+    # Temperature
+    try:
+        from bodn.temperature import read as temp_read, sensor_count as temp_count
+
+        temps = temp_read()
+        if temp_count() == 0:
+            info.append(("Temp", "no sensors"))
+        else:
+            parts = []
+            for i in sorted(temps):
+                t_c = temps[i]
+                parts.append("{}C".format(int(t_c)) if t_c is not None else "?")
+            info.append(("Temp", " / ".join(parts)))
     except Exception:
         pass
 
