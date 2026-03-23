@@ -44,7 +44,7 @@ def create_hardware():
     - PCA9685 missing → pwm is None (no LED dimming).
     - SPI displays can't be probed (push-only) so are always assumed present.
     """
-    hw_status = {"mcp": False, "pca": False}
+    hw_status = {"mcp": False, "pca": False, "temp": False}
 
     spi = SPI(
         2,
@@ -106,6 +106,19 @@ def create_hardware():
         hw_status["pca"] = True
     except Exception as e:
         print("PCA9685 not found, PWM dimming disabled:", e)
+
+    # DS18B20 temperature sensors (1-Wire)
+    try:
+        from bodn.temperature import scan as temp_scan
+
+        n_sensors = temp_scan()
+        if n_sensors > 0:
+            hw_status["temp"] = True
+            print("DS18B20: {} sensor(s) found".format(n_sensors))
+        else:
+            print("DS18B20: no sensors on 1-Wire bus")
+    except Exception as e:
+        print("DS18B20 init failed:", e)
 
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
     encoders = [
@@ -338,9 +351,12 @@ async def secondary_task(secondary):
         await asyncio.sleep_ms(200)
 
 
-async def housekeeping_task(session_mgr):
-    """Session management and periodic bookkeeping: ~500 ms tick."""
+async def housekeeping_task(session_mgr, np):
+    """Session management, temperature monitoring, periodic bookkeeping: ~500 ms tick."""
+    from bodn import temperature
+
     errors = 0
+    _overtemp_active = False
     while True:
         try:
             session_mgr.tick()
@@ -349,6 +365,28 @@ async def housekeeping_task(session_mgr):
         except Exception as e:
             errors += 1
             print("housekeeping_task error #{}: {}".format(errors, e))
+
+        # Temperature overwatch — poll is cheap (cached 30 s in temperature.py)
+        try:
+            if temperature.sensor_count() > 0:
+                if temperature.is_critical():
+                    if not _overtemp_active:
+                        _overtemp_active = True
+                        print("TEMP CRITICAL: shutting down NeoPixels")
+                        for i in range(N_LEDS):
+                            np[i] = (0, 0, 0)
+                        np.write()
+                elif temperature.is_warning():
+                    if not _overtemp_active:
+                        print("TEMP WARNING: {}C".format(int(temperature.max_temp())))
+                else:
+                    if _overtemp_active:
+                        _overtemp_active = False
+                        print("TEMP OK: resumed normal operation")
+        except Exception as e:
+            errors += 1
+            print("temp_monitor error #{}: {}".format(errors, e))
+
         await asyncio.sleep_ms(500)
 
 
@@ -410,7 +448,7 @@ async def main():
     await asyncio.gather(
         primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr),
         secondary_task(secondary),
-        housekeeping_task(session_mgr),
+        housekeeping_task(session_mgr, np),
     )
 
 

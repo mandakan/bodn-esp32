@@ -264,6 +264,20 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 "max_session_s": settings["max_session_min"] * 60,
                 "mode": session_mgr.mode,
             }
+            try:
+                from bodn import temperature
+
+                t_max = temperature.max_temp()
+                if t_max is not None:
+                    data["temp_c"] = round(t_max, 1)
+                    if temperature.is_critical():
+                        data["temp_status"] = "critical"
+                    elif temperature.is_warning():
+                        data["temp_status"] = "warn"
+                    else:
+                        data["temp_status"] = "ok"
+            except Exception:
+                pass
             await _send_json(writer, data)
 
         elif method == "GET" and path == "/api/settings":

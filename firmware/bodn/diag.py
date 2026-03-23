@@ -78,6 +78,22 @@ def gather(ip="0.0.0.0", boot_results=None, boot_steps=None):
     except Exception:
         pass
 
+    # Temperature
+    try:
+        from bodn.temperature import read as temp_read, sensor_count as temp_count
+
+        temps = temp_read()
+        if temp_count() == 0:
+            info.append(("Temp", "no sensors"))
+        else:
+            parts = []
+            for i in sorted(temps):
+                t_c = temps[i]
+                parts.append("{}C".format(int(t_c)) if t_c is not None else "?")
+            info.append(("Temp", " / ".join(parts)))
+    except Exception:
+        pass
+
     # NTP / time
     t = time.localtime()
     if t[0] >= 2024:

@@ -118,6 +118,7 @@ th{color:#aaa}
 <div class="stat"><label>Sessions today</label><span id="s-count" class="val">0</span> / <span id="s-max" class="val">5</span></div>
 <div class="stat"><label>Time remaining</label><div class="progress"><div id="time-bar" class="bar" style="width:0%"></div></div><div id="time-text" style="text-align:center;font-size:0.85em;margin-top:4px">--</div></div>
 <div class="toggle"><input type="checkbox" id="sessions-enabled" checked onchange="toggleSessions()"><label>Session limits enabled</label></div>
+<div id="temp-card" class="stat-card" style="display:none"><div class="val" id="temp-val">--</div><div class="lbl">Temperature</div></div>
 <button class="btn btn-danger" id="lockdown-btn" onclick="toggleLockdown()">Lockdown</button>
 </div>
 
@@ -211,6 +212,10 @@ if(d.time_remaining_s>0)pct=Math.round(d.time_remaining_s*100/maxS);
 document.getElementById('time-bar').style.width=pct+'%';
 document.getElementById('time-text').textContent=d.time_remaining_s>0?fmtTime(d.time_remaining_s):'--';
 document.getElementById('lockdown-btn').textContent=d.state==='LOCKDOWN'?'Unlock':'Lockdown';
+var tc=document.getElementById('temp-card'),tv=document.getElementById('temp-val');
+if(d.temp_c!=null){tc.style.display='';tv.textContent=d.temp_c+'\u00b0C';
+tc.style.borderLeft=d.temp_status==='critical'?'4px solid #e94560':d.temp_status==='warn'?'4px solid #f39c12':'4px solid #27ae60';
+}else{tc.style.display='none'}
 }catch(e){}
 }
 async function loadSettings(){
