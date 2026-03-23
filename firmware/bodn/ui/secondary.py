@@ -82,13 +82,17 @@ class SecondaryDisplay:
         if landscape:
             # Status on the left, content on the right
             self._status_vp = _Viewport(tft, 0, 0, STATUS_THICK, CONTENT_SIZE)
-            self._content_vp = _Viewport(tft, STATUS_THICK, 0, CONTENT_SIZE, CONTENT_SIZE)
+            self._content_vp = _Viewport(
+                tft, STATUS_THICK, 0, CONTENT_SIZE, CONTENT_SIZE
+            )
             self._status_rect = (0, 0, STATUS_THICK, CONTENT_SIZE)
             self._content_rect = (STATUS_THICK, 0, CONTENT_SIZE, CONTENT_SIZE)
         else:
             # Content on top, status on the bottom
             self._content_vp = _Viewport(tft, 0, 0, CONTENT_SIZE, CONTENT_SIZE)
-            self._status_vp = _Viewport(tft, 0, CONTENT_SIZE, CONTENT_SIZE, STATUS_THICK)
+            self._status_vp = _Viewport(
+                tft, 0, CONTENT_SIZE, CONTENT_SIZE, STATUS_THICK
+            )
             self._content_rect = (0, 0, CONTENT_SIZE, CONTENT_SIZE)
             self._status_rect = (0, CONTENT_SIZE, CONTENT_SIZE, STATUS_THICK)
 
