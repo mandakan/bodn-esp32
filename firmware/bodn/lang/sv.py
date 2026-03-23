@@ -128,8 +128,6 @@ STRINGS = {
     # Toggle modifier names (short)
     "tog_reverse": "Rev",
     "tog_mirror": "Spe",
-    "tog_strobe": "Str",
-    "tog_invert": "Inv",
     # Battery warnings
     "bat_low": "BATTERI LÅGT!",
     "bat_critical": "LADDA MIG!",

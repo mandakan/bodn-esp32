@@ -13,8 +13,6 @@
 #   ENC_B button: toggle cell at cursor (plant/remove).
 #   Toggle SW0: normal vs. friendly rules.
 #   Toggle SW1: wrap-around edges vs. walls.
-#   Toggle SW2: show next-gen ghost preview.
-#   Toggle SW3: enable undo (rewind one generation).
 
 from micropython import const
 from bodn import config
@@ -108,7 +106,6 @@ class GardenScreen(Screen):
 
         # Grid state
         self._grid = clear(GRID_W, GRID_H)
-        self._prev_grid = None  # for undo
         self._generation = 0
         self._population = 0
         self._running = False
@@ -125,8 +122,6 @@ class GardenScreen(Screen):
         # Rule modifiers (from toggle switches)
         self._friendly = False
         self._wrap = False
-        self._ghost = False
-        self._undo_enabled = False
 
     def _cursor_xy(self):
         """Convert flat cursor position to (x, y)."""
@@ -168,12 +163,10 @@ class GardenScreen(Screen):
         now = time.ticks_ms()
 
         # Read toggle switches
-        prev_mods = (self._friendly, self._wrap, self._ghost, self._undo_enabled)
+        prev_mods = (self._friendly, self._wrap)
         self._friendly = inp.sw[0]
         self._wrap = inp.sw[1]
-        self._ghost = inp.sw[2]
-        self._undo_enabled = len(inp.sw) > 3 and inp.sw[3]
-        new_mods = (self._friendly, self._wrap, self._ghost, self._undo_enabled)
+        new_mods = (self._friendly, self._wrap)
         if new_mods != prev_mods:
             self._dirty = True
             self._full_redraw = True
@@ -237,26 +230,15 @@ class GardenScreen(Screen):
 
         # ENC_B button: toggle cell at cursor (plant/remove)
         if inp.enc_btn_pressed[config.ENC_B]:
-            if self._undo_enabled and self._prev_grid:
-                # Undo mode: rewind one generation
-                self._grid = self._prev_grid
-                self._prev_grid = None
-                self._generation = max(0, self._generation - 1)
-                self._population = population(self._grid)
-                self._dirty = True
-                self._full_redraw = True
-                self._leds_dirty = True
-            else:
-                # Toggle cell at cursor
-                cx, cy = self._cursor_xy()
-                toggle(self._grid, cx, cy, GRID_W, self._cursor_color)
-                self._dirty_cells.add((cx, cy))
-                self._dirty = True
-                self._leds_dirty = True
-                self._population = population(self._grid)
-                self._last_step_ms = now
-                if not self._running and self._population >= AUTO_START_CELLS:
-                    self._running = True
+            cx, cy = self._cursor_xy()
+            toggle(self._grid, cx, cy, GRID_W, self._cursor_color)
+            self._dirty_cells.add((cx, cy))
+            self._dirty = True
+            self._leds_dirty = True
+            self._population = population(self._grid)
+            self._last_step_ms = now
+            if not self._running and self._population >= AUTO_START_CELLS:
+                self._running = True
 
         # Evolution tick
         if self._running and time.ticks_diff(now, self._last_step_ms) >= self._speed_ms:
@@ -279,9 +261,6 @@ class GardenScreen(Screen):
         """Run one generation step."""
         birth = FRIENDLY_BIRTH if self._friendly else CONWAY_BIRTH
         survive = FRIENDLY_SURVIVE if self._friendly else CONWAY_SURVIVE
-
-        if self._undo_enabled:
-            self._prev_grid = bytearray(self._grid)
 
         new_grid, births, deaths = step(
             self._grid, GRID_W, GRID_H, birth, survive, self._wrap
@@ -411,10 +390,6 @@ class GardenScreen(Screen):
                 self._draw_cell(tft, theme, cx, cy)
             self._dirty_cells.clear()
 
-        # Ghost preview (next generation state shown faintly)
-        if self._ghost and self._running:
-            self._draw_ghost(tft, theme)
-
         # Garden plots — always show colored outlines on empty plot cells
         # so the child knows which button maps to which spot
         for i, (px, py) in enumerate(GARDEN_PLOTS):
@@ -453,8 +428,6 @@ class GardenScreen(Screen):
         mods = [
             (self._friendly, theme.GREEN),
             (self._wrap, theme.CYAN),
-            (self._ghost, theme.YELLOW),
-            (self._undo_enabled, theme.MAGENTA),
         ]
         dx = 200
         for active, color in mods:
@@ -554,19 +527,3 @@ class GardenScreen(Screen):
         tft.fill_rect(
             sx + inner // 2 - 2, sy + inner // 2 - 2, 4, 4, tft.rgb(255, 255, 255)
         )
-
-    def _draw_ghost(self, tft, theme):
-        """Draw faint outlines where cells will appear/disappear next generation."""
-        birth = FRIENDLY_BIRTH if self._friendly else CONWAY_BIRTH
-        survive = FRIENDLY_SURVIVE if self._friendly else CONWAY_SURVIVE
-        _, births, deaths = step(self._grid, GRID_W, GRID_H, birth, survive, self._wrap)
-        ghost_color = tft.rgb(40, 60, 40)
-        death_color = tft.rgb(60, 20, 20)
-        for x, y in births:
-            sx = GRID_OX + x * CELL_PX + 4
-            sy = GRID_OY + y * CELL_PX + 4
-            tft.rect(sx, sy, CELL_PX - 8, CELL_PX - 8, ghost_color)
-        for x, y in deaths:
-            sx = GRID_OX + x * CELL_PX + 6
-            sy = GRID_OY + y * CELL_PX + 6
-            tft.fill_rect(sx, sy, 3, 3, death_color)

@@ -14,3 +14,8 @@ dependencies = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["firmware"]
+
+[dependency-groups]
+dev = [
+    "esptool>=5.2.0",
+]

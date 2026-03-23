@@ -6,7 +6,7 @@ from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
 from bodn.ui.widgets import draw_progress_bar, draw_button_grid, draw_centered
 from bodn.ui.pause import PauseMenu
-from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING, _BLACK
+from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING
 from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
@@ -48,7 +48,7 @@ class DemoScreen(Screen):
         # Snapshot of input state for dirty detection
         self._prev_enc = [0, 0, 0]
         self._prev_btn = [False] * 8
-        self._prev_sw = [False] * 4
+        self._prev_sw = [False] * 2
 
     def enter(self, manager):
         self._manager = manager
@@ -98,7 +98,7 @@ class DemoScreen(Screen):
             if inp.btn_held[i] != self._prev_btn[i]:
                 self._prev_btn[i] = inp.btn_held[i]
                 self._dirty = True
-        for i in range(min(4, len(inp.sw))):
+        for i in range(min(2, len(inp.sw))):
             if inp.sw[i] != self._prev_sw[i]:
                 self._prev_sw[i] = inp.sw[i]
                 self._dirty = True
@@ -119,7 +119,6 @@ class DemoScreen(Screen):
             # Toggle switch modifiers (operate in-place on shared _led_buf)
             sw = inp.sw
             n = N_LEDS
-            black = _BLACK
             if sw[0]:
                 # Reverse: swap in-place
                 half = n // 2
@@ -130,13 +129,6 @@ class DemoScreen(Screen):
                 half = n // 2
                 for i in range(half):
                     leds[n - 1 - i] = leds[i]
-            if sw[2] and (frame // 4) % 2 == 0:
-                for i in range(n):
-                    leds[i] = black
-            if len(sw) > 3 and sw[3]:
-                for i in range(n):
-                    r, g, b = leds[i]
-                    leds[i] = (255 - r, 255 - g, 255 - b)
 
             # Dim the lid ring relative to the sticks
             lid_ratio = config.NEOPIXEL_LID_BRIGHTNESS
@@ -218,8 +210,6 @@ class DemoScreen(Screen):
         toggle_labels = [
             t("tog_reverse"),
             t("tog_mirror"),
-            t("tog_strobe"),
-            t("tog_invert"),
         ]
         for i in range(len(toggle_labels)):
             x = i * 36
@@ -284,8 +274,6 @@ class DemoScreen(Screen):
         toggle_labels = [
             t("tog_reverse"),
             t("tog_mirror"),
-            t("tog_strobe"),
-            t("tog_invert"),
         ]
         for i in range(len(toggle_labels)):
             x = i * 32

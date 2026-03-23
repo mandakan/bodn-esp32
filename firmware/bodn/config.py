@@ -112,12 +112,19 @@ I2C_SDA = const(48)
 MCP23017_ADDR = const(0x20)  # A0-A2 jumpers all low
 MCP_INT_PIN = const(46)  # MCP23017 INTA/INTB → GPIO 46 (active-low, open-drain)
 MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
-MCP_SW_PINS = [8, 9, 10, 11]
+MCP_SW_PINS = [8, 9]  # GPB0–GPB1 (2 toggle switches; GPB2–3 freed for arcade)
 MCP_MASTER_SW_PIN = const(12)  # GPB4 — red-cover flip switch (active-low: 0 = ON)
+MCP_ARC_PINS = [10, 11, 13, 14, 15]  # GPB2,GPB3,GPB5,GPB6,GPB7 — 5 arcade buttons
 
 # PCA9685 16-channel 12-bit PWM driver — LED dimming over I2C
 PCA9685_ADDR = const(0x40)  # A0-A5 all low (default)
 PWM_CH_BACKLIGHT = const(0)  # TFT backlight dimming channel
+PWM_CH_ARC1 = const(1)  # Arcade button 1 LED (yellow)
+PWM_CH_ARC2 = const(2)  # Arcade button 2 LED (red)
+PWM_CH_ARC3 = const(3)  # Arcade button 3 LED (blue)
+PWM_CH_ARC4 = const(4)  # Arcade button 4 LED (green)
+PWM_CH_ARC5 = const(5)  # Arcade button 5 LED (white)
+PWM_CH_AMP_SD = const(6)  # MAX98357A SD pin — hardware mute (0=off, 4095=on)
 
 # Power save
 SLEEP_TIMEOUT_S = 300  # default 5 minutes of inactivity before light sleep
