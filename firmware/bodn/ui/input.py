@@ -94,32 +94,39 @@ class BrightnessControl:
 
 
 class InputState:
-    """Wraps buttons, switches and encoders into a single scannable state.
+    """Wraps buttons, switches, arcade buttons and encoders into a single scannable state.
 
     Args:
         buttons: list of 8 Pin objects (active-low).
-        switches: list of 4 Pin objects (latching toggles, active-low).
+        switches: list of Pin objects (latching toggles, active-low).
         encoders: list of 3 Encoder objects (each has .value, .sw).
         time_ms_fn: callable returning current time in ms.
+        arcade_pins: list of Pin objects for arcade buttons (active-low), or [].
     """
 
-    def __init__(self, buttons, switches, encoders, time_ms_fn):
+    def __init__(self, buttons, switches, encoders, time_ms_fn, arcade_pins=None):
         self._buttons = buttons
         self._switches = switches
         self._encoders = encoders
         self._time_ms = time_ms_fn
+        self._arcade_pins = arcade_pins or []
 
         self._btn_deb = [Debouncer(delay_ms=30) for _ in range(len(buttons))]
         self._enc_btn_deb = [Debouncer(delay_ms=30) for _ in range(len(encoders))]
+        self._arc_deb = [Debouncer(delay_ms=30) for _ in range(len(self._arcade_pins))]
 
         n_btn = len(buttons)
         n_enc = len(encoders)
+        n_arc = len(self._arcade_pins)
 
         # Public state (updated by scan)
         self.btn_held = [False] * n_btn
         self.btn_just_pressed = [False] * n_btn
         self.btn_just_released = [False] * n_btn
         self.sw = [False] * len(switches)
+        self.arc_held = [False] * n_arc
+        self.arc_just_pressed = [False] * n_arc
+        self.arc_just_released = [False] * n_arc
         self.enc_pos = [0] * n_enc
         self.enc_delta = [0] * n_enc
         self.enc_velocity = [0] * n_enc  # steps/second per encoder
@@ -128,12 +135,13 @@ class InputState:
         self.enc_btn_just_released = [False] * n_enc
 
         self._prev_btn = [False] * n_btn
+        self._prev_arc = [False] * n_arc
         self._prev_enc_pos = [0] * n_enc
         self._prev_enc_btn = [False] * n_enc
         self._enc_last_step_ms = [0] * n_enc
 
-        # Gesture detection for all buttons + encoder buttons
-        n_total = n_btn + n_enc
+        # Gesture detection for all buttons + arcade buttons + encoder buttons
+        n_total = n_btn + n_arc + n_enc
         self.gestures = GestureDetector(n_total)
         self._g_held = [False] * n_total
         self._g_pressed = [False] * n_total
@@ -164,6 +172,22 @@ class InputState:
         sw = self.sw
         for i, switch in enumerate(self._switches):
             sw[i] = switch.value() == 0
+
+        # Arcade buttons
+        arc_pins = self._arcade_pins
+        arc_deb = self._arc_deb
+        arc_held = self.arc_held
+        arc_just_pressed = self.arc_just_pressed
+        arc_just_released = self.arc_just_released
+        prev_arc = self._prev_arc
+
+        for i, pin in enumerate(arc_pins):
+            prev = prev_arc[i]
+            cur = arc_deb[i].update(pin.value(), now)
+            arc_held[i] = cur
+            arc_just_pressed[i] = cur and not prev
+            arc_just_released[i] = not cur and prev
+            prev_arc[i] = cur
 
         # Encoders
         encoders = self._encoders
@@ -203,15 +227,21 @@ class InputState:
             enc_btn_just_released[i] = not cur_btn and p_btn
             prev_enc_btn[i] = cur_btn
 
-        # Update gesture detector with combined button + encoder state
+        # Update gesture detector with combined button + arcade + encoder state
         gh = self._g_held
         gp = self._g_pressed
         gr = self._g_released
+        n_arc = len(arc_pins)
         for i in range(n_btn):
             gh[i] = btn_held[i]
             gp[i] = btn_just_pressed[i]
             gr[i] = btn_just_released[i]
         off = n_btn
+        for i in range(n_arc):
+            gh[off + i] = arc_held[i]
+            gp[off + i] = arc_just_pressed[i]
+            gr[off + i] = arc_just_released[i]
+        off += n_arc
         for i in range(n_enc):
             gh[off + i] = enc_btn_held[i]
             gp[off + i] = enc_btn_pressed[i]
@@ -222,6 +252,8 @@ class InputState:
         """Return True if any input changed this frame (for idle tracking)."""
         if any(self.btn_just_pressed) or any(self.btn_just_released):
             return True
+        if any(self.arc_just_pressed) or any(self.arc_just_released):
+            return True
         if any(d != 0 for d in self.enc_delta):
             return True
         if any(self.enc_btn_pressed):
@@ -229,16 +261,31 @@ class InputState:
         return False
 
     def any_btn_pressed(self):
-        """Return True if any button was just pressed this frame."""
+        """Return True if any mini button was just pressed this frame."""
         return any(self.btn_just_pressed)
 
     def first_btn_pressed(self):
-        """Return index of the first just-pressed button, or -1."""
+        """Return index of the first just-pressed mini button, or -1."""
         for i, p in enumerate(self.btn_just_pressed):
             if p:
                 return i
         return -1
 
+    def any_arc_pressed(self):
+        """Return True if any arcade button was just pressed this frame."""
+        return any(self.arc_just_pressed)
+
+    def first_arc_pressed(self):
+        """Return index of the first just-pressed arcade button, or -1."""
+        for i, p in enumerate(self.arc_just_pressed):
+            if p:
+                return i
+        return -1
+
+    def gesture_arc(self, arc_idx):
+        """Return gesture channel index for an arcade button."""
+        return len(self._buttons) + arc_idx
+
     def gesture_enc(self, enc_idx):
         """Return gesture channel index for an encoder button."""
-        return len(self._buttons) + enc_idx
+        return len(self._buttons) + len(self._arcade_pins) + enc_idx

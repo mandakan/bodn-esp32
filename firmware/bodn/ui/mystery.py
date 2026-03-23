@@ -71,14 +71,10 @@ class MysteryScreen(Screen):
         prev_mods = (
             eng.sw_invert,
             eng.sw_mirror,
-            eng.sw_shimmer,
-            eng.sw_lighten,
             eng.hue_shift,
         )
         eng.sw_invert = inp.sw[0]
         eng.sw_mirror = inp.sw[1]
-        eng.sw_shimmer = inp.sw[2]
-        eng.sw_lighten = len(inp.sw) > 3 and inp.sw[3]
         hue_units = self._hue_acc.update(
             inp.enc_delta[config.ENC_B], inp.enc_velocity[config.ENC_B]
         )
@@ -88,8 +84,6 @@ class MysteryScreen(Screen):
         new_mods = (
             eng.sw_invert,
             eng.sw_mirror,
-            eng.sw_shimmer,
-            eng.sw_lighten,
             eng.hue_shift,
         )
         if new_mods != prev_mods:
@@ -310,8 +304,6 @@ class MysteryScreen(Screen):
         mods = [
             (eng.sw_invert, theme.CYAN),
             (eng.sw_mirror, theme.GREEN),
-            (eng.sw_shimmer, theme.YELLOW),
-            (eng.sw_lighten, theme.WHITE),
         ]
         dx = x
         for active, color in mods:

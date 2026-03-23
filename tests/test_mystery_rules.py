@@ -168,18 +168,6 @@ def test_invert_modifier():
     assert inverted[2] > normal[2]
 
 
-def test_lighten_modifier():
-    engine = MysteryEngine()
-    engine.update(2, frame=1)  # Blue = (0, 0, 255)
-    normal = engine.display_color
-
-    engine.sw_lighten = True
-    lightened = engine.display_color
-    # Lightened blue should have higher R and G
-    assert lightened[0] > normal[0]
-    assert lightened[1] > normal[1]
-
-
 def test_hue_shift_modifier():
     engine = MysteryEngine()
     engine.update(0, frame=1)  # Red

@@ -13,7 +13,8 @@
 | 1 | Speaker | 3W 8Ω mini speaker (Quarkzman) | ~81 SEK |
 | 3 | Rotary encoder | KY-040 with push button (AZDelivery 5-pack) | ~119 SEK |
 | 8 | Push buttons | 7mm mini momentary, mixed colors (Gebildet 24-pack) | ~110 SEK |
-| 4 | Toggle switches | Mini SPST on/off (Gebildet 12-pack) | ~99 SEK |
+| 5 | Arcade buttons | 30mm illuminated LED, mixed colors (Electrokit) | ~150 SEK |
+| 2 | Toggle switches | Mini SPST on/off (Gebildet 12-pack) | ~99 SEK |
 | 2 | LED sticks | WS2812 8-LED RGB modules (from 10-pack) | ~incl. |
 | 1 | LED strip | WS2812B 144 LED/m RGBIC strip, cut to 640 mm (~92 LEDs) | ~169 SEK |
 | 1 | GPIO expander | Waveshare MCP23017 I2C 16-IO expansion board | ~85 SEK |
@@ -78,9 +79,17 @@ MCP23017 pins: GPA0–GPA7 (config: `MCP_BTN_PINS`)
 
 ### Toggle switches (MCP23017)
 
-4 × SPST mini toggles (active low with MCP23017 internal pull-ups):
+2 × SPST mini toggles (active low with MCP23017 internal pull-ups):
 
-MCP23017 pins: GPB0–GPB3 (config: `MCP_SW_PINS`)
+MCP23017 pins: GPB0–GPB1 (config: `MCP_SW_PINS`)
+
+### Arcade buttons (MCP23017)
+
+5 × 30mm illuminated arcade buttons (switch contacts, active low with MCP23017 internal pull-ups):
+
+MCP23017 pins: GPB2, GPB3, GPB5, GPB6, GPB7 (config: `MCP_ARC_PINS`)
+
+Arcade button LEDs are driven by the PCA9685 PWM driver (see below).
 
 ### Rotary encoders
 
@@ -244,12 +253,13 @@ ENC2_SW → 40) to free the I2C bus.
 
 | MCP23017 pin | Peripheral | Notes |
 |--------------|-----------|-------|
-| GPA0–GPA7 | 8 push buttons | Active low with internal pull-ups (MCP23017 has configurable pull-ups) |
-| GPB0–GPB3 | 4 toggle switches | Active low with internal pull-ups |
-| GPB4–GPB7 | 4 × available | Future use (additional buttons, status LEDs, etc.) |
+| GPA0–GPA7 | 8 push buttons | Active low with internal pull-ups |
+| GPB0–GPB1 | 2 toggle switches | Active low with internal pull-ups |
+| GPB2–GPB3 | Arcade buttons 1–2 | Active low with internal pull-ups |
+| GPB4 | Master switch | Red-cover flip switch (active-low) |
+| GPB5–GPB7 | Arcade buttons 3–5 | Active low with internal pull-ups |
 
-All buttons and toggle switches are permanently on the MCP23017 expander.
-Native GPIOs free for future use: 20, 21, 46.
+All 16 MCP23017 pins are allocated.
 
 ### Why not put encoders on the expander?
 
@@ -289,7 +299,13 @@ The PCA9685 shares the I2C bus on GPIO 47 (SCL) / GPIO 48 (SDA) with the MCP2301
 | Channel | Function | Notes |
 |---------|----------|-------|
 | 0 | TFT backlight | Smooth dimming (replaces binary GPIO on/off) |
-| 1–15 | Available | Indicator LEDs, mood lights, servos, etc. |
+| 1 | Arcade LED 1 (yellow) | 5V via V+ rail, ~10 mA |
+| 2 | Arcade LED 2 (red) | 5V via V+ rail, ~10 mA |
+| 3 | Arcade LED 3 (blue) | 5V via V+ rail, ~10 mA |
+| 4 | Arcade LED 4 (green) | 5V via V+ rail, ~10 mA |
+| 5 | Arcade LED 5 (white) | 5V via V+ rail, ~10 mA |
+| 6 | MAX98357A SD (mute) | 0 = shutdown, 4095 = enabled |
+| 7–15 | Available | Future use (servos, indicators, etc.) |
 
 ### Wiring
 
@@ -319,7 +335,7 @@ provides a stable 5 V rail from either USB or battery power.
 | Efficiency | Up to 95 % |
 | Input | LiPo BAT+ (3.0–4.2 V) or USB VBUS (5 V) |
 | Output | 5 V regulated |
-| Consumers | NeoPixel VDD, PCA9685 V+ |
+| Consumers | NeoPixel VDD, PCA9685 V+ (arcade LEDs) |
 
 ```
 LiPo BAT+ ──▶ VIN (converter)
@@ -422,10 +438,10 @@ and battery escalation should disable non-critical loads. See section 9 of
 | Category | Details |
 |----------|---------|
 | Native GPIOs in use | 24 (SPI, I2S, encoders, NeoPixel, I2C, battery, backlight, 1-Wire) |
-| Native GPIOs free | 2 — GPIO 19 (USB OTG caveat), 46 |
+| Native GPIOs free | 2 — GPIO 19 (USB OTG caveat, reserved for touch CS), 46 (reserved for touch IRQ) |
 | PSRAM-reserved (never use) | GPIO 35, 36, 37 |
 | UART console (avoid) | GPIO 43 (TX), 44 (RX) |
-| MCP23017 in use | 13 (8 buttons + 4 toggles + master switch) |
-| MCP23017 spare | 3 (GPB5–GPB7) |
-| PCA9685 in use | 1 (backlight) |
-| PCA9685 spare | 15 (channels 1–15) |
+| MCP23017 in use | 16 (8 buttons + 2 toggles + master switch + 5 arcade) |
+| MCP23017 spare | 0 |
+| PCA9685 in use | 7 (backlight + 5 arcade LEDs + amp mute) |
+| PCA9685 spare | 9 (channels 7–15) |

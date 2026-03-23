@@ -7,8 +7,6 @@
 # Switches and encoder B act as mystery modifiers:
 #   SW0: invert colors (red↔cyan, green↔magenta, etc.)
 #   SW1: mirror LED pattern (both halves identical)
-#   SW2: shimmer mode (output pulses instead of solid)
-#   SW3: add white to the mix (lightens all colors)
 #   ENC_B: hue shift — rotates output colors around the wheel
 
 from micropython import const
@@ -40,11 +38,6 @@ def _pair_key(a, b):
 def _invert_rgb(c):
     """Invert an RGB color."""
     return (255 - c[0], 255 - c[1], 255 - c[2])
-
-
-def _lighten_rgb(c):
-    """Mix a color with white (shift toward lighter)."""
-    return ((c[0] + 255) // 2, (c[1] + 255) // 2, (c[2] + 255) // 2)
 
 
 def _shift_hue(c, amount):
@@ -128,8 +121,6 @@ class MysteryEngine:
         # Modifier state (set by caller each frame)
         self.sw_invert = False
         self.sw_mirror = False
-        self.sw_shimmer = False
-        self.sw_lighten = False
         self.hue_shift = 0  # 0-255 from encoder B
 
     @property
@@ -162,8 +153,6 @@ class MysteryEngine:
         """Apply switch/encoder modifiers to a color."""
         if self.sw_invert:
             c = _invert_rgb(c)
-        if self.sw_lighten:
-            c = _lighten_rgb(c)
         if self.hue_shift > 0:
             c = _shift_hue(c, self.hue_shift)
         return c
@@ -220,7 +209,7 @@ class MysteryEngine:
         """Generate static LED colors for the current output state.
 
         No animation — solid colors only. Writes into the shared _led_buf.
-        Applies modifier transforms (invert, lighten, hue shift, mirror).
+        Applies modifier transforms (invert, hue shift, mirror).
         """
         buf = _led_buf
         n = N_STICKS
@@ -250,7 +239,7 @@ class MysteryEngine:
         """Generate LED colors for the current output state.
 
         Writes into the shared _led_buf to avoid per-frame allocations.
-        Applies modifier transforms (invert, lighten, hue shift, mirror, shimmer).
+        Applies modifier transforms (invert, hue shift, mirror).
         """
         buf = _led_buf
         n = N_STICKS
@@ -291,15 +280,6 @@ class MysteryEngine:
             c = scale(color, brightness)
             for i in range(n):
                 buf[i] = c
-
-        # Shimmer: modulate brightness with a pulse
-        if self.sw_shimmer and self._output != OUT_IDLE:
-            phase = (frame * 4) & 0xFF
-            v = phase if phase < 128 else 255 - phase
-            dim = max(30, (v * brightness) >> 8)
-            for i in range(n):
-                r, g, b = buf[i]
-                buf[i] = ((r * dim) >> 8, (g * dim) >> 8, (b * dim) >> 8)
 
         # Mirror: copy first half to second half (reversed)
         if self.sw_mirror:

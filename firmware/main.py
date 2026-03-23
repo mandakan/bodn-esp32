@@ -13,6 +13,7 @@ from bodn import config
 from bodn.encoder import Encoder
 from bodn.mcp23017 import MCP23017
 from bodn.pca9685 import PCA9685
+from bodn.arcade import ArcadeButtons
 from bodn.session import SessionManager
 from bodn.web import start_server
 from bodn.wifi import WiFiController
@@ -37,10 +38,10 @@ N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 def create_hardware():
     """Initialise all hardware peripherals.
 
-    Returns (tft, tft2, buttons, switches, encoders, np, mcp, pwm, hw_status).
+    Returns (tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status).
     Components that fail to initialise degrade gracefully:
     - MCP23017 missing → buttons/switches are empty lists, mcp is None.
-    - PCA9685 missing → pwm is None (no LED dimming).
+    - PCA9685 missing → pwm is None (no LED dimming), arcade LEDs disabled.
     - SPI displays can't be probed (push-only) so are always assumed present.
     """
     hw_status = {"mcp": False, "pca": False, "temp": False}
@@ -85,9 +86,10 @@ def create_hardware():
     # Shared I2C bus for MCP23017 and PCA9685
     i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
 
-    # MCP23017 GPIO expander for buttons and toggles
+    # MCP23017 GPIO expander for buttons, toggles, and arcade switches
     mcp = None
     pwm = None
+    arcade = None
     buttons = []
     switches = []
     try:
@@ -98,13 +100,26 @@ def create_hardware():
     except Exception as e:
         print("MCP23017 not found, buttons/switches disabled:", e)
 
-    # PCA9685 PWM driver for LED dimming
+    # PCA9685 PWM driver for LED dimming + arcade LEDs + amp mute
     try:
         pwm = PCA9685(i2c, config.PCA9685_ADDR)
         pwm.set_freq(1000)
         hw_status["pca"] = True
+        # Enable amplifier by default (SD pin high = on)
+        pwm.set_duty(config.PWM_CH_AMP_SD, 4095)
     except Exception as e:
         print("PCA9685 not found, PWM dimming disabled:", e)
+
+    # Arcade buttons (switch input via MCP23017 + LED output via PCA9685)
+    if mcp:
+        pwm_channels = [
+            config.PWM_CH_ARC1,
+            config.PWM_CH_ARC2,
+            config.PWM_CH_ARC3,
+            config.PWM_CH_ARC4,
+            config.PWM_CH_ARC5,
+        ]
+        arcade = ArcadeButtons(mcp, config.MCP_ARC_PINS, pwm, pwm_channels)
 
     # DS18B20 temperature sensors (1-Wire)
     try:
@@ -126,16 +141,28 @@ def create_hardware():
         Encoder(config.ENC3_CLK, config.ENC3_DT, config.ENC3_SW),
     ]
 
-    return tft, tft2, buttons, switches, encoders, np, mcp, pwm, hw_status
+    return tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status
 
 
 def create_ui(
-    session_mgr, settings, wifi_ctrl, tft, tft2, buttons, switches, encoders, np
+    session_mgr,
+    settings,
+    wifi_ctrl,
+    tft,
+    tft2,
+    buttons,
+    switches,
+    encoders,
+    np,
+    arcade=None,
 ):
     """Wire up UI components. Returns (manager, secondary, inp)."""
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
     theme2 = Theme(config.TFT2_WIDTH, config.TFT2_HEIGHT, ST7735.rgb)
-    inp = InputState(buttons, switches, encoders, time.ticks_ms)
+    arcade_pins = arcade.pins if arcade else []
+    inp = InputState(
+        buttons, switches, encoders, time.ticks_ms, arcade_pins=arcade_pins
+    )
     overlay = SessionOverlay(session_mgr, settings=settings)
 
     # Primary display — full screen manager with navigation
@@ -556,7 +583,9 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    tft, tft2, buttons, switches, encoders, np, mcp, pwm, hw_status = create_hardware()
+    tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status = (
+        create_hardware()
+    )
 
     # Publish hardware status for diagnostics
     from bodn.diag import set_hw_status
@@ -572,6 +601,7 @@ async def main():
         switches,
         encoders,
         np,
+        arcade=arcade,
     )
 
     # Power management
