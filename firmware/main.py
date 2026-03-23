@@ -352,28 +352,34 @@ async def secondary_task(secondary):
 
 
 async def housekeeping_task(session_mgr, np, settings):
-    """Session management, temperature monitoring, periodic bookkeeping: ~500 ms tick.
+    """Session management, temperature + battery monitoring: ~500 ms tick.
 
-    Temperature overwatch levels (thresholds in config.py):
+    Temperature overwatch (thresholds in config.py):
       OK       (< 40 °C): normal operation.
-      WARNING  (≥ 40 °C): log to serial, flag in settings for UI display.
-                           NeoPixel brightness halved.
-      CRITICAL (≥ 50 °C): kill NeoPixels, dim display backlight.
-                           The BL4054B charger IC has no NTC input and the
-                           Olimex battery has no thermistor, so this software
-                           watchdog is the ONLY thermal protection for the cell.
+      WARNING  (≥ 40 °C): log, amber banner, reduce LED brightness.
+      CRITICAL (≥ 50 °C): kill LEDs, dim backlight, full-screen alert.
+      EMERGENCY(≥ 60 °C): forced deep sleep (5 min cycle).
 
-    The shared key ``settings["_temp_status"]`` is read by the primary
-    display overlay and the secondary status strip to show warnings.
-    Values: ``"ok"``, ``"warn"``, ``"critical"``, or absent.
-    ``settings["_temp_c"]`` holds the current max reading (float or None).
+    Battery overwatch (thresholds in config.py, mV-based):
+      OK       (> 3.4 V): normal operation.
+      WARNING  (≤ 3.4 V): log, amber banner, reduce LED brightness.
+      CRITICAL (≤ 3.2 V): kill LEDs, full-screen "CHARGE ME!" alert.
+      SHUTDOWN (≤ 3.1 V): forced light sleep to protect the cell.
+
+    Shared settings keys for UI:
+      _temp_status / _temp_c   — temperature state + reading.
+      _bat_status  / _bat_mv   — battery state + voltage.
     """
     from bodn import temperature
+    from bodn import battery
 
     errors = 0
-    _prev_status = "ok"
+    _prev_temp = "ok"
+    _prev_bat = "ok"
     settings["_temp_status"] = "ok"
     settings["_temp_c"] = None
+    settings["_bat_status"] = "ok"
+    settings["_bat_mv"] = 0
 
     while True:
         try:
@@ -412,7 +418,7 @@ async def housekeeping_task(session_mgr, np, settings):
                     except Exception:
                         pass
 
-                if temp_status == "critical" and _prev_status != "critical":
+                if temp_status == "critical" and _prev_temp != "critical":
                     print(
                         "TEMP CRITICAL ({}C >= {}C): "
                         "killing NeoPixels, dimming backlight".format(
@@ -431,7 +437,7 @@ async def housekeeping_task(session_mgr, np, settings):
                     except Exception:
                         pass
 
-                elif temp_status == "warn" and _prev_status == "ok":
+                elif temp_status == "warn" and _prev_temp == "ok":
                     print(
                         "TEMP WARNING ({}C >= {}C): "
                         "reducing NeoPixel brightness".format(
@@ -439,7 +445,7 @@ async def housekeeping_task(session_mgr, np, settings):
                         )
                     )
 
-                elif temp_status == "ok" and _prev_status != "ok":
+                elif temp_status == "ok" and _prev_temp != "ok":
                     print("TEMP OK ({}C): resumed normal operation".format(int(t_max)))
                     # Restore backlight
                     try:
@@ -449,10 +455,69 @@ async def housekeeping_task(session_mgr, np, settings):
                     except Exception:
                         pass
 
-                _prev_status = temp_status
+                _prev_temp = temp_status
         except Exception as e:
             errors += 1
             print("temp_monitor error #{}: {}".format(errors, e))
+
+        # Battery overwatch — only meaningful when on battery (not USB)
+        try:
+            bat_status = battery.status()
+            settings["_bat_status"] = bat_status
+            settings["_bat_mv"] = battery.voltage_mv()
+
+            if bat_status == "shutdown":
+                mv = battery.voltage_mv()
+                print(
+                    "BAT SHUTDOWN ({}mV <= {}mV): FORCED LIGHT SLEEP".format(
+                        mv, config.BAT_SHUTDOWN_MV
+                    )
+                )
+                # Kill LEDs + backlight, then sleep
+                for i in range(N_LEDS):
+                    np[i] = (0, 0, 0)
+                np.write()
+                try:
+                    from machine import Pin
+                    import machine as _machine
+
+                    Pin(config.TFT_BL, Pin.OUT).value(0)
+                    # Light sleep (not deep) — preserves RAM, wakes on
+                    # USB plug (PWR_SENS goes low) or button press.
+                    import esp32
+
+                    pwr_pin = Pin(config.PWR_SENS_PIN, Pin.IN)
+                    esp32.gpio_wakeup(pwr_pin, esp32.WAKEUP_ANY_LOW)
+                    _machine.lightsleep(60_000)  # re-check every 60 s
+                except Exception:
+                    pass
+
+            elif bat_status == "critical" and _prev_bat != "critical":
+                mv = battery.voltage_mv()
+                print(
+                    "BAT CRITICAL ({}mV <= {}mV): killing NeoPixels".format(
+                        mv, config.BAT_CRIT_MV
+                    )
+                )
+                for i in range(N_LEDS):
+                    np[i] = (0, 0, 0)
+                np.write()
+
+            elif bat_status == "warn" and _prev_bat == "ok":
+                mv = battery.voltage_mv()
+                print(
+                    "BAT WARNING ({}mV <= {}mV): reducing NeoPixel brightness".format(
+                        mv, config.BAT_WARN_MV
+                    )
+                )
+
+            elif bat_status in ("ok", "usb") and _prev_bat not in ("ok", "usb"):
+                print("BAT OK: resumed normal operation")
+
+            _prev_bat = bat_status
+        except Exception as e:
+            errors += 1
+            print("bat_monitor error #{}: {}".format(errors, e))
 
         await asyncio.sleep_ms(500)
 

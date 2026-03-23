@@ -392,6 +392,31 @@ automatic charge/discharge cutoff based on temperature.
 Thresholds are defined in `config.py` as `TEMP_WARN_C`, `TEMP_CRIT_C`, and
 `TEMP_EMERGENCY_C`.
 
+### Software — low-battery protection
+
+Firmware module: `bodn/battery.py`. Reads BAT_SENS (GPIO 6) via ADC with
+voltage divider. The battery pack's hardware over-discharge cutoff (3.0 V)
+is listed but not explicitly confirmed, so software enforces shutdown well
+above that level.
+
+#### Battery threshold escalation
+
+| Level | Voltage | Action | Recovery |
+|-------|---------|--------|----------|
+| OK | > 3.4 V | Normal operation | — |
+| Warning | ≤ 3.4 V (~15 %) | Log to serial, amber "BATTERY LOW" banner on displays, web UI alert. NeoPixel brightness reduced. | Clears when voltage rises (charging) |
+| Critical | ≤ 3.2 V (~5 %) | Kill NeoPixels. Full-screen "CHARGE ME!" takeover. Red alert on secondary + web UI. | Restores when voltage rises |
+| Shutdown | ≤ 3.1 V (~2 %) | **Forced light sleep** (preserves RAM). Wakes on USB power (charger plugged in) or every 60 s to re-check. | Automatic when charger connected |
+
+Thresholds are defined in `config.py` as `BAT_WARN_MV`, `BAT_CRIT_MV`, and
+`BAT_SHUTDOWN_MV`.
+
+**Adding new power-drawing peripherals:** Any new component that draws
+significant power (LEDs, motors, RF modules, heaters) **must** be registered
+in the power-shedding logic in `main.py` `housekeeping_task()`. Both thermal
+and battery escalation should disable non-critical loads. See section 9 of
+`docs/PERFORMANCE_GUIDELINES.md`.
+
 ## GPIO budget
 
 | Category | Details |

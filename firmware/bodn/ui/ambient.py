@@ -167,11 +167,17 @@ class StatusStrip(Screen):
             x_right = w - len(label) * 8 - 2
             tft.text(label, x_right, 2, color)
 
-        # Temperature warning — takes priority over battery icon
+        # Row 2: safety alerts > battery icon (priority order)
         temp_st = temperature.status()
+        bat_st = battery.status()
         if temp_st == "critical":
             tft.fill_rect(0, 14, w, 18, theme.RED)
             label = _t("temp_critical")
+            lx = (w - len(label) * 8) // 2
+            tft.text(label, max(0, lx), 18, theme.WHITE)
+        elif bat_st == "critical":
+            tft.fill_rect(0, 14, w, 18, theme.RED)
+            label = _t("bat_critical")
             lx = (w - len(label) * 8) // 2
             tft.text(label, max(0, lx), 18, theme.WHITE)
         elif temp_st == "warn":
@@ -179,6 +185,9 @@ class StatusStrip(Screen):
             label = _t("temp_warn")
             if t_c is not None:
                 label = "{}C {}".format(int(t_c), label)
+            tft.text(label, 2, 22, theme.AMBER)
+        elif bat_st == "warn":
+            label = _t("bat_low")
             tft.text(label, 2, 22, theme.AMBER)
         else:
             # Battery icon — row 2 (hidden when no battery detected)
@@ -270,16 +279,22 @@ class StatusStrip(Screen):
             lx = (w - len(label) * 8) // 2
             tft.text(label, max(0, lx), y_session, color)
 
-        # Bottom: temperature warning or battery icon
+        # Bottom: safety alerts > battery icon (priority order)
         temp_st = temperature.status()
+        bat_st = battery.status()
         if temp_st == "critical":
             tft.fill_rect(0, h - 16, w, 16, theme.RED)
             tft.text("HOT", (w - 24) // 2, h - 14, theme.WHITE)
+        elif bat_st == "critical":
+            tft.fill_rect(0, h - 16, w, 16, theme.RED)
+            tft.text("LOW", (w - 24) // 2, h - 14, theme.WHITE)
         elif temp_st == "warn":
             t_c = temperature.max_temp()
             label = "{}C".format(int(t_c)) if t_c is not None else "?"
             lx = (w - len(label) * 8) // 2
             tft.text(label, max(0, lx), h - 12, theme.AMBER)
+        elif bat_st == "warn":
+            tft.text("BAT", (w - 24) // 2, h - 12, theme.AMBER)
         elif bat_pct is not None:
             if bat_pct >= 50:
                 bat_color = theme.GREEN

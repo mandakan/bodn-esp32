@@ -124,6 +124,10 @@ STRINGS = {
     "tog_mirror": "Spe",
     "tog_strobe": "Str",
     "tog_invert": "Inv",
+    # Battery warnings
+    "bat_low": "BATTERI LÅGT!",
+    "bat_critical": "LADDA MIG!",
+    "bat_shutdown": "Sover...",
     # Temperature warnings
     "temp_warn": "VARMT!",
     "temp_critical": "FÖR VARMT!",

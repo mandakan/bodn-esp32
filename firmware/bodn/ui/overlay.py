@@ -29,11 +29,14 @@ class SessionOverlay(Screen):
         self._settings = settings or {}
         self._prev_state = None
         self._prev_temp_status = "ok"
+        self._prev_bat_status = "ok"
         self._dirty = True
 
     @property
     def takes_over(self):
         if self._settings.get("_temp_status") == "critical":
+            return True
+        if self._settings.get("_bat_status") == "critical":
             return True
         return self.session_mgr.state in self._TAKEOVER_STATES
 
@@ -57,11 +60,19 @@ class SessionOverlay(Screen):
             self._prev_temp_status = temp_status
             self._dirty = True
 
+        # Track battery status changes
+        bat_status = self._settings.get("_bat_status", "ok")
+        if bat_status != self._prev_bat_status:
+            self._prev_bat_status = bat_status
+            self._dirty = True
+
         # Blinking states need periodic redraws
         if state == WINDDOWN and frame % 20 == 0:
             self._dirty = True
-        # Overtemp blinks for attention
+        # Overtemp / low-battery blink for attention
         if temp_status in ("warn", "critical") and frame % 15 == 0:
+            self._dirty = True
+        if bat_status in ("warn", "critical") and frame % 15 == 0:
             self._dirty = True
 
     def render(self, tft, theme, frame):
@@ -69,10 +80,11 @@ class SessionOverlay(Screen):
         state = self.session_mgr.state
         temp_status = self._settings.get("_temp_status", "ok")
 
+        bat_status = self._settings.get("_bat_status", "ok")
+
         # Temperature critical takes highest priority — full screen takeover
         if temp_status == "critical":
             tft.fill(theme.BLACK)
-            # Blinking red warning
             if (frame // 15) % 2 == 0:
                 tft.fill_rect(0, 0, tft.width, 3, theme.RED)
                 tft.fill_rect(0, tft.height - 3, tft.width, 3, theme.RED)
@@ -89,6 +101,22 @@ class SessionOverlay(Screen):
                 tft.text(deg, max(0, dx), 120, theme.AMBER, scale=2)
             return
 
+        # Battery critical — full screen "CHARGE ME!" takeover
+        if bat_status == "critical":
+            tft.fill(theme.BLACK)
+            if (frame // 15) % 2 == 0:
+                tft.fill_rect(0, 0, tft.width, 3, theme.RED)
+                tft.fill_rect(0, tft.height - 3, tft.width, 3, theme.RED)
+            label = t("bat_critical")
+            lx = (tft.width - len(label) * 16) // 2
+            tft.text(label, max(0, lx), 60, theme.RED, scale=2)
+            bat_mv = self._settings.get("_bat_mv", 0)
+            if bat_mv > 0:
+                volts = "{}.{}V".format(bat_mv // 1000, (bat_mv % 1000) // 100)
+                vx = (tft.width - len(volts) * 16) // 2
+                tft.text(volts, max(0, vx), 110, theme.AMBER, scale=2)
+            return
+
         if state == WINDDOWN:
             if (frame // 20) % 2 == 0:
                 tft.text(t("overlay_zzz"), 40, 70, theme.AMBER)
@@ -101,9 +129,14 @@ class SessionOverlay(Screen):
         elif state == LOCKDOWN:
             tft.text(t("overlay_goodnight"), 24, 70, theme.MAGENTA)
 
-        # Temperature warning banner — non-blocking, drawn on top of game
+        # Warning banners — non-blocking, drawn on top of game (blink)
         if temp_status == "warn" and (frame // 15) % 2 == 0:
             label = t("temp_warn")
+            lx = (tft.width - len(label) * 8) // 2
+            tft.fill_rect(0, 0, tft.width, 12, theme.AMBER)
+            tft.text(label, max(0, lx), 2, theme.BLACK)
+        elif bat_status == "warn" and (frame // 15) % 2 == 0:
+            label = t("bat_low")
             lx = (tft.width - len(label) * 8) // 2
             tft.fill_rect(0, 0, tft.width, 12, theme.AMBER)
             tft.text(label, max(0, lx), 2, theme.BLACK)

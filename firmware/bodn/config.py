@@ -97,6 +97,13 @@ TEMP_WARN_C = const(40)  # warn threshold (°C) — LiPo degradation accelerates
 TEMP_CRIT_C = const(50)  # critical threshold (°C) — kill LEDs + dim backlight
 TEMP_EMERGENCY_C = const(60)  # emergency (°C) — forced deep sleep (hardware off)
 
+# Low-battery thresholds (mV) — escalation mirrors thermal protection.
+# The pack may have a hardware cutoff at ~3.0 V but this is not confirmed,
+# so we treat software as the only reliable protection.
+BAT_WARN_MV = const(3400)  # ~15 % — show warning, dim LEDs
+BAT_CRIT_MV = const(3200)  # ~5 % — kill LEDs, show low-battery screen
+BAT_SHUTDOWN_MV = const(3100)  # ~2 % — forced light sleep to protect cell
+
 # I2C bus — pUEXT connector (2.2 kΩ pull-ups on devkit)
 I2C_SCL = const(47)
 I2C_SDA = const(48)
