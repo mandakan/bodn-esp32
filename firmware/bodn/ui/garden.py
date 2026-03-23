@@ -97,13 +97,14 @@ class GardenScreen(Screen):
         )
         self._speed_ms = SPEED_DEFAULT_MS
 
-        # Cursor control via ENC_B
+        # Cursor control via ENC_B — higher dpu filters encoder jitter,
+        # high fast_multiplier lets fast spins scan the grid quickly
         self._cursor_acc = EncoderAccumulator(
-            detents_per_unit=2, fast_threshold=400, fast_multiplier=3
+            detents_per_unit=3, fast_threshold=300, fast_multiplier=5
         )
         self._cursor_pos = 0  # flat index 0..(GRID_W*GRID_H-1)
         self._cursor_color = 1  # last-used color index (1-indexed)
-        self._prev_cursor_pos = -1  # for dirty tracking
+        self._prev_cursor_pos = -1  # last rendered cursor position (for erase)
 
         # Grid state
         self._grid = clear(GRID_W, GRID_H)
@@ -192,15 +193,8 @@ class GardenScreen(Screen):
             inp.enc_delta[config.ENC_B], inp.enc_velocity[config.ENC_B]
         )
         if cursor_units:
-            old_pos = self._cursor_pos
             self._cursor_pos = (self._cursor_pos + cursor_units) % _GRID_TOTAL
-            if self._cursor_pos != old_pos:
-                # Mark old and new cursor cells for redraw
-                ox, oy = old_pos % GRID_W, old_pos // GRID_W
-                self._dirty_cells.add((ox, oy))
-                cx, cy = self._cursor_xy()
-                self._dirty_cells.add((cx, cy))
-                self._dirty = True
+            self._dirty = True
 
         # Brightness via ENC_A button (cycle through levels)
         if inp.enc_btn_pressed[config.ENC_A]:
@@ -401,8 +395,16 @@ class GardenScreen(Screen):
             # Draw all cells
             self._draw_all_cells(tft, theme)
             self._dirty_cells.clear()
+            self._prev_cursor_pos = -1  # force cursor draw
         else:
-            # Only redraw changed cells
+            # Erase old cursor first (redraw that cell cleanly)
+            if self._prev_cursor_pos >= 0 and self._prev_cursor_pos != self._cursor_pos:
+                ox = self._prev_cursor_pos % GRID_W
+                oy = self._prev_cursor_pos // GRID_W
+                self._draw_cell(tft, theme, ox, oy)
+                self._redraw_grid_lines(tft, theme, ox, oy)
+
+            # Redraw changed cells
             for cx, cy in self._dirty_cells:
                 self._draw_cell(tft, theme, cx, cy)
             self._dirty_cells.clear()
@@ -421,8 +423,9 @@ class GardenScreen(Screen):
                     c565 = tft.rgb(r, g, b)
                     tft.rect(sx, sy, CELL_PX - 4, CELL_PX - 4, c565)
 
-        # Cursor — bright pulsing outline on the current cell
+        # Cursor — bright outline on the current cell
         self._draw_cursor(tft, theme, frame)
+        self._prev_cursor_pos = self._cursor_pos
 
         # HUD: generation counter, population, speed
         hud_y = h - 14
@@ -473,27 +476,34 @@ class GardenScreen(Screen):
                 )
 
     def _draw_cursor(self, tft, theme, frame):
-        """Draw a pulsing outline at the cursor position."""
+        """Draw a bright outline at the cursor position."""
         cx, cy = self._cursor_xy()
         sx = GRID_OX + cx * CELL_PX
         sy = GRID_OY + cy * CELL_PX
 
-        # Pulse brightness for visibility
-        phase = (frame * 6) & 0xFF
-        v = phase if phase < 128 else 255 - phase
-        # Map to color: cursor shows the current plant color
+        # Cursor color matches the current plant color (bright + white)
         idx = min(self._cursor_color - 1, len(CELL_COLORS) - 1)
         r, g, b = CELL_COLORS[idx]
-        # Blend between dim and bright
-        bright = 80 + (v * 175 >> 8)
-        cr = r * bright >> 8
-        cg = g * bright >> 8
-        cb = b * bright >> 8
-        c565 = tft.rgb(cr, cg, cb)
+        c565 = tft.rgb(r, g, b)
 
-        # Draw outline (2px thick for visibility)
+        # Thick outline (2px) for visibility — drawn just inside grid lines
         tft.rect(sx + 1, sy + 1, CELL_PX - 1, CELL_PX - 1, c565)
-        tft.rect(sx + 2, sy + 2, CELL_PX - 3, CELL_PX - 3, c565)
+        tft.rect(sx + 2, sy + 2, CELL_PX - 3, CELL_PX - 3, theme.WHITE)
+
+    def _redraw_grid_lines(self, tft, theme, cx, cy):
+        """Restore grid lines around cell (cx, cy) after cursor erase."""
+        sx = GRID_OX + cx * CELL_PX
+        sy = GRID_OY + cy * CELL_PX
+        # Left and top edges of this cell
+        tft.vline(sx, sy, CELL_PX + 1, theme.MUTED)
+        tft.hline(sx, sy, CELL_PX + 1, theme.MUTED)
+        # Right and bottom edges (shared with next cell)
+        rx = sx + CELL_PX
+        by = sy + CELL_PX
+        if rx <= GRID_OX + GRID_W * CELL_PX:
+            tft.vline(rx, sy, CELL_PX + 1, theme.MUTED)
+        if by <= GRID_OY + GRID_H * CELL_PX:
+            tft.hline(sx, by, CELL_PX + 1, theme.MUTED)
 
     def _draw_all_cells(self, tft, theme):
         """Draw every cell in the grid."""
