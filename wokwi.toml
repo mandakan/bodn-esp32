@@ -9,6 +9,10 @@ gdbServerPort = 3333
 name = "mcp23017"
 binary = "mcp23017.chip.wasm"
 
+[[chip]]
+name = "pca9685"
+binary = "pca9685.chip.wasm"
+
 [net]
 gateway = "ws://localhost:9011"
 

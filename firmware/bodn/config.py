@@ -89,5 +89,9 @@ MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
 MCP_SW_PINS = [8, 9, 10, 11]
 MCP_MASTER_SW_PIN = const(12)  # GPB4 — red-cover flip switch (active-low: 0 = ON)
 
+# PCA9685 16-channel 12-bit PWM driver — LED dimming over I2C
+PCA9685_ADDR = const(0x40)  # A0-A5 all low (default)
+PWM_CH_BACKLIGHT = const(0)  # TFT backlight dimming channel
+
 # Power save
 SLEEP_TIMEOUT_S = 300  # default 5 minutes of inactivity before light sleep

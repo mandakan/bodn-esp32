@@ -17,10 +17,11 @@
 | 2 | LED sticks | WS2812 8-LED RGB modules (from 10-pack) | ~incl. |
 | 1 | LED strip | WS2812B 144 LED/m RGBIC strip, cut to 640 mm (~92 LEDs) | ~169 SEK |
 | 1 | GPIO expander | Waveshare MCP23017 I2C 16-IO expansion board | ~85 SEK |
+| 1 | PWM driver | PCA9685 16-channel 12-bit PWM I2C breakout ([Adafruit 815](https://www.adafruit.com/product/815)) | ~120 SEK |
 | — | Wiring | Dupont jumper wire kits M-M/F-M/F-F (AZDelivery 3×40) | ~89 SEK |
 | 1 | Breadboard | Olimex MAXI breadboard (prototyping) | ~40 SEK |
 
-**Estimated total: ~1 745 SEK**
+**Estimated total: ~1 865 SEK**
 
 ## Pin assignments
 
@@ -251,6 +252,53 @@ Rotary encoders generate rapid quadrature pulses that need low-latency IRQ handl
 The I2C round-trip through the MCP23017 adds too much delay — missed edges cause phantom
 steps. Encoders must stay on native ESP32 GPIOs with hardware interrupts.
 
+## PCA9685 PWM driver
+
+**Purpose:** Provide 16 channels of 12-bit PWM for smooth LED dimming, backlight
+control, and future servo/motor accessories — all over the existing I2C bus without
+consuming additional native GPIOs.
+
+### Module specs
+
+| Parameter | Value |
+|-----------|-------|
+| Board | Adafruit PCA9685 16-channel 12-bit PWM I2C breakout (or compatible clone) |
+| Chip | NXP PCA9685 |
+| Interface | I2C (shared bus with MCP23017) |
+| PWM channels | 16 × 12-bit (4096 steps per channel) |
+| PWM frequency | 24 Hz – 1526 Hz (configurable via prescaler) |
+| Operating voltage | 3.3V logic, separate V+ for LED power (up to 6V) |
+| Default I2C address | 0x40 (configurable 0x40–0x7F via A0–A5) |
+
+### I2C bus connection
+
+The PCA9685 shares the I2C bus on GPIO 47 (SCL) / GPIO 48 (SDA) with the MCP23017.
+
+| Address | Device |
+|---------|--------|
+| 0x20 | MCP23017 (buttons, toggles, power switch) |
+| 0x40 | PCA9685 (PWM dimming) |
+
+### Channel assignments
+
+| Channel | Function | Notes |
+|---------|----------|-------|
+| 0 | TFT backlight | Smooth dimming (replaces binary GPIO on/off) |
+| 1–15 | Available | Indicator LEDs, mood lights, servos, etc. |
+
+### Wiring
+
+```
+ESP32-S3          PCA9685 breakout
+─────────         ────────────────
+GPIO 47 (SCL) ──▶ SCL
+GPIO 48 (SDA) ──▶ SDA
+3V3           ──▶ VCC
+GND           ──▶ GND
+GND           ──▶ OE  (active-low: GND = outputs enabled)
+                  V+ ← external LED supply or 3V3 for low-power LEDs
+```
+
 ## GPIO budget
 
 | Category | Details |
@@ -261,3 +309,5 @@ steps. Encoders must stay on native ESP32 GPIOs with hardware interrupts.
 | UART console (avoid) | GPIO 43 (TX), 44 (RX) |
 | MCP23017 in use | 12 (8 buttons + 4 toggles) |
 | MCP23017 spare | 4 (GPB4–GPB7) |
+| PCA9685 in use | 1 (backlight) |
+| PCA9685 spare | 15 (channels 1–15) |
