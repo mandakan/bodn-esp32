@@ -46,7 +46,7 @@ def parse_config(path: Path) -> list[Group]:
             continue
         if (
             re.match(
-                r"^[A-Z][A-Z0-9_]*(WIDTH|HEIGHT|RATE|SIZE|LEN|COUNT|MAX|MIN|MADCTL|OFFSET|BRIGHTNESS|ADDR|TIMEOUT[A-Z0-9_]*|_NAV|_A\b|_B\b)\s*=",
+                r"^[A-Z][A-Z0-9_]*(WIDTH|HEIGHT|PANEL_[WH]|RATE|SIZE|LEN|COUNT|MAX|MIN|MADCTL|OFFSET|BRIGHTNESS|ADDR|TIMEOUT[A-Z0-9_]*|_NAV|_A\b|_B\b|LANDSCAPE)\s*=",
                 line,
             )
             or re.match(r"^MCP", line)

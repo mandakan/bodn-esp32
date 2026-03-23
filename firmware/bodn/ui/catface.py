@@ -4,7 +4,7 @@
 # The emotion can be changed by game modes via set_emotion().
 
 from bodn.ui.screen import Screen
-from bodn.ui.secondary import CONTENT_H
+from bodn.ui.secondary import CONTENT_SIZE
 
 # Emotion constants
 NEUTRAL = "neutral"
@@ -37,7 +37,7 @@ class CatFaceScreen(Screen):
 
     def render(self, tft, theme, frame):
         self._dirty = False
-        tft.fill_rect(0, 0, theme.width, CONTENT_H, theme.BLACK)
+        tft.fill_rect(0, 0, CONTENT_SIZE, CONTENT_SIZE, theme.BLACK)
         e = self._emotion
 
         # Face circle (filled, centered in 128×128)

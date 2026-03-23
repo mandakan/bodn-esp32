@@ -155,7 +155,7 @@ def create_ui(
     # Secondary display — cat face (default) + status strip
     from bodn.ui.catface import CatFaceScreen
 
-    secondary = SecondaryDisplay(tft2, theme2)
+    secondary = SecondaryDisplay(tft2, theme2, landscape=config.TFT2_LANDSCAPE)
     cat = CatFaceScreen()
     secondary.set_content(cat)
     secondary.set_status(StatusStrip(session_mgr))

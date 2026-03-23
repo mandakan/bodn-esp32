@@ -4,7 +4,7 @@ import time
 from bodn.session import PLAYING, WARN_5, WARN_2, IDLE
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_progress_bar, draw_battery_icon
-from bodn.ui.secondary import STATUS_Y, STATUS_H
+from bodn.ui.secondary import CONTENT_SIZE
 import bodn.battery as battery
 from bodn.i18n import t as _t
 
@@ -36,7 +36,7 @@ class AmbientClock(Screen):
         return False
 
     def render(self, tft, theme, frame):
-        w = theme.width
+        w = CONTENT_SIZE
         tft.fill_rect(0, _AMBIENT_TEXT_Y, w, _AMBIENT_TEXT_H, theme.BLACK)
         t = time.localtime()
         clock = "{:02d}:{:02d}".format(t[3], t[4])
@@ -46,10 +46,11 @@ class AmbientClock(Screen):
 
 
 class StatusStrip(Screen):
-    """Compact clock + session timer for the 128×32 status strip.
+    """Compact clock + session timer + battery for the status strip.
 
-    Renders at y=128..159.  Redraws on minute change or session state
-    transition — at most once per second in practice.
+    Adapts layout automatically based on orientation:
+    - Portrait (128×32): horizontal — clock left, session right, battery below
+    - Landscape (32×128): vertical — clock top, session middle, battery bottom
     """
 
     def __init__(self, session_mgr):
@@ -59,6 +60,7 @@ class StatusStrip(Screen):
         self._prev_remaining_min = -1
         self._prev_bat_pct = -1
         self._prev_charging = None
+        self._landscape = False
 
     def enter(self, display):
         self._last_min = -1
@@ -66,6 +68,7 @@ class StatusStrip(Screen):
         self._prev_remaining_min = -1
         self._prev_bat_pct = -1
         self._prev_charging = None
+        self._landscape = getattr(display, "landscape", False)
 
     def needs_redraw(self):
         changed = False
@@ -97,16 +100,23 @@ class StatusStrip(Screen):
         return changed
 
     def render(self, tft, theme, frame):
-        w = theme.width
-        y0 = STATUS_Y
-        tft.fill_rect(0, y0, w, STATUS_H, theme.BLACK)
+        if self._landscape:
+            self._render_vertical(tft, theme)
+        else:
+            self._render_horizontal(tft, theme)
+
+    def _render_horizontal(self, tft, theme):
+        """Portrait layout: 128×32 horizontal strip."""
+        w = tft.width
+        h = tft.height
+        tft.fill_rect(0, 0, w, h, theme.BLACK)
         t = time.localtime()
 
         bat_pct, charging = battery.read()
 
         # Row 1: clock left, session info right
         clock = "{:02d}:{:02d}".format(t[3], t[4])
-        tft.text(clock, 2, y0 + 2, theme.CYAN)
+        tft.text(clock, 2, 2, theme.CYAN)
 
         state = self._session_mgr.state
         if state in (PLAYING, WARN_5, WARN_2):
@@ -124,13 +134,13 @@ class StatusStrip(Screen):
             mins = remaining // 60
             label = "{}m".format(mins) if mins > 0 else "<1m"
             x_right = w - len(label) * 8 - 2
-            tft.text(label, x_right, y0 + 2, bar_color)
+            tft.text(label, x_right, 2, bar_color)
 
             # Progress bar — row 2
             draw_progress_bar(
                 tft,
                 2,
-                y0 + 14,
+                14,
                 w - 4,
                 8,
                 remaining,
@@ -145,10 +155,9 @@ class StatusStrip(Screen):
             color = theme.GREEN if remaining > 0 else theme.RED
             label = _t("plays", remaining)
             x_right = w - len(label) * 8 - 2
-            tft.text(label, x_right, y0 + 2, color)
+            tft.text(label, x_right, 2, color)
 
         # Battery icon — row 2, always visible
-        # Colour: green ≥50 %, amber ≥20 %, red <20 %; bolt overlay when charging
         if bat_pct >= 50:
             bat_color = theme.GREEN
         elif bat_pct >= 20:
@@ -157,7 +166,7 @@ class StatusStrip(Screen):
             bat_color = theme.RED
         icon_w, icon_h = 20, 10
         icon_x = w - icon_w - 2
-        icon_y = y0 + 18
+        icon_y = 18
         draw_battery_icon(
             tft,
             icon_x,
@@ -170,5 +179,92 @@ class StatusStrip(Screen):
             theme.WHITE,
         )
         if charging:
-            # Small "+" mark to indicate charging
+            tft.text("+", icon_x + icon_w // 2 - 4, icon_y + 1, theme.YELLOW)
+
+    def _render_vertical(self, tft, theme):
+        """Landscape layout: 32×128 vertical strip."""
+        w = tft.width  # 32
+        h = tft.height  # 128
+        tft.fill_rect(0, 0, w, h, theme.BLACK)
+        t = time.localtime()
+
+        bat_pct, charging = battery.read()
+
+        # Top: clock (HH:MM centered, scale=1 → 5 chars × 8px = 40px, won't fit)
+        # Use compact HH\nMM or just HH:MM at x=0
+        hh = "{:02d}".format(t[3])
+        mm = "{:02d}".format(t[4])
+        # Center "HH" and "MM" vertically stacked
+        hh_x = (w - 16) // 2  # 2 chars × 8px
+        tft.text(hh, hh_x, 4, theme.CYAN)
+        tft.text(mm, hh_x, 16, theme.CYAN)
+        # Colon-like dots between
+        dot_x = w // 2 - 1
+        tft.fill_rect(dot_x, 13, 2, 2, theme.CYAN)
+
+        # Middle: session info
+        state = self._session_mgr.state
+        y_session = 34
+
+        if state in (PLAYING, WARN_5, WARN_2):
+            remaining = self._session_mgr.time_remaining_s
+            limit = self._session_mgr._session_limit_s()
+
+            if state == WARN_2:
+                bar_color = theme.RED
+            elif state == WARN_5:
+                bar_color = theme.AMBER
+            else:
+                bar_color = theme.GREEN
+
+            mins = remaining // 60
+            label = "{}m".format(mins) if mins > 0 else "<1m"
+            lx = (w - len(label) * 8) // 2
+            tft.text(label, lx, y_session, bar_color)
+
+            # Vertical progress bar
+            bar_x = (w - 8) // 2
+            bar_h = 40
+            bar_y = y_session + 14
+            frac = remaining / limit if limit > 0 else 0
+            filled = int(frac * bar_h)
+            tft.rect(bar_x, bar_y, 8, bar_h, theme.WHITE)
+            if filled > 0:
+                tft.fill_rect(
+                    bar_x + 1, bar_y + bar_h - filled - 1, 6, filled, bar_color
+                )
+
+        elif state == IDLE:
+            rem = self._session_mgr.sessions_remaining
+            color = theme.GREEN if rem > 0 else theme.RED
+            label = _t("plays", rem)
+            # Truncate if wider than strip
+            max_chars = w // 8
+            if len(label) > max_chars:
+                label = label[:max_chars]
+            lx = (w - len(label) * 8) // 2
+            tft.text(label, max(0, lx), y_session, color)
+
+        # Bottom: battery icon
+        if bat_pct >= 50:
+            bat_color = theme.GREEN
+        elif bat_pct >= 20:
+            bat_color = theme.AMBER
+        else:
+            bat_color = theme.RED
+        icon_w, icon_h = 20, 10
+        icon_x = (w - icon_w) // 2
+        icon_y = h - icon_h - 4
+        draw_battery_icon(
+            tft,
+            icon_x,
+            icon_y,
+            icon_w,
+            icon_h,
+            bat_pct,
+            bat_color,
+            theme.BLACK,
+            theme.WHITE,
+        )
+        if charging:
             tft.text("+", icon_x + icon_w // 2 - 4, icon_y + 1, theme.YELLOW)

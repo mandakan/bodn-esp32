@@ -1,7 +1,7 @@
 """Tests for SecondaryDisplay two-zone layout and StatusStrip."""
 
 from bodn.ui.screen import Screen
-from bodn.ui.secondary import SecondaryDisplay, CONTENT_H, STATUS_Y, STATUS_H
+from bodn.ui.secondary import SecondaryDisplay, CONTENT_SIZE, STATUS_THICK
 from bodn.ui.catface import CatFaceScreen, NEUTRAL, CURIOUS, HAPPY, SLEEPY
 
 
@@ -28,7 +28,7 @@ class FakeTft:
         pass
 
     def hline(self, *a, **kw):
-        pass
+        self.calls.append(("hline", *a))
 
     def pixel(self, *a, **kw):
         return 0
@@ -83,17 +83,30 @@ class AlwaysCleanScreen(Screen):
         self.renders += 1
 
 
-def make_display():
-    return SecondaryDisplay(FakeTft(), FakeTheme())
+def make_display(landscape=False):
+    return SecondaryDisplay(FakeTft(), FakeTheme(), landscape=landscape)
 
 
 # --- Zone geometry ---
 
 
 def test_zone_constants():
-    assert CONTENT_H == 128
-    assert STATUS_Y == 128
-    assert STATUS_H == 32
+    assert CONTENT_SIZE == 128
+    assert STATUS_THICK == 32
+
+
+def test_portrait_geometry():
+    d = make_display(landscape=False)
+    # Content at top-left, status below
+    assert d._content_rect == (0, 0, 128, 128)
+    assert d._status_rect == (0, 128, 128, 32)
+
+
+def test_landscape_geometry():
+    d = make_display(landscape=True)
+    # Status on the left, content on the right
+    assert d._status_rect == (0, 0, 32, 128)
+    assert d._content_rect == (32, 0, 128, 128)
 
 
 # --- set_content / set_status ---
@@ -232,6 +245,26 @@ def test_status_zone_cleared_at_correct_region():
     assert ("fill_rect", 0, 128, 128, 32, 0) in fill_rects
 
 
+def test_landscape_content_zone_cleared_at_correct_region():
+    d = make_display(landscape=True)
+    d.set_content(SpyScreen())
+    d.tft.calls.clear()
+    d.tick()
+    fill_rects = [c for c in d.tft.calls if c[0] == "fill_rect"]
+    # Content zone clear: (32, 0, 128, 128, BLACK)
+    assert ("fill_rect", 32, 0, 128, 128, 0) in fill_rects
+
+
+def test_landscape_status_zone_cleared_at_correct_region():
+    d = make_display(landscape=True)
+    d.set_status(SpyScreen())
+    d.tft.calls.clear()
+    d.tick()
+    fill_rects = [c for c in d.tft.calls if c[0] == "fill_rect"]
+    # Status zone clear: (0, 0, 32, 128, BLACK)
+    assert ("fill_rect", 0, 0, 32, 128, 0) in fill_rects
+
+
 def test_transition_clears_zone_but_normal_redraw_does_not():
     """set_content() should clear the zone once; subsequent redraws should not.
 
@@ -331,7 +364,7 @@ def test_status_only_update_uses_show_rect():
 
     show_rects = [c for c in d.tft.calls if c[0] == "show_rect"]
     full_shows = [c for c in d.tft.calls if c[0] == "show"]
-    assert ("show_rect", 0, STATUS_Y, 128, STATUS_H) in show_rects
+    assert ("show_rect", 0, 128, 128, 32) in show_rects
     assert len(full_shows) == 0
 
 
@@ -351,7 +384,7 @@ def test_content_only_update_uses_show_rect():
 
     show_rects = [c for c in d.tft.calls if c[0] == "show_rect"]
     full_shows = [c for c in d.tft.calls if c[0] == "show"]
-    assert ("show_rect", 0, 0, 128, CONTENT_H) in show_rects
+    assert ("show_rect", 0, 0, 128, 128) in show_rects
     assert len(full_shows) == 0
 
 
@@ -373,3 +406,63 @@ def test_both_zones_dirty_uses_full_show():
     full_shows = [c for c in d.tft.calls if c[0] == "show"]
     assert len(show_rects) == 0
     assert len(full_shows) == 1
+
+
+# --- Viewport offset tests ---
+
+
+def test_viewport_offsets_drawing_calls():
+    """Content viewport should offset all drawing operations."""
+    from bodn.ui.secondary import _Viewport
+
+    tft = FakeTft()
+    vp = _Viewport(tft, 32, 0, 128, 128)
+    vp.fill_rect(0, 0, 10, 10, 0xFFFF)
+    assert ("fill_rect", 32, 0, 10, 10, 0xFFFF) in tft.calls
+
+    tft.calls.clear()
+    vp.hline(5, 10, 20, 0x1234)
+    assert tft.calls[0] == ("hline", 37, 10, 20, 0x1234)
+
+
+def test_viewport_dimensions():
+    """Viewport exposes zone dimensions, not full display dimensions."""
+    from bodn.ui.secondary import _Viewport
+
+    tft = FakeTft()
+    vp = _Viewport(tft, 32, 0, 128, 128)
+    assert vp.width == 128
+    assert vp.height == 128
+
+
+def test_landscape_content_renders_through_viewport():
+    """In landscape mode, content screen draws are offset by the status strip width."""
+    d = make_display(landscape=True)
+    tft = d.tft
+
+    class OffsetChecker(Screen):
+        def __init__(self):
+            self._dirty = True
+            self.fill_call = None
+
+        def enter(self, display):
+            pass
+
+        def needs_redraw(self):
+            return self._dirty
+
+        def render(self, vp, theme, frame):
+            self._dirty = False
+            vp.fill_rect(0, 0, 128, 128, 0x1234)
+
+    checker = OffsetChecker()
+    d.set_content(checker)
+    d.tft.calls.clear()
+    d.tick()
+
+    # The fill_rect(0, 0, ...) from the screen should land at (32, 0, ...) on the tft
+    fill_rects = [c for c in tft.calls if c[0] == "fill_rect"]
+    # Two fill_rects: zone clear + screen's own fill
+    screen_fills = [c for c in fill_rects if c[5] == 0x1234]
+    assert len(screen_fills) == 1
+    assert screen_fills[0] == ("fill_rect", 32, 0, 128, 128, 0x1234)
