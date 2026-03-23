@@ -109,3 +109,25 @@ def is_critical():
     """True if any sensor exceeds the critical threshold."""
     t = max_temp()
     return t is not None and t >= config.TEMP_CRIT_C
+
+
+def is_emergency():
+    """True if any sensor exceeds the emergency threshold (forced shutdown)."""
+    t = max_temp()
+    return t is not None and t >= config.TEMP_EMERGENCY_C
+
+
+def status():
+    """Return temperature status string: 'emergency', 'critical', 'warn', or 'ok'.
+
+    Returns 'ok' when no sensors are present (fail-open).
+    """
+    if sensor_count() == 0:
+        return "ok"
+    if is_emergency():
+        return "emergency"
+    if is_critical():
+        return "critical"
+    if is_warning():
+        return "warn"
+    return "ok"

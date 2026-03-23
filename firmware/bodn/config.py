@@ -93,8 +93,9 @@ PWR_SENS_PIN = const(5)  # PWR_SENS: high-Z on battery, low when USB present
 
 # DS18B20 1-Wire temperature sensors (battery + enclosure monitoring)
 ONEWIRE_PIN = const(20)  # 1-Wire bus — multiple sensors share one GPIO
-TEMP_WARN_C = const(45)  # warn threshold (°C) — typical LiPo safe max
-TEMP_CRIT_C = const(55)  # critical threshold (°C) — shut down NeoPixels
+TEMP_WARN_C = const(40)  # warn threshold (°C) — LiPo degradation accelerates above 40°C
+TEMP_CRIT_C = const(50)  # critical threshold (°C) — kill LEDs + dim backlight
+TEMP_EMERGENCY_C = const(60)  # emergency (°C) — forced deep sleep (hardware off)
 
 # I2C bus — pUEXT connector (2.2 kΩ pull-ups on devkit)
 I2C_SCL = const(47)

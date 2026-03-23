@@ -239,4 +239,14 @@ When generating or reviewing code, check:
    - Hot loops / long-running coroutines cache `self.*` and module attributes as locals.
    - No `file.read(n)` in loops — use `readinto(buf)` with pre-allocated buffer.
 
+9. **Thermal safety**:
+   - Does the new peripheral draw significant power (LEDs, motors, heaters, RF)?
+   - If yes, is it registered in the power-shedding logic in `main.py`
+     `housekeeping_task()`? Non-critical loads must be disabled at the
+     **critical** threshold (≥ 50 °C) and killed before **emergency** deep
+     sleep (≥ 60 °C). See `docs/hardware.md` § "Thermal protection" for the
+     full escalation table.
+   - The BL4054B charger and the LiPo cell have **no hardware thermal cutoff**.
+     Software is the only protection.
+
 If any of these are violated, prefer a simpler, event-driven, low-refresh design over "desktop style" code.

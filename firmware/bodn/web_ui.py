@@ -118,7 +118,11 @@ th{color:#aaa}
 <div class="stat"><label>Sessions today</label><span id="s-count" class="val">0</span> / <span id="s-max" class="val">5</span></div>
 <div class="stat"><label>Time remaining</label><div class="progress"><div id="time-bar" class="bar" style="width:0%"></div></div><div id="time-text" style="text-align:center;font-size:0.85em;margin-top:4px">--</div></div>
 <div class="toggle"><input type="checkbox" id="sessions-enabled" checked onchange="toggleSessions()"><label>Session limits enabled</label></div>
-<div id="temp-card" class="stat-card" style="display:none"><div class="val" id="temp-val">--</div><div class="lbl">Temperature</div></div>
+<div id="temp-card" class="stat-card" style="display:none">
+<div class="val" id="temp-val">--</div>
+<div class="lbl" id="temp-lbl">Temperature</div>
+<div id="temp-alert" style="display:none;margin-top:6px;padding:6px;border-radius:6px;font-size:0.8em"></div>
+</div>
 <button class="btn btn-danger" id="lockdown-btn" onclick="toggleLockdown()">Lockdown</button>
 </div>
 
@@ -212,9 +216,16 @@ if(d.time_remaining_s>0)pct=Math.round(d.time_remaining_s*100/maxS);
 document.getElementById('time-bar').style.width=pct+'%';
 document.getElementById('time-text').textContent=d.time_remaining_s>0?fmtTime(d.time_remaining_s):'--';
 document.getElementById('lockdown-btn').textContent=d.state==='LOCKDOWN'?'Unlock':'Lockdown';
-var tc=document.getElementById('temp-card'),tv=document.getElementById('temp-val');
+var tc=document.getElementById('temp-card'),tv=document.getElementById('temp-val'),ta=document.getElementById('temp-alert');
 if(d.temp_c!=null){tc.style.display='';tv.textContent=d.temp_c+'\u00b0C';
-tc.style.borderLeft=d.temp_status==='critical'?'4px solid #e94560':d.temp_status==='warn'?'4px solid #f39c12':'4px solid #27ae60';
+if(d.temp_status==='critical'){tc.style.borderLeft='4px solid #e94560';tc.style.background='#3a1020';
+tv.style.color='#e94560';ta.style.display='block';ta.style.background='#e94560';ta.style.color='#fff';
+ta.textContent='\u26a0 OVERHEATING \u2014 LEDs and backlight disabled. Let the device cool down before use.';
+}else if(d.temp_status==='warn'){tc.style.borderLeft='4px solid #f39c12';tc.style.background='#3a2a10';
+tv.style.color='#f39c12';ta.style.display='block';ta.style.background='#f39c12';ta.style.color='#000';
+ta.textContent='\u26a0 Device is warm. LED brightness reduced.';
+}else{tc.style.borderLeft='4px solid #27ae60';tc.style.background='#16213e';
+tv.style.color='#27ae60';ta.style.display='none'}
 }else{tc.style.display='none'}
 }catch(e){}
 }

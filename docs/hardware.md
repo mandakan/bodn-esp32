@@ -367,15 +367,30 @@ GND              ──▶ GND (both sensors)
 
 | Sensor | Location | Purpose |
 |--------|----------|---------|
-| Battery | Against LiPo pouch, secured with Kapton thermal tape | Detect cell overheating (warn ≥ 45 °C, critical ≥ 55 °C) |
+| Battery | Against LiPo pouch, secured with Kapton thermal tape | Detect cell overheating |
 | Enclosure | Near DC-DC converter / electronics | Detect general overheating inside the box |
 
-### Software
+### Software — thermal protection
 
 Firmware module: `bodn/temperature.py`. Sensors are auto-discovered by ROM
-address on the 1-Wire bus. Readings are cached for 30 s. The `is_warning()`
-and `is_critical()` helpers compare against `config.TEMP_WARN_C` / `TEMP_CRIT_C`
-thresholds.
+address on the 1-Wire bus. Readings are cached for 30 s.
+
+**Important:** The BL4054B charger IC on the DevKit-Lipo has **no NTC thermistor
+input** and the Olimex battery has **no temperature wire**. This software watchdog
+is the **only thermal protection** for the LiPo cell. The hardware provides no
+automatic charge/discharge cutoff based on temperature.
+
+#### Threshold escalation
+
+| Level | Threshold | Action | Recovery |
+|-------|-----------|--------|----------|
+| OK | < 40 °C | Normal operation | — |
+| Warning | ≥ 40 °C | Log to serial, amber banner on both displays, web UI alert. NeoPixel brightness halved (biggest heat source). | Clears when temp drops below 40 °C |
+| Critical | ≥ 50 °C | Kill all NeoPixels, dim display backlight. Full-screen "TOO HOT" takeover on primary display. Red alert on secondary + web UI. | Restores when temp drops below 40 °C |
+| Emergency | ≥ 60 °C | **Forced deep sleep** (ESP32 powers down all peripherals). Wakes after 5 min to re-check; re-sleeps if still hot. | Automatic after cool-down |
+
+Thresholds are defined in `config.py` as `TEMP_WARN_C`, `TEMP_CRIT_C`, and
+`TEMP_EMERGENCY_C`.
 
 ## GPIO budget
 

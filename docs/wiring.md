@@ -30,7 +30,7 @@ graph LR
     DevKitLipoonboardpowermonitoring["DevKit-Lipo on-board power monitoring<br/><sub>GPIO 6 → BAT_SENS_PIN<br/>GPIO 5 → PWR_SENS_PIN</sub>"]
     DevKitLipoonboardpowermonitoring -.- ESP
 
-    DS18B201Wiretemperaturesensors["DS18B20 1-Wire temperature sensors<br/><sub>GPIO 20 → ONEWIRE_PIN<br/>GPIO 45 → TEMP_WARN_C<br/>GPIO 55 → TEMP_CRIT_C</sub>"]
+    DS18B201Wiretemperaturesensors["DS18B20 1-Wire temperature sensors<br/><sub>GPIO 20 → ONEWIRE_PIN<br/>GPIO 40 → TEMP_WARN_C<br/>GPIO 50 → TEMP_CRIT_C<br/>GPIO 60 → TEMP_EMERGENCY_C</sub>"]
     DS18B201Wiretemperaturesensors -.- ESP
 
     I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
@@ -103,8 +103,9 @@ graph LR
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
 | ONEWIRE_PIN | 20 | `ONEWIRE_PIN` |
-| TEMP_WARN_C | 45 | `TEMP_WARN_C` |
-| TEMP_CRIT_C | 55 | `TEMP_CRIT_C` |
+| TEMP_WARN_C | 40 | `TEMP_WARN_C` |
+| TEMP_CRIT_C | 50 | `TEMP_CRIT_C` |
+| TEMP_EMERGENCY_C | 60 | `TEMP_EMERGENCY_C` |
 
 ### I2C bus — pUEXT connector
 
@@ -139,16 +140,17 @@ graph LR
 | 20 | DS18B20 1-Wire temperature sensors | ONEWIRE_PIN |
 | 21 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 39 | ST7735 TFT | TFT2_CS |
-| 40 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
+| 40 | DS18B20 1-Wire temperature sensors | TEMP_WARN_C |
 | 41 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 42 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
-| 45 | DS18B20 1-Wire temperature sensors | TEMP_WARN_C |
+| 45 | MAX98357A I2S amplifier | WS |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |
 | 48 | I2C bus — pUEXT connector | I2C_SDA |
-| 55 | DS18B20 1-Wire temperature sensors | TEMP_CRIT_C |
+| 50 | DS18B20 1-Wire temperature sensors | TEMP_CRIT_C |
+| 60 | DS18B20 1-Wire temperature sensors | TEMP_EMERGENCY_C |
 
 > **Pin conflicts detected:**
-> - **GPIO 45**: MAX98357A I2S amplifier: WS / DS18B20 1-Wire temperature sensors: TEMP_WARN_C
+> - **GPIO 40**: Rotary encoders — must stay on native GPIO for IRQ latency: SW / DS18B20 1-Wire temperature sensors: TEMP_WARN_C
 <!-- pinout:end -->
 
 ## Encoder roles and placement

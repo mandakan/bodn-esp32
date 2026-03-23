@@ -124,6 +124,10 @@ STRINGS = {
     "tog_mirror": "Spe",
     "tog_strobe": "Str",
     "tog_invert": "Inv",
+    # Temperature warnings
+    "temp_warn": "VARMT!",
+    "temp_critical": "FÖR VARMT!",
+    "temp_cooling": "Kyler ner...",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_net": "Söker vänner...",

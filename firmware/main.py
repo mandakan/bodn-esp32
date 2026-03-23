@@ -156,7 +156,7 @@ def create_ui(
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
     theme2 = Theme(config.TFT2_WIDTH, config.TFT2_HEIGHT, ST7735.rgb)
     inp = InputState(buttons, switches, encoders, time.ticks_ms)
-    overlay = SessionOverlay(session_mgr)
+    overlay = SessionOverlay(session_mgr, settings=settings)
 
     # Primary display — full screen manager with navigation
     manager = ScreenManager(tft, theme, inp)
@@ -351,12 +351,30 @@ async def secondary_task(secondary):
         await asyncio.sleep_ms(200)
 
 
-async def housekeeping_task(session_mgr, np):
-    """Session management, temperature monitoring, periodic bookkeeping: ~500 ms tick."""
+async def housekeeping_task(session_mgr, np, settings):
+    """Session management, temperature monitoring, periodic bookkeeping: ~500 ms tick.
+
+    Temperature overwatch levels (thresholds in config.py):
+      OK       (< 40 °C): normal operation.
+      WARNING  (≥ 40 °C): log to serial, flag in settings for UI display.
+                           NeoPixel brightness halved.
+      CRITICAL (≥ 50 °C): kill NeoPixels, dim display backlight.
+                           The BL4054B charger IC has no NTC input and the
+                           Olimex battery has no thermistor, so this software
+                           watchdog is the ONLY thermal protection for the cell.
+
+    The shared key ``settings["_temp_status"]`` is read by the primary
+    display overlay and the secondary status strip to show warnings.
+    Values: ``"ok"``, ``"warn"``, ``"critical"``, or absent.
+    ``settings["_temp_c"]`` holds the current max reading (float or None).
+    """
     from bodn import temperature
 
     errors = 0
-    _overtemp_active = False
+    _prev_status = "ok"
+    settings["_temp_status"] = "ok"
+    settings["_temp_c"] = None
+
     while True:
         try:
             session_mgr.tick()
@@ -369,20 +387,69 @@ async def housekeeping_task(session_mgr, np):
         # Temperature overwatch — poll is cheap (cached 30 s in temperature.py)
         try:
             if temperature.sensor_count() > 0:
-                if temperature.is_critical():
-                    if not _overtemp_active:
-                        _overtemp_active = True
-                        print("TEMP CRITICAL: shutting down NeoPixels")
-                        for i in range(N_LEDS):
-                            np[i] = (0, 0, 0)
-                        np.write()
-                elif temperature.is_warning():
-                    if not _overtemp_active:
-                        print("TEMP WARNING: {}C".format(int(temperature.max_temp())))
-                else:
-                    if _overtemp_active:
-                        _overtemp_active = False
-                        print("TEMP OK: resumed normal operation")
+                temp_status = temperature.status()
+                t_max = temperature.max_temp()
+                settings["_temp_status"] = temp_status
+                settings["_temp_c"] = t_max
+
+                # Emergency: forced deep sleep — only way to cut power draw
+                if temp_status == "emergency":
+                    print(
+                        "TEMP EMERGENCY ({}C >= {}C): FORCED DEEP SLEEP".format(
+                            int(t_max), config.TEMP_EMERGENCY_C
+                        )
+                    )
+                    # Kill everything before sleeping
+                    for i in range(N_LEDS):
+                        np[i] = (0, 0, 0)
+                    np.write()
+                    try:
+                        from machine import Pin, deepsleep
+
+                        Pin(config.TFT_BL, Pin.OUT).value(0)
+                        # Deep sleep for 5 minutes, then wake to re-check
+                        deepsleep(300_000)
+                    except Exception:
+                        pass
+
+                if temp_status == "critical" and _prev_status != "critical":
+                    print(
+                        "TEMP CRITICAL ({}C >= {}C): "
+                        "killing NeoPixels, dimming backlight".format(
+                            int(t_max), config.TEMP_CRIT_C
+                        )
+                    )
+                    # Kill NeoPixels — biggest heat contributor
+                    for i in range(N_LEDS):
+                        np[i] = (0, 0, 0)
+                    np.write()
+                    # Dim display backlight to minimum
+                    try:
+                        from machine import Pin
+
+                        Pin(config.TFT_BL, Pin.OUT).value(0)
+                    except Exception:
+                        pass
+
+                elif temp_status == "warn" and _prev_status == "ok":
+                    print(
+                        "TEMP WARNING ({}C >= {}C): "
+                        "reducing NeoPixel brightness".format(
+                            int(t_max), config.TEMP_WARN_C
+                        )
+                    )
+
+                elif temp_status == "ok" and _prev_status != "ok":
+                    print("TEMP OK ({}C): resumed normal operation".format(int(t_max)))
+                    # Restore backlight
+                    try:
+                        from machine import Pin
+
+                        Pin(config.TFT_BL, Pin.OUT).value(1)
+                    except Exception:
+                        pass
+
+                _prev_status = temp_status
         except Exception as e:
             errors += 1
             print("temp_monitor error #{}: {}".format(errors, e))
@@ -448,7 +515,7 @@ async def main():
     await asyncio.gather(
         primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr),
         secondary_task(secondary),
-        housekeeping_task(session_mgr, np),
+        housekeeping_task(session_mgr, np, settings),
     )
 
 
