@@ -120,6 +120,7 @@ class GardenScreen(Screen):
         self._full_redraw = True
         self._leds_dirty = True
         self._empty_since_ms = 0
+        self._prompt_visible = False  # tracks if center text prompt is on screen
 
         # Rule modifiers (from toggle switches)
         self._friendly = False
@@ -462,18 +463,27 @@ class GardenScreen(Screen):
                 tft.rect(dx, hud_y + 4, 6, 6, theme.MUTED)
             dx += 10
 
-        # Empty garden prompt
+        # Empty garden prompt — force full redraw when it appears/disappears
+        show_prompt = False
         if is_empty(self._grid):
             now = time.ticks_ms()
             if (
                 self._empty_since_ms
                 and time.ticks_diff(now, self._empty_since_ms) > EMPTY_PROMPT_MS
             ):
-                from bodn.ui.widgets import draw_centered
+                show_prompt = True
 
-                draw_centered(
-                    tft, t("garden_plant"), h // 2 - 20, theme.CYAN, w, scale=2
-                )
+        if show_prompt:
+            if not self._prompt_visible:
+                self._prompt_visible = True
+            from bodn.ui.widgets import draw_centered
+
+            draw_centered(tft, t("garden_plant"), h // 2 - 20, theme.CYAN, w, scale=2)
+        elif self._prompt_visible:
+            # Prompt was visible but grid is no longer empty — full redraw to clear it
+            self._prompt_visible = False
+            self._full_redraw = True
+            self._dirty = True
 
     def _draw_cursor(self, tft, theme, frame):
         """Draw a bright outline at the cursor position."""
