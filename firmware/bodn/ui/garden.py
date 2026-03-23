@@ -64,6 +64,9 @@ SPEED_STEP_MS = const(100)
 # Empty garden prompt timing
 EMPTY_PROMPT_MS = const(2000)
 
+# Minimum cells before evolution auto-starts
+AUTO_START_CELLS = const(3)
+
 
 class GardenScreen(Screen):
     """Garden of Life — cellular automata reimagined as a garden.
@@ -180,10 +183,11 @@ class GardenScreen(Screen):
             self._dirty = True
             self._leds_dirty = True
             self._population = population(self._grid)
-            # Auto-start when first seed is planted
-            if not self._running and self._population > 0:
+            # Reset step timer on each plant so child has time to add more
+            self._last_step_ms = now
+            # Auto-start once enough seeds are planted (isolated cells just die)
+            if not self._running and self._population >= AUTO_START_CELLS:
                 self._running = True
-                self._last_step_ms = now
 
         # Encoder nav button: toggle run/pause
         if inp.enc_btn_pressed[config.ENC_A]:
@@ -247,7 +251,9 @@ class GardenScreen(Screen):
                 self._secondary.set_population(self._population, self._generation)
         elif is_empty(self._grid):
             self._running = False
+            self._generation = 0
             self._dirty = True
+            self._full_redraw = True
 
     def _update_leds(self, frame):
         """Update NeoPixel LEDs to reflect garden state."""
@@ -373,6 +379,10 @@ class GardenScreen(Screen):
         # Running/paused indicator
         if self._running:
             tft.text(">", 160, hud_y + 2, theme.GREEN)
+        elif self._population > 0 and self._population < AUTO_START_CELLS:
+            # Waiting for more seeds
+            dots = "." * self._population
+            tft.text(dots, 160, hud_y + 2, theme.CYAN)
         else:
             tft.text("||", 160, hud_y + 2, theme.YELLOW)
 
