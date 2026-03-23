@@ -5,10 +5,12 @@
 # Tier 3: "Life Lab" — full rule control (future).
 #
 # Hardware mapping:
-#   Buttons 0–7: plant a flower of that color in a highlighted garden plot.
-#   Touch screen: tap to toggle cells directly on the grid.
-#   ENC_A: generation speed (slow ↔ fast).
-#   ENC_B: (tier 1) unused / (tier 3) preset pattern selection.
+#   Buttons 0–7: plant a flower of that color at the cursor position
+#                (also plants at the matching garden plot for quick seeding).
+#   ENC_A rotation: generation speed (slow ↔ fast).
+#   ENC_A button: toggle run/pause.
+#   ENC_B rotation: move cursor across the grid.
+#   ENC_B button: toggle cell at cursor (plant/remove).
 #   Toggle SW0: normal vs. friendly rules.
 #   Toggle SW1: wrap-around edges vs. walls.
 #   Toggle SW2: show next-gen ghost preview.
@@ -33,6 +35,7 @@ from bodn.life_rules import (
     is_empty,
     clear,
     place,
+    toggle,
 )
 from bodn.i18n import t
 from bodn.patterns import (
@@ -67,10 +70,14 @@ EMPTY_PROMPT_MS = const(2000)
 # Minimum cells before evolution auto-starts
 AUTO_START_CELLS = const(3)
 
+# Total grid cells (for cursor wrapping)
+_GRID_TOTAL = const(192)  # GRID_W * GRID_H
+
 
 class GardenScreen(Screen):
     """Garden of Life — cellular automata reimagined as a garden.
 
+    Turn ENC_B to move the cursor, press any colored button to plant.
     Hold nav encoder button to open the pause menu (resume / back to menu).
     """
 
@@ -89,6 +96,14 @@ class GardenScreen(Screen):
             detents_per_unit=2, fast_threshold=400, fast_multiplier=3
         )
         self._speed_ms = SPEED_DEFAULT_MS
+
+        # Cursor control via ENC_B
+        self._cursor_acc = EncoderAccumulator(
+            detents_per_unit=2, fast_threshold=400, fast_multiplier=3
+        )
+        self._cursor_pos = 0  # flat index 0..(GRID_W*GRID_H-1)
+        self._cursor_color = 1  # last-used color index (1-indexed)
+        self._prev_cursor_pos = -1  # for dirty tracking
 
         # Grid state
         self._grid = clear(GRID_W, GRID_H)
@@ -111,11 +126,18 @@ class GardenScreen(Screen):
         self._ghost = False
         self._undo_enabled = False
 
+    def _cursor_xy(self):
+        """Convert flat cursor position to (x, y)."""
+        return self._cursor_pos % GRID_W, self._cursor_pos // GRID_W
+
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
         self._brightness.reset()
         self._speed_acc.reset()
+        self._cursor_acc.reset()
+        self._cursor_pos = _GRID_TOTAL // 2  # start in center
+        self._prev_cursor_pos = -1
         self._dirty = True
         self._full_redraw = True
         self._leds_dirty = True
@@ -165,46 +187,81 @@ class GardenScreen(Screen):
             )
             self._dirty = True
 
-        # Brightness via ENC_B (reuse for brightness in tier 1)
-        prev_bri = self._brightness.value
-        self._brightness.update(
+        # Cursor movement via ENC_B
+        cursor_units = self._cursor_acc.update(
             inp.enc_delta[config.ENC_B], inp.enc_velocity[config.ENC_B]
         )
-        if self._brightness.value != prev_bri:
+        if cursor_units:
+            old_pos = self._cursor_pos
+            self._cursor_pos = (self._cursor_pos + cursor_units) % _GRID_TOTAL
+            if self._cursor_pos != old_pos:
+                # Mark old and new cursor cells for redraw
+                ox, oy = old_pos % GRID_W, old_pos // GRID_W
+                self._dirty_cells.add((ox, oy))
+                cx, cy = self._cursor_xy()
+                self._dirty_cells.add((cx, cy))
+                self._dirty = True
+
+        # Brightness via ENC_A button (cycle through levels)
+        if inp.enc_btn_pressed[config.ENC_A]:
+            bri = self._brightness.value
+            if bri < 80:
+                self._brightness.reset(value=128)
+            elif bri < 200:
+                self._brightness.reset(value=255)
+            else:
+                self._brightness.reset(value=40)
             self._leds_dirty = True
 
-        # Button presses — plant flowers at garden plots
+        # Button presses — plant at cursor AND at garden plot
         btn = inp.first_btn_pressed()
-        if btn >= 0 and btn < len(GARDEN_PLOTS):
-            px, py = GARDEN_PLOTS[btn]
+        if btn >= 0 and btn < 8:
             color_idx = btn + 1  # 1-indexed color
-            place(self._grid, px, py, GRID_W, color_idx)
-            self._dirty_cells.add((px, py))
+            self._cursor_color = color_idx
+
+            # Plant at cursor position
+            cx, cy = self._cursor_xy()
+            place(self._grid, cx, cy, GRID_W, color_idx)
+            self._dirty_cells.add((cx, cy))
+
+            # Also plant at the matching garden plot (quick-seed shortcut)
+            if btn < len(GARDEN_PLOTS):
+                px, py = GARDEN_PLOTS[btn]
+                if (px, py) != (cx, cy):
+                    place(self._grid, px, py, GRID_W, color_idx)
+                    self._dirty_cells.add((px, py))
+
             self._dirty = True
             self._leds_dirty = True
             self._population = population(self._grid)
-            # Reset step timer on each plant so child has time to add more
+            # Reset step timer so child has time to add more
             self._last_step_ms = now
-            # Auto-start once enough seeds are planted (isolated cells just die)
+            # Auto-start once enough seeds are planted
             if not self._running and self._population >= AUTO_START_CELLS:
                 self._running = True
 
-        # Encoder nav button: toggle run/pause
-        if inp.enc_btn_pressed[config.ENC_A]:
-            self._running = not self._running
-            if self._running:
+        # ENC_B button: toggle cell at cursor (plant/remove)
+        if inp.enc_btn_pressed[config.ENC_B]:
+            if self._undo_enabled and self._prev_grid:
+                # Undo mode: rewind one generation
+                self._grid = self._prev_grid
+                self._prev_grid = None
+                self._generation = max(0, self._generation - 1)
+                self._population = population(self._grid)
+                self._dirty = True
+                self._full_redraw = True
+                self._leds_dirty = True
+            else:
+                # Toggle cell at cursor
+                cx, cy = self._cursor_xy()
+                toggle(self._grid, cx, cy, GRID_W, self._cursor_color)
+                self._dirty_cells.add((cx, cy))
+                self._dirty = True
+                self._leds_dirty = True
+                self._population = population(self._grid)
                 self._last_step_ms = now
-            self._dirty = True
-
-        # Undo via encoder B button
-        if inp.enc_btn_pressed[config.ENC_B] and self._undo_enabled and self._prev_grid:
-            self._grid = self._prev_grid
-            self._prev_grid = None
-            self._generation = max(0, self._generation - 1)
-            self._population = population(self._grid)
-            self._dirty = True
-            self._full_redraw = True
-            self._leds_dirty = True
+                if not self._running and self._population >= AUTO_START_CELLS:
+                    self._running = True
 
         # Evolution tick
         if self._running and time.ticks_diff(now, self._last_step_ms) >= self._speed_ms:
@@ -277,9 +334,7 @@ class GardenScreen(Screen):
 
         # Lid ring: density mapped to lit LEDs
         if pop > 0:
-            # How many ring LEDs to light (proportional to population)
             lit = max(1, pop * 92 // total)
-            # Find dominant color in grid
             dom_color = self._dominant_grid_color()
             c = scale(dom_color, lid_bright)
             dim = scale(dom_color, lid_bright // 6)
@@ -356,18 +411,20 @@ class GardenScreen(Screen):
         if self._ghost and self._running:
             self._draw_ghost(tft, theme)
 
-        # Garden plots (tier 1) — show highlighted spots when empty
-        if self._population == 0 or not self._running:
+        # Garden plots (tier 1) — show highlighted spots when few cells planted
+        if self._population < AUTO_START_CELLS:
             for i, (px, py) in enumerate(GARDEN_PLOTS):
                 if not self._grid[py * GRID_W + px]:
                     sx = GRID_OX + px * CELL_PX + 2
                     sy = GRID_OY + py * CELL_PX + 2
-                    # Small colored dot to hint where button plants
                     r, g, b = CELL_COLORS[i]
                     c565 = tft.rgb(r, g, b)
                     tft.rect(sx, sy, CELL_PX - 4, CELL_PX - 4, c565)
 
-        # HUD: generation counter and speed
+        # Cursor — bright pulsing outline on the current cell
+        self._draw_cursor(tft, theme, frame)
+
+        # HUD: generation counter, population, speed
         hud_y = h - 14
         tft.fill_rect(0, hud_y, w, 14, theme.BLACK)
         gen_text = "G:{}".format(self._generation)
@@ -380,7 +437,6 @@ class GardenScreen(Screen):
         if self._running:
             tft.text(">", 160, hud_y + 2, theme.GREEN)
         elif self._population > 0 and self._population < AUTO_START_CELLS:
-            # Waiting for more seeds
             dots = "." * self._population
             tft.text(dots, 160, hud_y + 2, theme.CYAN)
         else:
@@ -415,6 +471,29 @@ class GardenScreen(Screen):
                 draw_centered(
                     tft, t("garden_plant"), h // 2 - 20, theme.CYAN, w, scale=2
                 )
+
+    def _draw_cursor(self, tft, theme, frame):
+        """Draw a pulsing outline at the cursor position."""
+        cx, cy = self._cursor_xy()
+        sx = GRID_OX + cx * CELL_PX
+        sy = GRID_OY + cy * CELL_PX
+
+        # Pulse brightness for visibility
+        phase = (frame * 6) & 0xFF
+        v = phase if phase < 128 else 255 - phase
+        # Map to color: cursor shows the current plant color
+        idx = min(self._cursor_color - 1, len(CELL_COLORS) - 1)
+        r, g, b = CELL_COLORS[idx]
+        # Blend between dim and bright
+        bright = 80 + (v * 175 >> 8)
+        cr = r * bright >> 8
+        cg = g * bright >> 8
+        cb = b * bright >> 8
+        c565 = tft.rgb(cr, cg, cb)
+
+        # Draw outline (2px thick for visibility)
+        tft.rect(sx + 1, sy + 1, CELL_PX - 1, CELL_PX - 1, c565)
+        tft.rect(sx + 2, sy + 2, CELL_PX - 3, CELL_PX - 3, c565)
 
     def _draw_all_cells(self, tft, theme):
         """Draw every cell in the grid."""
