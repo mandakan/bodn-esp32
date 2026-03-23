@@ -67,6 +67,9 @@ firmware/
 
 ## Getting started
 
+For a complete first-boot walkthrough (flashing MicroPython, serial console, debugging),
+see [`docs/getting-started.md`](docs/getting-started.md).
+
 ### Prerequisites
 
 - Python 3.12+ and [uv](https://docs.astral.sh/uv/)
