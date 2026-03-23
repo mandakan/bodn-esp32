@@ -414,15 +414,15 @@ class GardenScreen(Screen):
         if self._ghost and self._running:
             self._draw_ghost(tft, theme)
 
-        # Garden plots (tier 1) — show highlighted spots when few cells planted
-        if self._population < AUTO_START_CELLS:
-            for i, (px, py) in enumerate(GARDEN_PLOTS):
-                if not self._grid[py * GRID_W + px]:
-                    sx = GRID_OX + px * CELL_PX + 2
-                    sy = GRID_OY + py * CELL_PX + 2
-                    r, g, b = CELL_COLORS[i]
-                    c565 = tft.rgb(r, g, b)
-                    tft.rect(sx, sy, CELL_PX - 4, CELL_PX - 4, c565)
+        # Garden plots — always show colored outlines on empty plot cells
+        # so the child knows which button maps to which spot
+        for i, (px, py) in enumerate(GARDEN_PLOTS):
+            if not self._grid[py * GRID_W + px]:
+                sx = GRID_OX + px * CELL_PX + 2
+                sy = GRID_OY + py * CELL_PX + 2
+                r, g, b = CELL_COLORS[i]
+                c565 = tft.rgb(r, g, b)
+                tft.rect(sx, sy, CELL_PX - 4, CELL_PX - 4, c565)
 
         # Cursor — bright outline on the current cell
         self._draw_cursor(tft, theme, frame)
