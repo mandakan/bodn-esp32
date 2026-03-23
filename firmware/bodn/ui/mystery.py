@@ -3,7 +3,7 @@
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
-from bodn.ui.input import BrightnessControl
+from bodn.ui.input import BrightnessControl, EncoderAccumulator
 from bodn.ui.widgets import draw_centered, draw_button_grid
 from bodn.ui.pause import PauseMenu
 from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
@@ -30,6 +30,10 @@ class MysteryScreen(Screen):
         self._on_exit = on_exit
         self._engine = MysteryEngine()
         self._brightness = BrightnessControl()
+        self._hue_acc = EncoderAccumulator(
+            detents_per_unit=2, fast_threshold=400, fast_multiplier=4
+        )
+        self._hue = 0
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._prev_out_type = OUT_IDLE
@@ -40,6 +44,8 @@ class MysteryScreen(Screen):
         self._manager = manager
         self._pause.set_manager(manager)
         self._brightness.reset()
+        self._hue_acc.reset()
+        self._hue = 0
         self._dirty = True
 
     def exit(self):
@@ -73,7 +79,12 @@ class MysteryScreen(Screen):
         eng.sw_mirror = inp.sw[1]
         eng.sw_shimmer = inp.sw[2]
         eng.sw_lighten = len(inp.sw) > 3 and inp.sw[3]
-        eng.hue_shift = inp.enc_pos[config.ENC_B] * 255 // 20
+        hue_units = self._hue_acc.update(
+            inp.enc_delta[config.ENC_B], inp.enc_velocity[config.ENC_B]
+        )
+        if hue_units:
+            self._hue = (self._hue + hue_units * 13) % 256
+        eng.hue_shift = self._hue
         new_mods = (
             eng.sw_invert,
             eng.sw_mirror,
