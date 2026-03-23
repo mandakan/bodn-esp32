@@ -103,16 +103,17 @@ def step(grid, w, h, birth=None, survive=None, wrap=False):
                     deaths.append((x, y))
             else:
                 if n in birth:
-                    # New cell — inherit dominant neighbor color
-                    new[idx] = _dominant_color(grid, x, y, w, h, wrap)
+                    # New cell — color is a mix of parent colors
+                    new[idx] = _mixed_color(grid, x, y, w, h, wrap)
                     births.append((x, y))
 
     return new, births, deaths
 
 
-def _dominant_color(grid, x, y, w, h, wrap):
-    """Find the most common color among alive neighbours."""
-    counts = {}
+def _mixed_color(grid, x, y, w, h, wrap):
+    """Mix parent colors: average RGB of alive neighbours, snap to nearest palette color."""
+    r_sum, g_sum, b_sum = 0, 0, 0
+    count = 0
     for dy in (-1, 0, 1):
         for dx in (-1, 0, 1):
             if dx == 0 and dy == 0:
@@ -127,16 +128,28 @@ def _dominant_color(grid, x, y, w, h, wrap):
                     continue
             c = grid[ny * w + nx]
             if c:
-                counts[c] = counts.get(c, 0) + 1
-    if not counts:
+                r, g, b = CELL_COLORS[min(c - 1, 7)]
+                r_sum += r
+                g_sum += g
+                b_sum += b
+                count += 1
+    if count == 0:
         return 1
-    # Return the color with the highest count
+    # Average RGB of parents
+    mr = r_sum // count
+    mg = g_sum // count
+    mb = b_sum // count
+    # Find nearest palette color (squared distance, no sqrt needed)
     best = 1
-    best_n = 0
-    for c, n in counts.items():
-        if n > best_n:
-            best = c
-            best_n = n
+    best_dist = 999999
+    for i, (cr, cg, cb) in enumerate(CELL_COLORS):
+        dr = mr - cr
+        dg = mg - cg
+        db = mb - cb
+        dist = dr * dr + dg * dg + db * db
+        if dist < best_dist:
+            best_dist = dist
+            best = i + 1  # 1-indexed
     return best
 
 

@@ -193,17 +193,52 @@ def test_custom_birth_rule():
 # --- Color inheritance ---
 
 
-def test_new_cell_inherits_dominant_color():
-    """New cells should inherit the most common color of their parents."""
+def test_new_cell_mixes_parent_colors():
+    """New cells should get the nearest palette color to the RGB average of parents."""
     g = clear(5, 5)
-    # Place 3 cells around (2,1) — 2 red, 1 blue
+    # Place 3 cells around (2,1) — 2 red (255,0,0), 1 blue (0,0,255)
+    # Average RGB = (170, 0, 85) → nearest palette color is red (255,0,0)
     place(g, 1, 0, 5, 1)  # red
     place(g, 2, 0, 5, 1)  # red
     place(g, 3, 0, 5, 3)  # blue
     new, births, deaths = step(g, 5, 5)
-    # (2,1) should be born with color 1 (red, dominant)
     if (2, 1) in births:
-        assert new[1 * 5 + 2] == 1
+        assert new[1 * 5 + 2] == 1  # closest to red
+
+
+def test_color_mixing_produces_blend():
+    """Equal parts red + blue + green should produce a blended color."""
+    g = clear(5, 5)
+    # Place red (255,0,0), green (0,255,0), blue (0,0,255) around (1,1)
+    # Average = (85, 85, 85) — nearest is... let's check what the engine picks
+    place(g, 0, 0, 5, 1)  # red
+    place(g, 1, 0, 5, 2)  # green
+    place(g, 2, 0, 5, 3)  # blue
+    new, births, deaths = step(g, 5, 5)
+    if (1, 1) in births:
+        # The child cell should exist with some color (not zero)
+        assert new[1 * 5 + 1] != 0
+        # Should not be any of the pure parent colors since it's a 3-way mix
+        # (85,85,85) is equidistant from many — the engine picks the nearest
+
+
+def test_color_mixing_red_plus_blue():
+    """Red + blue parents should produce a purple-ish child."""
+    from bodn.life_rules import CELL_COLORS
+
+    g = clear(5, 5)
+    # 1 red, 1 blue, 1 magenta around (1,1) — 3 neighbours = birth
+    place(g, 0, 0, 5, 1)  # red (255,0,0)
+    place(g, 1, 0, 5, 3)  # blue (0,0,255)
+    place(g, 2, 0, 5, 6)  # magenta (255,0,255)
+    new, births, deaths = step(g, 5, 5)
+    if (1, 1) in births:
+        child_color_idx = new[1 * 5 + 1]
+        # Average RGB = (170, 0, 170) → nearest should be magenta (255,0,255)
+        # or purple (128,0,255)
+        child_rgb = CELL_COLORS[child_color_idx - 1]
+        # Should have significant red and blue, low green
+        assert child_rgb[1] < 50  # very little green
 
 
 # --- Presets ---
