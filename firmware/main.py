@@ -226,6 +226,20 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_garden():
+        from bodn.ui.garden import GardenScreen
+        from bodn.ui.garden_secondary import GardenSecondary
+
+        garden_sec = GardenSecondary()
+        secondary.set_content(garden_sec)
+        return GardenScreen(
+            np,
+            overlay,
+            settings=settings,
+            secondary_screen=garden_sec,
+            on_exit=_reset_secondary,
+        )
+
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
 
@@ -237,6 +251,7 @@ def create_ui(
         "simon": _make_simon,
         "rulefollow": _make_rulefollow,
         "flode": _make_flode,
+        "garden": _make_garden,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, settings=settings),
@@ -247,7 +262,16 @@ def create_ui(
     home = HomeScreen(
         mode_screens,
         session_mgr,
-        order=["mystery", "simon", "rulefollow", "flode", "demo", "clock", "settings"],
+        order=[
+            "mystery",
+            "simon",
+            "rulefollow",
+            "flode",
+            "garden",
+            "demo",
+            "clock",
+            "settings",
+        ],
     )
     manager.push(home)
 
