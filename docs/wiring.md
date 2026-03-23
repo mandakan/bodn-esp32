@@ -30,6 +30,9 @@ graph LR
     DevKitLipoonboardpowermonitoring["DevKit-Lipo on-board power monitoring<br/><sub>GPIO 6 → BAT_SENS_PIN<br/>GPIO 5 → PWR_SENS_PIN</sub>"]
     DevKitLipoonboardpowermonitoring -.- ESP
 
+    DS18B201Wiretemperaturesensors["DS18B20 1-Wire temperature sensors<br/><sub>GPIO 20 → ONEWIRE_PIN<br/>GPIO 45 → TEMP_WARN_C<br/>GPIO 55 → TEMP_CRIT_C</sub>"]
+    DS18B201Wiretemperaturesensors -.- ESP
+
     I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
     I2CbuspUEXTconnector -.- ESP
 
@@ -95,6 +98,14 @@ graph LR
 | BAT_SENS_PIN | 6 | `BAT_SENS_PIN` |
 | PWR_SENS_PIN | 5 | `PWR_SENS_PIN` |
 
+### DS18B20 1-Wire temperature sensors
+
+| Signal | GPIO | Config variable |
+|--------|------|-----------------|
+| ONEWIRE_PIN | 20 | `ONEWIRE_PIN` |
+| TEMP_WARN_C | 45 | `TEMP_WARN_C` |
+| TEMP_CRIT_C | 55 | `TEMP_CRIT_C` |
+
 ### I2C bus — pUEXT connector
 
 | Signal | GPIO | Config variable |
@@ -125,14 +136,19 @@ graph LR
 | 16 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 17 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 18 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 20 | DS18B20 1-Wire temperature sensors | ONEWIRE_PIN |
 | 21 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 41 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 42 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
-| 45 | MAX98357A I2S amplifier | WS |
+| 45 | DS18B20 1-Wire temperature sensors | TEMP_WARN_C |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |
 | 48 | I2C bus — pUEXT connector | I2C_SDA |
+| 55 | DS18B20 1-Wire temperature sensors | TEMP_CRIT_C |
+
+> **Pin conflicts detected:**
+> - **GPIO 45**: MAX98357A I2S amplifier: WS / DS18B20 1-Wire temperature sensors: TEMP_WARN_C
 <!-- pinout:end -->
 
 ## Encoder roles and placement

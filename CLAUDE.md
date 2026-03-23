@@ -55,6 +55,8 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 | LED sticks | WS2812 8-LED modules × 2 (on lid) | NeoPixel (1 GPIO, daisy-chained) |
 | LED strip | WS2812B 144 LED/m strip, 640 mm / ~92 LEDs (inside lid perimeter) | NeoPixel (chained after sticks) |
 | GPIO expander | Waveshare MCP23017 16-IO board | I2C (addr 0x20) |
+| DC-DC converter | Buck-boost 3–16 V → 5 V / 2 A | LiPo → 5 V for NeoPixels |
+| Temperature sensors | DS18B20 × 2 (battery + enclosure) | 1-Wire (GPIO 20) |
 | Power switch | Panel-mount toggle switch | — |
 
 ## Repository layout
@@ -79,6 +81,7 @@ bodn-esp32/
 │     ├─ mystery_rules.py   # Mystery Box rule engine (pure logic)
 │     ├─ session.py         # play session state machine (pure logic)
 │     ├─ storage.py         # JSON settings & session history on flash
+│     ├─ temperature.py     # DS18B20 1-Wire temperature monitoring
 │     ├─ tones.py           # procedural tone generation (pure logic)
 │     ├─ wav.py             # WAV header parser + streaming reader (pure logic)
 │     ├─ wifi.py            # WiFi connect (STA / AP) + runtime control
