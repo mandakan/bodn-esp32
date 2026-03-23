@@ -177,8 +177,14 @@ class GardenScreen(Screen):
             self._full_redraw = True
 
         # Speed control via ENC_A
+        enc_a_delta = inp.enc_delta[config.ENC_A]
+        if enc_a_delta:
+            # Re-center encoder to prevent hitting clamp limits
+            mid = self._manager.inp._encoders[config.ENC_A]._max // 2
+            self._manager.inp._encoders[config.ENC_A].value = mid
+            self._manager.inp._prev_enc_pos[config.ENC_A] = mid
         speed_units = self._speed_acc.update(
-            inp.enc_delta[config.ENC_A], inp.enc_velocity[config.ENC_A]
+            enc_a_delta, inp.enc_velocity[config.ENC_A]
         )
         if speed_units:
             self._speed_ms = max(
@@ -188,8 +194,14 @@ class GardenScreen(Screen):
             self._dirty = True
 
         # Cursor movement via ENC_B
+        enc_b_delta = inp.enc_delta[config.ENC_B]
+        if enc_b_delta:
+            # Re-center encoder to prevent hitting clamp limits
+            mid = self._manager.inp._encoders[config.ENC_B]._max // 2
+            self._manager.inp._encoders[config.ENC_B].value = mid
+            self._manager.inp._prev_enc_pos[config.ENC_B] = mid
         cursor_units = self._cursor_acc.update(
-            inp.enc_delta[config.ENC_B], inp.enc_velocity[config.ENC_B]
+            enc_b_delta, inp.enc_velocity[config.ENC_B]
         )
         if cursor_units:
             old_pos = self._cursor_pos
