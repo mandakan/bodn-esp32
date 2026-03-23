@@ -71,7 +71,10 @@ def gather(ip="0.0.0.0", boot_results=None, boot_steps=None):
         from bodn.battery import read as bat_read
 
         pct, chg = bat_read()
-        info.append(("Battery", "{}%{}".format(pct, " CHG" if chg else "")))
+        if pct is None:
+            info.append(("Battery", "N/A (USB)"))
+        else:
+            info.append(("Battery", "{}%{}".format(pct, " CHG" if chg else "")))
     except Exception:
         pass
 

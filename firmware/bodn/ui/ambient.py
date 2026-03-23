@@ -92,6 +92,7 @@ class StatusStrip(Screen):
 
         # Battery (cached — at most one ADC read per call, refresh every 30 s)
         bat_pct, charging = battery.read()
+        # bat_pct is None when no battery detected — still track for changes
         if bat_pct != self._prev_bat_pct or charging != self._prev_charging:
             self._prev_bat_pct = bat_pct
             self._prev_charging = charging
@@ -157,29 +158,30 @@ class StatusStrip(Screen):
             x_right = w - len(label) * 8 - 2
             tft.text(label, x_right, 2, color)
 
-        # Battery icon — row 2, always visible
-        if bat_pct >= 50:
-            bat_color = theme.GREEN
-        elif bat_pct >= 20:
-            bat_color = theme.AMBER
-        else:
-            bat_color = theme.RED
-        icon_w, icon_h = 20, 10
-        icon_x = w - icon_w - 2
-        icon_y = 18
-        draw_battery_icon(
-            tft,
-            icon_x,
-            icon_y,
-            icon_w,
-            icon_h,
-            bat_pct,
-            bat_color,
-            theme.BLACK,
-            theme.WHITE,
-        )
-        if charging:
-            tft.text("+", icon_x + icon_w // 2 - 4, icon_y + 1, theme.YELLOW)
+        # Battery icon — row 2 (hidden when no battery detected)
+        if bat_pct is not None:
+            if bat_pct >= 50:
+                bat_color = theme.GREEN
+            elif bat_pct >= 20:
+                bat_color = theme.AMBER
+            else:
+                bat_color = theme.RED
+            icon_w, icon_h = 20, 10
+            icon_x = w - icon_w - 2
+            icon_y = 18
+            draw_battery_icon(
+                tft,
+                icon_x,
+                icon_y,
+                icon_w,
+                icon_h,
+                bat_pct,
+                bat_color,
+                theme.BLACK,
+                theme.WHITE,
+            )
+            if charging:
+                tft.text("+", icon_x + icon_w // 2 - 4, icon_y + 1, theme.YELLOW)
 
     def _render_vertical(self, tft, theme):
         """Landscape layout: 32×128 vertical strip."""
@@ -245,26 +247,27 @@ class StatusStrip(Screen):
             lx = (w - len(label) * 8) // 2
             tft.text(label, max(0, lx), y_session, color)
 
-        # Bottom: battery icon
-        if bat_pct >= 50:
-            bat_color = theme.GREEN
-        elif bat_pct >= 20:
-            bat_color = theme.AMBER
-        else:
-            bat_color = theme.RED
-        icon_w, icon_h = 20, 10
-        icon_x = (w - icon_w) // 2
-        icon_y = h - icon_h - 4
-        draw_battery_icon(
-            tft,
-            icon_x,
-            icon_y,
-            icon_w,
-            icon_h,
-            bat_pct,
-            bat_color,
-            theme.BLACK,
-            theme.WHITE,
-        )
-        if charging:
-            tft.text("+", icon_x + icon_w // 2 - 4, icon_y + 1, theme.YELLOW)
+        # Bottom: battery icon (hidden when no battery detected)
+        if bat_pct is not None:
+            if bat_pct >= 50:
+                bat_color = theme.GREEN
+            elif bat_pct >= 20:
+                bat_color = theme.AMBER
+            else:
+                bat_color = theme.RED
+            icon_w, icon_h = 20, 10
+            icon_x = (w - icon_w) // 2
+            icon_y = h - icon_h - 4
+            draw_battery_icon(
+                tft,
+                icon_x,
+                icon_y,
+                icon_w,
+                icon_h,
+                bat_pct,
+                bat_color,
+                theme.BLACK,
+                theme.WHITE,
+            )
+            if charging:
+                tft.text("+", icon_x + icon_w // 2 - 4, icon_y + 1, theme.YELLOW)
