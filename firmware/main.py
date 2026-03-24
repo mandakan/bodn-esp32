@@ -281,6 +281,7 @@ def create_ui(
             "clock",
             "settings",
         ],
+        settings=settings,
     )
     manager.push(home)
 

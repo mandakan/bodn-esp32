@@ -30,10 +30,12 @@ class HomeScreen(Screen):
     Only redraws on input events or during active animation.
     """
 
-    def __init__(self, mode_screens, session_mgr, order=None):
+    def __init__(self, mode_screens, session_mgr, order=None, settings=None):
         self._mode_screens = mode_screens
         self._session_mgr = session_mgr
-        self._names = order if order else list(mode_screens.keys())
+        self._all_names = order if order else list(mode_screens.keys())
+        self._settings = settings or {}
+        self._names = []  # rebuilt on enter()
         self._index = 0
         self._manager = None
         self._error = None
@@ -44,6 +46,7 @@ class HomeScreen(Screen):
         # Animation state
         self._anim_step = _ANIM_STEPS  # >= _ANIM_STEPS means idle
         self._anim_dir = 1  # +1 = incoming from right, -1 = from left
+        self._prev_name = None  # previous item for slide-out animation
         # Chord: hold btn 0 + press btn 7 → jump to settings
         self._chords = (
             ChordDetector({(0, 7): "settings"})
@@ -51,8 +54,23 @@ class HomeScreen(Screen):
             else None
         )
 
+    def _rebuild_names(self):
+        """Rebuild visible mode list from settings.
+
+        hidden_modes: list of mode names to hide from the carousel.
+        Modes hidden here are still accessible via chord combos (e.g. settings).
+        """
+        hidden = self._settings.get("hidden_modes", ["settings"])
+        self._names = [n for n in self._all_names if n not in hidden]
+        # Clamp index
+        if self._names:
+            self._index = self._index % len(self._names)
+        else:
+            self._index = 0
+
     def enter(self, manager):
         self._manager = manager
+        self._rebuild_names()
         self._accum = 0
         self._anim_step = _ANIM_STEPS
         self._dirty = True
@@ -123,6 +141,7 @@ class HomeScreen(Screen):
         velocity = inp.enc_velocity[NAV]
         units = self._accumulate(delta, velocity)
         if units != 0:
+            self._prev_name = self._names[self._index]
             self._index = (self._index + units) % len(self._names)
             # Start slide animation: incoming from direction of turn
             self._anim_step = 0
@@ -170,6 +189,22 @@ class HomeScreen(Screen):
         else:
             self._render_portrait(tft, theme, frame, name)
 
+    def _draw_dots(self, tft, theme, y, w):
+        """Draw carousel dot indicators centered at y."""
+        n = len(self._names)
+        if n <= 1:
+            return
+        dot_r = 3
+        gap = 12
+        total_w = n * gap - (gap - dot_r * 2)
+        x0 = (w - total_w) // 2
+        for i in range(n):
+            cx = x0 + i * gap + dot_r
+            if i == self._index:
+                tft.fill_rect(cx - dot_r, y - dot_r, dot_r * 2, dot_r * 2, theme.CYAN)
+            else:
+                tft.rect(cx - dot_r, y - dot_r, dot_r * 2, dot_r * 2, theme.MUTED)
+
     def _render_landscape(self, tft, theme, frame, name):
         """Landscape layout: centered, icon above mode name."""
         w = theme.width
@@ -179,25 +214,45 @@ class HomeScreen(Screen):
         # Title — centered at top (static, no slide)
         draw_centered(tft, t("home_title"), 8, theme.WHITE, w, scale=2)
 
-        # Icon — centered, offset by animation
-        icon_data = MODE_ICONS.get(name)
         icon_scale = 4
         icon_size = 16 * icon_scale
+        name_y = 40 + icon_size + 12
+
+        # Outgoing item (slides out in opposite direction)
+        if self._prev_name and ox != 0:
+            # Outgoing offset: opposite side, moving away
+            out_ox = ox - self._anim_dir * w
+            prev_icon = MODE_ICONS.get(self._prev_name)
+            if prev_icon:
+                pix = (w - icon_size) // 2 + out_ox
+                draw_icon(
+                    tft, prev_icon, pix, 40, 16, 16, theme.MUTED, scale=icon_scale
+                )
+            draw_centered(
+                tft,
+                t("mode_" + self._prev_name).upper(),
+                name_y,
+                theme.MUTED,
+                w + out_ox * 2,
+                scale=2,
+            )
+
+        # Incoming item (slides in from the side)
+        icon_data = MODE_ICONS.get(name)
         if icon_data:
             ix = (w - icon_size) // 2 + ox
-            iy = 40
-            draw_icon(tft, icon_data, ix, iy, 16, 16, theme.CYAN, scale=icon_scale)
+            draw_icon(tft, icon_data, ix, 40, 16, 16, theme.CYAN, scale=icon_scale)
 
-        # Mode name — centered below icon, offset by animation
-        name_y = 40 + icon_size + 12
         draw_centered(
             tft, t("mode_" + name).upper(), name_y, theme.CYAN, w + ox * 2, scale=2
         )
 
-        # Arrow hints
-        n = len(self._names)
-        if n > 1:
-            draw_centered(tft, t("home_browse"), name_y + 24, theme.MUTED, w)
+        # Clear prev_name when animation completes
+        if ox == 0:
+            self._prev_name = None
+
+        # Carousel dots
+        self._draw_dots(tft, theme, name_y + 28, w)
 
         # Sessions remaining — bottom center (static)
         remaining = self._session_mgr.sessions_remaining
@@ -211,12 +266,31 @@ class HomeScreen(Screen):
 
         draw_centered(tft, t("home_title"), theme.HEADER_Y, theme.WHITE, w)
 
+        icon_scale = 3
+        icon_size = 16 * icon_scale
+        iy = theme.CENTER_Y - icon_size // 2 - 8
+
+        # Outgoing item
+        if self._prev_name and ox != 0:
+            out_ox = ox - self._anim_dir * w
+            prev_icon = MODE_ICONS.get(self._prev_name)
+            if prev_icon:
+                pix = (w - icon_size) // 2 + out_ox
+                draw_icon(
+                    tft, prev_icon, pix, iy, 16, 16, theme.MUTED, scale=icon_scale
+                )
+            draw_centered(
+                tft,
+                t("mode_" + self._prev_name).upper(),
+                theme.CENTER_Y + 24,
+                theme.MUTED,
+                w + out_ox * 2,
+            )
+
+        # Incoming item
         icon_data = MODE_ICONS.get(name)
         if icon_data:
-            icon_scale = 3
-            icon_size = 16 * icon_scale
             ix = (w - icon_size) // 2 + ox
-            iy = theme.CENTER_Y - icon_size // 2 - 8
             draw_icon(tft, icon_data, ix, iy, 16, 16, theme.CYAN, scale=icon_scale)
 
         draw_centered(
@@ -227,10 +301,11 @@ class HomeScreen(Screen):
             w + ox * 2,
         )
 
-        n = len(self._names)
-        if n > 1:
-            tft.text("<", 2, theme.CENTER_Y - 4, theme.MUTED)
-            tft.text(">", w - 10, theme.CENTER_Y - 4, theme.MUTED)
+        if ox == 0:
+            self._prev_name = None
+
+        # Carousel dots
+        self._draw_dots(tft, theme, theme.CENTER_Y + 44, w)
 
         remaining = self._session_mgr.sessions_remaining
         color = theme.GREEN if remaining > 0 else theme.RED
