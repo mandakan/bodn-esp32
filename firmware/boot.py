@@ -6,6 +6,11 @@
 import gc
 import time
 
+# Safe-boot window: pause briefly so Ctrl-C can interrupt before heavy init.
+# Also lets the ESP32 task watchdog breathe between reset cycles.
+print("boot.py: 1s safe-boot window (Ctrl-C to abort)...")
+time.sleep(1)
+
 settings = None
 ip = "0.0.0.0"
 
@@ -25,7 +30,7 @@ try:
     _diag_btn = None  # release pin — encoder driver will reclaim it
 
     spi = SPI(
-        2,
+        1,
         baudrate=26_000_000,
         sck=Pin(config.TFT_SCK),
         mosi=Pin(config.TFT_MOSI),

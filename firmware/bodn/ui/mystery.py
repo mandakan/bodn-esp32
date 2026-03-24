@@ -73,8 +73,8 @@ class MysteryScreen(Screen):
             eng.sw_mirror,
             eng.hue_shift,
         )
-        eng.sw_invert = inp.sw[0]
-        eng.sw_mirror = inp.sw[1]
+        eng.sw_invert = inp.sw[0] if len(inp.sw) > 0 else False
+        eng.sw_mirror = inp.sw[1] if len(inp.sw) > 1 else False
         hue_units = self._hue_acc.update(
             inp.enc_delta[config.ENC_B], inp.enc_velocity[config.ENC_B]
         )

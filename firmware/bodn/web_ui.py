@@ -102,13 +102,13 @@ th{color:#aaa}
 <body>
 <h1>Bodn</h1>
 <div class="tabs">
-<button class="tab active" onclick="show('dash')">Dashboard</button>
-<button class="tab" onclick="show('limits')">Limits</button>
-<button class="tab" onclick="show('history')">History</button>
-<button class="tab" onclick="show('stats')">Stats</button>
-<button class="tab" onclick="show('wifi')">WiFi</button>
-<button class="tab" onclick="show('security')">Security</button>
-<button class="tab" onclick="show('debug')">Debug</button>
+<button class="tab active" onclick="show('dash',this)">Dashboard</button>
+<button class="tab" onclick="show('limits',this)">Limits</button>
+<button class="tab" onclick="show('history',this)">History</button>
+<button class="tab" onclick="show('stats',this)">Stats</button>
+<button class="tab" onclick="show('wifi',this)">WiFi</button>
+<button class="tab" onclick="show('security',this)">Security</button>
+<button class="tab" onclick="show('debug',this)">Debug</button>
 </div>
 
 <div id="dash" class="panel active">
@@ -189,11 +189,11 @@ th{color:#aaa}
 </div>
 
 <script>
-function show(id){
+function show(id,el){
 document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
 document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
 document.getElementById(id).classList.add('active');
-event.target.classList.add('active');
+el.classList.add('active');
 if(id==='history')loadHistory();
 if(id==='stats')loadStats();
 }

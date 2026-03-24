@@ -47,8 +47,8 @@ class DemoScreen(Screen):
         self._dirty = True
         # Snapshot of input state for dirty detection
         self._prev_enc = [0, 0, 0]
-        self._prev_btn = [False] * 8
-        self._prev_sw = [False] * 2
+        self._prev_btn = []
+        self._prev_sw = []
 
     def enter(self, manager):
         self._manager = manager
@@ -72,7 +72,8 @@ class DemoScreen(Screen):
 
         # Button tap → select pattern (uses gesture layer)
         g = inp.gestures
-        for i in range(8):
+        n_btn = len(inp.btn_held)
+        for i in range(n_btn):
             if g.tap[i]:
                 self._active_pattern = i % len(PATTERNS)
                 self._dirty = True
@@ -94,7 +95,9 @@ class DemoScreen(Screen):
             if inp.enc_pos[i] != self._prev_enc[i]:
                 self._prev_enc[i] = inp.enc_pos[i]
                 self._dirty = True
-        for i in range(8):
+        if not self._prev_btn:
+            self._prev_btn = [False] * n_btn
+        for i in range(n_btn):
             if inp.btn_held[i] != self._prev_btn[i]:
                 self._prev_btn[i] = inp.btn_held[i]
                 self._dirty = True
@@ -119,13 +122,13 @@ class DemoScreen(Screen):
             # Toggle switch modifiers (operate in-place on shared _led_buf)
             sw = inp.sw
             n = N_LEDS
-            if sw[0]:
+            if len(sw) > 0 and sw[0]:
                 # Reverse: swap in-place
                 half = n // 2
                 for i in range(half):
                     j = n - 1 - i
                     leds[i], leds[j] = leds[j], leds[i]
-            if sw[1]:
+            if len(sw) > 1 and sw[1]:
                 half = n // 2
                 for i in range(half):
                     leds[n - 1 - i] = leds[i]

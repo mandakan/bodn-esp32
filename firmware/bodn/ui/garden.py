@@ -164,8 +164,8 @@ class GardenScreen(Screen):
 
         # Read toggle switches
         prev_mods = (self._friendly, self._wrap)
-        self._friendly = inp.sw[0]
-        self._wrap = inp.sw[1]
+        self._friendly = inp.sw[0] if len(inp.sw) > 0 else False
+        self._wrap = inp.sw[1] if len(inp.sw) > 1 else False
         new_mods = (self._friendly, self._wrap)
         if new_mods != prev_mods:
             self._dirty = True

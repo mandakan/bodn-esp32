@@ -4,7 +4,7 @@
 #   from machine import Pin, SPI
 #   from st7735 import ST7735
 #
-#   spi = SPI(2, baudrate=26_000_000, sck=Pin(12), mosi=Pin(11))
+#   spi = SPI(1, baudrate=26_000_000, sck=Pin(12), mosi=Pin(11))
 #   tft = ST7735(spi, cs=Pin(10, Pin.OUT), dc=Pin(8, Pin.OUT), rst=Pin(9, Pin.OUT))
 #   tft.fill(0x0000)
 #   tft.text("Hello", 10, 10, 0xFFFF)
@@ -40,6 +40,7 @@ class ST7735(framebuf.FrameBuffer):
         col_offset=0,
         row_offset=0,
         madctl=0x00,
+        skip_reset=False,
     ):
         self.spi = spi
         self.cs = cs
@@ -52,7 +53,7 @@ class ST7735(framebuf.FrameBuffer):
         self._madctl = madctl
         self._buf = bytearray(width * height * 2)
         super().__init__(self._buf, width, height, framebuf.RGB565)
-        self._init_display()
+        self._init_display(skip_reset=skip_reset)
 
     def _cmd(self, cmd, data=None):
         self.cs.value(0)
@@ -63,14 +64,15 @@ class ST7735(framebuf.FrameBuffer):
             self.spi.write(data)
         self.cs.value(1)
 
-    def _init_display(self):
-        # Hardware reset
-        self.rst.value(1)
-        time.sleep_ms(50)
-        self.rst.value(0)
-        time.sleep_ms(50)
-        self.rst.value(1)
-        time.sleep_ms(150)
+    def _init_display(self, skip_reset=False):
+        if not skip_reset:
+            # Hardware reset (affects all displays sharing this RST pin)
+            self.rst.value(1)
+            time.sleep_ms(50)
+            self.rst.value(0)
+            time.sleep_ms(50)
+            self.rst.value(1)
+            time.sleep_ms(150)
 
         # These commands are shared by ST7735, ST7789, and ILI9341,
         # so this driver works on real hardware and in Wokwi (ILI9341).

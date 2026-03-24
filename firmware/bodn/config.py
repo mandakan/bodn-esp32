@@ -17,7 +17,7 @@ TFT_RST = const(9)
 TFT_BL = const(1)  # GPIO 43 is UART TX — would flicker backlight on every print()
 TFT_WIDTH = const(320)
 TFT_HEIGHT = const(240)
-TFT_MADCTL = const(0x68)  # MV + MX + BGR (landscape)
+TFT_MADCTL = const(0xE0)  # MY + MX + MV (landscape, RGB order)
 TFT_COL_OFFSET = const(0)
 TFT_ROW_OFFSET = const(0)
 

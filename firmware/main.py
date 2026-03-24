@@ -47,7 +47,7 @@ def create_hardware():
     hw_status = {"mcp": False, "pca": False, "temp": False}
 
     spi = SPI(
-        2,
+        1,
         baudrate=26_000_000,
         sck=Pin(config.TFT_SCK),
         mosi=Pin(config.TFT_MOSI),
@@ -71,6 +71,7 @@ def create_hardware():
     )
 
     # Secondary display (ST7735 128×160, shared bus)
+    # skip_reset=True — shares RST pin with primary, don't reset both
     tft2 = ST7735(
         spi,
         cs=Pin(config.TFT2_CS, Pin.OUT),
@@ -81,6 +82,7 @@ def create_hardware():
         col_offset=config.TFT2_COL_OFFSET,
         row_offset=config.TFT2_ROW_OFFSET,
         madctl=config.TFT2_MADCTL,
+        skip_reset=True,
     )
 
     # Shared I2C bus for MCP23017 and PCA9685
@@ -311,7 +313,12 @@ async def primary_task(manager, settings, inp, encoders, mcp, idle_tracker, powe
             raise
         except Exception as e:
             errors += 1
-            print("primary_task error #{}: {}".format(errors, e))
+            if errors <= 3:
+                import sys
+
+                sys.print_exception(e)
+            else:
+                print("primary_task error #{}: {}".format(errors, e))
 
         # Power management
         if inp.has_activity():
@@ -343,7 +350,9 @@ async def primary_task(manager, settings, inp, encoders, mcp, idle_tracker, powe
             idle_tracker.timeout_s = settings.get("sleep_timeout_s", 300)
 
         if settings.get("debug_input") and frame % 15 == 0:
-            btns = "".join("1" if inp.btn_held[i] else "." for i in range(8))
+            btns = "".join(
+                "1" if inp.btn_held[i] else "." for i in range(len(inp.btn_held))
+            )
             sws = "".join("1" if inp.sw[i] else "." for i in range(len(inp.sw)))
             enc_vals = " ".join("{}".format(inp.enc_pos[i]) for i in range(3))
             enc_raw = " ".join(
