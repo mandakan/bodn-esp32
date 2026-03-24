@@ -157,7 +157,7 @@ class HomeScreen(Screen):
         if self._anim_step >= _ANIM_STEPS:
             return 0
         frac = _ANIM_FRAC[self._anim_step]
-        return self._anim_dir * (frac * width // 4)
+        return self._anim_dir * (frac * width // 8)
 
     def render(self, tft, theme, frame):
         self._dirty = False
