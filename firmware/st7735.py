@@ -13,6 +13,11 @@
 import framebuf
 import time
 
+try:
+    from bodn.ui.font_ext import GLYPHS as _EXT_GLYPHS
+except ImportError:
+    _EXT_GLYPHS = {}
+
 # ST7735 commands
 _SWRESET = 0x01
 _SLPOUT = 0x11
@@ -84,6 +89,35 @@ class ST7735(framebuf.FrameBuffer):
         self._cmd(_MADCTL, bytes([self._madctl]))
         self._cmd(_DISPON)
         time.sleep_ms(100)
+
+    def text(self, text, x, y, color=0xFFFF):
+        """Draw text with extended glyph support (å ä ö Å Ä Ö)."""
+        if not _EXT_GLYPHS:
+            super().text(text, x, y, color)
+            return
+        cx = x
+        ascii_start = cx
+        ascii_buf = []
+        for ch in text:
+            glyph = _EXT_GLYPHS.get(ch)
+            if glyph:
+                if ascii_buf:
+                    super().text("".join(ascii_buf), ascii_start, y, color)
+                    ascii_buf = []
+                for row in range(8):
+                    byte = glyph[row]
+                    if byte == 0:
+                        continue
+                    for col in range(8):
+                        if byte & (0x80 >> col):
+                            self.pixel(cx + col, y + row, color)
+                cx += 8
+                ascii_start = cx
+            else:
+                ascii_buf.append(ch)
+                cx += 8
+        if ascii_buf:
+            super().text("".join(ascii_buf), ascii_start, y, color)
 
     def show(self):
         """Push the framebuffer to the display."""
