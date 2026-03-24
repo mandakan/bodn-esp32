@@ -91,7 +91,8 @@ def draw_progress_bar(tft, x, y, w, h, value, max_val, fg, bg, border=None):
 
 def draw_button_grid(tft, theme, names, held, cols=4, x0=0, y0=0, cell_w=32, cell_h=16):
     """Draw button indicators in a grid layout."""
-    for i in range(len(names)):
+    n = min(len(names), len(held))
+    for i in range(n):
         col = i % cols
         row = i // cols
         x = x0 + col * cell_w
