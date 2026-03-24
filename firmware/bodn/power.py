@@ -96,7 +96,6 @@ class PowerManager:
         """Configure wake sources and enter machine.lightsleep()."""
         import machine
         from machine import Pin
-        import esp32
         from bodn import config
 
         # Enable MCP23017 interrupts (any button/toggle change pulls INT low)
@@ -104,19 +103,25 @@ class PowerManager:
             self._mcp.enable_interrupts()
 
         # Wake sources: encoder buttons (all active-low) + MCP INT if present
-        wake_pins = [config.ENC1_SW, config.ENC2_SW, config.ENC3_SW]
-        if self._mcp:
-            wake_pins.append(config.MCP_INT_PIN)
-        for pin_num in wake_pins:
-            p = Pin(pin_num, Pin.IN, Pin.PULL_UP)
-            esp32.gpio_wakeup(p, esp32.WAKEUP_ANY_LOW)
+        try:
+            import esp32
+
+            wake_pins = [config.ENC1_SW, config.ENC2_SW, config.ENC3_SW]
+            if self._mcp:
+                wake_pins.append(config.MCP_INT_PIN)
+            for pin_num in wake_pins:
+                p = Pin(pin_num, Pin.IN, Pin.PULL_UP)
+                esp32.gpio_wakeup(p, esp32.WAKEUP_ANY_LOW)
+        except (ImportError, AttributeError) as e:
+            # gpio_wakeup not available — use timed sleep as fallback
+            print("POWER: gpio_wakeup unavailable:", e)
 
         # Clear pending MCP interrupts before sleeping
         if self._mcp:
             self._mcp.clear_interrupts()
 
         print("POWER: entering light sleep")
-        machine.lightsleep()
+        machine.lightsleep(60_000)  # wake after 60s if no GPIO wake source
         print("POWER: woke up")
 
     def post_wake(self):
