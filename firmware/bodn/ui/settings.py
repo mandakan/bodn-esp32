@@ -213,7 +213,7 @@ class SettingsScreen(Screen):
 
             # Highlight bar for selected item
             if selected:
-                tft.fill_rect(4, y - 2, w - 8, row_h - 2, theme.MUTED)
+                tft.fill_rect(4, y - 2, w - 8, row_h - 2, theme.DIM)
 
             # Label
             color = theme.WHITE if selected else theme.MUTED

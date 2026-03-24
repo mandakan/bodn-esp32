@@ -27,7 +27,8 @@ class Theme:
         self.ORANGE = rgb_fn(255, 128, 0)
         self.PURPLE = rgb_fn(128, 0, 255)
         self.AMBER = rgb_fn(255, 191, 0)
-        self.MUTED = rgb_fn(80, 80, 80)
+        self.MUTED = rgb_fn(160, 160, 160)  # readable from angles
+        self.DIM = rgb_fn(80, 80, 80)  # subtle indicators only
 
         # One colour per button (RGB565)
         self.BTN_565 = [

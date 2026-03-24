@@ -3,16 +3,16 @@
 from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.icons import MODE_ICONS
-from bodn.ui.widgets import draw_icon, draw_centered
+from bodn.ui.widgets import draw_icon, draw_centered, draw_label
 from bodn.chord import ChordDetector
 from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
 
-# Animation: ease-out x-offsets as fraction of screen width (numerator / 4)
-# Positions: [full off-screen, 2/3 off, 1/4 off, settled]
-_ANIM_STEPS = const(4)
-_ANIM_FRAC = (4, 3, 1, 0)  # multiplied by width//4
+# Animation: ease-out x-offsets as fraction of screen width (numerator / 8)
+# Smoother slide: 8 steps so both incoming and outgoing are clearly visible
+_ANIM_STEPS = const(8)
+_ANIM_FRAC = (8, 7, 5, 4, 3, 2, 1, 0)  # multiplied by width//8
 
 # Accumulator settings
 _DPU = const(1)  # raw detents per unit (1 per physical click)
@@ -207,7 +207,7 @@ class HomeScreen(Screen):
             if i == self._index:
                 tft.fill_rect(cx - dot_r, y - dot_r, dot_r * 2, dot_r * 2, theme.CYAN)
             else:
-                tft.rect(cx - dot_r, y - dot_r, dot_r * 2, dot_r * 2, theme.MUTED)
+                tft.rect(cx - dot_r, y - dot_r, dot_r * 2, dot_r * 2, theme.DIM)
 
     def _render_landscape(self, tft, theme, frame, name):
         """Landscape layout: centered, icon above mode name."""
@@ -224,22 +224,14 @@ class HomeScreen(Screen):
 
         # Outgoing item (slides out in opposite direction)
         if self._prev_name and ox != 0:
-            # Outgoing offset: opposite side, moving away
             out_ox = ox - self._anim_dir * w
             prev_icon = MODE_ICONS.get(self._prev_name)
             if prev_icon:
                 pix = (w - icon_size) // 2 + out_ox
-                draw_icon(
-                    tft, prev_icon, pix, 40, 16, 16, theme.MUTED, scale=icon_scale
-                )
-            draw_centered(
-                tft,
-                t("mode_" + self._prev_name).upper(),
-                name_y,
-                theme.MUTED,
-                w + out_ox * 2,
-                scale=2,
-            )
+                draw_icon(tft, prev_icon, pix, 40, 16, 16, theme.CYAN, scale=icon_scale)
+            prev_text = t("mode_" + self._prev_name).upper()
+            ptx = (w - len(prev_text) * 16) // 2 + out_ox
+            draw_label(tft, prev_text, ptx, name_y, theme.CYAN, scale=2)
 
         # Incoming item (slides in from the side)
         icon_data = MODE_ICONS.get(name)
@@ -247,9 +239,9 @@ class HomeScreen(Screen):
             ix = (w - icon_size) // 2 + ox
             draw_icon(tft, icon_data, ix, 40, 16, 16, theme.CYAN, scale=icon_scale)
 
-        draw_centered(
-            tft, t("mode_" + name).upper(), name_y, theme.CYAN, w + ox * 2, scale=2
-        )
+        mode_text = t("mode_" + name).upper()
+        mtx = (w - len(mode_text) * 16) // 2 + ox
+        draw_label(tft, mode_text, mtx, name_y, theme.CYAN, scale=2)
 
         # Clear prev_name when animation completes
         if ox == 0:
@@ -280,16 +272,10 @@ class HomeScreen(Screen):
             prev_icon = MODE_ICONS.get(self._prev_name)
             if prev_icon:
                 pix = (w - icon_size) // 2 + out_ox
-                draw_icon(
-                    tft, prev_icon, pix, iy, 16, 16, theme.MUTED, scale=icon_scale
-                )
-            draw_centered(
-                tft,
-                t("mode_" + self._prev_name).upper(),
-                theme.CENTER_Y + 24,
-                theme.MUTED,
-                w + out_ox * 2,
-            )
+                draw_icon(tft, prev_icon, pix, iy, 16, 16, theme.CYAN, scale=icon_scale)
+            prev_text = t("mode_" + self._prev_name).upper()
+            ptx = (w - len(prev_text) * 8) // 2 + out_ox
+            tft.text(prev_text, ptx, theme.CENTER_Y + 24, theme.CYAN)
 
         # Incoming item
         icon_data = MODE_ICONS.get(name)
@@ -297,13 +283,9 @@ class HomeScreen(Screen):
             ix = (w - icon_size) // 2 + ox
             draw_icon(tft, icon_data, ix, iy, 16, 16, theme.CYAN, scale=icon_scale)
 
-        draw_centered(
-            tft,
-            t("mode_" + name).upper(),
-            theme.CENTER_Y + 24,
-            theme.WHITE,
-            w + ox * 2,
-        )
+        mode_text = t("mode_" + name).upper()
+        mtx = (w - len(mode_text) * 8) // 2 + ox
+        tft.text(mode_text, mtx, theme.CENTER_Y + 24, theme.WHITE)
 
         if ox == 0:
             self._prev_name = None

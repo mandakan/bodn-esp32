@@ -24,7 +24,7 @@ class Encoder:
 
     def _on_clk(self, pin):
         now = time.ticks_us()
-        if time.ticks_diff(now, self._last_us) < 2000:  # 2ms debounce
+        if time.ticks_diff(now, self._last_us) < 4000:  # 4ms debounce
             return
         clk_val = self.clk.value()
         if clk_val != self._last_clk:

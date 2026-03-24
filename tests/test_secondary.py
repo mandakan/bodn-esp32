@@ -44,6 +44,7 @@ class FakeTheme:
     ORANGE = 0xFC00
     MAGENTA = 0xF81F
     MUTED = 0x5145
+    DIM = 0x4208
     width = 128
     height = 160
 

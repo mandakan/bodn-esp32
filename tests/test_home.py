@@ -48,6 +48,7 @@ class FakeTheme:
     RED = 0xF800
     GREEN = 0x07E0
     MUTED = 0x7BEF
+    DIM = 0x4208
     HEADER_Y = 3
     CENTER_X = 160
     CENTER_Y = 120
