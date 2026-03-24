@@ -21,7 +21,7 @@ graph LR
     MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN</sub>"]
     ESP -- I2S --> MAX98357AI2Samplifier
 
-    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 14 → DT<br/>GPIO 40 → SW<br/>GPIO 41 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
+    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 44 → DT<br/>GPIO 40 → SW<br/>GPIO 41 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
     RotaryencodersmuststayonnativeGPIOforIRQlatency -.- ESP
 
     The144LEDmstriprunsaroundtheinsideofthetranslucentlidperimeter["The 144 LED/m strip runs around the inside of the translucent lid perimeter<br/><sub>GPIO 4 → PIN</sub>"]
@@ -85,7 +85,7 @@ graph LR
 | DT | 18 | `ENC1_DT` |
 | SW | 17 | `ENC1_SW` |
 | CLK | 16 | `ENC2_CLK` |
-| DT | 14 | `ENC2_DT` |
+| DT | 44 | `ENC2_DT` |
 | SW | 40 | `ENC2_SW` |
 | CLK | 41 | `ENC3_CLK` |
 | DT | 42 | `ENC3_DT` |
@@ -155,7 +155,7 @@ graph LR
 | 11 | ILI9341 TFT | MOSI |
 | 12 | ILI9341 TFT | SCK |
 | 13 | MAX98357A I2S amplifier | BCK |
-| 14 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 14 | INMP441 I2S microphone | SCK |
 | 15 | INMP441 I2S microphone | WS |
 | 16 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 17 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
@@ -166,6 +166,7 @@ graph LR
 | 40 | DS18B20 1-Wire temperature sensors | TEMP_WARN_C |
 | 41 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 42 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 44 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
 | 45 | MAX98357A I2S amplifier | WS |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |
 | 48 | I2C bus — pUEXT connector | I2C_SDA |
@@ -176,7 +177,6 @@ graph LR
 | 3400 | so we treat software as the only reliable protection. | BAT_WARN_MV |
 
 > **Pin conflicts detected:**
-> - **GPIO 14**: INMP441 I2S microphone: SCK / Rotary encoders — must stay on native GPIO for IRQ latency: DT
 > - **GPIO 40**: Rotary encoders — must stay on native GPIO for IRQ latency: SW / DS18B20 1-Wire temperature sensors: TEMP_WARN_C
 > - **GPIO 1**: ILI9341 TFT: BL / detents per logical unit: ENCODER SENS OPTIONS 0
 > - **GPIO 2**: INMP441 I2S microphone: SD / detents per logical unit: ENCODER SENS OPTIONS 1
