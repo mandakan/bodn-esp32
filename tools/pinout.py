@@ -72,11 +72,14 @@ def parse_config(path: Path) -> list[Group]:
                 current_pins.append((n, v))
             continue
 
-        # List assignment: NAME = [1, 2, 3]
+        # List assignment: NAME = [1, 2, 3] (only integer lists are pin arrays)
         m = re.match(r"^([A-Z][A-Z0-9_]+)\s*=\s*\[([^\]]+)\]", line)
         if m:
             name_base = m.group(1)
-            vals = [int(v.strip()) for v in m.group(2).split(",")]
+            try:
+                vals = [int(v.strip()) for v in m.group(2).split(",")]
+            except ValueError:
+                continue  # skip non-integer lists (labels, options, etc.)
             for i, v in enumerate(vals):
                 current_pins.append((f"{name_base}[{i}]", v))
             continue

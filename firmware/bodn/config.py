@@ -126,5 +126,17 @@ PWM_CH_ARC4 = const(4)  # Arcade button 4 LED (green)
 PWM_CH_ARC5 = const(5)  # Arcade button 5 LED (white)
 PWM_CH_AMP_SD = const(6)  # MAX98357A SD pin — hardware mute (0=off, 4095=on)
 
+# Encoder sensitivity: detents per logical unit
+# 1=high (every click), 2=medium, 3=low (for young children)
+ENCODER_SENS_OPTIONS = [1, 2, 3]
+ENCODER_SENS_DEFAULT = 1
+ENCODER_SENS_LABELS = ["high", "medium", "low"]
+
+
+def encoder_dpu(settings):
+    """Return detents-per-unit from settings (1=high, 2=medium, 3=low)."""
+    return settings.get("encoder_sensitivity", ENCODER_SENS_DEFAULT)
+
+
 # Power save
 SLEEP_TIMEOUT_S = 300  # default 5 minutes of inactivity before light sleep

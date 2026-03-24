@@ -20,8 +20,21 @@ class EncoderAccumulator:
         fast_multiplier: detent scaling factor at high velocity.
     """
 
-    def __init__(self, detents_per_unit=1, fast_threshold=400, fast_multiplier=2):
-        self._dpu = detents_per_unit
+    def __init__(
+        self,
+        detents_per_unit=None,
+        fast_threshold=400,
+        fast_multiplier=2,
+        settings=None,
+    ):
+        if detents_per_unit is not None:
+            self._dpu = detents_per_unit
+        elif settings:
+            from bodn.config import encoder_dpu
+
+            self._dpu = encoder_dpu(settings)
+        else:
+            self._dpu = 1
         self._fast_thresh = fast_threshold
         self._fast_mult = fast_multiplier
         self._accum = 0

@@ -13,6 +13,7 @@ NAV = const(0)  # config.ENC_NAV
 _ITEMS = [
     ("sessions_enabled", "settings_sessions", "bool"),
     ("sleep_timeout_s", "settings_sleep", "cycle"),
+    ("encoder_sensitivity", "settings_encoder", "cycle"),
     ("wifi", "settings_wifi", "bool"),
     ("leds", "settings_leds", "bool"),
     ("language", "pause_lang", "lang"),
@@ -60,6 +61,14 @@ class SettingsScreen(Screen):
             if val == 0:
                 return t("off")
             return t("sleep_min", val // 60)
+        if key == "encoder_sensitivity":
+            val = self._settings.get("encoder_sensitivity", config.ENCODER_SENS_DEFAULT)
+            idx = 0
+            for i in range(len(config.ENCODER_SENS_OPTIONS)):
+                if config.ENCODER_SENS_OPTIONS[i] == val:
+                    idx = i
+                    break
+            return t("sens_" + config.ENCODER_SENS_LABELS[idx])
         if key in ("debug_input", "debug_perf", "sessions_enabled"):
             return self._settings.get(key, key == "sessions_enabled")
         return False
@@ -88,6 +97,23 @@ class SettingsScreen(Screen):
             self._settings["sleep_timeout_s"] = _SLEEP_OPTIONS[
                 (idx + 1) % len(_SLEEP_OPTIONS)
             ]
+            try:
+                from bodn.storage import save_settings
+
+                save_settings(self._settings)
+            except Exception:
+                pass
+            self._dirty = True
+            return
+        if key == "encoder_sensitivity":
+            opts = config.ENCODER_SENS_OPTIONS
+            cur = self._settings.get("encoder_sensitivity", config.ENCODER_SENS_DEFAULT)
+            idx = 0
+            for i in range(len(opts)):
+                if opts[i] == cur:
+                    idx = i
+                    break
+            self._settings["encoder_sensitivity"] = opts[(idx + 1) % len(opts)]
             try:
                 from bodn.storage import save_settings
 

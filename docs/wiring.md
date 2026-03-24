@@ -39,6 +39,9 @@ graph LR
     I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
     I2CbuspUEXTconnector -.- ESP
 
+    detentsperlogicalunit["detents per logical unit<br/><sub>GPIO 1 → ENCODER SENS OPTIONS 0<br/>GPIO 2 → ENCODER SENS OPTIONS 1<br/>GPIO 3 → ENCODER SENS OPTIONS 2<br/>GPIO 1 → ENCODER_SENS_DEFAULT</sub>"]
+    detentsperlogicalunit -.- ESP
+
 ```
 
 ### ILI9341 TFT
@@ -125,14 +128,23 @@ graph LR
 | I2C_SCL | 47 | `I2C_SCL` |
 | I2C_SDA | 48 | `I2C_SDA` |
 
+### detents per logical unit
+
+| Signal | GPIO | Config variable |
+|--------|------|-----------------|
+| ENCODER SENS OPTIONS 0 | 1 | `ENCODER_SENS_OPTIONS[0]` |
+| ENCODER SENS OPTIONS 1 | 2 | `ENCODER_SENS_OPTIONS[1]` |
+| ENCODER SENS OPTIONS 2 | 3 | `ENCODER_SENS_OPTIONS[2]` |
+| ENCODER_SENS_DEFAULT | 1 | `ENCODER_SENS_DEFAULT` |
+
 ### All GPIOs
 
 | GPIO | Component | Signal |
 |------|-----------|--------|
 | 0 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
-| 1 | ILI9341 TFT | BL |
-| 2 | INMP441 I2S microphone | SD |
-| 3 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 1 | detents per logical unit | ENCODER_SENS_DEFAULT |
+| 2 | detents per logical unit | ENCODER SENS OPTIONS 1 |
+| 3 | detents per logical unit | ENCODER SENS OPTIONS 2 |
 | 4 | The 144 LED/m strip runs around the inside of the translucent lid perimeter | PIN |
 | 5 | DevKit-Lipo on-board power monitoring | PWR_SENS_PIN |
 | 6 | DevKit-Lipo on-board power monitoring | BAT_SENS_PIN |
@@ -165,6 +177,10 @@ graph LR
 
 > **Pin conflicts detected:**
 > - **GPIO 40**: Rotary encoders — must stay on native GPIO for IRQ latency: SW / DS18B20 1-Wire temperature sensors: TEMP_WARN_C
+> - **GPIO 1**: ILI9341 TFT: BL / detents per logical unit: ENCODER SENS OPTIONS 0
+> - **GPIO 2**: INMP441 I2S microphone: SD / detents per logical unit: ENCODER SENS OPTIONS 1
+> - **GPIO 3**: Rotary encoders — must stay on native GPIO for IRQ latency: DT / detents per logical unit: ENCODER SENS OPTIONS 2
+> - **GPIO 1**: detents per logical unit: ENCODER SENS OPTIONS 0 / detents per logical unit: ENCODER_SENS_DEFAULT
 <!-- pinout:end -->
 
 ## Encoder roles and placement

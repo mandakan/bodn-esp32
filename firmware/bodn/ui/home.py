@@ -72,6 +72,9 @@ class HomeScreen(Screen):
         self._manager = manager
         self._rebuild_names()
         self._accum = 0
+        from bodn.config import encoder_dpu
+
+        self._dpu = encoder_dpu(self._settings)
         self._anim_step = _ANIM_STEPS
         self._dirty = True
 
@@ -87,13 +90,14 @@ class HomeScreen(Screen):
         else:
             self._accum += delta
         a = self._accum
-        if a >= _DPU:
-            units = a // _DPU
-            self._accum = a - units * _DPU
+        dpu = self._dpu
+        if a >= dpu:
+            units = a // dpu
+            self._accum = a - units * dpu
             return units
-        if a <= -_DPU:
-            units = -((-a) // _DPU)
-            self._accum = a - units * _DPU
+        if a <= -dpu:
+            units = -((-a) // dpu)
+            self._accum = a - units * dpu
             return units
         return 0
 
