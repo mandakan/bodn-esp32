@@ -101,7 +101,10 @@ class DemoScreen(Screen):
             if inp.btn_held[i] != self._prev_btn[i]:
                 self._prev_btn[i] = inp.btn_held[i]
                 self._dirty = True
-        for i in range(min(2, len(inp.sw))):
+        n_sw = min(2, len(inp.sw))
+        if not self._prev_sw and n_sw:
+            self._prev_sw = [False] * n_sw
+        for i in range(n_sw):
             if inp.sw[i] != self._prev_sw[i]:
                 self._prev_sw[i] = inp.sw[i]
                 self._dirty = True
