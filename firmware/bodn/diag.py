@@ -63,7 +63,21 @@ def gather(ip="0.0.0.0", boot_results=None, boot_steps=None):
     except Exception:
         pass
 
-    # IP
+    # IP — read live from network interface if no ip passed
+    if ip == "0.0.0.0":
+        try:
+            import network
+
+            for mode in (network.AP_IF, network.STA_IF):
+                wlan = network.WLAN(mode)
+                if wlan.active() and wlan.isconnected():
+                    ip = wlan.ifconfig()[0]
+                    break
+                if mode == network.AP_IF and wlan.active():
+                    ip = wlan.ifconfig()[0]
+                    break
+        except Exception:
+            pass
     info.append(("IP", ip))
 
     # Battery

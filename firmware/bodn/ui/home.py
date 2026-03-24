@@ -60,7 +60,7 @@ class HomeScreen(Screen):
         hidden_modes: list of mode names to hide from the carousel.
         Modes hidden here are still accessible via chord combos (e.g. settings).
         """
-        hidden = self._settings.get("hidden_modes", ["settings"])
+        hidden = self._settings.get("hidden_modes", [])
         self._names = [n for n in self._all_names if n not in hidden]
         # Clamp index
         if self._names:

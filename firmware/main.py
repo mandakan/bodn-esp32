@@ -268,19 +268,22 @@ def create_ui(
         "clock": lambda: (_reset_secondary(), ClockScreen(settings=settings))[1],
         "settings": _make_settings,
     }
+    mode_order = [
+        "mystery",
+        "simon",
+        "rulefollow",
+        "flode",
+        "garden",
+        "demo",
+        "clock",
+        "settings",
+    ]
+    # Expose mode list to web API (not persisted, runtime only)
+    settings["_all_modes"] = mode_order
     home = HomeScreen(
         mode_screens,
         session_mgr,
-        order=[
-            "mystery",
-            "simon",
-            "rulefollow",
-            "flode",
-            "garden",
-            "demo",
-            "clock",
-            "settings",
-        ],
+        order=mode_order,
         settings=settings,
     )
     manager.push(home)

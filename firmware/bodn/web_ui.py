@@ -139,6 +139,9 @@ th{color:#aaa}
 <div class="field"><label>Quiet start (HH:MM, empty=off)</label><input class="input-field" type="text" id="quiet_start" placeholder="21:00"></div>
 <div class="field"><label>Quiet end (HH:MM)</label><input class="input-field" type="text" id="quiet_end" placeholder="07:00"></div>
 <div class="field"><label>Device language</label><select id="language" class="input-field"><option value="sv">Svenska</option><option value="en">English</option></select></div>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Visible modes</h3>
+<p style="font-size:0.75em;color:#666;margin:4px 0">Toggle which modes appear in the main menu.</p>
+<div id="mode-vis"></div>
 <h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Per-mode limits</h3>
 <p style="font-size:0.75em;color:#666;margin:4px 0">Minutes per session. Empty = use global. 0 = unlimited.</p>
 <div id="mode-limits"></div>
@@ -262,18 +265,32 @@ var se=document.getElementById('sessions-enabled');if(se)se.checked=d.sessions_e
 updRv(document.getElementById('max_session_min'),'rv-sess',' min');
 updRv(document.getElementById('max_sessions_day'),'rv-maxs','');
 updRv(document.getElementById('break_min'),'rv-brk',' min');
-// Load mode limits
-var ml=d.mode_limits||{};
+// Load modes (visibility + limits) from API
+try{
+var mr=await fetch('/api/modes');var modes=await mr.json();
+var vc=document.getElementById('mode-vis');
 var mc=document.getElementById('mode-limits');
-if(mc){mc.innerHTML='';
-var modes=['free_play','sound_mixer','recorder','sequencer'];
-var names={'free_play':'Free Play','sound_mixer':'Sound Mixer','recorder':'Recorder','sequencer':'Sequencer'};
+var ml=d.mode_limits||{};
+if(vc)vc.innerHTML='';
+if(mc)mc.innerHTML='';
 modes.forEach(function(m){
-var row=document.createElement('div');row.className='mode-row';
-var v=ml[m];var val=(v!=null&&v!==undefined)?v:'';
-row.innerHTML='<label>'+names[m]+'</label><input type="number" min="0" id="ml_'+m+'" value="'+val+'" placeholder="--"><span class="hint">min</span>';
-mc.appendChild(row);
-});}
+// Visibility toggle
+if(vc){
+var row=document.createElement('div');row.className='toggle';
+var cb=document.createElement('input');cb.type='checkbox';cb.id='mv_'+m.name;cb.checked=m.visible;
+var lb=document.createElement('label');lb.textContent=m.name;
+row.appendChild(cb);row.appendChild(lb);vc.appendChild(row);
+}
+// Per-mode limit
+if(mc){
+var row2=document.createElement('div');row2.className='mode-row';
+var v=ml[m.name];var val=(v!=null&&v!==undefined)?v:'';
+row2.innerHTML='<label>'+m.name+'</label><input type="number" min="0" id="ml_'+m.name+'" value="'+val+'" placeholder="--"><span class="hint">min</span>';
+mc.appendChild(row2);
+}
+});
+window._modeNames=modes.map(function(m){return m.name});
+}catch(e){window._modeNames=[];}
 }catch(e){}
 }
 async function saveSettings(){
@@ -286,8 +303,16 @@ var v=document.getElementById(k).value.trim();
 body[k]=v||null;
 });
 var langEl=document.getElementById('language');if(langEl)body.language=langEl.value;
+// Collect hidden modes
+var hidden=[];
+(window._modeNames||[]).forEach(function(m){
+var cb=document.getElementById('mv_'+m);
+if(cb&&!cb.checked)hidden.push(m);
+});
+body.hidden_modes=hidden;
+// Collect per-mode limits
 var ml={};
-['free_play','sound_mixer','recorder','sequencer'].forEach(function(m){
+(window._modeNames||[]).forEach(function(m){
 var el=document.getElementById('ml_'+m);
 if(el&&el.value!=='')ml[m]=parseInt(el.value);
 });
