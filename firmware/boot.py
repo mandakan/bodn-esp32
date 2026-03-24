@@ -176,22 +176,22 @@ def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
         logo_scale = 3 if w >= 240 else 2
         logo_w = 16 * logo_scale
         logo_h = 16 * logo_scale
-        lx = (w - logo_w) // 2
-        ly = max(2, h // 16)
-        _draw_logo(tft, lx, ly, _LOGO_COLORS, scale=logo_scale)
-        # "Bodn" text below logo
+        # Center logo + name as a unit
         title = "Bodn"
-        tx = (w - len(title) * 8 * 2) // 2
+        title_w = len(title) * 8
+        block_h = logo_h + 4 + 8  # logo + gap + text height
+        ly = max(2, (h * 3 // 8 - block_h) // 2)
+        lx = (w - logo_w) // 2
+        _draw_logo(tft, lx, ly, _LOGO_COLORS, scale=logo_scale)
+        tx = (w - title_w) // 2
         _boot_text(tft, title, tx, ly + logo_h + 4, COL_TITLE)
-        # scale 2x title manually — use fill_rect per char pixel
-        # (too complex for boot, just use 1x below the logo)
     else:
         title = "~ Bodn ~"
         tx = (w - len(title) * 8) // 2
         _boot_text(tft, title, tx, h // 8, COL_TITLE)
 
-    # Whimsical message — centered below logo/title
-    msg_y = h * 3 // 8 + (8 if _draw_logo else 0)
+    # Whimsical message — centered
+    msg_y = h * 3 // 8 + (12 if _draw_logo else 0)
     mx = max(0, (w - len(message) * 8) // 2)
     _boot_text(tft, message, mx, msg_y, COL_WHITE)
 
