@@ -20,7 +20,7 @@ class EncoderAccumulator:
         fast_multiplier: detent scaling factor at high velocity.
     """
 
-    def __init__(self, detents_per_unit=2, fast_threshold=400, fast_multiplier=2):
+    def __init__(self, detents_per_unit=1, fast_threshold=400, fast_multiplier=2):
         self._dpu = detents_per_unit
         self._fast_thresh = fast_threshold
         self._fast_mult = fast_multiplier

@@ -15,7 +15,7 @@ _ANIM_STEPS = const(4)
 _ANIM_FRAC = (4, 3, 1, 0)  # multiplied by width//4
 
 # Accumulator settings
-_DPU = const(2)  # raw detents per unit (KY-040 dual-edge ≈ 2 per click)
+_DPU = const(1)  # raw detents per unit (1 per physical click)
 _FAST_THRESH = const(400)  # velocity threshold for fast multiplier
 _FAST_MULT = const(2)  # multiplier at high velocity
 
