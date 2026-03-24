@@ -60,14 +60,15 @@ def _ota_walk(stage_dir):
 
 async def _send(writer, status, content_type, body, extra_headers=None):
     """Send an HTTP response."""
+    body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
     writer.write("HTTP/1.0 {} OK\r\n".format(status).encode())
     writer.write("Content-Type: {}\r\n".format(content_type).encode())
-    writer.write("Content-Length: {}\r\n".format(len(body)).encode())
+    writer.write("Content-Length: {}\r\n".format(len(body_bytes)).encode())
     if extra_headers:
         for h in extra_headers:
             writer.write("{}\r\n".format(h).encode())
     writer.write(b"Connection: close\r\n\r\n")
-    writer.write(body if isinstance(body, bytes) else body.encode())
+    writer.write(body_bytes)
     await writer.drain()
 
 
