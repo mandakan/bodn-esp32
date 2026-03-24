@@ -15,7 +15,7 @@
       "id": "lcd",
       "top": -273.5,
       "left": 241.2,
-      "rotate": 90,
+      "rotate": 270,
       "attrs": { "rotate": "90" }
     },
     { "type": "wokwi-ili9341", "id": "lcd2", "top": -229.6, "left": 681.3, "attrs": {} },
@@ -143,11 +143,41 @@
       "left": 580,
       "attrs": { "color": "white", "label": "ARC 4" }
     },
-    { "type": "wokwi-led", "id": "arc_led0", "top": 470, "left": 318, "attrs": { "color": "yellow" } },
-    { "type": "wokwi-led", "id": "arc_led1", "top": 470, "left": 388, "attrs": { "color": "red" } },
-    { "type": "wokwi-led", "id": "arc_led2", "top": 470, "left": 458, "attrs": { "color": "blue" } },
-    { "type": "wokwi-led", "id": "arc_led3", "top": 470, "left": 528, "attrs": { "color": "green" } },
-    { "type": "wokwi-led", "id": "arc_led4", "top": 470, "left": 598, "attrs": { "color": "white" } },
+    {
+      "type": "wokwi-led",
+      "id": "arc_led0",
+      "top": 470,
+      "left": 318,
+      "attrs": { "color": "yellow" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "arc_led1",
+      "top": 470,
+      "left": 388,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "arc_led2",
+      "top": 470,
+      "left": 458,
+      "attrs": { "color": "blue" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "arc_led3",
+      "top": 470,
+      "left": 528,
+      "attrs": { "color": "green" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "arc_led4",
+      "top": 470,
+      "left": 598,
+      "attrs": { "color": "white" }
+    },
     {
       "type": "wokwi-led-strip",
       "id": "stickA",
