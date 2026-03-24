@@ -46,7 +46,7 @@ class SimonScreen(Screen):
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = SimonEngine()
-        self._brightness = BrightnessControl()
+        self._brightness = BrightnessControl(settings=settings)
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._prev_state = None

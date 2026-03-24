@@ -82,12 +82,12 @@ class FlodeScreen(Screen):
         self._engine = FlodeEngine(rand_fn=_rand)
 
         # Brightness and encoder accumulators
-        self._brightness = BrightnessControl()
+        self._brightness = BrightnessControl(settings=settings)
         self._select_acc = EncoderAccumulator(
-            detents_per_unit=2, fast_threshold=300, fast_multiplier=2
+            settings=settings, fast_threshold=300, fast_multiplier=2
         )
         self._shift_acc = EncoderAccumulator(
-            detents_per_unit=3, fast_threshold=400, fast_multiplier=2
+            settings=settings, fast_threshold=400, fast_multiplier=2
         )
 
         # Animation state per segment: (start_y, target_y, step)

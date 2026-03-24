@@ -40,7 +40,7 @@ class DemoScreen(Screen):
     def __init__(self, np, overlay, settings=None):
         self._np = np
         self._overlay = overlay
-        self._brightness = BrightnessControl()
+        self._brightness = BrightnessControl(settings=settings)
         self._active_pattern = 0
         self._manager = None
         self._pause = PauseMenu(settings=settings)

@@ -78,9 +78,9 @@ class BrightnessControl:
         step: brightness change per logical encoder unit.
     """
 
-    def __init__(self, initial=128, minimum=10, maximum=255, step=20):
+    def __init__(self, initial=128, minimum=10, maximum=255, step=20, settings=None):
         self._acc = EncoderAccumulator(
-            detents_per_unit=3, fast_threshold=400, fast_multiplier=3
+            settings=settings, fast_threshold=400, fast_multiplier=3
         )
         self._value = initial
         self._min = minimum

@@ -87,18 +87,17 @@ class GardenScreen(Screen):
         self._settings = settings or {}
         self._manager = None
         self._pause = PauseMenu(settings=settings)
-        self._brightness = BrightnessControl()
+        self._brightness = BrightnessControl(settings=settings)
 
         # Speed control via ENC_A
         self._speed_acc = EncoderAccumulator(
-            detents_per_unit=2, fast_threshold=400, fast_multiplier=3
+            settings=settings, fast_threshold=400, fast_multiplier=3
         )
         self._speed_ms = SPEED_DEFAULT_MS
 
-        # Cursor control via ENC_B — higher dpu filters encoder jitter,
-        # high fast_multiplier lets fast spins scan the grid quickly
+        # Cursor control via ENC_B — fast_multiplier lets fast spins scan quickly
         self._cursor_acc = EncoderAccumulator(
-            detents_per_unit=3, fast_threshold=300, fast_multiplier=5
+            settings=settings, fast_threshold=300, fast_multiplier=5
         )
         self._cursor_pos = 0  # flat index 0..(GRID_W*GRID_H-1)
         self._cursor_color = 1  # last-used color index (1-indexed)

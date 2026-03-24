@@ -29,9 +29,9 @@ class MysteryScreen(Screen):
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = MysteryEngine()
-        self._brightness = BrightnessControl()
+        self._brightness = BrightnessControl(settings=settings)
         self._hue_acc = EncoderAccumulator(
-            detents_per_unit=2, fast_threshold=400, fast_multiplier=4
+            settings=settings, fast_threshold=400, fast_multiplier=4
         )
         self._hue = 0
         self._manager = None
