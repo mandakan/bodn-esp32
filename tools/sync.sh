@@ -5,6 +5,27 @@ set -euo pipefail
 
 MPREMOTE="uv run mpremote connect auto"
 
+# Stop running code and show sync message on display
+echo "Preparing device..."
+$MPREMOTE exec "
+import machine
+try:
+    from machine import Pin, SPI
+    from st7735 import ST7735
+    from bodn import config
+    spi = SPI(1, baudrate=26_000_000, sck=Pin(config.TFT_SCK), mosi=Pin(config.TFT_MOSI))
+    tft = ST7735(spi, cs=Pin(config.TFT_CS, Pin.OUT), dc=Pin(config.TFT_DC, Pin.OUT), rst=Pin(config.TFT_RST, Pin.OUT), width=config.TFT_WIDTH, height=config.TFT_HEIGHT, col_offset=config.TFT_COL_OFFSET, row_offset=config.TFT_ROW_OFFSET, madctl=config.TFT_MADCTL, skip_reset=True)
+    bl = Pin(config.TFT_BL, Pin.OUT)
+    bl.value(1)
+    tft.fill(0)
+    cx = (config.TFT_WIDTH - 11 * 8) // 2
+    cy = config.TFT_HEIGHT // 2 - 4
+    tft.text('Syncing ...', cx, cy, 0x07E0)
+    tft.show()
+except Exception as e:
+    print('Display msg failed:', e)
+" 2>/dev/null || true
+
 if [ "${1:-}" = "--clean" ]; then
     echo "Wiping device filesystem..."
     $MPREMOTE exec "

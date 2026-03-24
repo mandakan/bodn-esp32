@@ -72,6 +72,7 @@ class PowerManager:
         self._np = np
         self._mcp = mcp
         self._bl_pin = None
+        self._master_sw_seen = False  # only sleep after switch toggled ON first
 
     def pre_sleep(self):
         """Turn off power-hungry peripherals before entering light sleep."""
@@ -138,13 +139,26 @@ class PowerManager:
         self._bl_pin.value(1)
 
     def master_switch_off(self):
-        """Return True if the master switch is in the OFF position (high = off)."""
+        """Return True if the master switch is in the OFF position.
+
+        The switch is active-low: 0 = ON, 1 = OFF.
+        With MCP23017 pull-ups enabled, an unconnected pin reads 1 (high).
+        To avoid false sleep when the switch isn't wired, we require the pin
+        to be explicitly pulled low (grounded) to register as ON, and only
+        treat it as OFF if we see a transition from ON to OFF (not on startup).
+        """
         if not self._mcp:
-            return False  # assume device ON when MCP is absent
+            return False
         from bodn import config
 
         self._mcp.refresh()
-        return self._mcp.pin_value(config.MCP_MASTER_SW_PIN) == 1
+        pin_val = self._mcp.pin_value(config.MCP_MASTER_SW_PIN)
+        # If we've never seen the switch in the ON position, don't sleep
+        if not self._master_sw_seen:
+            if pin_val == 0:
+                self._master_sw_seen = True
+            return False
+        return pin_val == 1
 
     def sleep_and_wake(self):
         """Full sleep cycle: pre_sleep → lightsleep → post_wake."""

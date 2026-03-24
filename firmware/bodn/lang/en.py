@@ -140,5 +140,6 @@ STRINGS = {
     "boot_cfg": "Waking up...",
     "boot_net": "Finding friends...",
     "boot_ntp": "What time is it?",
+    "boot_bat": "Checking battery...",
     "boot_go": "Let's go!",
 }

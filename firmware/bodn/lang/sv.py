@@ -140,5 +140,6 @@ STRINGS = {
     "boot_cfg": "Vaknar...",
     "boot_net": "Söker vänner...",
     "boot_ntp": "Vilken tid är det?",
+    "boot_bat": "Kollar batteriet...",
     "boot_go": "Nu kör vi!",
 }

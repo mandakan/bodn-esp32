@@ -90,6 +90,7 @@ STEPS = [
     ("CFG", "boot_cfg", (80, 40, 120)),
     ("NET", "boot_net", (0, 120, 200)),
     ("NTP", "boot_ntp", (200, 120, 0)),
+    ("BAT", "boot_bat", (200, 60, 0)),
     ("GO!", "boot_go", (0, 200, 80)),
 ]
 
@@ -293,9 +294,43 @@ ntp_col = COL_GREEN if _results[2] == "ok" else COL_AMBER
 _show_progress(3, STEPS[2][1], STEPS[2][2], detail=ntp_detail, detail_col=ntp_col)
 time.sleep(0.5)
 
-# --- Step 3: Ready! ---
-_results[3] = "ok"
-_show_progress(4, STEPS[3][1], STEPS[3][2], detail="IP: " + ip, detail_col=COL_WHITE)
+# --- Step 3: Battery check ---
+_show_progress(3, STEPS[3][1], STEPS[3][2])
+
+try:
+    from machine import ADC
+
+    _bat_adc = ADC(Pin(config.BAT_SENS_PIN))
+    _bat_adc.atten(ADC.ATTN_11DB)
+    _bat_adc.width(ADC.WIDTH_12BIT)
+    _bat_mv = _bat_adc.read_uv() // 1000 * 2  # voltage divider ×2
+    _bat_adc = None
+    if _bat_mv > 3000:
+        _results[3] = "ok"
+        _bat_detail = "{}mV".format(_bat_mv)
+        _bat_col = COL_GREEN
+    elif _bat_mv > 0:
+        _results[3] = "warn"
+        _bat_detail = "LOW {}mV".format(_bat_mv)
+        _bat_col = COL_AMBER
+    else:
+        # No battery — USB powered
+        _results[3] = "ok"
+        _bat_detail = "USB"
+        _bat_col = COL_GREEN
+except Exception as e:
+    print("Battery check failed:", e)
+    _results[3] = "skip"
+    _bat_detail = "N/A"
+    _bat_col = COL_AMBER
+
+print("BOOT [BAT]", _results[3], _bat_detail)
+_show_progress(4, STEPS[3][1], STEPS[3][2], detail=_bat_detail, detail_col=_bat_col)
+time.sleep(0.5)
+
+# --- Step 4: Ready! ---
+_results[4] = "ok"
+_show_progress(5, STEPS[4][1], STEPS[4][2], detail="IP: " + ip, detail_col=COL_WHITE)
 
 # --- Diagnostic boot screen (hold NAV encoder button to activate) ---
 if _diag_requested and tft:

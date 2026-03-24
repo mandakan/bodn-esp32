@@ -166,14 +166,23 @@ class SettingsScreen(Screen):
         landscape = w > h
 
         # Title
+        title_h = 28 if landscape else 24
         draw_centered(tft, t("settings_title"), 8, theme.WHITE, w, scale=2)
 
-        # Menu items
-        y_start = 40 if landscape else 30
+        # Menu items — scroll to keep selection centered
         row_h = 24 if landscape else 20
+        menu_h = h - title_h - 4  # available height for menu items
+        visible = menu_h // row_h  # how many items fit on screen
 
-        for i, (key, label_key, item_type) in enumerate(_ITEMS):
-            y = y_start + i * row_h
+        # Calculate scroll offset to center the selected item
+        n = len(_ITEMS)
+        half = visible // 2
+        scroll = self._index - half
+        scroll = max(0, min(scroll, n - visible))
+
+        for i in range(scroll, min(scroll + visible, n)):
+            key, label_key, item_type = _ITEMS[i]
+            y = title_h + (i - scroll) * row_h
             selected = i == self._index
 
             # Highlight bar for selected item
@@ -201,3 +210,9 @@ class SettingsScreen(Screen):
                 val_str = str(self._get_value(key))
                 tx = w - 8 - len(val_str) * 8
                 tft.text(val_str, tx, y + 2, theme.WHITE if selected else theme.MUTED)
+
+        # Scroll indicators
+        if scroll > 0:
+            draw_centered(tft, "^", title_h - 10, theme.MUTED, w)
+        if scroll + visible < n:
+            draw_centered(tft, "v", h - 12, theme.MUTED, w)

@@ -109,7 +109,7 @@ I2C_SCL = const(47)
 I2C_SDA = const(48)
 
 # MCP23017 GPIO expander — buttons and toggles over I2C
-MCP23017_ADDR = const(0x20)  # A0-A2 jumpers all low
+MCP23017_ADDR = const(0x27)  # A0-A2 jumpers all high (Waveshare default)
 MCP_INT_PIN = const(46)  # MCP23017 INTA/INTB → GPIO 46 (active-low, open-drain)
 MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
 MCP_SW_PINS = [8, 9]  # GPB0–GPB1 (2 toggle switches; GPB2–3 freed for arcade)
