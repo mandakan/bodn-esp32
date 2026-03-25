@@ -65,11 +65,13 @@ The secondary display shares SCK, MOSI, DC, and RST with the primary. Only CS is
 
 ### MAX98357A Amplifier (I2S OUT)
 
-| Signal | GPIO |
-|--------|------|
-| BCLK | 13 |
-| LRCLK (WS) | 45 |
-| DIN | 5 |
+| Signal | Connection |
+|--------|------------|
+| BCLK | GPIO 13 |
+| LRCLK (WS) | GPIO 45 |
+| DIN | GPIO 7 |
+| SD | PCA9685 CH6 (software mute; add 100kΩ pull-down to GND for clean boot) |
+| GAIN | floating (9dB default) |
 
 ### Buttons (MCP23017)
 
