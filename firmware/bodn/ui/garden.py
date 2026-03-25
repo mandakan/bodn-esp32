@@ -7,11 +7,11 @@
 # Hardware mapping:
 #   Buttons 0–7: plant a flower of that color at the cursor position
 #                (also plants at the matching garden plot for quick seeding).
-#   ENC_A rotation: generation speed (slow ↔ fast).
-#   ENC_A button: toggle run/pause.
-#   ENC_B rotation: move cursor across the grid.
-#   ENC_B button: toggle cell at cursor (plant/remove).
-#   Toggle SW0: normal vs. friendly rules.
+#   NAV rotation: move cursor X (horizontal).
+#   NAV tap: toggle cell at cursor (plant/remove).
+#   ENC_A rotation: move cursor Y (vertical).
+#   ENC_A button: toggle run/pause evolution.
+#   Toggle SW0: slow vs. fast generation speed.
 #   Toggle SW1: wrap-around edges vs. walls.
 
 from micropython import const
@@ -75,8 +75,9 @@ _GRID_TOTAL = const(192)  # GRID_W * GRID_H
 class GardenScreen(Screen):
     """Garden of Life — cellular automata reimagined as a garden.
 
-    Turn ENC_B to move the cursor, press any colored button to plant.
-    Hold nav encoder button to open the pause menu (resume / back to menu).
+    NAV rotates cursor X, ENC_A rotates cursor Y.
+    NAV tap toggles cell, ENC_A button starts/stops evolution.
+    Hold nav encoder button to open the pause menu.
     """
 
     def __init__(self, np, overlay, settings=None, secondary_screen=None, on_exit=None):
@@ -89,17 +90,15 @@ class GardenScreen(Screen):
         self._pause = PauseMenu(settings=settings)
         self._brightness = BrightnessControl(settings=settings)
 
-        # Speed control via ENC_A
-        self._speed_acc = EncoderAccumulator(
-            settings=settings, fast_threshold=400, fast_multiplier=3
+        # Cursor X via NAV, Y via ENC_A
+        self._cursor_x_acc = EncoderAccumulator(
+            settings=settings, fast_threshold=300, fast_multiplier=3
         )
-        self._speed_ms = SPEED_DEFAULT_MS
-
-        # Cursor control via ENC_B — fast_multiplier lets fast spins scan quickly
-        self._cursor_acc = EncoderAccumulator(
-            settings=settings, fast_threshold=300, fast_multiplier=5
+        self._cursor_y_acc = EncoderAccumulator(
+            settings=settings, fast_threshold=300, fast_multiplier=3
         )
-        self._cursor_pos = 0  # flat index 0..(GRID_W*GRID_H-1)
+        self._cursor_x = 0
+        self._cursor_y = 0
         self._cursor_color = 1  # last-used color index (1-indexed)
         self._prev_cursor_pos = -1  # last rendered cursor position (for erase)
 
@@ -123,8 +122,13 @@ class GardenScreen(Screen):
         self._wrap = False
 
     def _cursor_xy(self):
-        """Convert flat cursor position to (x, y)."""
-        return self._cursor_pos % GRID_W, self._cursor_pos // GRID_W
+        """Return current cursor (x, y)."""
+        return self._cursor_x, self._cursor_y
+
+    @property
+    def _cursor_pos(self):
+        """Flat index for backward compat."""
+        return self._cursor_y * GRID_W + self._cursor_x
 
     def enter(self, manager):
         self._manager = manager
@@ -163,42 +167,39 @@ class GardenScreen(Screen):
 
         # Read toggle switches
         prev_mods = (self._friendly, self._wrap)
-        self._friendly = inp.sw[0] if len(inp.sw) > 0 else False
+        # SW0: slow/fast speed toggle
+        fast = inp.sw[0] if len(inp.sw) > 0 else False
+        self._speed_ms = SPEED_MIN_MS if fast else SPEED_DEFAULT_MS
+        # SW1: wrap-around edges
         self._wrap = inp.sw[1] if len(inp.sw) > 1 else False
+        self._friendly = not fast  # friendly rules when slow
         new_mods = (self._friendly, self._wrap)
         if new_mods != prev_mods:
             self._dirty = True
             self._full_redraw = True
 
-        # Speed control via ENC_A
-        speed_units = self._speed_acc.update(
+        # Cursor X via NAV encoder
+        x_units = self._cursor_x_acc.update(
+            inp.enc_delta[config.ENC_NAV], inp.enc_velocity[config.ENC_NAV]
+        )
+        if x_units:
+            self._cursor_x = (self._cursor_x + x_units) % GRID_W
+            self._dirty = True
+
+        # Cursor Y via ENC_A encoder
+        y_units = self._cursor_y_acc.update(
             inp.enc_delta[config.ENC_A], inp.enc_velocity[config.ENC_A]
         )
-        if speed_units:
-            self._speed_ms = max(
-                SPEED_MIN_MS,
-                min(SPEED_MAX_MS, self._speed_ms - speed_units * SPEED_STEP_MS),
-            )
+        if y_units:
+            self._cursor_y = (self._cursor_y + y_units) % GRID_H
             self._dirty = True
 
-        # Cursor movement via ENC_B
-        cursor_units = self._cursor_acc.update(
-            inp.enc_delta[config.ENC_B], inp.enc_velocity[config.ENC_B]
-        )
-        if cursor_units:
-            self._cursor_pos = (self._cursor_pos + cursor_units) % _GRID_TOTAL
-            self._dirty = True
-
-        # Brightness via ENC_A button (cycle through levels)
+        # ENC_A button: toggle run/pause evolution
         if inp.enc_btn_pressed[config.ENC_A]:
-            bri = self._brightness.value
-            if bri < 80:
-                self._brightness.reset(value=128)
-            elif bri < 200:
-                self._brightness.reset(value=255)
-            else:
-                self._brightness.reset(value=40)
-            self._leds_dirty = True
+            self._running = not self._running
+            if self._running:
+                self._last_step_ms = now
+            self._dirty = True
 
         # Button presses — plant at cursor AND at garden plot
         btn = inp.first_btn_pressed()
@@ -221,24 +222,16 @@ class GardenScreen(Screen):
             self._dirty = True
             self._leds_dirty = True
             self._population = population(self._grid)
-            # Reset step timer so child has time to add more
-            self._last_step_ms = now
-            # Auto-start once enough seeds are planted
-            if not self._running and self._population >= AUTO_START_CELLS:
-                self._running = True
 
         # NAV button tap: toggle cell at cursor (plant/remove)
         # Uses gesture tap (not enc_btn_pressed) to avoid triggering hold-to-pause
-        if inp.gestures.tap[inp.gesture_enc(config.ENC_B)]:
+        if inp.gestures.tap[inp.gesture_enc(config.ENC_NAV)]:
             cx, cy = self._cursor_xy()
             toggle(self._grid, cx, cy, GRID_W, self._cursor_color)
             self._dirty_cells.add((cx, cy))
             self._dirty = True
             self._leds_dirty = True
             self._population = population(self._grid)
-            self._last_step_ms = now
-            if not self._running and self._population >= AUTO_START_CELLS:
-                self._running = True
 
         # Evolution tick
         if self._running and time.ticks_diff(now, self._last_step_ms) >= self._speed_ms:
