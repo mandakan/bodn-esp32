@@ -19,6 +19,7 @@ _ITEMS = [
     ("language", "pause_lang", "lang"),
     ("debug_input", "settings_debug", "bool"),
     ("debug_perf", "settings_perf", "bool"),
+    ("admin_url", "settings_admin", "action"),
     ("standby", "settings_standby", "action"),
     ("diag", "settings_diag", "action"),
     ("back", "settings_back", "action"),
@@ -77,6 +78,12 @@ class SettingsScreen(Screen):
         if key == "back":
             if self._manager:
                 self._manager.pop()
+            return
+        if key == "admin_url":
+            if self._manager:
+                from bodn.ui.admin_qr import AdminQRScreen
+
+                self._manager.push(AdminQRScreen(self._settings))
             return
         if key == "diag":
             if self._manager:

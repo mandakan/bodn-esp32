@@ -30,6 +30,8 @@ STRINGS = {
     "settings_diag": "Diagnostics",
     "settings_sleep": "Sleep timer",
     "settings_encoder": "Sensitivity",
+    "settings_admin": "Show admin URL",
+    "admin_back": "Press to go back",
     "settings_standby": "Standby now",
     "sleep_min": "{} min",
     "sens_high": "High",

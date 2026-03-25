@@ -30,6 +30,8 @@ STRINGS = {
     "settings_diag": "Diagnostik",
     "settings_sleep": "Vilotimer",
     "settings_encoder": "Känslighet",
+    "settings_admin": "Visa admin-URL",
+    "admin_back": "Tryck för att gå tillbaka",
     "settings_standby": "Viloläge nu",
     "sleep_min": "{} min",
     "sens_high": "Hög",
