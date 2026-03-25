@@ -30,7 +30,7 @@ CH_SFX = const(1)
 CH_UI = const(2)
 CHANNEL_NAMES = {"music": CH_MUSIC, "sfx": CH_SFX, "ui": CH_UI}
 
-_BUF_SIZE = const(1024)  # bytes per audio buffer
+_BUF_SIZE = const(2048)  # bytes per stereo audio buffer (1024 mono → 2048 stereo)
 
 
 def _apply_volume_py(buf, n_bytes, mult):
@@ -134,6 +134,8 @@ class AudioEngine:
     def __init__(self, i2s):
         self._i2s = i2s
         self._channels = [_Channel() for _ in range(3)]
+        # Mono sources write into _mono_buf; _buf holds stereo-expanded output
+        self._mono_buf = bytearray(_BUF_SIZE // 2)
         self._buf = bytearray(_BUF_SIZE)
         self._buf_view = memoryview(self._buf)
         self._silence = bytes(_BUF_SIZE)
@@ -204,15 +206,39 @@ class AudioEngine:
                 return idx
         return -1
 
+    @staticmethod
+    def _mono_to_stereo(mono, stereo, n_mono_bytes):
+        """Duplicate each 16-bit mono sample into L+R stereo frames.
+
+        Reads n_mono_bytes from mono, writes n_mono_bytes*2 to stereo.
+        Iterates backwards so mono and stereo can overlap (mono at start of stereo).
+        """
+        # Each mono sample is 2 bytes; each stereo frame is 4 bytes (L+R)
+        i = n_mono_bytes - 2
+        j = (n_mono_bytes - 2) * 2
+        while i >= 0:
+            lo = mono[i]
+            hi = mono[i + 1]
+            # Left channel
+            stereo[j] = lo
+            stereo[j + 1] = hi
+            # Right channel (same sample)
+            stereo[j + 2] = lo
+            stereo[j + 3] = hi
+            i -= 2
+            j -= 4
+
     async def start(self):
         """Background audio loop — add to asyncio.gather()."""
         # Cache attributes as locals — avoids dict lookups each iteration
+        mono_buf = self._mono_buf
         buf = self._buf
         buf_view = self._buf_view
         i2s = self._i2s
         channels = self._channels
         silence = self._silence
         sleep_ms = asyncio.sleep_ms
+        mono_to_stereo = self._mono_to_stereo
 
         while True:
             ch_idx = self._active_channel()
@@ -226,7 +252,7 @@ class AudioEngine:
             ch = channels[ch_idx]
             n = 0
             try:
-                n = ch.source.read_chunk(buf)
+                n = ch.source.read_chunk(mono_buf)
             except Exception as e:
                 print("audio read error:", e)
                 ch.stop()
@@ -240,10 +266,12 @@ class AudioEngine:
                     ch.stop()
                     continue
 
-            self._apply_volume(buf, n)
+            self._apply_volume(mono_buf, n)
+            # Expand mono → stereo (duplicate each sample to L+R)
+            mono_to_stereo(mono_buf, buf, n)
+            stereo_n = n * 2
             try:
-                # memoryview slice avoids allocating a new bytes object
-                i2s.write(buf_view[:n])
+                i2s.write(buf_view[:stereo_n])
             except Exception as e:
                 print("audio write error:", e)
 

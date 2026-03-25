@@ -155,9 +155,9 @@ def create_hardware():
             sd=Pin(config.I2S_SPK_DIN),
             mode=I2S.TX,
             bits=16,
-            format=I2S.MONO,
+            format=I2S.STEREO,
             rate=16000,
-            ibuf=2048,
+            ibuf=4096,
         )
         from bodn.audio import AudioEngine
 
