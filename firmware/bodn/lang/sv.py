@@ -146,6 +146,18 @@ STRINGS = {
     "temp_warn": "VARMT!",
     "temp_critical": "FÖR VARMT!",
     "temp_cooling": "Kyler ner...",
+    # Soundboard mode
+    "mode_soundboard": "ljudbräda",
+    "sb_bank": "Bank {}",
+    "sb_sound": "Ljud {}",
+    "sb_extra": "Extra {}",
+    "sb_volume": "Vol {}",
+    "sb_muted": "TYST",
+    "sb_bank_0": "Bank 1",
+    "sb_bank_1": "Bank 2",
+    "sb_bank_2": "Bank 3",
+    "sb_bank_3": "Bank 4",
+    "sb_empty": "tom",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_net": "Söker vänner...",

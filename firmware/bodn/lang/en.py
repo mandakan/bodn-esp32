@@ -146,6 +146,18 @@ STRINGS = {
     "temp_warn": "WARM!",
     "temp_critical": "TOO HOT!",
     "temp_cooling": "Cooling down...",
+    # Soundboard mode
+    "mode_soundboard": "soundboard",
+    "sb_bank": "Bank {}",
+    "sb_sound": "Sound {}",
+    "sb_extra": "Extra {}",
+    "sb_volume": "Vol {}",
+    "sb_muted": "MUTED",
+    "sb_bank_0": "Bank 1",
+    "sb_bank_1": "Bank 2",
+    "sb_bank_2": "Bank 3",
+    "sb_bank_3": "Bank 4",
+    "sb_empty": "empty",
     # Boot screen
     "boot_cfg": "Waking up...",
     "boot_net": "Finding friends...",

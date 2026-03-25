@@ -17,6 +17,16 @@ class Screen:
         """Called when this screen is removed from the stack."""
         pass
 
+    def on_reveal(self):
+        """Called when this screen becomes active again because the screen above it was popped.
+
+        The default implementation resets _full_clear (if present) so that the
+        first render after returning is a full redraw. Override for additional
+        state that needs resetting on reveal.
+        """
+        if hasattr(self, "_full_clear"):
+            self._full_clear = True
+
     def update(self, inp, frame):
         """Process input and update state. Called every frame."""
         pass
@@ -114,11 +124,12 @@ class ScreenManager:
         screen = self._stack.pop()
         screen.exit()
         self._dirty = True
-        # Mark the newly-revealed screen as needing a redraw
+        # Notify the newly-revealed screen so it can reset partial-draw state
         if self._stack:
             revealed = self._stack[-1]
             if hasattr(revealed, "_dirty"):
                 revealed._dirty = True
+            revealed.on_reveal()
         return screen
 
     def replace(self, screen):
@@ -143,6 +154,9 @@ class ScreenManager:
         active = self.active
         if active:
             active.update(self.inp, self._frame)
+
+        # Re-read: update() may have pushed or popped screens
+        active = self.active
 
         if self._overlay:
             self._overlay.update(self.inp, self._frame)
