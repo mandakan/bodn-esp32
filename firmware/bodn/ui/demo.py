@@ -176,6 +176,9 @@ class DemoScreen(Screen):
             self._pause.render(tft, theme, frame)
             return
 
+        if not self._dirty:
+            self._pause.render(tft, theme, frame)
+            return
         self._dirty = False
         tft.fill(theme.BLACK)
         landscape = theme.width > theme.height
