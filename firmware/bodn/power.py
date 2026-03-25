@@ -134,10 +134,13 @@ class PowerManager:
             self._mcp.clear_interrupts()
             self._mcp.disable_interrupts()
 
-        # Wake displays (SLPOUT)
-        self._tft._cmd(0x11)
-        self._tft2._cmd(0x11)
-        time.sleep_ms(120)  # displays need ~120 ms after SLPOUT
+        # Reinitialize displays — lightsleep can lose SPI/display state
+        self._tft._init_display(skip_reset=False)
+        self._tft2._init_display(skip_reset=True)
+
+        # Restore backlight
+        self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
+        self._bl_pin.value(1)
 
         # Restore backlight
         self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
