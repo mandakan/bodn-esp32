@@ -139,6 +139,7 @@ th{color:#aaa}
 <div class="field"><label>Quiet start (HH:MM, empty=off)</label><input class="input-field" type="text" id="quiet_start" placeholder="21:00"></div>
 <div class="field"><label>Quiet end (HH:MM)</label><input class="input-field" type="text" id="quiet_end" placeholder="07:00"></div>
 <div class="field"><label>Device language</label><select id="language" class="input-field"><option value="sv">Svenska</option><option value="en">English</option></select></div>
+<div class="field"><label>Timezone (UTC offset, DST added automatically)</label><select id="tz_offset" class="input-field"></select></div>
 <h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Audio</h3>
 <div class="field"><label>Sound enabled</label><select id="audio_enabled" class="input-field"><option value="true">On</option><option value="false">Off</option></select></div>
 <div class="field"><label>Volume <span class="rv" id="rv-vol">30%</span></label><input type="range" id="volume" min="0" max="100" step="5" value="30" oninput="updRv(this,'rv-vol','%')"></div>
@@ -259,12 +260,16 @@ sa.style.background=sev?'#e94560':'#f39c12';sa.style.color=sev?'#fff':'#000';}
 async function loadSettings(){
 try{
 var r=await fetch('/api/settings');var d=await r.json();
+// Build timezone select options
+var tzEl=document.getElementById('tz_offset');
+if(tzEl&&!tzEl.options.length){for(var o=-12;o<=14;o++){var op=document.createElement('option');op.value=o;op.textContent='UTC'+(o>=0?'+':'')+o;tzEl.appendChild(op);}}
 ['max_session_min','max_sessions_day','break_min','volume'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k];
 });
 ['quiet_start','quiet_end','wifi_ssid','wifi_pass','wifi_mode','ui_pin','ota_token','language','hostname'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k]||'';
 });
+if(tzEl&&d.tz_offset!=null)tzEl.value=d.tz_offset;
 var se=document.getElementById('sessions-enabled');if(se)se.checked=d.sessions_enabled!==false;
 var ae=document.getElementById('audio_enabled');if(ae)ae.value=d.audio_enabled===false?'false':'true';
 updRv(document.getElementById('max_session_min'),'rv-sess',' min');
@@ -309,6 +314,7 @@ var v=document.getElementById(k).value.trim();
 body[k]=v||null;
 });
 var langEl=document.getElementById('language');if(langEl)body.language=langEl.value;
+var tzEl2=document.getElementById('tz_offset');if(tzEl2)body.tz_offset=parseInt(tzEl2.value);
 var aeEl=document.getElementById('audio_enabled');if(aeEl)body.audio_enabled=aeEl.value==='true';
 var volEl=document.getElementById('volume');if(volEl)body.volume=parseInt(volEl.value);
 // Collect hidden modes

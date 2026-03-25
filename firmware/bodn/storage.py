@@ -29,6 +29,7 @@ DEFAULT_SETTINGS = {
     "debug_input": False,
     "language": "sv",
     "sleep_timeout_s": 300,
+    "tz_offset": 1,
 }
 
 # Keep 7 days of session history
