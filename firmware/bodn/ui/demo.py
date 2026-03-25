@@ -1,6 +1,5 @@
 # bodn/ui/demo.py — LED playground (Demo mode screen)
 
-from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
