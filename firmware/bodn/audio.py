@@ -131,8 +131,15 @@ class AudioEngine:
         audio.boop()                    # quick UI feedback tone
     """
 
-    def __init__(self, i2s):
+    def __init__(self, i2s, amp_enable=None):
+        """Create the audio engine.
+
+        amp_enable: optional callable to unmute the amplifier.
+        Called once after the first silence write so the amp never
+        hears noise from unconfigured I2S pins during boot.
+        """
         self._i2s = i2s
+        self._amp_enable = amp_enable
         self._channels = [_Channel() for _ in range(3)]
         # Mono sources write into _mono_buf; _buf holds stereo-expanded output
         self._mono_buf = bytearray(_BUF_SIZE // 2)
@@ -182,7 +189,7 @@ class AudioEngine:
 
     def boop(self):
         """Quick UI feedback beep."""
-        self.tone(440, 80, "square", "ui")
+        self.tone(440, 150, "square", "ui")
 
     def stop(self, channel=None):
         """Stop playback on a channel, or all channels if None."""
@@ -239,6 +246,12 @@ class AudioEngine:
         silence = self._silence
         sleep_ms = asyncio.sleep_ms
         mono_to_stereo = self._mono_to_stereo
+
+        # Prime the I2S DMA with silence, then unmute the amp
+        i2s.write(silence)
+        if self._amp_enable:
+            self._amp_enable()
+            print("Amplifier enabled")
 
         while True:
             ch_idx = self._active_channel()

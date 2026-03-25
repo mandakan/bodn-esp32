@@ -108,8 +108,8 @@ def create_hardware():
         pwm = PCA9685(i2c, config.PCA9685_ADDR)
         pwm.set_freq(1000)
         hw_status["pca"] = True
-        # Enable amplifier by default (SD pin high = on)
-        pwm.set_duty(config.PWM_CH_AMP_SD, 4095)
+        # Keep amp in shutdown until AudioEngine is running (avoids boot static)
+        pwm.set_duty(config.PWM_CH_AMP_SD, 0)
     except Exception as e:
         print("PCA9685 not found, PWM dimming disabled:", e)
 
@@ -161,7 +161,11 @@ def create_hardware():
         )
         from bodn.audio import AudioEngine
 
-        audio = AudioEngine(i2s)
+        def _enable_amp():
+            if pwm:
+                pwm.set_duty(config.PWM_CH_AMP_SD, 4095)
+
+        audio = AudioEngine(i2s, amp_enable=_enable_amp)
         hw_status["audio"] = True
         print("AudioEngine initialised (I2S TX)")
     except Exception as e:
