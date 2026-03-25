@@ -52,7 +52,7 @@ if _has_viper:
     @micropython.viper
     def _apply_volume_viper(buf_ptr, n_bytes: int, mult: int):
         """Scale int16 samples in-place — viper-emitted for ~10-20x speedup."""
-        p = ptr8(buf_ptr)
+        p = ptr8(buf_ptr)  # noqa: F821 — viper builtin
         i = 0
         while i < n_bytes:
             lo = int(p[i])
