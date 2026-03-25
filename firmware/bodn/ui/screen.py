@@ -192,7 +192,8 @@ class ScreenManager:
         if self._overlay:
             self._overlay.render(self.tft, self.theme, self._frame)
 
-        self.tft.show()
+        # Push only the dirty region to the display (auto-tracked by ST7735)
+        self.tft.show_dirty()
 
         if self.debug_perf:
             self._perf_total += 1

@@ -58,6 +58,9 @@ class ST7735(framebuf.FrameBuffer):
         self._madctl = madctl
         self._buf = bytearray(width * height * 2)
         super().__init__(self._buf, width, height, framebuf.RGB565)
+        # Dirty rect tracking: (x0, y0, x1, y1) bounding box of all draws
+        # None = clean, call mark_dirty() to expand the box
+        self._drect = None
         self._init_display(skip_reset=skip_reset)
 
     def _cmd(self, cmd, data=None):
@@ -90,8 +93,107 @@ class ST7735(framebuf.FrameBuffer):
         self._cmd(_DISPON)
         time.sleep_ms(100)
 
+    # --- Dirty rect tracking ---
+    # Automatically tracks the bounding box of all draw operations.
+    # Call show_dirty() instead of show() to push only the changed region.
+
+    def mark_dirty(self, x, y, w, h):
+        """Expand the dirty bounding box to include (x, y, w, h)."""
+        x1 = x + w
+        y1 = y + h
+        if self._drect is None:
+            self._drect = [x, y, x1, y1]
+        else:
+            d = self._drect
+            if x < d[0]:
+                d[0] = x
+            if y < d[1]:
+                d[1] = y
+            if x1 > d[2]:
+                d[2] = x1
+            if y1 > d[3]:
+                d[3] = y1
+
+    def reset_dirty(self):
+        """Clear the dirty rect. Call after show/show_dirty."""
+        self._drect = None
+
+    @property
+    def dirty_rect(self):
+        """Return (x, y, w, h) of dirty region, or None if clean."""
+        d = self._drect
+        if d is None:
+            return None
+        return (d[0], d[1], d[2] - d[0], d[3] - d[1])
+
+    def show_dirty(self):
+        """Push only the dirty region to the display, then reset.
+
+        Falls back to show() if the dirty region is large or covers
+        the full screen. If nothing is dirty, does nothing.
+        """
+        if self._drect is None:
+            return
+        d = self._drect
+        self._drect = None
+        x, y = d[0], d[1]
+        w, h = d[2] - x, d[3] - y
+        # Clamp
+        if x < 0:
+            w += x
+            x = 0
+        if y < 0:
+            h += y
+            y = 0
+        if x + w > self.width:
+            w = self.width - x
+        if y + h > self.height:
+            h = self.height - y
+        if w <= 0 or h <= 0:
+            return
+        # Full screen? Use show() for efficiency (single contiguous write)
+        if w >= self.width and h >= self.height:
+            self.show()
+            return
+        self.show_rect(x, y, w, h)
+
+    # --- Draw method overrides for dirty tracking ---
+
+    def fill(self, color):
+        """Fill entire screen and mark fully dirty."""
+        super().fill(color)
+        self._drect = [0, 0, self.width, self.height]
+
+    def fill_rect(self, x, y, w, h, color):
+        super().fill_rect(x, y, w, h, color)
+        self.mark_dirty(x, y, w, h)
+
+    def rect(self, x, y, w, h, color):
+        super().rect(x, y, w, h, color)
+        self.mark_dirty(x, y, w, h)
+
+    def pixel(self, x, y, color):
+        super().pixel(x, y, color)
+        self.mark_dirty(x, y, 1, 1)
+
+    def hline(self, x, y, w, color):
+        super().hline(x, y, w, color)
+        self.mark_dirty(x, y, w, 1)
+
+    def vline(self, x, y, h, color):
+        super().vline(x, y, h, color)
+        self.mark_dirty(x, y, 1, h)
+
+    def line(self, x0, y0, x1, y1, color):
+        super().line(x0, y0, x1, y1, color)
+        lx = min(x0, x1)
+        ly = min(y0, y1)
+        self.mark_dirty(lx, ly, abs(x1 - x0) + 1, abs(y1 - y0) + 1)
+
     def text(self, text, x, y, color=0xFFFF):
         """Draw text with extended glyph support (å ä ö Å Ä Ö)."""
+        # Track dirty for all text regardless of glyph path
+        self.mark_dirty(x, y, len(text) * 8, 8)
         if not _EXT_GLYPHS:
             super().text(text, x, y, color)
             return
