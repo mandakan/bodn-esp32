@@ -190,16 +190,11 @@ class RuleFollowScreen(Screen):
             if 0 <= btn < len(_STIM_TONES):
                 audio.tone(_STIM_TONES[btn], 200, channel=1)
         elif new_state == CORRECT:
-            # Immediate press feedback + result tone
-            audio.tone(_CORRECT_TONE, 150, channel=1)
-        elif new_state == WRONG and prev_state == STIMULUS:
-            # Immediate press feedback + gentle wrong tone
-            audio.tone(_WRONG_TONE, 250, channel=1)
+            audio.play_sound("correct", channel="sfx")
         elif new_state == WRONG:
-            # Timeout — softer cue
-            audio.tone(_WRONG_TONE, 150, channel=1)
+            audio.play_sound("wrong", channel="sfx")
         elif new_state == RULE_SWITCH:
-            audio.tone(_SWITCH_TONE, 300, channel=1)
+            audio.play_sound("rule_switch", channel="sfx")
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:

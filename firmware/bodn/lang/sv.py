@@ -25,6 +25,8 @@ STRINGS = {
     "settings_sessions": "Sessioner",
     "settings_wifi": "WiFi",
     "settings_leds": "LEDar",
+    "settings_audio": "Ljud",
+    "settings_volume": "Volym",
     "settings_debug": "Debug logg",
     "settings_perf": "Perf stats",
     "settings_diag": "Diagnostik",

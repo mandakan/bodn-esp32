@@ -38,13 +38,14 @@ N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 def create_hardware():
     """Initialise all hardware peripherals.
 
-    Returns (tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status).
+    Returns (tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, audio, hw_status).
     Components that fail to initialise degrade gracefully:
     - MCP23017 missing → buttons/switches are empty lists, mcp is None.
     - PCA9685 missing → pwm is None (no LED dimming), arcade LEDs disabled.
+    - AudioEngine missing → audio is None (no sound).
     - SPI displays can't be probed (push-only) so are always assumed present.
     """
-    hw_status = {"mcp": False, "pca": False, "temp": False}
+    hw_status = {"mcp": False, "pca": False, "temp": False, "audio": False}
 
     spi = SPI(
         1,
@@ -107,8 +108,8 @@ def create_hardware():
         pwm = PCA9685(i2c, config.PCA9685_ADDR)
         pwm.set_freq(1000)
         hw_status["pca"] = True
-        # Enable amplifier by default (SD pin high = on)
-        pwm.set_duty(config.PWM_CH_AMP_SD, 4095)
+        # Amp SD managed via direct GPIO (config.AMP_SD_PIN), not PCA9685
+        # — PCA9685 glitches on power-up causing static.
     except Exception as e:
         print("PCA9685 not found, PWM dimming disabled:", e)
 
@@ -142,7 +143,48 @@ def create_hardware():
         Encoder(config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW),
     ]
 
-    return tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status
+    # I2S audio output (MAX98357A)
+    audio = None
+    try:
+        from machine import I2S
+
+        i2s = I2S(
+            0,
+            sck=Pin(config.I2S_SPK_BCK),
+            ws=Pin(config.I2S_SPK_WS),
+            sd=Pin(config.I2S_SPK_DIN),
+            mode=I2S.TX,
+            bits=16,
+            format=I2S.STEREO,
+            rate=16000,
+            ibuf=4096,
+        )
+        from bodn.audio import AudioEngine
+
+        _amp_sd = Pin(config.AMP_SD_PIN, Pin.OUT, value=0)
+
+        def _enable_amp():
+            _amp_sd.value(1)
+
+        audio = AudioEngine(i2s, amp_enable=_enable_amp)
+        hw_status["audio"] = True
+        print("AudioEngine initialised (I2S TX)")
+    except Exception as e:
+        print("Audio init failed:", e)
+
+    return (
+        tft,
+        tft2,
+        buttons,
+        switches,
+        encoders,
+        np,
+        mcp,
+        pwm,
+        arcade,
+        audio,
+        hw_status,
+    )
 
 
 def create_ui(
@@ -156,6 +198,7 @@ def create_ui(
     encoders,
     np,
     arcade=None,
+    audio=None,
 ):
     """Wire up UI components. Returns (manager, secondary, inp)."""
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
@@ -217,6 +260,7 @@ def create_ui(
         return RuleFollowScreen(
             np,
             overlay,
+            audio=audio,
             settings=settings,
             secondary_screen=cat,
             on_exit=_reset_secondary,
@@ -229,6 +273,7 @@ def create_ui(
         return FlodeScreen(
             np,
             overlay,
+            audio=audio,
             settings=settings,
             secondary_screen=cat,
             on_exit=_reset_secondary,
@@ -284,6 +329,7 @@ def create_ui(
         session_mgr,
         order=mode_order,
         settings=settings,
+        audio=audio,
     )
     manager.push(home)
 
@@ -395,7 +441,7 @@ async def secondary_task(secondary):
         await asyncio.sleep_ms(200)
 
 
-async def housekeeping_task(session_mgr, np, settings):
+async def housekeeping_task(session_mgr, np, settings, audio=None):
     """Session management, temperature + battery monitoring: ~500 ms tick.
 
     Temperature overwatch (thresholds in config.py):
@@ -563,6 +609,15 @@ async def housekeeping_task(session_mgr, np, settings):
             errors += 1
             print("bat_monitor error #{}: {}".format(errors, e))
 
+        # Sync audio volume from settings
+        if audio:
+            if settings.get("audio_enabled", True):
+                target = settings.get("volume", 30)
+            else:
+                target = 0
+            if audio.volume != target:
+                audio.volume = target
+
         await asyncio.sleep_ms(500)
 
 
@@ -596,7 +651,7 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status = (
+    tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, audio, hw_status = (
         create_hardware()
     )
 
@@ -615,7 +670,14 @@ async def main():
         encoders,
         np,
         arcade=arcade,
+        audio=audio,
     )
+
+    # Sync audio settings
+    if audio:
+        audio.volume = settings.get("volume", 30)
+        if not settings.get("audio_enabled", True):
+            audio.volume = 0
 
     # Power management
     idle_tracker = IdleTracker(
@@ -624,11 +686,19 @@ async def main():
     )
     power_mgr = PowerManager(tft, tft2, np, mcp)
 
-    await asyncio.gather(
+    # Startup sound disabled — re-enable when tuned:
+    # if audio and settings.get("audio_enabled", True):
+    #     if not session_mgr._in_quiet_hours():
+    #         audio.play_sound("start")
+
+    tasks = [
         primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr),
         secondary_task(secondary),
-        housekeeping_task(session_mgr, np, settings),
-    )
+        housekeeping_task(session_mgr, np, settings, audio=audio),
+    ]
+    if audio:
+        tasks.append(audio.start())
+    await asyncio.gather(*tasks)
 
 
 try:

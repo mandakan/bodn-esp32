@@ -18,7 +18,7 @@ graph LR
     INMP441I2Smicrophone["INMP441 I2S microphone<br/><sub>GPIO 14 → SCK<br/>GPIO 15 → WS<br/>GPIO 2 → SD</sub>"]
     INMP441I2Smicrophone -- I2S --> ESP
 
-    MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN</sub>"]
+    MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN<br/>GPIO 3 → AMP_SD_PIN</sub>"]
     ESP -- I2S --> MAX98357AI2Samplifier
 
     RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 44 → DT<br/>GPIO 40 → SW</sub>"]
@@ -76,6 +76,7 @@ graph LR
 | BCK | 13 | `I2S_SPK_BCK` |
 | WS | 45 | `I2S_SPK_WS` |
 | DIN | 7 | `I2S_SPK_DIN` |
+| AMP_SD_PIN | 3 | `AMP_SD_PIN` |
 
 ### Rotary encoders — must stay on native GPIO for IRQ latency
 
@@ -174,6 +175,7 @@ graph LR
 > - **GPIO 40**: Rotary encoders — must stay on native GPIO for IRQ latency: SW / DS18B20 1-Wire temperature sensors: TEMP_WARN_C
 > - **GPIO 1**: ILI9341 TFT: BL / detents per logical unit: ENCODER SENS OPTIONS 0
 > - **GPIO 2**: INMP441 I2S microphone: SD / detents per logical unit: ENCODER SENS OPTIONS 1
+> - **GPIO 3**: MAX98357A I2S amplifier: AMP_SD_PIN / detents per logical unit: ENCODER SENS OPTIONS 2
 > - **GPIO 1**: detents per logical unit: ENCODER SENS OPTIONS 0 / detents per logical unit: ENCODER_SENS_DEFAULT
 <!-- pinout:end -->
 

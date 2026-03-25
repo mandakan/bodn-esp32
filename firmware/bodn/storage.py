@@ -24,6 +24,8 @@ DEFAULT_SETTINGS = {
     "ota_token": "",
     "sessions_enabled": True,
     "mode_limits": {},
+    "audio_enabled": True,
+    "volume": 10,
     "debug_input": False,
     "language": "sv",
     "sleep_timeout_s": 300,
