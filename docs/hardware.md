@@ -52,6 +52,10 @@ Touch controller (XPT2046) pins TBD — shares SPI bus with a separate CS.
 | CS | 39 |
 | DC | 8 (shared) |
 | RST | 9 (shared) |
+| VCC | 5V (DC-DC converter) |
+| BL | 5V (DC-DC converter) |
+
+The DollaTek module requires **5V on VCC** (J1 jumper open = default = 5V mode). An onboard regulator steps down to 3.3V for the ST7735 chip, so 3.3V SPI signals from the ESP32 work fine. The backlight also needs 5V — tie BL to the same 5V rail.
 
 The secondary display shares SCK, MOSI, DC, and RST with the primary. Only CS is separate — asserting one CS at a time selects which display receives data.
 
