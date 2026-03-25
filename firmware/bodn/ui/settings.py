@@ -14,6 +14,7 @@ _ITEMS = [
     ("sessions_enabled", "settings_sessions", "bool"),
     ("sleep_timeout_s", "settings_sleep", "cycle"),
     ("encoder_sensitivity", "settings_encoder", "cycle"),
+    ("tz_offset", "settings_tz", "cycle"),
     ("audio_enabled", "settings_audio", "bool"),
     ("volume", "settings_volume", "cycle"),
     ("wifi", "settings_wifi", "bool"),
@@ -29,6 +30,7 @@ _ITEMS = [
 
 _SLEEP_OPTIONS = [0, 60, 120, 300, 600]
 _VOLUME_OPTIONS = [10, 25, 50, 75, 100]
+_TZ_OPTIONS = list(range(-12, 15))  # UTC-12 .. UTC+14
 
 
 class SettingsScreen(Screen):
@@ -75,6 +77,9 @@ class SettingsScreen(Screen):
             return t("sens_" + config.ENCODER_SENS_LABELS[idx])
         if key == "volume":
             return "{}%".format(self._settings.get("volume", 30))
+        if key == "tz_offset":
+            off = self._settings.get("tz_offset", 1)
+            return "UTC{:+d}".format(off)
         if key in ("debug_input", "debug_perf", "sessions_enabled", "audio_enabled"):
             return self._settings.get(key, key in ("sessions_enabled", "audio_enabled"))
         return False
@@ -142,6 +147,22 @@ class SettingsScreen(Screen):
                     idx = i
                     break
             self._settings["volume"] = _VOLUME_OPTIONS[(idx + 1) % len(_VOLUME_OPTIONS)]
+            try:
+                from bodn.storage import save_settings
+
+                save_settings(self._settings)
+            except Exception:
+                pass
+            self._dirty = True
+            return
+        if key == "tz_offset":
+            cur = self._settings.get("tz_offset", 1)
+            idx = 13  # default index for UTC+1
+            for i in range(len(_TZ_OPTIONS)):
+                if _TZ_OPTIONS[i] == cur:
+                    idx = i
+                    break
+            self._settings["tz_offset"] = _TZ_OPTIONS[(idx + 1) % len(_TZ_OPTIONS)]
             try:
                 from bodn.storage import save_settings
 

@@ -313,10 +313,50 @@ time.sleep(0.5)
 # --- Step 2: NTP sync ---
 _show_progress(2, STEPS[2][1], STEPS[2][2])
 
+
+def _last_sunday_of(year, month):
+    """Return day-of-month of last Sunday in the given month."""
+    import time
+
+    days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    if month == 2 and (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)):
+        days_in_month[2] = 29
+    last = days_in_month[month]
+    t = time.mktime((year, month, last, 0, 0, 0, 0, 0))
+    wd = time.localtime(t)[6]  # 0=Mon..6=Sun
+    return last - (wd + 1) % 7
+
+
+def _is_eu_dst(year, month, day, hour):
+    """Return True if EU summer time (DST) is active for the given UTC time."""
+    if month < 3 or month > 10:
+        return False
+    if 3 < month < 10:
+        return True
+    ds = _last_sunday_of(year, 3)
+    de = _last_sunday_of(year, 10)
+    if month == 3:
+        return day > ds or (day == ds and hour >= 1)
+    # month == 10: DST ends at 01:00 UTC on last Sunday
+    return not (day > de or (day == de and hour >= 1))
+
+
 try:
     import ntptime
+    import machine
 
     ntptime.settime()
+    # Adjust RTC from UTC to local time (EU DST rules)
+    import time as _t
+
+    _utc = _t.localtime()
+    _base = settings.get("tz_offset", 1)
+    _dst = _is_eu_dst(_utc[0], _utc[1], _utc[2], _utc[3])
+    _off = (_base + (1 if _dst else 0)) * 3600
+    _local = _t.localtime(_t.mktime(_utc) + _off)
+    machine.RTC().datetime(
+        (_local[0], _local[1], _local[2], _local[6], _local[3], _local[4], _local[5], 0)
+    )
     _results[2] = "ok"
 except Exception:
     _results[2] = "warn"

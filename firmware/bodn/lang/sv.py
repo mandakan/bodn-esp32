@@ -32,6 +32,7 @@ STRINGS = {
     "settings_diag": "Diagnostik",
     "settings_sleep": "Vilotimer",
     "settings_encoder": "Känslighet",
+    "settings_tz": "Tidszon",
     "settings_admin": "Visa admin-URL",
     "admin_back": "Tryck för att gå tillbaka",
     "settings_standby": "Viloläge nu",
