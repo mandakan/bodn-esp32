@@ -49,8 +49,10 @@ def test_shift_clamped_at_bounds():
 def test_shift_to_target_completes():
     eng = FlodeEngine(rand_fn=make_rand([1, 0]))
     eng.start_level(1)
-    # target=1, position=0, shift +1 should complete
+    # target=1, position=0, shift +1 should complete after check
     eng.shift(1)
+    assert eng.state == PLAYING  # not complete until checked
+    eng.check_complete()
     assert eng.state == COMPLETE
 
 
@@ -99,7 +101,8 @@ def test_select_delta_backward():
 def test_shift_ignored_when_complete():
     eng = FlodeEngine(rand_fn=make_rand([1, 0]))
     eng.start_level(1)
-    eng.shift(1)  # completes
+    eng.shift(1)
+    eng.check_complete()
     assert eng.state == COMPLETE
     changed = eng.shift(-1)
     assert not changed
@@ -109,6 +112,7 @@ def test_celebration_lifecycle():
     eng = FlodeEngine(rand_fn=make_rand([1, 0]))
     eng.start_level(1)
     eng.shift(1)
+    eng.check_complete()
     assert eng.state == COMPLETE
 
     eng.start_celebration()
@@ -126,6 +130,7 @@ def test_celebrate_progress():
     eng = FlodeEngine(rand_fn=make_rand([1, 0]))
     eng.start_level(1)
     eng.shift(1)
+    eng.check_complete()
     eng.start_celebration()
 
     assert eng.celebrate_progress == 0
@@ -164,6 +169,7 @@ def test_multi_segment_completion():
         while eng.positions[i] != eng.target:
             eng.shift(1)
 
+    eng.check_complete()
     assert eng.state == COMPLETE
     assert eng.flow_reaches() == 3
 

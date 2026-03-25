@@ -259,8 +259,6 @@ class FlodeScreen(Screen):
             eng.start_flowing()
             self._dirty = True
             self._leds_dirty = True
-            if self._audio:
-                self._audio.tone(880, 200, channel=1)
             return
 
         # --- PLAYING state ---
@@ -287,8 +285,18 @@ class FlodeScreen(Screen):
                     self._audio.boop()
 
         # Tick animations
-        if self._tick_anim():
+        anim_active = self._tick_anim()
+        if anim_active:
             self._dirty = True
+            self._leds_dirty = True
+
+        # Check completion only when all animations have settled
+        if not anim_active and eng.state == PLAYING:
+            if eng.check_complete():
+                self._dirty = True
+                self._leds_dirty = True
+                if self._audio:
+                    self._audio.tone(880, 200, channel=1)
 
         # Update brightness from encoder A (velocity-aware)
         prev_bri = self._brightness.value
@@ -412,13 +420,26 @@ class FlodeScreen(Screen):
             total_frames = (eng.num_segments + 1) * 12  # FLOW_FRAMES_PER_SEG
             self._render_animated_flow(tft, theme, flow_frac, total_frames)
         else:
-            # Static flow: shows how far alignment reaches
-            reaches = eng.flow_reaches()
+            # Static flow: only count segments whose animation has settled
+            reaches = self._visual_flow_reaches()
             self._render_static_flow(tft, theme, reaches)
 
         # Level indicator (top-right, small)
         level_str = t("flode_level", eng.level)
         tft.text(level_str, w - len(level_str) * 8 - 4, 2, theme.MUTED)
+
+    def _visual_flow_reaches(self):
+        """Count how many segments from left are aligned AND have settled animations."""
+        eng = self._engine
+        target = eng.target
+        for i in range(eng.num_segments):
+            # Position must match target
+            if eng.positions[i] != target:
+                return i
+            # Animation must be settled (not mid-snap)
+            if self._anim[i][2] < _ANIM_STEPS:
+                return i
+        return eng.num_segments
 
     def _render_static_flow(self, tft, theme, reaches):
         """Draw flow up to the number of aligned segments."""

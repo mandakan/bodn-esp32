@@ -88,7 +88,11 @@ class FlodeEngine:
         return self.selected != old
 
     def shift(self, d):
-        """Shift selected segment by d positions (clamped). Returns True if changed."""
+        """Shift selected segment by d positions (clamped). Returns True if changed.
+
+        Does NOT check completion — the screen should check after
+        snap animations finish so the child sees the piece land.
+        """
         if self.state != PLAYING:
             return False
         old = self.positions[self.selected]
@@ -96,10 +100,14 @@ class FlodeEngine:
         if new == old:
             return False
         self.positions[self.selected] = new
-        # Check completion
-        if self.flow_reaches() == self.num_segments:
-            self.state = COMPLETE
         return True
+
+    def check_complete(self):
+        """Check if all gaps are aligned. Call after animations finish."""
+        if self.state == PLAYING and self.flow_reaches() == self.num_segments:
+            self.state = COMPLETE
+            return True
+        return False
 
     def flow_reaches(self):
         """Return how many segments from left the flow passes through.
