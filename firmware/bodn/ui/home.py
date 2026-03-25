@@ -137,11 +137,10 @@ class HomeScreen(Screen):
                 self._dirty = True
             return
 
-        # Advance animation if active — needs full clear each frame
+        # Advance animation if active — only the content band is cleared
         if self._anim_step < _ANIM_STEPS:
             self._anim_step += 1
             self._dirty = True
-            self._full_clear = True
 
         # Nav encoder rotation cycles modes via accumulator
         delta = inp.enc_delta[NAV]
@@ -165,11 +164,16 @@ class HomeScreen(Screen):
 
     def render(self, tft, theme, frame):
         self._dirty = False
+        full_clear = self._full_clear
         self._full_clear = False
-        tft.fill(theme.BLACK)
+
+        if full_clear:
+            tft.fill(theme.BLACK)
 
         # Show error on screen if a mode failed to load
         if self._error:
+            if not full_clear:
+                tft.fill(theme.BLACK)
             tft.text("ERR: " + str(self._error_mode), 4, 4, theme.RED)
             # Word-wrap error message
             msg = self._error
@@ -194,9 +198,9 @@ class HomeScreen(Screen):
         landscape = theme.width > theme.height
 
         if landscape:
-            self._render_landscape(tft, theme, frame, name)
+            self._render_landscape(tft, theme, frame, name, full_clear)
         else:
-            self._render_portrait(tft, theme, frame, name)
+            self._render_portrait(tft, theme, frame, name, full_clear)
 
     def _draw_dots(self, tft, theme, y, w):
         """Draw carousel dot indicators centered at y."""
@@ -214,18 +218,31 @@ class HomeScreen(Screen):
             else:
                 tft.rect(cx - dot_r, y - dot_r, dot_r * 2, dot_r * 2, theme.DIM)
 
-    def _render_landscape(self, tft, theme, frame, name):
+    def _render_landscape(self, tft, theme, frame, name, full_clear):
         """Landscape layout: centered, icon above mode name."""
         w = theme.width
         h = theme.height
         ox = self._anim_x(w)
 
-        # Title — centered at top (static, no slide)
-        draw_centered(tft, t("home_title"), 8, theme.WHITE, w, scale=2)
-
         icon_scale = 4
         icon_size = 16 * icon_scale
         name_y = 40 + icon_size + 12
+        dots_y = name_y + 28
+
+        # Content band: from icon top to below dots
+        band_top = 40
+        band_bot = dots_y + 8
+
+        # Clear only the content band during animation, not the whole screen
+        if not full_clear:
+            tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
+
+        # Static elements — only drawn on full clear
+        if full_clear:
+            draw_centered(tft, t("home_title"), 8, theme.WHITE, w, scale=2)
+            remaining = self._session_mgr.sessions_remaining
+            color = theme.GREEN if remaining > 0 else theme.RED
+            draw_centered(tft, t("home_plays_left", remaining), h - 20, color, w)
 
         # Outgoing item (slides out in opposite direction)
         if self._prev_name and ox != 0:
@@ -253,23 +270,32 @@ class HomeScreen(Screen):
             self._prev_name = None
 
         # Carousel dots
-        self._draw_dots(tft, theme, name_y + 28, w)
+        self._draw_dots(tft, theme, dots_y, w)
 
-        # Sessions remaining — bottom center (static)
-        remaining = self._session_mgr.sessions_remaining
-        color = theme.GREEN if remaining > 0 else theme.RED
-        draw_centered(tft, t("home_plays_left", remaining), h - 20, color, w)
-
-    def _render_portrait(self, tft, theme, frame, name):
+    def _render_portrait(self, tft, theme, frame, name, full_clear):
         """Portrait layout: icon centered, stacked vertically."""
         w = theme.width
         ox = self._anim_x(w)
 
-        draw_centered(tft, t("home_title"), theme.HEADER_Y, theme.WHITE, w)
-
         icon_scale = 3
         icon_size = 16 * icon_scale
         iy = theme.CENTER_Y - icon_size // 2 - 8
+        dots_y = theme.CENTER_Y + 44
+
+        # Content band: from icon top to below dots
+        band_top = iy
+        band_bot = dots_y + 8
+
+        # Clear only the content band during animation, not the whole screen
+        if not full_clear:
+            tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
+
+        # Static elements — only drawn on full clear
+        if full_clear:
+            draw_centered(tft, t("home_title"), theme.HEADER_Y, theme.WHITE, w)
+            remaining = self._session_mgr.sessions_remaining
+            color = theme.GREEN if remaining > 0 else theme.RED
+            tft.text(t("home_plays_left", remaining), 16, theme.height - 16, color)
 
         # Outgoing item
         if self._prev_name and ox != 0:
@@ -296,8 +322,4 @@ class HomeScreen(Screen):
             self._prev_name = None
 
         # Carousel dots
-        self._draw_dots(tft, theme, theme.CENTER_Y + 44, w)
-
-        remaining = self._session_mgr.sessions_remaining
-        color = theme.GREEN if remaining > 0 else theme.RED
-        tft.text(t("home_plays_left", remaining), 16, theme.height - 16, color)
+        self._draw_dots(tft, theme, dots_y, w)
