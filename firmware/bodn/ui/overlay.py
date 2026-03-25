@@ -31,6 +31,7 @@ class SessionOverlay(Screen):
         self._prev_temp_status = "ok"
         self._prev_bat_status = "ok"
         self._dirty = True
+        self._full_clear = True
 
     @property
     def takes_over(self):
@@ -53,18 +54,21 @@ class SessionOverlay(Screen):
         if state != self._prev_state:
             self._prev_state = state
             self._dirty = True
+            self._full_clear = True
 
         # Track temperature status changes
         temp_status = self._settings.get("_temp_status", "ok")
         if temp_status != self._prev_temp_status:
             self._prev_temp_status = temp_status
             self._dirty = True
+            self._full_clear = True
 
         # Track battery status changes
         bat_status = self._settings.get("_bat_status", "ok")
         if bat_status != self._prev_bat_status:
             self._prev_bat_status = bat_status
             self._dirty = True
+            self._full_clear = True
 
         # Blinking states need periodic redraws
         if state == WINDDOWN and frame % 20 == 0:
@@ -84,7 +88,12 @@ class SessionOverlay(Screen):
 
         # Temperature critical takes highest priority — full screen takeover
         if temp_status == "critical":
-            tft.fill(theme.BLACK)
+            if self._full_clear:
+                self._full_clear = False
+                tft.fill(theme.BLACK)
+            # Clear blinking bar areas
+            tft.fill_rect(0, 0, tft.width, 3, theme.BLACK)
+            tft.fill_rect(0, tft.height - 3, tft.width, 3, theme.BLACK)
             if (frame // 15) % 2 == 0:
                 tft.fill_rect(0, 0, tft.width, 3, theme.RED)
                 tft.fill_rect(0, tft.height - 3, tft.width, 3, theme.RED)
@@ -103,7 +112,12 @@ class SessionOverlay(Screen):
 
         # Battery critical — full screen "CHARGE ME!" takeover
         if bat_status == "critical":
-            tft.fill(theme.BLACK)
+            if self._full_clear:
+                self._full_clear = False
+                tft.fill(theme.BLACK)
+            # Clear blinking bar areas
+            tft.fill_rect(0, 0, tft.width, 3, theme.BLACK)
+            tft.fill_rect(0, tft.height - 3, tft.width, 3, theme.BLACK)
             if (frame // 15) % 2 == 0:
                 tft.fill_rect(0, 0, tft.width, 3, theme.RED)
                 tft.fill_rect(0, tft.height - 3, tft.width, 3, theme.RED)
@@ -117,7 +131,11 @@ class SessionOverlay(Screen):
                 tft.text(volts, max(0, vx), 110, theme.AMBER, scale=2)
             return
 
+        self._full_clear = False
+
         if state == WINDDOWN:
+            # Clear text area for blink toggle
+            tft.fill_rect(40, 70, 80, 10, theme.BLACK)
             if (frame // 20) % 2 == 0:
                 tft.text(t("overlay_zzz"), 40, 70, theme.AMBER)
 

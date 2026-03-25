@@ -21,7 +21,7 @@ graph LR
     MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN</sub>"]
     ESP -- I2S --> MAX98357AI2Samplifier
 
-    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 3 → DT<br/>GPIO 40 → SW<br/>GPIO 41 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
+    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 44 → DT<br/>GPIO 40 → SW</sub>"]
     RotaryencodersmuststayonnativeGPIOforIRQlatency -.- ESP
 
     The144LEDmstriprunsaroundtheinsideofthetranslucentlidperimeter["The 144 LED/m strip runs around the inside of the translucent lid perimeter<br/><sub>GPIO 4 → PIN</sub>"]
@@ -38,6 +38,9 @@ graph LR
 
     I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
     I2CbuspUEXTconnector -.- ESP
+
+    detentsperlogicalunit["detents per logical unit<br/><sub>GPIO 1 → ENCODER SENS OPTIONS 0<br/>GPIO 2 → ENCODER SENS OPTIONS 1<br/>GPIO 3 → ENCODER SENS OPTIONS 2<br/>GPIO 1 → ENCODER_SENS_DEFAULT</sub>"]
+    detentsperlogicalunit -.- ESP
 
 ```
 
@@ -82,11 +85,8 @@ graph LR
 | DT | 18 | `ENC1_DT` |
 | SW | 17 | `ENC1_SW` |
 | CLK | 16 | `ENC2_CLK` |
-| DT | 3 | `ENC2_DT` |
+| DT | 44 | `ENC2_DT` |
 | SW | 40 | `ENC2_SW` |
-| CLK | 41 | `ENC3_CLK` |
-| DT | 42 | `ENC3_DT` |
-| SW | 0 | `ENC3_SW` |
 
 ### The 144 LED/m strip runs around the inside of the translucent lid perimeter
 
@@ -125,14 +125,22 @@ graph LR
 | I2C_SCL | 47 | `I2C_SCL` |
 | I2C_SDA | 48 | `I2C_SDA` |
 
+### detents per logical unit
+
+| Signal | GPIO | Config variable |
+|--------|------|-----------------|
+| ENCODER SENS OPTIONS 0 | 1 | `ENCODER_SENS_OPTIONS[0]` |
+| ENCODER SENS OPTIONS 1 | 2 | `ENCODER_SENS_OPTIONS[1]` |
+| ENCODER SENS OPTIONS 2 | 3 | `ENCODER_SENS_OPTIONS[2]` |
+| ENCODER_SENS_DEFAULT | 1 | `ENCODER_SENS_DEFAULT` |
+
 ### All GPIOs
 
 | GPIO | Component | Signal |
 |------|-----------|--------|
-| 0 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
-| 1 | ILI9341 TFT | BL |
-| 2 | INMP441 I2S microphone | SD |
-| 3 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 1 | detents per logical unit | ENCODER_SENS_DEFAULT |
+| 2 | detents per logical unit | ENCODER SENS OPTIONS 1 |
+| 3 | detents per logical unit | ENCODER SENS OPTIONS 2 |
 | 4 | The 144 LED/m strip runs around the inside of the translucent lid perimeter | PIN |
 | 5 | DevKit-Lipo on-board power monitoring | PWR_SENS_PIN |
 | 6 | DevKit-Lipo on-board power monitoring | BAT_SENS_PIN |
@@ -152,8 +160,7 @@ graph LR
 | 21 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | DS18B20 1-Wire temperature sensors | TEMP_WARN_C |
-| 41 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
-| 42 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 44 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
 | 45 | MAX98357A I2S amplifier | WS |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |
 | 48 | I2C bus — pUEXT connector | I2C_SDA |
@@ -165,28 +172,29 @@ graph LR
 
 > **Pin conflicts detected:**
 > - **GPIO 40**: Rotary encoders — must stay on native GPIO for IRQ latency: SW / DS18B20 1-Wire temperature sensors: TEMP_WARN_C
+> - **GPIO 1**: ILI9341 TFT: BL / detents per logical unit: ENCODER SENS OPTIONS 0
+> - **GPIO 2**: INMP441 I2S microphone: SD / detents per logical unit: ENCODER SENS OPTIONS 1
+> - **GPIO 1**: detents per logical unit: ENCODER SENS OPTIONS 0 / detents per logical unit: ENCODER_SENS_DEFAULT
 <!-- pinout:end -->
 
 ## Encoder roles and placement
 
-The three KY-040 rotary encoders have fixed roles in the UI. Mount them in
-a horizontal row directly next to (or below) the TFT display, left to right:
+Two KY-040 rotary encoders with dual roles. Mount them in a horizontal row
+next to the TFT display:
 
 | Position | Encoder | Config index | Role | Rotation | Button press |
 |----------|---------|-------------|------|----------|--------------|
-| Left | ENC1 | `ENC_NAV` (0) | Navigation | Home: scroll modes | Home: enter mode / Modes: back |
-| Middle | ENC2 | `ENC_A` (1) | Parameter A | Mode-specific (e.g. brightness) | Cycle pattern |
-| Right | ENC3 | `ENC_B` (2) | Parameter B | Mode-specific (e.g. speed) | Cycle pattern |
+| Left | ENC1 | `ENC_NAV` (0) | Navigation + Param B | Home: scroll modes / Games: parameter B (speed, cursor X) | Home: enter mode / Games: tap = action, long hold = pause menu |
+| Right | ENC2 | `ENC_A` (1) | Parameter A | Mode-specific (e.g. brightness, cursor Y) | Mode-specific (e.g. start/stop, cycle) |
 
 **Key rules:**
 
-- **ENC_NAV is always navigation.** It never controls a mode parameter.
-  Its button is the universal "back" action inside any mode screen, and
-  "enter" on the home screen.
-- **ENC_A and ENC_B are mode-specific.** Each mode decides what they
-  control. In Demo mode: brightness (A) and speed (B). Future modes
-  may repurpose them freely.
-- **Place ENC_NAV closest to the display** so the child's dominant hand
+- **NAV doubles as parameter B in game modes.** Rotation controls a
+  second parameter (speed, horizontal cursor, etc.). Short taps trigger
+  game actions. Long press (1.5s hold) opens the pause menu.
+- **ENC_A is mode-specific.** Each mode decides what it controls.
+  In Demo mode: brightness. In Garden: cursor Y. In Flöde: segment select.
+- **Place NAV closest to the display** so the child's dominant hand
   naturally reaches both the screen and the nav knob.
 
 ### Suggested panel layout
@@ -196,15 +204,15 @@ a horizontal row directly next to (or below) the TFT display, left to right:
   │                                                          │
   │    ┌────────────┐                                        │
   │    │            │                                        │
-  │    │   Display  │    [NAV]    [ENC A]    [ENC B]         │
-  │    │   128×160  │     ◎         ◎          ◎             │
+  │    │   Display  │         [NAV]         [ENC A]          │
+  │    │  240×320   │           ◎              ◎             │
   │    │            │                                        │
   │    └────────────┘                                        │
   │                                                          │
-  │    [BTN0] [BTN1] [BTN2] [BTN3]    [SW0] [SW1] [SW2] [SW3] │
+  │    [BTN0] [BTN1] [BTN2] [BTN3]         [SW0] [SW1]      │
   │    [BTN4] [BTN5] [BTN6] [BTN7]                          │
   │                                                          │
-  │    ═══════ NeoPixel strip (16 LEDs) ═══════              │
+  │    ═══════ NeoPixel sticks (2×8 LEDs) ═══════            │
   │                                                          │
   └──────────────────────────────────────────────────────────┘
 ```

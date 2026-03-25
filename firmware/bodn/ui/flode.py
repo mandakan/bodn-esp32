@@ -7,12 +7,12 @@ from bodn.ui.widgets import draw_centered
 from bodn.ui.pause import PauseMenu
 from bodn.ui.input import BrightnessControl, EncoderAccumulator
 from bodn.i18n import t
-from bodn.flode_rules import FlodeEngine, PLAYING, COMPLETE, CELEBRATE
+from bodn.flode_rules import FlodeEngine, PLAYING, COMPLETE, FLOWING, CELEBRATE
 from bodn.patterns import N_LEDS, zone_fill, zone_pulse, zone_clear, ZONE_LID_RING
 from bodn.ui.catface import CURIOUS, HAPPY
 
-ENC_A = const(1)  # config.ENC_A — select segment
-ENC_B = const(2)  # config.ENC_B — shift segment
+ENC_A = config.ENC_A  # select segment
+ENC_B = config.ENC_B  # shift segment
 
 # Layout constants
 _MARGIN_LEFT = const(20)  # space for source indicator
@@ -69,6 +69,7 @@ class FlodeScreen(Screen):
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._dirty = True
+        self._full_clear = True  # only clear on state transitions, not every frame
         self._leds_dirty = True
 
         # Game engine — use a simple RNG based on frame counter
@@ -82,12 +83,12 @@ class FlodeScreen(Screen):
         self._engine = FlodeEngine(rand_fn=_rand)
 
         # Brightness and encoder accumulators
-        self._brightness = BrightnessControl()
+        self._brightness = BrightnessControl(settings=settings)
         self._select_acc = EncoderAccumulator(
-            detents_per_unit=2, fast_threshold=300, fast_multiplier=2
+            settings=settings, fast_threshold=300, fast_multiplier=2
         )
         self._shift_acc = EncoderAccumulator(
-            detents_per_unit=3, fast_threshold=400, fast_multiplier=2
+            settings=settings, fast_threshold=400, fast_multiplier=2
         )
 
         # Animation state per segment: (start_y, target_y, step)
@@ -115,6 +116,7 @@ class FlodeScreen(Screen):
         self._compute_layout(manager.theme)
         self._init_anim()
         self._dirty = True
+        self._full_clear = True
         self._leds_dirty = True
         if self._secondary:
             self._secondary.set_emotion(CURIOUS)
@@ -241,18 +243,27 @@ class FlodeScreen(Screen):
                     self._select_acc.reset()
                     self._shift_acc.reset()
                 self._leds_dirty = True
+                self._full_clear = True
             self._dirty = True
             return
 
-        # Completion — trigger celebration
-        if eng.state == COMPLETE:
-            eng.start_celebration()
+        # Flow animation — shows the solution working
+        if eng.state == FLOWING:
+            if eng.update_flowing():
+                eng.start_celebration()
+                self._full_clear = True
+                if self._secondary:
+                    self._secondary.set_emotion(HAPPY)
             self._dirty = True
             self._leds_dirty = True
-            if self._secondary:
-                self._secondary.set_emotion(HAPPY)
-            if self._audio:
-                self._audio.tone(880, 200, channel=1)
+            return
+
+        # Completion — start flow animation (not celebrate immediately)
+        if eng.state == COMPLETE:
+            eng.start_flowing()
+            self._dirty = True
+            self._full_clear = True
+            self._leds_dirty = True
             return
 
         # --- PLAYING state ---
@@ -279,8 +290,18 @@ class FlodeScreen(Screen):
                     self._audio.boop()
 
         # Tick animations
-        if self._tick_anim():
+        anim_active = self._tick_anim()
+        if anim_active:
             self._dirty = True
+            self._leds_dirty = True
+
+        # Check completion only when all animations have settled
+        if not anim_active and eng.state == PLAYING:
+            if eng.check_complete():
+                self._dirty = True
+                self._leds_dirty = True
+                if self._audio:
+                    self._audio.tone(880, 200, channel=1)
 
         # Update brightness from encoder A (velocity-aware)
         prev_bri = self._brightness.value
@@ -332,14 +353,18 @@ class FlodeScreen(Screen):
         if self._pause.is_open:
             if self._dirty:
                 self._dirty = False
-                tft.fill(theme.BLACK)
+                if self._full_clear:
+                    tft.fill(theme.BLACK)
+                    self._full_clear = False
                 self._render_game(tft, theme, frame)
             self._pause.render(tft, theme, frame)
             return
 
         if self._dirty:
             self._dirty = False
-            tft.fill(theme.BLACK)
+            if self._full_clear:
+                tft.fill(theme.BLACK)
+                self._full_clear = False
             self._render_game(tft, theme, frame)
 
         self._pause.render(tft, theme, frame)
@@ -356,12 +381,23 @@ class FlodeScreen(Screen):
 
         wall_c = rgb(*_WALL_COLOR)
         wall_sel_c = rgb(*_WALL_SELECTED)
-        flow_c = rgb(*_FLOW_COLOR)
         source_c = rgb(*_SOURCE_COLOR)
+        locked_c = rgb(40, 160, 80)  # green tint for locked/solved segments
 
         seg_w = self._seg_w
         gap_h = self._gap_h
         flow_y = self._flow_y
+        is_flowing = eng.state == FLOWING
+
+        # Clear margins and flow line area
+        tft.fill_rect(0, self._usable_y0, _MARGIN_LEFT, self._usable_h, theme.BLACK)
+        tft.fill_rect(
+            w - _MARGIN_RIGHT,
+            self._usable_y0,
+            _MARGIN_RIGHT,
+            self._usable_h,
+            theme.BLACK,
+        )
 
         # Draw source indicator (left edge)
         src_h = gap_h
@@ -372,58 +408,125 @@ class FlodeScreen(Screen):
         tgt_x = w - _MARGIN_RIGHT + 2
         tft.fill_rect(tgt_x, src_y, _MARGIN_RIGHT - 2, src_h, source_c)
 
-        # Draw segments
+        # Draw segments — clear each column first to avoid flicker
         for i in range(eng.num_segments):
             x = self._seg_x[i]
             gap_cy = self._anim_current_y(i)
             gap_top = gap_cy - gap_h // 2
             gap_bot = gap_top + gap_h
-            is_selected = i == eng.selected
-            wc = wall_sel_c if is_selected else wall_c
+            is_selected = i == eng.selected and not is_flowing
+            wc = locked_c if is_flowing else (wall_sel_c if is_selected else wall_c)
+
+            wall_top = self._usable_y0
+            wall_bot = self._usable_y0 + self._usable_h
+
+            # Clear entire column (including selection indicators)
+            tft.fill_rect(x - 2, wall_top, seg_w + 4, self._usable_h, theme.BLACK)
 
             # Wall above gap
-            wall_top = self._usable_y0
             if gap_top > wall_top:
                 tft.fill_rect(x, wall_top, seg_w, gap_top - wall_top, wc)
 
             # Wall below gap
-            wall_bot = self._usable_y0 + self._usable_h
             if gap_bot < wall_bot:
                 tft.fill_rect(x, gap_bot, seg_w, wall_bot - gap_bot, wc)
 
-            # Selected indicator: thin border on sides
+            # Selected indicator (not during flow animation)
             if is_selected:
                 tft.fill_rect(x - 2, wall_top, 2, self._usable_h, theme.CYAN)
                 tft.fill_rect(x + seg_w, wall_top, 2, self._usable_h, theme.CYAN)
 
-        # Draw flow — animate from left through aligned gaps
-        reaches = eng.flow_reaches()
-        flow_h = max(4, gap_h // 3)  # flow is thinner than gap
-        fy = flow_y - flow_h // 2
+        # Draw flow
+        if is_flowing:
+            # Animated flow: progresses left to right over time
+            flow_frac = eng._flow_frame
+            total_frames = (eng.num_segments + 1) * 12  # FLOW_FRAMES_PER_SEG
+            self._render_animated_flow(tft, theme, flow_frac, total_frames)
+        else:
+            # Static flow: only count segments whose animation has settled
+            reaches = self._visual_flow_reaches()
+            self._render_static_flow(tft, theme, reaches)
 
-        # Flow from source to first segment
+        # Level indicator (top-right, small)
+        level_str = t("flode_level", eng.level)
+        tft.text(level_str, w - len(level_str) * 8 - 4, 2, theme.MUTED)
+
+    def _visual_flow_reaches(self):
+        """Count how many segments from left are aligned AND have settled animations."""
+        eng = self._engine
+        target = eng.target
+        for i in range(eng.num_segments):
+            # Position must match target
+            if eng.positions[i] != target:
+                return i
+            # Animation must be settled (not mid-snap)
+            if self._anim[i][2] < _ANIM_STEPS:
+                return i
+        return eng.num_segments
+
+    def _render_static_flow(self, tft, theme, reaches):
+        """Draw flow up to the number of aligned segments."""
+        eng = self._engine
+        w = theme.width
+        flow_c = theme.rgb(*_FLOW_COLOR)
+        flow_h = max(4, self._gap_h // 3)
+        fy = self._flow_y - flow_h // 2
+
         if reaches > 0:
             fx_start = _MARGIN_LEFT - 2
             fx_end = self._seg_x[0]
             tft.fill_rect(fx_start, fy, fx_end - fx_start, flow_h, flow_c)
 
-        # Flow through aligned segments
         for i in range(reaches):
             x = self._seg_x[i]
-            # Flow through gap
-            tft.fill_rect(x, fy, seg_w, flow_h, flow_c)
-            # Flow between segments (or to target)
+            tft.fill_rect(x, fy, self._seg_w, flow_h, flow_c)
             if i < eng.num_segments - 1:
                 next_x = self._seg_x[i + 1]
-                tft.fill_rect(x + seg_w, fy, next_x - (x + seg_w), flow_h, flow_c)
+                tft.fill_rect(
+                    x + self._seg_w, fy, next_x - (x + self._seg_w), flow_h, flow_c
+                )
             else:
-                # Flow to target
                 tgt_x = w - _MARGIN_RIGHT + 2
-                tft.fill_rect(x + seg_w, fy, tgt_x - (x + seg_w), flow_h, flow_c)
+                tft.fill_rect(
+                    x + self._seg_w, fy, tgt_x - (x + self._seg_w), flow_h, flow_c
+                )
 
-        # Level indicator (top-right, small)
-        level_str = t("flode_level", eng.level)
-        tft.text(level_str, w - len(level_str) * 8 - 4, 2, theme.MUTED)
+    def _render_animated_flow(self, tft, theme, flow_frame, total_frames):
+        """Draw flow animating left to right through all segments."""
+        eng = self._engine
+        w = theme.width
+        flow_c = theme.rgb(*_FLOW_COLOR)
+        glow_c = theme.rgb(100, 255, 200)  # bright leading edge
+        flow_h = max(4, self._gap_h // 3)
+        fy = self._flow_y - flow_h // 2
+        n = eng.num_segments
+
+        # Calculate how far the flow has reached as a pixel x position
+        # Source → seg0 → gap → seg1 → ... → segN → target
+        source_x = _MARGIN_LEFT - 2
+        target_x = w - _MARGIN_RIGHT + 2
+
+        # Build waypoints: [source, seg0_start, seg0_end, seg1_start, ..., target]
+        waypoints = [source_x]
+        for i in range(n):
+            waypoints.append(self._seg_x[i])
+            waypoints.append(self._seg_x[i] + self._seg_w)
+        waypoints.append(target_x)
+
+        # Total pixel distance
+        total_dist = waypoints[-1] - waypoints[0]
+        # Current flow head position
+        progress = min(flow_frame * 256 // total_frames, 256)
+        head_x = source_x + total_dist * progress // 256
+
+        # Draw the filled flow from source to head
+        if head_x > source_x:
+            tft.fill_rect(source_x, fy, head_x - source_x, flow_h, flow_c)
+
+        # Bright leading edge
+        edge_w = min(8, head_x - source_x)
+        if edge_w > 0:
+            tft.fill_rect(head_x - edge_w, fy, edge_w, flow_h, glow_c)
 
     def _render_celebrate(self, tft, theme, frame):
         """Celebration screen — big star burst effect."""

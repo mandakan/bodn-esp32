@@ -4,13 +4,47 @@ from bodn.ui.screen import Screen, ScreenManager
 
 
 class FakeTft:
-    """Minimal TFT stub tracking calls."""
+    """Minimal TFT stub tracking calls with dirty rect support."""
 
     def __init__(self):
         self.calls = []
+        self._drect = None
+        self.width = 128
+        self.height = 160
+
+    def mark_dirty(self, x, y, w, h):
+        x1 = x + w
+        y1 = y + h
+        if self._drect is None:
+            self._drect = [x, y, x1, y1]
+        else:
+            d = self._drect
+            if x < d[0]:
+                d[0] = x
+            if y < d[1]:
+                d[1] = y
+            if x1 > d[2]:
+                d[2] = x1
+            if y1 > d[3]:
+                d[3] = y1
+
+    def reset_dirty(self):
+        self._drect = None
+
+    def show_dirty(self):
+        if self._drect is None:
+            return
+        d = self._drect
+        self._drect = None
+        w, h = d[2] - d[0], d[3] - d[1]
+        if w >= self.width and h >= self.height:
+            self.calls.append(("show",))
+        else:
+            self.calls.append(("show_rect", d[0], d[1], w, h))
 
     def fill(self, color):
         self.calls.append(("fill", color))
+        self._drect = [0, 0, self.width, self.height]
 
     def show(self):
         self.calls.append(("show",))
@@ -19,15 +53,19 @@ class FakeTft:
         self.calls.append(("show_rect", x, y, w, h))
 
     def text(self, *a, **kw):
-        pass
+        self.mark_dirty(a[1] if len(a) > 1 else 0, a[2] if len(a) > 2 else 0, 8, 8)
 
     def rect(self, *a, **kw):
-        pass
+        if len(a) >= 4:
+            self.mark_dirty(a[0], a[1], a[2], a[3])
 
     def fill_rect(self, *a, **kw):
-        pass
+        if len(a) >= 4:
+            self.mark_dirty(a[0], a[1], a[2], a[3])
 
     def pixel(self, *a, **kw):
+        if len(a) >= 2:
+            self.mark_dirty(a[0], a[1], 1, 1)
         return 0
 
 

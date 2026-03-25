@@ -63,11 +63,13 @@ class ChordDetector:
             should have their tap gesture consumed.
         """
         self._suppressed.clear()
+        n = len(just_pressed)
         for trigger, entries in self._by_trigger.items():
-            if not just_pressed[trigger]:
+            if trigger >= n or not just_pressed[trigger]:
                 continue
+            nh = len(held)
             for modifiers, action in entries:
-                if all(held[m] for m in modifiers):
+                if all(m < nh and held[m] for m in modifiers):
                     self._suppressed.append(trigger)
                     return action
         return None

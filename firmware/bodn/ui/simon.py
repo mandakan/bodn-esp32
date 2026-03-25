@@ -46,12 +46,13 @@ class SimonScreen(Screen):
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = SimonEngine()
-        self._brightness = BrightnessControl()
+        self._brightness = BrightnessControl(settings=settings)
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._prev_state = None
         self._prev_active_btn = -1
         self._dirty = True
+        self._full_clear = True
         self._leds_dirty = True
 
     def enter(self, manager):
@@ -60,6 +61,7 @@ class SimonScreen(Screen):
         self._engine.reset()
         self._brightness.reset()
         self._dirty = True
+        self._full_clear = True
 
     def exit(self):
         if self._on_exit:
@@ -76,6 +78,7 @@ class SimonScreen(Screen):
             return
         elif result == "resume":
             self._dirty = True
+            self._full_clear = True
         if self._pause.is_open or self._pause.is_holding:
             return
 
@@ -88,6 +91,7 @@ class SimonScreen(Screen):
         if state != self._prev_state:
             self._prev_state = state
             self._dirty = True
+            self._full_clear = True
             self._leds_dirty = True
             # Update cat face
             if self._secondary:
@@ -192,13 +196,16 @@ class SimonScreen(Screen):
             if self._dirty:
                 self._dirty = False
                 tft.fill(theme.BLACK)
+                self._full_clear = False
                 self._render_game(tft, theme, frame)
             self._pause.render(tft, theme, frame)
             return
 
         if self._dirty:
             self._dirty = False
-            tft.fill(theme.BLACK)
+            if self._full_clear:
+                self._full_clear = False
+                tft.fill(theme.BLACK)
             self._render_game(tft, theme, frame)
 
         # Hold-to-pause progress bar (always called so PauseMenu can clear its dirty flag)
@@ -313,6 +320,7 @@ class SimonScreen(Screen):
         )
 
         # Bottom bar: score
+        tft.fill_rect(0, h - 18, w, 18, theme.BLACK)
         tft.text(t("simon_round", round_num), 8, h - 14, theme.MUTED)
         if eng.high_score > 0:
             hs_text = t("simon_best_short", eng.high_score)
@@ -397,4 +405,5 @@ class SimonScreen(Screen):
         )
 
         # Score
+        tft.fill_rect(0, h - 16, w, 16, theme.BLACK)
         tft.text(t("simon_round_short", round_num), 4, h - 12, theme.MUTED)

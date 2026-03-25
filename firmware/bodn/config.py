@@ -17,7 +17,7 @@ TFT_RST = const(9)
 TFT_BL = const(1)  # GPIO 43 is UART TX — would flicker backlight on every print()
 TFT_WIDTH = const(320)
 TFT_HEIGHT = const(240)
-TFT_MADCTL = const(0x68)  # MV + MX + BGR (landscape)
+TFT_MADCTL = const(0xE0)  # MY + MX + MV (landscape, RGB order)
 TFT_COL_OFFSET = const(0)
 TFT_ROW_OFFSET = const(0)
 
@@ -56,19 +56,15 @@ ENC1_CLK = const(21)  # CLK was 19 (USB OTG D−) → moved to 21
 ENC1_DT = const(18)
 ENC1_SW = const(17)
 ENC2_CLK = const(16)
-ENC2_DT = const(3)
+ENC2_DT = const(44)
 ENC2_SW = const(40)
-ENC3_CLK = const(41)
-ENC3_DT = const(42)
-ENC3_SW = const(0)
 
-# Encoder role indices — mount left-to-right next to the display:
-#   ENC1 = NAV   (left,   nearest display — menu scroll + back button)
-#   ENC2 = ENC_A (middle, mode parameter 1 — e.g. brightness)
-#   ENC3 = ENC_B (right,  mode parameter 2 — e.g. speed)
-ENC_NAV = const(0)  # index: navigation (home: scroll modes, modes: back button)
+# Encoder role indices — two encoders, NAV doubles as parameter B in game modes:
+#   ENC1 = NAV   (left,  menu scroll + back button; rotation = param B in games)
+#   ENC2 = ENC_A (right, mode parameter 1 — e.g. brightness)
+ENC_NAV = const(0)  # index: navigation + parameter B in game modes
 ENC_A = const(1)  # index: mode parameter 1
-ENC_B = const(2)  # index: mode parameter 2
+ENC_B = const(0)  # same as NAV — NAV rotation doubles as param B in games
 
 # WS2812B NeoPixel LEDs — three zones daisy-chained on one data line:
 #   Stick A (8 LEDs)  →  Stick B (8 LEDs)  →  Lid Ring (92 LEDs)
@@ -109,7 +105,7 @@ I2C_SCL = const(47)
 I2C_SDA = const(48)
 
 # MCP23017 GPIO expander — buttons and toggles over I2C
-MCP23017_ADDR = const(0x20)  # A0-A2 jumpers all low
+MCP23017_ADDR = const(0x27)  # A0-A2 jumpers all high (Waveshare default)
 MCP_INT_PIN = const(46)  # MCP23017 INTA/INTB → GPIO 46 (active-low, open-drain)
 MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
 MCP_SW_PINS = [8, 9]  # GPB0–GPB1 (2 toggle switches; GPB2–3 freed for arcade)
@@ -125,6 +121,18 @@ PWM_CH_ARC3 = const(3)  # Arcade button 3 LED (blue)
 PWM_CH_ARC4 = const(4)  # Arcade button 4 LED (green)
 PWM_CH_ARC5 = const(5)  # Arcade button 5 LED (white)
 PWM_CH_AMP_SD = const(6)  # MAX98357A SD pin — hardware mute (0=off, 4095=on)
+
+# Encoder sensitivity: detents per logical unit
+# 1=high (every click), 2=medium, 3=low (for young children)
+ENCODER_SENS_OPTIONS = [1, 2, 3]
+ENCODER_SENS_DEFAULT = 1
+ENCODER_SENS_LABELS = ["high", "medium", "low"]
+
+
+def encoder_dpu(settings):
+    """Return detents-per-unit from settings (1=high, 2=medium, 3=low)."""
+    return settings.get("encoder_sensitivity", ENCODER_SENS_DEFAULT)
+
 
 # Power save
 SLEEP_TIMEOUT_S = 300  # default 5 minutes of inactivity before light sleep

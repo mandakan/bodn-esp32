@@ -102,13 +102,13 @@ th{color:#aaa}
 <body>
 <h1>Bodn</h1>
 <div class="tabs">
-<button class="tab active" onclick="show('dash')">Dashboard</button>
-<button class="tab" onclick="show('limits')">Limits</button>
-<button class="tab" onclick="show('history')">History</button>
-<button class="tab" onclick="show('stats')">Stats</button>
-<button class="tab" onclick="show('wifi')">WiFi</button>
-<button class="tab" onclick="show('security')">Security</button>
-<button class="tab" onclick="show('debug')">Debug</button>
+<button class="tab active" onclick="show('dash',this)">Dashboard</button>
+<button class="tab" onclick="show('limits',this)">Limits</button>
+<button class="tab" onclick="show('history',this)">History</button>
+<button class="tab" onclick="show('stats',this)">Stats</button>
+<button class="tab" onclick="show('wifi',this)">WiFi</button>
+<button class="tab" onclick="show('security',this)">Security</button>
+<button class="tab" onclick="show('debug',this)">Debug</button>
 </div>
 
 <div id="dash" class="panel active">
@@ -139,6 +139,9 @@ th{color:#aaa}
 <div class="field"><label>Quiet start (HH:MM, empty=off)</label><input class="input-field" type="text" id="quiet_start" placeholder="21:00"></div>
 <div class="field"><label>Quiet end (HH:MM)</label><input class="input-field" type="text" id="quiet_end" placeholder="07:00"></div>
 <div class="field"><label>Device language</label><select id="language" class="input-field"><option value="sv">Svenska</option><option value="en">English</option></select></div>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Visible modes</h3>
+<p style="font-size:0.75em;color:#666;margin:4px 0">Toggle which modes appear in the main menu.</p>
+<div id="mode-vis"></div>
 <h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Per-mode limits</h3>
 <p style="font-size:0.75em;color:#666;margin:4px 0">Minutes per session. Empty = use global. 0 = unlimited.</p>
 <div id="mode-limits"></div>
@@ -184,16 +187,17 @@ th{color:#aaa}
 <div class="field"><label>Mode</label><select class="input-field" id="wifi_mode"><option value="ap">Access Point</option><option value="sta">Connect to network</option></select></div>
 <div class="field"><label>SSID</label><input class="input-field" type="text" id="wifi_ssid"></div>
 <div class="field"><label>Password</label><input class="input-field" type="password" id="wifi_pass"></div>
+<div class="field"><label>Hostname</label><input class="input-field" type="text" id="hostname" placeholder="bodn"><p style="font-size:0.75em;color:#666;margin-top:4px">Device will be reachable at <span id="hostname-preview">bodn</span>.local</p></div>
 <button class="btn btn-primary" onclick="saveWifi()">Save &amp; Reboot</button>
 <div id="wifi-msg" class="msg"></div>
 </div>
 
 <script>
-function show(id){
+function show(id,el){
 document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
 document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
 document.getElementById(id).classList.add('active');
-event.target.classList.add('active');
+el.classList.add('active');
 if(id==='history')loadHistory();
 if(id==='stats')loadStats();
 }
@@ -255,25 +259,39 @@ var r=await fetch('/api/settings');var d=await r.json();
 ['max_session_min','max_sessions_day','break_min'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k];
 });
-['quiet_start','quiet_end','wifi_ssid','wifi_pass','wifi_mode','ui_pin','ota_token','language'].forEach(function(k){
+['quiet_start','quiet_end','wifi_ssid','wifi_pass','wifi_mode','ui_pin','ota_token','language','hostname'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k]||'';
 });
 var se=document.getElementById('sessions-enabled');if(se)se.checked=d.sessions_enabled!==false;
 updRv(document.getElementById('max_session_min'),'rv-sess',' min');
 updRv(document.getElementById('max_sessions_day'),'rv-maxs','');
 updRv(document.getElementById('break_min'),'rv-brk',' min');
-// Load mode limits
-var ml=d.mode_limits||{};
+// Load modes (visibility + limits) from API
+try{
+var mr=await fetch('/api/modes');var modes=await mr.json();
+var vc=document.getElementById('mode-vis');
 var mc=document.getElementById('mode-limits');
-if(mc){mc.innerHTML='';
-var modes=['free_play','sound_mixer','recorder','sequencer'];
-var names={'free_play':'Free Play','sound_mixer':'Sound Mixer','recorder':'Recorder','sequencer':'Sequencer'};
+var ml=d.mode_limits||{};
+if(vc)vc.innerHTML='';
+if(mc)mc.innerHTML='';
 modes.forEach(function(m){
-var row=document.createElement('div');row.className='mode-row';
-var v=ml[m];var val=(v!=null&&v!==undefined)?v:'';
-row.innerHTML='<label>'+names[m]+'</label><input type="number" min="0" id="ml_'+m+'" value="'+val+'" placeholder="--"><span class="hint">min</span>';
-mc.appendChild(row);
-});}
+// Visibility toggle
+if(vc){
+var row=document.createElement('div');row.className='toggle';
+var cb=document.createElement('input');cb.type='checkbox';cb.id='mv_'+m.name;cb.checked=m.visible;
+var lb=document.createElement('label');lb.textContent=m.name;
+row.appendChild(cb);row.appendChild(lb);vc.appendChild(row);
+}
+// Per-mode limit
+if(mc){
+var row2=document.createElement('div');row2.className='mode-row';
+var v=ml[m.name];var val=(v!=null&&v!==undefined)?v:'';
+row2.innerHTML='<label>'+m.name+'</label><input type="number" min="0" id="ml_'+m.name+'" value="'+val+'" placeholder="--"><span class="hint">min</span>';
+mc.appendChild(row2);
+}
+});
+window._modeNames=modes.map(function(m){return m.name});
+}catch(e){window._modeNames=[];}
 }catch(e){}
 }
 async function saveSettings(){
@@ -286,8 +304,16 @@ var v=document.getElementById(k).value.trim();
 body[k]=v||null;
 });
 var langEl=document.getElementById('language');if(langEl)body.language=langEl.value;
+// Collect hidden modes
+var hidden=[];
+(window._modeNames||[]).forEach(function(m){
+var cb=document.getElementById('mv_'+m);
+if(cb&&!cb.checked)hidden.push(m);
+});
+body.hidden_modes=hidden;
+// Collect per-mode limits
 var ml={};
-['free_play','sound_mixer','recorder','sequencer'].forEach(function(m){
+(window._modeNames||[]).forEach(function(m){
 var el=document.getElementById('ml_'+m);
 if(el&&el.value!=='')ml[m]=parseInt(el.value);
 });
@@ -367,9 +393,11 @@ setTimeout(function(){msg.className='msg'},2000);
 if(r.ok&&body.ui_pin){document.cookie='bodn_pin='+body.ui_pin+';path=/;SameSite=Strict'}
 }
 async function saveWifi(){
+var hn=document.getElementById('hostname').value.trim()||'bodn';
 var body={wifi_mode:document.getElementById('wifi_mode').value,
 wifi_ssid:document.getElementById('wifi_ssid').value,
-wifi_pass:document.getElementById('wifi_pass').value};
+wifi_pass:document.getElementById('wifi_pass').value,
+hostname:hn};
 var r=await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 var msg=document.getElementById('wifi-msg');
 msg.className=r.ok?'msg ok':'msg err';
@@ -392,6 +420,8 @@ var r=await fetch('/api/settings');var d=await r.json();
 document.getElementById('dbg-serial').checked=!!d.debug_input;
 }catch(e){}
 }
+var hnEl=document.getElementById('hostname');
+if(hnEl)hnEl.addEventListener('input',function(){document.getElementById('hostname-preview').textContent=this.value.trim()||'bodn'});
 loadSettings();loadDebugState();refresh();setInterval(refresh,5000);
 </script>
 </body>

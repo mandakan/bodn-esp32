@@ -13,11 +13,13 @@ NAV = const(0)  # config.ENC_NAV
 _ITEMS = [
     ("sessions_enabled", "settings_sessions", "bool"),
     ("sleep_timeout_s", "settings_sleep", "cycle"),
+    ("encoder_sensitivity", "settings_encoder", "cycle"),
     ("wifi", "settings_wifi", "bool"),
     ("leds", "settings_leds", "bool"),
     ("language", "pause_lang", "lang"),
     ("debug_input", "settings_debug", "bool"),
     ("debug_perf", "settings_perf", "bool"),
+    ("admin_url", "settings_admin", "action"),
     ("standby", "settings_standby", "action"),
     ("diag", "settings_diag", "action"),
     ("back", "settings_back", "action"),
@@ -60,6 +62,14 @@ class SettingsScreen(Screen):
             if val == 0:
                 return t("off")
             return t("sleep_min", val // 60)
+        if key == "encoder_sensitivity":
+            val = self._settings.get("encoder_sensitivity", config.ENCODER_SENS_DEFAULT)
+            idx = 0
+            for i in range(len(config.ENCODER_SENS_OPTIONS)):
+                if config.ENCODER_SENS_OPTIONS[i] == val:
+                    idx = i
+                    break
+            return t("sens_" + config.ENCODER_SENS_LABELS[idx])
         if key in ("debug_input", "debug_perf", "sessions_enabled"):
             return self._settings.get(key, key == "sessions_enabled")
         return False
@@ -68,6 +78,12 @@ class SettingsScreen(Screen):
         if key == "back":
             if self._manager:
                 self._manager.pop()
+            return
+        if key == "admin_url":
+            if self._manager:
+                from bodn.ui.admin_qr import AdminQRScreen
+
+                self._manager.push(AdminQRScreen(self._settings))
             return
         if key == "diag":
             if self._manager:
@@ -88,6 +104,23 @@ class SettingsScreen(Screen):
             self._settings["sleep_timeout_s"] = _SLEEP_OPTIONS[
                 (idx + 1) % len(_SLEEP_OPTIONS)
             ]
+            try:
+                from bodn.storage import save_settings
+
+                save_settings(self._settings)
+            except Exception:
+                pass
+            self._dirty = True
+            return
+        if key == "encoder_sensitivity":
+            opts = config.ENCODER_SENS_OPTIONS
+            cur = self._settings.get("encoder_sensitivity", config.ENCODER_SENS_DEFAULT)
+            idx = 0
+            for i in range(len(opts)):
+                if opts[i] == cur:
+                    idx = i
+                    break
+            self._settings["encoder_sensitivity"] = opts[(idx + 1) % len(opts)]
             try:
                 from bodn.storage import save_settings
 
@@ -166,19 +199,28 @@ class SettingsScreen(Screen):
         landscape = w > h
 
         # Title
+        title_h = 28 if landscape else 24
         draw_centered(tft, t("settings_title"), 8, theme.WHITE, w, scale=2)
 
-        # Menu items
-        y_start = 40 if landscape else 30
+        # Menu items — scroll to keep selection centered
         row_h = 24 if landscape else 20
+        menu_h = h - title_h - 4  # available height for menu items
+        visible = menu_h // row_h  # how many items fit on screen
 
-        for i, (key, label_key, item_type) in enumerate(_ITEMS):
-            y = y_start + i * row_h
+        # Calculate scroll offset to center the selected item
+        n = len(_ITEMS)
+        half = visible // 2
+        scroll = self._index - half
+        scroll = max(0, min(scroll, n - visible))
+
+        for i in range(scroll, min(scroll + visible, n)):
+            key, label_key, item_type = _ITEMS[i]
+            y = title_h + (i - scroll) * row_h
             selected = i == self._index
 
             # Highlight bar for selected item
             if selected:
-                tft.fill_rect(4, y - 2, w - 8, row_h - 2, theme.MUTED)
+                tft.fill_rect(4, y - 2, w - 8, row_h - 2, theme.DIM)
 
             # Label
             color = theme.WHITE if selected else theme.MUTED
@@ -201,3 +243,9 @@ class SettingsScreen(Screen):
                 val_str = str(self._get_value(key))
                 tx = w - 8 - len(val_str) * 8
                 tft.text(val_str, tx, y + 2, theme.WHITE if selected else theme.MUTED)
+
+        # Scroll indicators
+        if scroll > 0:
+            draw_centered(tft, "^", title_h - 10, theme.MUTED, w)
+        if scroll + visible < n:
+            draw_centered(tft, "v", h - 12, theme.MUTED, w)

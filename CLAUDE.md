@@ -18,7 +18,7 @@
   - `wokwi.toml` contains `[[chip]] name="mcp23017" binary="mcp23017.chip.wasm"` to register it
   - `wokwi-api.h` is a build artefact downloaded by the CLI — it is gitignored, do not commit it
   - If `mcp23017.chip.c` is changed, recompile and commit the new `.wasm`: `~/bin/wokwi-cli chip compile mcp23017.chip.c -o mcp23017.chip.wasm`
-  - The `diagram.json` wires all 8 buttons (GPA0–7) and all 4 toggle switches (GPB0–3) through `mcp1` — do not bypass these with direct ESP GPIO connections in the diagram
+  - The `diagram.json` wires all 8 buttons (GPA0–7), 2 toggle switches (GPB0–1), and 5 arcade buttons (GPB2–3, GPB5–7) through `mcp1` — do not bypass these with direct ESP GPIO connections in the diagram
 - **UX design**: when designing screens, game modes, interactions, or feedback, follow `docs/UX_GUIDELINES.md`. Key rules: one concept per screen, large icons over text, immediate multimodal feedback, max 3–4 active choices, no complex gestures. Games should target executive functions (working memory, inhibition, cognitive flexibility) at a 4-year-old level.
 - **Performance**: follow `docs/PERFORMANCE_GUIDELINES.md`. Key rules: event-driven over polling, no full-screen redraws every frame, cooperative async tasks, minimal per-frame allocations, sparse `print()` usage. The review checklist (section 10) applies to all code changes.
 - **Thermal safety**: the LiPo charger (BL4054B) and battery have NO hardware thermal protection — software is the only safeguard. Any new peripheral that draws significant power (LEDs, motors, RF) **must** be added to the power-shedding logic in `main.py` `housekeeping_task()`. Non-critical loads are disabled at ≥ 50 °C (critical) and the device deep-sleeps at ≥ 60 °C (emergency). See `docs/hardware.md` § "Thermal protection" for the escalation table.
@@ -50,12 +50,12 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 | Microphone | INMP441 I2S MEMS | I2S IN |
 | Amplifier | MAX98357A 3W class-D (AZDelivery) | I2S OUT |
 | Speaker | 3W 8Ω mini speaker (Quarkzman) | wired to MAX98357A |
-| Encoders | KY-040 rotary encoder × 3 (with push button) | GPIO + pull-up |
+| Encoders | KY-040 rotary encoder × 2 (with push button) | GPIO + pull-up |
 | Buttons | Mini momentary push buttons × 8 | GPIO + pull-up |
-| Toggle switches | SPST mini toggle switches × 4 | GPIO + pull-up |
+| Toggle switches | SPST mini toggle switches × 2 | MCP23017 I2C expander |
 | LED sticks | WS2812 8-LED modules × 2 (on lid) | NeoPixel (1 GPIO, daisy-chained) |
 | LED strip | WS2812B 144 LED/m strip, 640 mm / ~92 LEDs (inside lid perimeter) | NeoPixel (chained after sticks) |
-| GPIO expander | Waveshare MCP23017 16-IO board | I2C (addr 0x20) |
+| GPIO expander | Waveshare MCP23017 16-IO board | I2C (addr 0x27) |
 | DC-DC converter | Buck-boost 3–16 V → 5 V / 2 A | LiPo → 5 V for NeoPixels |
 | Temperature sensors | DS18B20 × 2 (battery + enclosure) | 1-Wire (GPIO 20) |
 | Power switch | Panel-mount toggle switch | — |
@@ -65,49 +65,70 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 ```
 bodn-esp32/
 ├─ firmware/
-│  ├─ boot.py              # WiFi setup, NTP sync, load settings
+│  ├─ boot.py              # WiFi setup, NTP sync, battery check, boot screen
 │  ├─ main.py              # async entry point (uasyncio)
-│  ├─ st7735.py            # framebuf-based ST7735/ILI9341 display driver
+│  ├─ st7735.py            # framebuf-based ST7735/ILI9341 driver + dirty rect tracking
 │  └─ bodn/
 │     ├─ __init__.py
+│     ├─ arcade.py          # arcade button input + LED output via MCP/PCA
 │     ├─ audio.py           # async AudioEngine (3-channel priority playback)
-│     ├─ config.py          # pin assignments, constants
+│     ├─ chord.py           # multi-button chord/combo detection
+│     ├─ cli.py             # serial REPL helpers (wifi, settings, reboot)
+│     ├─ config.py          # pin assignments, constants, encoder sensitivity
 │     ├─ debounce.py        # generic debounce logic
+│     ├─ diag.py            # system diagnostics data gathering
+│     ├─ encoder.py         # IRQ-based rotary encoder reader (with debounce)
+│     ├─ flode_rules.py     # Flöde puzzle engine (pure logic)
+│     ├─ gesture.py         # tap/hold/long-press gesture detection
 │     ├─ i18n.py            # internationalisation: t(), set_language(), init()
 │     ├─ lang/
 │     │  ├─ sv.py           # Swedish string table (default)
 │     │  └─ en.py           # English string table
-│     ├─ encoder.py         # IRQ-based rotary encoder reader
-│     ├─ patterns.py        # LED animation patterns (shared buffer)
+│     ├─ life_rules.py      # Game of Life cellular automata (pure logic)
+│     ├─ mcp23017.py        # MCP23017 I2C GPIO expander driver
 │     ├─ mystery_rules.py   # Mystery Box rule engine (pure logic)
+│     ├─ patterns.py        # LED animation patterns (shared buffer)
+│     ├─ pca9685.py         # PCA9685 I2C PWM driver
+│     ├─ power.py           # power management (sleep, wake, master switch)
+│     ├─ qr.py              # minimal QR code encoder (V1-V2)
+│     ├─ rulefollow_rules.py # Rule Follow game engine (pure logic)
 │     ├─ session.py         # play session state machine (pure logic)
+│     ├─ simon_rules.py     # Simon game engine (pure logic)
 │     ├─ storage.py         # JSON settings & session history on flash
 │     ├─ temperature.py     # DS18B20 1-Wire temperature monitoring
 │     ├─ tones.py           # procedural tone generation (pure logic)
 │     ├─ wav.py             # WAV header parser + streaming reader (pure logic)
-│     ├─ wifi.py            # WiFi connect (STA / AP) + runtime control
+│     ├─ wifi.py            # WiFi connect (STA / AP) + mDNS + runtime control
 │     ├─ web.py             # async HTTP server for parental controls
 │     ├─ web_ui.py          # HTML/CSS/JS served to the browser
 │     └─ ui/
-│        ├─ screen.py       # Screen base class + ScreenManager
-│        ├─ theme.py        # colour palette and layout constants
-│        ├─ font_ext.py     # 8×8 bitmap glyphs for å ä ö Å Ä Ö
-│        ├─ input.py        # unified input state with debouncing
-│        ├─ widgets.py      # stateless draw helpers
-│        ├─ icons.py        # 16×16 bitmap icons
-│        ├─ home.py         # home screen with mode selection
-│        ├─ demo.py         # LED playground mode
-│        ├─ mystery.py      # Mystery Box discovery game
-│        ├─ clock.py        # clock display mode
+│        ├─ admin_qr.py     # admin URL screen with QR code
 │        ├─ ambient.py      # AmbientClock (content) + StatusStrip (status)
 │        ├─ catface.py      # cat face with emotions (secondary content)
-│        ├─ settings.py     # on-device settings menu
+│        ├─ clock.py        # clock display mode
+│        ├─ demo.py         # LED playground mode
+│        ├─ diag.py         # on-device diagnostics screen
+│        ├─ flode.py        # Flöde flow alignment puzzle
+│        ├─ font_ext.py     # 8×8 bitmap glyphs for å ä ö Å Ä Ö
+│        ├─ garden.py       # Garden of Life (cellular automata)
+│        ├─ garden_secondary.py # Garden secondary display content
+│        ├─ home.py         # home screen with carousel mode selection
+│        ├─ icons.py        # 16×16 bitmap icons
+│        ├─ input.py        # unified input state with debouncing
+│        ├─ logo.py         # pixel art boot logo (Norse mead vessel)
+│        ├─ mystery.py      # Mystery Box discovery game
 │        ├─ overlay.py      # session state overlay
-│        ├─ pause.py        # in-game pause menu
-│        └─ secondary.py    # two-zone secondary display manager
+│        ├─ pause.py        # in-game pause menu (hold-to-open)
+│        ├─ rulefollow.py   # Rule Follow game screen
+│        ├─ screen.py       # Screen base class + ScreenManager
+│        ├─ secondary.py    # two-zone secondary display manager
+│        ├─ settings.py     # on-device settings menu (scrollable)
+│        ├─ simon.py        # Simon memory game screen
+│        ├─ theme.py        # colour palette and layout constants
+│        └─ widgets.py      # stateless draw helpers
 ├─ docs/
 │  ├─ audio.md              # audio file preparation guide
-│  ├─ hardware.md           # BOM, board notes
+│  ├─ hardware.md           # BOM, board notes, pin assignments
 │  ├─ wiring.md             # auto-generated pin diagram and tables
 │  ├─ UX_GUIDELINES.md      # child-facing interaction design
 │  ├─ PERFORMANCE_GUIDELINES.md  # ESP32 performance rules

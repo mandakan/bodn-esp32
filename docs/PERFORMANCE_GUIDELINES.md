@@ -51,6 +51,25 @@ that alone takes ~47 ms, exceeding a 30 ms frame budget.
   - In `render()`, prefer `tft.fill_rect(x, y, w, h, BLACK)` over `tft.fill(BLACK)`.
     Clear only the region you are about to redraw, not the whole screen.
   - Reserve `tft.fill(BLACK)` for screen transitions (entering a new screen / mode).
+- **Automatic dirty rect tracking** — the ST7735 driver tracks a bounding box of all
+  draw operations (`fill_rect`, `text`, `pixel`, `line`, etc.) per frame. After
+  `render()`, `ScreenManager` calls `tft.show_dirty()` which pushes only the changed
+  region via `show_rect()`. This is automatic — no screen code changes needed.
+  - Screens that call `tft.fill(BLACK)` mark the entire screen dirty → full push (same as before).
+  - Screens that only redraw changed areas (garden cells, flöde segments) get partial
+    pushes automatically, reducing SPI data from ~150 KB to a few KB.
+  - **To benefit**: avoid `tft.fill(BLACK)` per frame. Instead, clear only the changed
+    sub-region with `tft.fill_rect()`. Use a `_full_clear` flag for transitions.
+  - **Pattern for animation screens** (see Flöde as reference):
+    ```python
+    def render(self, tft, theme, frame):
+        if self._dirty:
+            self._dirty = False
+            if self._full_clear:           # only on state transitions
+                tft.fill(theme.BLACK)
+                self._full_clear = False
+            self._render_game(tft, theme, frame)  # draws only changed areas
+    ```
 - **Never call `tft.show()` or `tft.show_rect()` directly** from screens or UI components.
   Always route through `manager.request_show()` or `manager.request_show(x, y, w, h)`.
   Only `ScreenManager.tick()` and `SecondaryDisplay.tick()` issue the actual SPI push.
@@ -216,10 +235,12 @@ When generating or reviewing code, check:
    - Does the screen implement `needs_redraw()` and track `_dirty` state?
    - Is `render()` + `show()` skipped entirely when nothing changed?
    - No full `fill()` calls inside fast loops?
+   - Is `tft.fill(BLACK)` reserved for screen transitions (guarded by a `_full_clear` flag)?
+     Every `fill()` marks the full screen dirty, defeating partial-push optimization.
+   - For animations: does the screen clear only the changed sub-region with `fill_rect()`
+     instead of clearing the whole screen? (dirty rect tracking handles the rest automatically)
    - For small, frequent updates (progress bars, timers, counters): does the screen use
      `manager.request_show(x, y, w, h)` (partial push) instead of triggering a full render?
-   - In `render()`, is `fill_rect(x, y, w, h)` used instead of `fill()` wherever possible?
-     `fill()` should only appear on screen transitions.
    - Secondary display: does the screen clear only its changed sub-region (not the full zone)?
      Does it stay within zone bounds (content: y<128, status: y≥128)?
 3. **Input**:

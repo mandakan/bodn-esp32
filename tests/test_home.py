@@ -48,6 +48,7 @@ class FakeTheme:
     RED = 0xF800
     GREEN = 0x07E0
     MUTED = 0x7BEF
+    DIM = 0x4208
     HEADER_Y = 3
     CENTER_X = 160
     CENTER_Y = 120
@@ -90,7 +91,7 @@ def make_home(n_modes=4):
     modes = {f"mode{i}": lambda: None for i in range(n_modes)}
     order = [f"mode{i}" for i in range(n_modes)]
     session_mgr = FakeSessionMgr()
-    home = HomeScreen(modes, session_mgr, order=order)
+    home = HomeScreen(modes, session_mgr, order=order, settings={"hidden_modes": []})
     mgr = FakeManager()
     home.enter(mgr)
     # Consume initial dirty flag
@@ -98,22 +99,15 @@ def make_home(n_modes=4):
     return home, mgr
 
 
-def test_slow_turn_needs_multiple_detents():
-    """Slow turn: accumulator requires ~2 raw detents per mode step."""
+def test_single_detent_moves_one_step():
+    """Single detent at low velocity moves one mode step (dpu=1)."""
     home, mgr = make_home()
     inp = mgr.inp
     assert home._index == 0
 
-    # 1 raw detent at low velocity → not enough
     inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
-    assert home._index == 0
-
-    # 2nd raw detent → triggers mode change (detents_per_unit=2)
-    inp.enc_delta[0] = 1
-    inp.enc_velocity[0] = 50
-    home.update(inp, 2)
     assert home._index == 1
 
 
@@ -122,11 +116,11 @@ def test_fast_spin_skips_modes():
     home, mgr = make_home(n_modes=6)
     inp = mgr.inp
 
-    # 2 detents at high velocity → 2*2=4 effective, 4//2=2 units
+    # 2 detents at high velocity → 2*2=4 effective, 4//1=4 units
     inp.enc_delta[0] = 2
     inp.enc_velocity[0] = 500
     home.update(inp, 1)
-    assert home._index == 2
+    assert home._index == 4
 
 
 def test_mode_change_starts_animation():
@@ -134,8 +128,8 @@ def test_mode_change_starts_animation():
     home, mgr = make_home()
     inp = mgr.inp
 
-    # Trigger a mode change (2 raw detents = 1 unit at dpu=2)
-    inp.enc_delta[0] = 2
+    # Trigger a mode change (1 detent = 1 unit at dpu=1)
+    inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._anim_step == 0
@@ -148,7 +142,7 @@ def test_animation_advances_each_frame():
     inp = mgr.inp
 
     # Trigger mode change
-    inp.enc_delta[0] = 2
+    inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._anim_step == 0
@@ -167,7 +161,7 @@ def test_animation_stops_redraws_when_done():
     inp = mgr.inp
 
     # Trigger mode change
-    inp.enc_delta[0] = 2
+    inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
 
@@ -192,8 +186,8 @@ def test_mid_animation_encoder_restarts():
     home, mgr = make_home()
     inp = mgr.inp
 
-    # Trigger first mode change (2 raw detents = 1 unit)
-    inp.enc_delta[0] = 2
+    # Trigger first mode change (1 detent = 1 unit at dpu=1)
+    inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._index == 1
@@ -206,7 +200,7 @@ def test_mid_animation_encoder_restarts():
     assert home._anim_step == 2
 
     # New encoder input mid-animation → restarts
-    inp.enc_delta[0] = 2
+    inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 4)
     assert home._index == 2
@@ -218,7 +212,7 @@ def test_backward_turn_animation_direction():
     home, mgr = make_home()
     inp = mgr.inp
 
-    inp.enc_delta[0] = -2
+    inp.enc_delta[0] = -1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._anim_dir == -1
@@ -230,7 +224,7 @@ def test_circular_wrapping():
     inp = mgr.inp
 
     # Go backward from index 0 → should wrap to last
-    inp.enc_delta[0] = -2
+    inp.enc_delta[0] = -1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
     assert home._index == 2
@@ -241,20 +235,15 @@ def test_accumulator_reset_on_enter():
     home, mgr = make_home()
     inp = mgr.inp
 
-    # Accumulate 1 detent without triggering a step (dpu=2)
+    # Move one step
     inp.enc_delta[0] = 1
     inp.enc_velocity[0] = 50
     home.update(inp, 1)
-    assert home._index == 0
+    assert home._index == 1
 
-    # Re-enter screen
+    # Re-enter screen — index preserved but accumulator reset
     home.enter(mgr)
-
-    # Should need full 2 detents again (reset cleared the 1 accumulated)
-    inp.enc_delta[0] = 1
-    inp.enc_velocity[0] = 50
-    home.update(inp, 2)
-    assert home._index == 0
+    assert home._accum == 0
 
 
 def test_button_still_enters_mode():

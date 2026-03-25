@@ -360,19 +360,16 @@ def test_brightness_initial_value():
 
 def test_brightness_slow_turn_fine_adjustment():
     bc = BrightnessControl(initial=128, step=20)
-    # 3 slow detents (below fast threshold) → 1 unit → +20 brightness
-    bc.update(1, 100)
-    bc.update(1, 100)
-    assert bc.value == 128  # not yet
+    # 1 slow detent (dpu=1 default) → 1 unit → +20 brightness
     bc.update(1, 100)
     assert bc.value == 148  # +20
 
 
 def test_brightness_fast_spin_big_jump():
     bc = BrightnessControl(initial=128, step=20)
-    # 1 detent at high velocity → multiplied by 3 → 1 unit → +20
+    # 1 detent at high velocity → multiplied by 3 → 3 units → +60
     bc.update(1, 500)
-    assert bc.value == 148
+    assert bc.value == 188
 
 
 def test_brightness_clamps_to_max():
@@ -389,20 +386,17 @@ def test_brightness_clamps_to_min():
 
 def test_brightness_reset_clears_accumulator():
     bc = BrightnessControl(initial=128, step=20)
-    bc.update(1, 100)  # accumulate 1 detent
+    bc.update(1, 100)  # 1 detent → +20 → 148
     bc.reset(value=200)
     assert bc.value == 200
-    # After reset, need full 3 detents again
-    assert bc.update(1, 100) == 200
-    assert bc.update(1, 100) == 200
+    # After reset, 1 detent → +20
     bc.update(1, 100)
     assert bc.value == 220
 
 
 def test_brightness_decrease_direction():
     bc = BrightnessControl(initial=128, step=20)
-    bc.update(-1, 100)
-    bc.update(-1, 100)
+    # 1 detent down at dpu=1 → -20 per detent
     bc.update(-1, 100)
     assert bc.value == 108
 

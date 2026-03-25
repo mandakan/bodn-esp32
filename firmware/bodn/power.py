@@ -72,6 +72,7 @@ class PowerManager:
         self._np = np
         self._mcp = mcp
         self._bl_pin = None
+        self._master_sw_seen = False  # only sleep after switch toggled ON first
 
     def pre_sleep(self):
         """Turn off power-hungry peripherals before entering light sleep."""
@@ -95,7 +96,6 @@ class PowerManager:
         """Configure wake sources and enter machine.lightsleep()."""
         import machine
         from machine import Pin
-        import esp32
         from bodn import config
 
         # Enable MCP23017 interrupts (any button/toggle change pulls INT low)
@@ -103,19 +103,47 @@ class PowerManager:
             self._mcp.enable_interrupts()
 
         # Wake sources: encoder buttons (all active-low) + MCP INT if present
-        wake_pins = [config.ENC1_SW, config.ENC2_SW, config.ENC3_SW]
-        if self._mcp:
-            wake_pins.append(config.MCP_INT_PIN)
-        for pin_num in wake_pins:
-            p = Pin(pin_num, Pin.IN, Pin.PULL_UP)
-            esp32.gpio_wakeup(p, esp32.WAKEUP_ANY_LOW)
+        has_gpio_wake = False
+        try:
+            import esp32
+
+            wake_pins = [config.ENC1_SW, config.ENC2_SW]
+            if self._mcp:
+                wake_pins.append(config.MCP_INT_PIN)
+            for pin_num in wake_pins:
+                p = Pin(pin_num, Pin.IN, Pin.PULL_UP)
+                esp32.gpio_wakeup(p, esp32.WAKEUP_ANY_LOW)
+            has_gpio_wake = True
+        except (ImportError, AttributeError) as e:
+            print("POWER: gpio_wakeup unavailable:", e)
 
         # Clear pending MCP interrupts before sleeping
         if self._mcp:
             self._mcp.clear_interrupts()
 
-        print("POWER: entering light sleep")
-        machine.lightsleep()
+        if has_gpio_wake:
+            print("POWER: entering light sleep (GPIO wake)")
+            machine.lightsleep()
+        else:
+            # Fallback: poll encoder buttons in a light sleep loop
+            print("POWER: entering poll sleep (no GPIO wake)")
+            enc_pins = [
+                Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP),
+                Pin(config.ENC2_SW, Pin.IN, Pin.PULL_UP),
+            ]
+            while True:
+                machine.lightsleep(200)  # wake every 200ms to check buttons
+                if any(p.value() == 0 for p in enc_pins):
+                    break
+                if self._mcp:
+                    self._mcp.refresh()
+                    # Check if any button was pressed on expander
+                    for bp in range(16):
+                        if self._mcp.pin_value(bp) == 0:
+                            break
+                    else:
+                        continue
+                    break
         print("POWER: woke up")
 
     def post_wake(self):
@@ -128,23 +156,39 @@ class PowerManager:
             self._mcp.clear_interrupts()
             self._mcp.disable_interrupts()
 
-        # Wake displays (SLPOUT)
-        self._tft._cmd(0x11)
-        self._tft2._cmd(0x11)
-        time.sleep_ms(120)  # displays need ~120 ms after SLPOUT
+        # Reinitialize displays — lightsleep can lose SPI/display state
+        self._tft._init_display(skip_reset=False)
+        self._tft2._init_display(skip_reset=True)
+
+        # Restore backlight
+        self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
+        self._bl_pin.value(1)
 
         # Restore backlight
         self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
         self._bl_pin.value(1)
 
     def master_switch_off(self):
-        """Return True if the master switch is in the OFF position (high = off)."""
+        """Return True if the master switch is in the OFF position.
+
+        The switch is active-low: 0 = ON, 1 = OFF.
+        With MCP23017 pull-ups enabled, an unconnected pin reads 1 (high).
+        To avoid false sleep when the switch isn't wired, we require the pin
+        to be explicitly pulled low (grounded) to register as ON, and only
+        treat it as OFF if we see a transition from ON to OFF (not on startup).
+        """
         if not self._mcp:
-            return False  # assume device ON when MCP is absent
+            return False
         from bodn import config
 
         self._mcp.refresh()
-        return self._mcp.pin_value(config.MCP_MASTER_SW_PIN) == 1
+        pin_val = self._mcp.pin_value(config.MCP_MASTER_SW_PIN)
+        # If we've never seen the switch in the ON position, don't sleep
+        if not self._master_sw_seen:
+            if pin_val == 0:
+                self._master_sw_seen = True
+            return False
+        return pin_val == 1
 
     def sleep_and_wake(self):
         """Full sleep cycle: pre_sleep → lightsleep → post_wake."""

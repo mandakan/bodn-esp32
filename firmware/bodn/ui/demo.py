@@ -1,6 +1,5 @@
 # bodn/ui/demo.py — LED playground (Demo mode screen)
 
-from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
@@ -9,9 +8,9 @@ from bodn.ui.pause import PauseMenu
 from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING
 from bodn.i18n import t
 
-NAV = const(0)  # config.ENC_NAV
-ENC_A = const(1)  # config.ENC_A
-ENC_B = const(2)  # config.ENC_B
+NAV = config.ENC_NAV
+ENC_A = config.ENC_A
+ENC_B = config.ENC_B
 
 # Colour palette per pattern index — module-level to avoid per-frame allocation
 _COLOUR_RGB = [
@@ -40,21 +39,24 @@ class DemoScreen(Screen):
     def __init__(self, np, overlay, settings=None):
         self._np = np
         self._overlay = overlay
-        self._brightness = BrightnessControl()
+        self._brightness = BrightnessControl(settings=settings)
         self._active_pattern = 0
+        self._speed = 5  # 1-20, controlled by NAV/ENC_B rotation
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._dirty = True
+        self._full_clear = True
         # Snapshot of input state for dirty detection
-        self._prev_enc = [0, 0, 0]
-        self._prev_btn = [False] * 8
-        self._prev_sw = [False] * 2
+        self._prev_enc = [0, 0]  # indexed by encoder index
+        self._prev_btn = []
+        self._prev_sw = []
 
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
         self._brightness.reset()
         self._dirty = True
+        self._full_clear = True
 
     def needs_redraw(self):
         return self._dirty or self._pause.needs_render
@@ -67,19 +69,23 @@ class DemoScreen(Screen):
             return
         elif result == "resume":
             self._dirty = True
+            self._full_clear = True
         if self._pause.is_open or self._pause.is_holding:
             return
 
         # Button tap → select pattern (uses gesture layer)
         g = inp.gestures
-        for i in range(8):
+        n_btn = len(inp.btn_held)
+        for i in range(n_btn):
             if g.tap[i]:
                 self._active_pattern = i % len(PATTERNS)
                 self._dirty = True
                 break
 
-        # Encoder A or B button → cycle pattern
-        if inp.enc_btn_pressed[ENC_A] or inp.enc_btn_pressed[ENC_B]:
+        # Encoder A button or NAV tap → cycle pattern
+        # NAV tap uses gesture to avoid triggering hold-to-pause
+        nav_tap = inp.gestures.tap[inp.gesture_enc(ENC_B)]
+        if inp.enc_btn_pressed[ENC_A] or nav_tap:
             self._active_pattern = (self._active_pattern + 1) % len(PATTERNS)
             self._dirty = True
 
@@ -89,16 +95,26 @@ class DemoScreen(Screen):
         if self._brightness.value != prev_bri:
             self._dirty = True
 
-        # Detect encoder changes for display redraw
-        for i in (NAV, ENC_B):
-            if inp.enc_pos[i] != self._prev_enc[i]:
-                self._prev_enc[i] = inp.enc_pos[i]
-                self._dirty = True
-        for i in range(8):
+        # NAV/ENC_B rotation adjusts speed
+        delta_b = inp.enc_delta[ENC_B]
+        if delta_b != 0:
+            self._speed = max(1, min(20, self._speed + delta_b))
+            self._dirty = True
+
+        # Detect encoder A changes for display redraw
+        if inp.enc_pos[ENC_A] != self._prev_enc[ENC_A]:
+            self._prev_enc[ENC_A] = inp.enc_pos[ENC_A]
+            self._dirty = True
+        if not self._prev_btn:
+            self._prev_btn = [False] * n_btn
+        for i in range(n_btn):
             if inp.btn_held[i] != self._prev_btn[i]:
                 self._prev_btn[i] = inp.btn_held[i]
                 self._dirty = True
-        for i in range(min(2, len(inp.sw))):
+        n_sw = min(2, len(inp.sw))
+        if not self._prev_sw and n_sw:
+            self._prev_sw = [False] * n_sw
+        for i in range(n_sw):
             if inp.sw[i] != self._prev_sw[i]:
                 self._prev_sw[i] = inp.sw[i]
                 self._dirty = True
@@ -106,7 +122,7 @@ class DemoScreen(Screen):
         # Only compute and write LEDs on NeoPixel-write frames
         if frame % 3 == 0:
             brightness = self._brightness.value
-            speed = max(1, min(20, inp.enc_pos[ENC_B]))
+            speed = self._speed
 
             _name, pat_fn = PATTERNS[self._active_pattern]
 
@@ -119,13 +135,13 @@ class DemoScreen(Screen):
             # Toggle switch modifiers (operate in-place on shared _led_buf)
             sw = inp.sw
             n = N_LEDS
-            if sw[0]:
+            if len(sw) > 0 and sw[0]:
                 # Reverse: swap in-place
                 half = n // 2
                 for i in range(half):
                     j = n - 1 - i
                     leds[i], leds[j] = leds[j], leds[i]
-            if sw[1]:
+            if len(sw) > 1 and sw[1]:
                 half = n // 2
                 for i in range(half):
                     leds[n - 1 - i] = leds[i]
@@ -155,6 +171,7 @@ class DemoScreen(Screen):
             if self._dirty:
                 self._dirty = False
                 tft.fill(theme.BLACK)
+                self._full_clear = False
                 landscape = theme.width > theme.height
                 if landscape:
                     self._render_landscape(tft, theme, frame)
@@ -163,8 +180,13 @@ class DemoScreen(Screen):
             self._pause.render(tft, theme, frame)
             return
 
+        if not self._dirty:
+            self._pause.render(tft, theme, frame)
+            return
         self._dirty = False
-        tft.fill(theme.BLACK)
+        if self._full_clear:
+            self._full_clear = False
+            tft.fill(theme.BLACK)
         landscape = theme.width > theme.height
         if landscape:
             self._render_landscape(tft, theme, frame)
@@ -182,7 +204,7 @@ class DemoScreen(Screen):
         if self._manager:
             sw = self._manager.inp.sw
             held = self._manager.inp.btn_held
-            enc_spd = max(0, min(20, self._manager.inp.enc_pos[ENC_B]))
+            enc_spd = self._speed
 
         mid_x = theme.width // 2
 
@@ -214,6 +236,7 @@ class DemoScreen(Screen):
         for i in range(len(toggle_labels)):
             x = i * 36
             y = 104
+            tft.fill_rect(x, y, 32, 14, theme.BLACK)
             if i < len(sw) and sw[i]:
                 tft.fill_rect(x, y, 32, 14, theme.GREEN)
                 tft.text(toggle_labels[i], x + 4, y + 3, theme.BLACK)
@@ -241,7 +264,8 @@ class DemoScreen(Screen):
                 tft, bar_x, y, bar_w, 14, val, max_val, colour_565, theme.BLACK
             )
 
-        # Back hint
+        # Back hint (static text, clear area first)
+        tft.fill_rect(rx, theme.height - 16, rw, 16, theme.BLACK)
         tft.text(t("demo_back"), rx, theme.height - 16, theme.MUTED)
 
     def _render_portrait(self, tft, theme, frame):
@@ -252,7 +276,7 @@ class DemoScreen(Screen):
         if self._manager:
             sw = self._manager.inp.sw
             held = self._manager.inp.btn_held
-            enc_spd = max(0, min(20, self._manager.inp.enc_pos[ENC_B]))
+            enc_spd = self._speed
 
         tft.text(t("home_title"), 32, 3, theme.WHITE)
 
@@ -278,6 +302,7 @@ class DemoScreen(Screen):
         for i in range(len(toggle_labels)):
             x = i * 32
             y = 82
+            tft.fill_rect(x, y, 28, 14, theme.BLACK)
             if i < len(sw) and sw[i]:
                 tft.fill_rect(x, y, 28, 14, theme.GREEN)
                 tft.text(toggle_labels[i], x + 2, y + 3, theme.BLACK)

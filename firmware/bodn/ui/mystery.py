@@ -29,15 +29,16 @@ class MysteryScreen(Screen):
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = MysteryEngine()
-        self._brightness = BrightnessControl()
+        self._brightness = BrightnessControl(settings=settings)
         self._hue_acc = EncoderAccumulator(
-            detents_per_unit=2, fast_threshold=400, fast_multiplier=4
+            settings=settings, fast_threshold=400, fast_multiplier=4
         )
         self._hue = 0
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._prev_out_type = OUT_IDLE
         self._dirty = True
+        self._full_clear = True
         self._leds_dirty = True
 
     def enter(self, manager):
@@ -47,6 +48,7 @@ class MysteryScreen(Screen):
         self._hue_acc.reset()
         self._hue = 0
         self._dirty = True
+        self._full_clear = True
 
     def exit(self):
         if self._on_exit:
@@ -63,6 +65,7 @@ class MysteryScreen(Screen):
             return
         elif result == "resume":
             self._dirty = True
+            self._full_clear = True
         if self._pause.is_open or self._pause.is_holding:
             return
 
@@ -73,8 +76,8 @@ class MysteryScreen(Screen):
             eng.sw_mirror,
             eng.hue_shift,
         )
-        eng.sw_invert = inp.sw[0]
-        eng.sw_mirror = inp.sw[1]
+        eng.sw_invert = inp.sw[0] if len(inp.sw) > 0 else False
+        eng.sw_mirror = inp.sw[1] if len(inp.sw) > 1 else False
         hue_units = self._hue_acc.update(
             inp.enc_delta[config.ENC_B], inp.enc_velocity[config.ENC_B]
         )
@@ -99,6 +102,7 @@ class MysteryScreen(Screen):
         if out_type != self._prev_out_type:
             self._prev_out_type = out_type
             self._dirty = True
+            self._full_clear = True
             self._leds_dirty = True
             # Update secondary display cat face
             if self._secondary:
@@ -152,6 +156,7 @@ class MysteryScreen(Screen):
                 # Redraw game underneath first time, then overlay pause
                 self._dirty = False
                 tft.fill(theme.BLACK)
+                self._full_clear = False
                 landscape = theme.width > theme.height
                 if landscape:
                     self._render_landscape(tft, theme, frame)
@@ -162,7 +167,9 @@ class MysteryScreen(Screen):
 
         if self._dirty:
             self._dirty = False
-            tft.fill(theme.BLACK)
+            if self._full_clear:
+                self._full_clear = False
+                tft.fill(theme.BLACK)
             landscape = theme.width > theme.height
             if landscape:
                 self._render_landscape(tft, theme, frame)
@@ -179,9 +186,12 @@ class MysteryScreen(Screen):
         w = theme.width
         h = theme.height
 
-        # Big color swatch — top area, full width
+        # Clear swatch + label zone (top half) for redraw
         swatch_y = 4
         swatch_h = h // 2 - 8
+        tft.fill_rect(0, swatch_y, w, swatch_h + 24, theme.BLACK)
+
+        # Big color swatch — top area, full width
         if out_type != OUT_IDLE:
             r, g, b = out_color
             c565 = tft.rgb(r, g, b)
@@ -230,6 +240,7 @@ class MysteryScreen(Screen):
         )
 
         # Bottom bar: discovery counter + modifier dots
+        tft.fill_rect(0, h - 18, w, 18, theme.BLACK)
         found = self._engine.discovery_count
         total = self._engine.total_discoverable
         tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)
@@ -242,9 +253,12 @@ class MysteryScreen(Screen):
         w = theme.width
         h = theme.height
 
-        # Large color swatch — top half of screen
+        # Clear swatch + label zone for redraw
         swatch_y = 8
         swatch_h = h * 2 // 5
+        tft.fill_rect(0, swatch_y, w, swatch_h + 30, theme.BLACK)
+
+        # Large color swatch — top half of screen
         if out_type != OUT_IDLE:
             r, g, b = out_color
             c565 = tft.rgb(r, g, b)
@@ -293,6 +307,7 @@ class MysteryScreen(Screen):
         )
 
         # Bottom bar: discovery counter + modifier dots
+        tft.fill_rect(0, h - 18, w, 18, theme.BLACK)
         found = self._engine.discovery_count
         total = self._engine.total_discoverable
         tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)

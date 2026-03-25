@@ -60,14 +60,15 @@ def _ota_walk(stage_dir):
 
 async def _send(writer, status, content_type, body, extra_headers=None):
     """Send an HTTP response."""
+    body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
     writer.write("HTTP/1.0 {} OK\r\n".format(status).encode())
     writer.write("Content-Type: {}\r\n".format(content_type).encode())
-    writer.write("Content-Length: {}\r\n".format(len(body)).encode())
+    writer.write("Content-Length: {}\r\n".format(len(body_bytes)).encode())
     if extra_headers:
         for h in extra_headers:
             writer.write("{}\r\n".format(h).encode())
     writer.write(b"Connection: close\r\n\r\n")
-    writer.write(body if isinstance(body, bytes) else body.encode())
+    writer.write(body_bytes)
     await writer.drain()
 
 
@@ -321,28 +322,33 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _send_json(writer, stats)
 
         elif method == "GET" and path == "/api/modes":
-            from bodn.session import ALL_MODES
-
+            # Return all registered modes with visibility and per-mode limits
+            all_modes = settings.get("_all_modes", [])
             mode_limits = settings.get("mode_limits", {})
+            hidden = settings.get("hidden_modes", [])
             modes = []
-            for m in ALL_MODES:
-                modes.append({"name": m, "limit_min": mode_limits.get(m)})
+            for m in all_modes:
+                modes.append(
+                    {
+                        "name": m,
+                        "visible": m not in hidden,
+                        "limit_min": mode_limits.get(m),
+                    }
+                )
             await _send_json(writer, modes)
 
         elif method == "POST" and path == "/api/wifi":
             if body:
-                for k in ("wifi_mode", "wifi_ssid", "wifi_pass"):
+                for k in ("wifi_mode", "wifi_ssid", "wifi_pass", "hostname"):
                     if k in body:
                         settings[k] = body[k]
                 storage.save_settings(settings)
             await _send_json(writer, {"ok": True})
-            # Schedule reboot after response
-            try:
-                import machine
+            # Reboot after response is sent
+            await asyncio.sleep_ms(500)
+            import machine
 
-                asyncio.get_event_loop().call_later(1, machine.reset)
-            except Exception:
-                pass
+            machine.reset()
 
         elif method == "POST" and path == "/api/upload":
             await _handle_upload(reader, writer, headers)

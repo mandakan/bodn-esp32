@@ -6,6 +6,11 @@
 import gc
 import time
 
+# Safe-boot window: pause briefly so Ctrl-C can interrupt before heavy init.
+# Also lets the ESP32 task watchdog breathe between reset cycles.
+print("boot.py: 1s safe-boot window (Ctrl-C to abort)...")
+time.sleep(1)
+
 settings = None
 ip = "0.0.0.0"
 
@@ -25,7 +30,7 @@ try:
     _diag_btn = None  # release pin — encoder driver will reclaim it
 
     spi = SPI(
-        2,
+        1,
         baudrate=26_000_000,
         sck=Pin(config.TFT_SCK),
         mosi=Pin(config.TFT_MOSI),
@@ -85,6 +90,7 @@ STEPS = [
     ("CFG", "boot_cfg", (80, 40, 120)),
     ("NET", "boot_net", (0, 120, 200)),
     ("NTP", "boot_ntp", (200, 120, 0)),
+    ("BAT", "boot_bat", (200, 60, 0)),
     ("GO!", "boot_go", (0, 200, 80)),
 ]
 
@@ -107,6 +113,20 @@ try:
     from bodn.ui.font_ext import GLYPHS as _EXT_GLYPHS
 except ImportError:
     _EXT_GLYPHS = {}
+
+# Load pixel art logo
+try:
+    from bodn.ui.logo import draw_logo as _draw_logo
+
+    _LOGO_COLORS = {
+        "body": _rgb(200, 150, 50),  # warm amber
+        "mead": COL_TITLE,  # crimson red
+        "rim": _rgb(255, 220, 100),  # bright gold
+        "sparkle": COL_CYAN,  # magic sparkles
+    }
+except ImportError:
+    _draw_logo = None
+    _LOGO_COLORS = {}
 
 
 def _boot_text(tft, text, x, y, color):
@@ -151,14 +171,29 @@ def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
     w = tft.width
     h = tft.height
 
-    # Title — centered
-    title = "~ Bodn ~"
-    tx = (w - len(title) * 8) // 2
-    _boot_text(tft, title, tx, h // 8, COL_TITLE)
+    # Logo or title — centered at top
+    if _draw_logo:
+        logo_scale = 3 if w >= 240 else 2
+        logo_w = 16 * logo_scale
+        logo_h = 16 * logo_scale
+        # Center logo + name as a unit
+        title = "Bodn"
+        title_w = len(title) * 8
+        block_h = logo_h + 4 + 8  # logo + gap + text height
+        ly = max(2, (h * 3 // 8 - block_h) // 2)
+        lx = (w - logo_w) // 2
+        _draw_logo(tft, lx, ly, _LOGO_COLORS, scale=logo_scale)
+        tx = (w - title_w) // 2
+        _boot_text(tft, title, tx, ly + logo_h + 4, COL_TITLE)
+    else:
+        title = "~ Bodn ~"
+        tx = (w - len(title) * 8) // 2
+        _boot_text(tft, title, tx, h // 8, COL_TITLE)
 
     # Whimsical message — centered
+    msg_y = h * 3 // 8 + (12 if _draw_logo else 0)
     mx = max(0, (w - len(message) * 8) // 2)
-    _boot_text(tft, message, mx, h * 3 // 8, COL_WHITE)
+    _boot_text(tft, message, mx, msg_y, COL_WHITE)
 
     # Progress bar
     tft.fill_rect(BAR_X, BAR_Y, BAR_W, BAR_H, COL_BAR_BG)
@@ -288,9 +323,43 @@ ntp_col = COL_GREEN if _results[2] == "ok" else COL_AMBER
 _show_progress(3, STEPS[2][1], STEPS[2][2], detail=ntp_detail, detail_col=ntp_col)
 time.sleep(0.5)
 
-# --- Step 3: Ready! ---
-_results[3] = "ok"
-_show_progress(4, STEPS[3][1], STEPS[3][2], detail="IP: " + ip, detail_col=COL_WHITE)
+# --- Step 3: Battery check ---
+_show_progress(3, STEPS[3][1], STEPS[3][2])
+
+try:
+    from machine import ADC
+
+    _bat_adc = ADC(Pin(config.BAT_SENS_PIN))
+    _bat_adc.atten(ADC.ATTN_11DB)
+    _bat_adc.width(ADC.WIDTH_12BIT)
+    _bat_mv = _bat_adc.read_uv() // 1000 * 2  # voltage divider ×2
+    _bat_adc = None
+    if _bat_mv > 3000:
+        _results[3] = "ok"
+        _bat_detail = "{}mV".format(_bat_mv)
+        _bat_col = COL_GREEN
+    elif _bat_mv > 0:
+        _results[3] = "warn"
+        _bat_detail = "LOW {}mV".format(_bat_mv)
+        _bat_col = COL_AMBER
+    else:
+        # No battery — USB powered
+        _results[3] = "ok"
+        _bat_detail = "USB"
+        _bat_col = COL_GREEN
+except Exception as e:
+    print("Battery check failed:", e)
+    _results[3] = "skip"
+    _bat_detail = "N/A"
+    _bat_col = COL_AMBER
+
+print("BOOT [BAT]", _results[3], _bat_detail)
+_show_progress(4, STEPS[3][1], STEPS[3][2], detail=_bat_detail, detail_col=_bat_col)
+time.sleep(0.5)
+
+# --- Step 4: Ready! ---
+_results[4] = "ok"
+_show_progress(5, STEPS[4][1], STEPS[4][2], detail="IP: " + ip, detail_col=COL_WHITE)
 
 # --- Diagnostic boot screen (hold NAV encoder button to activate) ---
 if _diag_requested and tft:
@@ -323,7 +392,6 @@ if _diag_requested and tft:
     _enc_btns = [
         Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP),
         Pin(config.ENC2_SW, Pin.IN, Pin.PULL_UP),
-        Pin(config.ENC3_SW, Pin.IN, Pin.PULL_UP),
     ]
     # First wait for the held button to be released
     while _enc_btns[0].value() == 0:

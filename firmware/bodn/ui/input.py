@@ -20,8 +20,21 @@ class EncoderAccumulator:
         fast_multiplier: detent scaling factor at high velocity.
     """
 
-    def __init__(self, detents_per_unit=3, fast_threshold=400, fast_multiplier=2):
-        self._dpu = detents_per_unit
+    def __init__(
+        self,
+        detents_per_unit=None,
+        fast_threshold=400,
+        fast_multiplier=2,
+        settings=None,
+    ):
+        if detents_per_unit is not None:
+            self._dpu = detents_per_unit
+        elif settings:
+            from bodn.config import encoder_dpu
+
+            self._dpu = encoder_dpu(settings)
+        else:
+            self._dpu = 1
         self._fast_thresh = fast_threshold
         self._fast_mult = fast_multiplier
         self._accum = 0
@@ -65,9 +78,9 @@ class BrightnessControl:
         step: brightness change per logical encoder unit.
     """
 
-    def __init__(self, initial=128, minimum=10, maximum=255, step=20):
+    def __init__(self, initial=128, minimum=10, maximum=255, step=20, settings=None):
         self._acc = EncoderAccumulator(
-            detents_per_unit=3, fast_threshold=400, fast_multiplier=3
+            settings=settings, fast_threshold=400, fast_multiplier=3
         )
         self._value = initial
         self._min = minimum

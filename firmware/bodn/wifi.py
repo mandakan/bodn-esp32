@@ -43,6 +43,22 @@ def get_ip():
     return "0.0.0.0"
 
 
+def start_mdns(hostname="bodn"):
+    """Register mDNS so the device is reachable at bodn.local."""
+    try:
+        import mdns
+
+        mdns.start(hostname, hostname)
+        print("mDNS: {}.local".format(hostname))
+    except ImportError:
+        # mdns module not available — try network.hostname instead
+        try:
+            network.hostname(hostname)
+            print("mDNS: hostname set to", hostname)
+        except Exception:
+            print("mDNS: not available")
+
+
 class WiFiController:
     """Runtime WiFi enable/disable control."""
 
@@ -93,10 +109,13 @@ def connect(settings):
     ssid = settings.get("wifi_ssid", "")
     password = settings.get("wifi_pass", "")
 
+    hostname = settings.get("hostname", "bodn")
+
     # User configured a network — try it
     if mode == "sta" and ssid:
         print("WiFi: connecting to", ssid)
         if connect_sta(ssid, password):
+            start_mdns(hostname)
             return get_ip()
         print("WiFi: failed to connect to", ssid)
 
@@ -107,8 +126,11 @@ def connect(settings):
         # Once the user configures WiFi via the web UI, this path is skipped.
         print("WiFi: trying Wokwi-GUEST...")
         if connect_sta("Wokwi-GUEST", "", timeout=3):
+            start_mdns(hostname)
             return get_ip()
 
     # Fall back to AP mode
     print("WiFi: starting AP mode")
-    return start_ap()
+    ip = start_ap()
+    start_mdns(hostname)
+    return ip
