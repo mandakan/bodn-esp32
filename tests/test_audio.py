@@ -62,7 +62,7 @@ class TestAudioEngine:
     def test_initial_state(self):
         engine, _ = self._make_engine()
         assert not engine.playing
-        assert engine.volume == 30
+        assert engine.volume == 10
 
     def test_tone_activates(self):
         engine, _ = self._make_engine()

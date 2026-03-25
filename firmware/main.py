@@ -686,11 +686,10 @@ async def main():
     )
     power_mgr = PowerManager(tft, tft2, np, mcp)
 
-    # Queue startup sound (played once the audio task starts).
-    # Respects quiet hours and audio_enabled.
-    if audio and settings.get("audio_enabled", True):
-        if not session_mgr._in_quiet_hours():
-            audio.play_sound("start")
+    # Startup sound disabled — re-enable when tuned:
+    # if audio and settings.get("audio_enabled", True):
+    #     if not session_mgr._in_quiet_hours():
+    #         audio.play_sound("start")
 
     tasks = [
         primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr),
