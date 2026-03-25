@@ -5,8 +5,8 @@
 # Use AudioEngine.play_sound(name) to trigger them.
 
 SOUNDS = {
-    # Navigation — sharp noise click mimicking a physical detent
-    "nav_click": [(4000, 8, "noise")],
+    # Navigation — short high-frequency tick, percussive and consistent
+    "nav_click": [(2400, 12, "sine")],
     # Select — rising chirp when entering a mode
     "select": [(660, 60, "sine"), (880, 80, "sine")],
     # Back — descending tone when leaving a screen
