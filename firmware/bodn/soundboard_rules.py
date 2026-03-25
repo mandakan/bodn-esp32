@@ -71,6 +71,28 @@ def scan_bank(bank):
     return [_file_exists(wav_path(bank, i)) for i in range(NUM_MINI_BUTTONS)]
 
 
+def discover_bank(bank):
+    """Scan the bank directory and return up to NUM_MINI_BUTTONS (path, label) pairs.
+
+    Files are sorted alphanumerically; the filename stem (without .wav) is the
+    label.  Only .wav files are included; numbered files (0.wav–7.wav) are not
+    excluded — this function is only called when none of those are present.
+    Returns an empty list if the directory does not exist or is empty.
+    """
+    dir_path = "{}/bank_{}".format(SOUNDS_ROOT, bank)
+    try:
+        entries = os.listdir(dir_path)
+    except OSError:
+        return []
+    wavs = sorted(f for f in entries if f.lower().endswith(".wav"))
+    result = []
+    for fname in wavs[:NUM_MINI_BUTTONS]:
+        path = "{}/{}".format(dir_path, fname)
+        label = fname[:-4]  # strip .wav extension
+        result.append((path, label))
+    return result
+
+
 def scan_arcade():
     """Return a list of NUM_ARCADE_BUTTONS bools: True if the WAV file exists."""
     return [_file_exists(arcade_wav_path(i)) for i in range(NUM_ARCADE_BUTTONS)]
@@ -173,6 +195,12 @@ class SoundboardState:
         self.volume = 50  # 0–100
         self.muted = False
         self.slots_present = [False] * NUM_MINI_BUTTONS
+        self._slot_paths = [
+            None
+        ] * NUM_MINI_BUTTONS  # path per slot (numbered or discovered)
+        self._disc_labels = [
+            None
+        ] * NUM_MINI_BUTTONS  # filename-stem labels from discovery
         self.arcade_present = [False] * NUM_ARCADE_BUTTONS
         self.manifest = None  # loaded lazily
 
@@ -189,7 +217,25 @@ class SoundboardState:
         self._rescan()
 
     def _rescan(self):
-        self.slots_present = scan_bank(self.bank)
+        numbered = scan_bank(self.bank)
+        if any(numbered):
+            # Numbered mode: use 0.wav–7.wav
+            self.slots_present = numbered
+            self._slot_paths = [
+                wav_path(self.bank, i) if numbered[i] else None
+                for i in range(NUM_MINI_BUTTONS)
+            ]
+            self._disc_labels = [None] * NUM_MINI_BUTTONS
+        else:
+            # Discovery mode: sort any .wav files in the directory
+            found = discover_bank(self.bank)
+            self.slots_present = [i < len(found) for i in range(NUM_MINI_BUTTONS)]
+            self._slot_paths = [
+                found[i][0] if i < len(found) else None for i in range(NUM_MINI_BUTTONS)
+            ]
+            self._disc_labels = [
+                found[i][1] if i < len(found) else None for i in range(NUM_MINI_BUTTONS)
+            ]
         self.arcade_present = scan_arcade()
 
     def bank_name(self):
@@ -211,24 +257,26 @@ class SoundboardState:
     def slot_label(self, slot):
         """Return the display label for a mini-button slot in the active language.
 
-        Returns None if no label is configured (caller uses an i18n fallback).
-        Label values can be a plain string or a {lang: str} dict.
+        Resolution order:
+          1. manifest label (language-aware)
+          2. discovered filename stem (from directory scan)
+          3. None → caller uses i18n fallback ("Ljud N")
         """
         if self.manifest:
             label = self.manifest["labels"].get((self.bank, slot))
-            if label is None:
-                return None
-            if isinstance(label, dict):
-                from bodn.i18n import get_language
+            if label is not None:
+                if isinstance(label, dict):
+                    from bodn.i18n import get_language
 
-                lang = get_language()
-                return (
-                    label.get(lang)
-                    or label.get("sv")
-                    or next(iter(label.values()), None)
-                )
-            return label  # plain string — language-neutral
-        return None
+                    lang = get_language()
+                    return (
+                        label.get(lang)
+                        or label.get("sv")
+                        or next(iter(label.values()), None)
+                    )
+                return label  # plain string — language-neutral
+        # Discovery mode: use filename stem as label
+        return self._disc_labels[slot]
 
     def adjust_volume(self, delta):
         """Adjust volume by delta detents, clamped to 0–100."""
@@ -246,9 +294,10 @@ class SoundboardState:
         self.playing_arcade = -1
         if not (0 <= slot < NUM_MINI_BUTTONS):
             return None
-        if self.slots_present[slot]:
+        path = self._slot_paths[slot]
+        if path:
             self.playing_slot = slot
-            return wav_path(self.bank, slot)
+            return path
         # Empty slot → boop feedback
         self.playing_slot = -1
         return None

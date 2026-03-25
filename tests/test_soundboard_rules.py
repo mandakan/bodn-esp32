@@ -18,11 +18,8 @@ from bodn.soundboard_rules import (
     NUM_MINI_BUTTONS,
     NUM_ARCADE_BUTTONS,
     NUM_BANKS,
-    SOUNDS_ROOT,
-    MANIFEST_PATH,
     VOLUME_STEP,
     _DEFAULT_COLORS,
-    _DEFAULT_BANK_NAMES,
 )
 import bodn.soundboard_rules as sbr
 
@@ -301,24 +298,26 @@ def test_effective_volume_unmuted():
 def test_press_slot_present(monkeypatch):
     monkeypatch.setattr(sbr, "_file_exists", lambda p: True)
     state = SoundboardState()
-    state.slots_present = [True] * NUM_MINI_BUTTONS
+    state.load()
     path = state.press_slot(3)
     assert path == wav_path(0, 3)
     assert state.playing_slot == 3
 
 
 def test_press_slot_missing_returns_none(monkeypatch):
+    monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
     state = SoundboardState()
-    state.slots_present = [False] * NUM_MINI_BUTTONS
+    state.load()
     path = state.press_slot(3)
     assert path is None
     assert state.playing_slot == -1
 
 
-def test_press_slot_clears_arcade():
+def test_press_slot_clears_arcade(monkeypatch):
+    monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
     state = SoundboardState()
+    state.load()
     state.playing_arcade = 2
-    state.slots_present = [False] * NUM_MINI_BUTTONS
     state.press_slot(0)
     assert state.playing_arcade == -1
 
