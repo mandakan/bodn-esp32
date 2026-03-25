@@ -440,7 +440,7 @@ async def secondary_task(secondary):
         await asyncio.sleep_ms(200)
 
 
-async def housekeeping_task(session_mgr, np, settings):
+async def housekeeping_task(session_mgr, np, settings, audio=None):
     """Session management, temperature + battery monitoring: ~500 ms tick.
 
     Temperature overwatch (thresholds in config.py):
@@ -608,6 +608,15 @@ async def housekeeping_task(session_mgr, np, settings):
             errors += 1
             print("bat_monitor error #{}: {}".format(errors, e))
 
+        # Sync audio volume from settings
+        if audio:
+            if settings.get("audio_enabled", True):
+                target = settings.get("volume", 30)
+            else:
+                target = 0
+            if audio.volume != target:
+                audio.volume = target
+
         await asyncio.sleep_ms(500)
 
 
@@ -663,6 +672,12 @@ async def main():
         audio=audio,
     )
 
+    # Sync audio settings
+    if audio:
+        audio.volume = settings.get("volume", 30)
+        if not settings.get("audio_enabled", True):
+            audio.volume = 0
+
     # Power management
     idle_tracker = IdleTracker(
         timeout_s=settings.get("sleep_timeout_s", config.SLEEP_TIMEOUT_S),
@@ -670,10 +685,16 @@ async def main():
     )
     power_mgr = PowerManager(tft, tft2, np, mcp)
 
+    # Queue startup sound (played once the audio task starts).
+    # Respects quiet hours and audio_enabled.
+    if audio and settings.get("audio_enabled", True):
+        if not session_mgr._in_quiet_hours():
+            audio.play_sound("start")
+
     tasks = [
         primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr),
         secondary_task(secondary),
-        housekeeping_task(session_mgr, np, settings),
+        housekeeping_task(session_mgr, np, settings, audio=audio),
     ]
     if audio:
         tasks.append(audio.start())

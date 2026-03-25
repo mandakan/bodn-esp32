@@ -139,6 +139,9 @@ th{color:#aaa}
 <div class="field"><label>Quiet start (HH:MM, empty=off)</label><input class="input-field" type="text" id="quiet_start" placeholder="21:00"></div>
 <div class="field"><label>Quiet end (HH:MM)</label><input class="input-field" type="text" id="quiet_end" placeholder="07:00"></div>
 <div class="field"><label>Device language</label><select id="language" class="input-field"><option value="sv">Svenska</option><option value="en">English</option></select></div>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Audio</h3>
+<div class="field"><label>Sound enabled</label><select id="audio_enabled" class="input-field"><option value="true">On</option><option value="false">Off</option></select></div>
+<div class="field"><label>Volume <span class="rv" id="rv-vol">30%</span></label><input type="range" id="volume" min="0" max="100" step="5" value="30" oninput="updRv(this,'rv-vol','%')"></div>
 <h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Visible modes</h3>
 <p style="font-size:0.75em;color:#666;margin:4px 0">Toggle which modes appear in the main menu.</p>
 <div id="mode-vis"></div>
@@ -256,16 +259,18 @@ sa.style.background=sev?'#e94560':'#f39c12';sa.style.color=sev?'#fff':'#000';}
 async function loadSettings(){
 try{
 var r=await fetch('/api/settings');var d=await r.json();
-['max_session_min','max_sessions_day','break_min'].forEach(function(k){
+['max_session_min','max_sessions_day','break_min','volume'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k];
 });
 ['quiet_start','quiet_end','wifi_ssid','wifi_pass','wifi_mode','ui_pin','ota_token','language','hostname'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k]||'';
 });
 var se=document.getElementById('sessions-enabled');if(se)se.checked=d.sessions_enabled!==false;
+var ae=document.getElementById('audio_enabled');if(ae)ae.value=d.audio_enabled===false?'false':'true';
 updRv(document.getElementById('max_session_min'),'rv-sess',' min');
 updRv(document.getElementById('max_sessions_day'),'rv-maxs','');
 updRv(document.getElementById('break_min'),'rv-brk',' min');
+updRv(document.getElementById('volume'),'rv-vol','%');
 // Load modes (visibility + limits) from API
 try{
 var mr=await fetch('/api/modes');var modes=await mr.json();
@@ -304,6 +309,8 @@ var v=document.getElementById(k).value.trim();
 body[k]=v||null;
 });
 var langEl=document.getElementById('language');if(langEl)body.language=langEl.value;
+var aeEl=document.getElementById('audio_enabled');if(aeEl)body.audio_enabled=aeEl.value==='true';
+var volEl=document.getElementById('volume');if(volEl)body.volume=parseInt(volEl.value);
 // Collect hidden modes
 var hidden=[];
 (window._modeNames||[]).forEach(function(m){

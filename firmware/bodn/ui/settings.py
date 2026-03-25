@@ -14,6 +14,8 @@ _ITEMS = [
     ("sessions_enabled", "settings_sessions", "bool"),
     ("sleep_timeout_s", "settings_sleep", "cycle"),
     ("encoder_sensitivity", "settings_encoder", "cycle"),
+    ("audio_enabled", "settings_audio", "bool"),
+    ("volume", "settings_volume", "cycle"),
     ("wifi", "settings_wifi", "bool"),
     ("leds", "settings_leds", "bool"),
     ("language", "pause_lang", "lang"),
@@ -26,6 +28,7 @@ _ITEMS = [
 ]
 
 _SLEEP_OPTIONS = [0, 60, 120, 300, 600]
+_VOLUME_OPTIONS = [10, 25, 50, 75, 100]
 
 
 class SettingsScreen(Screen):
@@ -70,8 +73,10 @@ class SettingsScreen(Screen):
                     idx = i
                     break
             return t("sens_" + config.ENCODER_SENS_LABELS[idx])
-        if key in ("debug_input", "debug_perf", "sessions_enabled"):
-            return self._settings.get(key, key == "sessions_enabled")
+        if key == "volume":
+            return "{}%".format(self._settings.get("volume", 30))
+        if key in ("debug_input", "debug_perf", "sessions_enabled", "audio_enabled"):
+            return self._settings.get(key, key in ("sessions_enabled", "audio_enabled"))
         return False
 
     def _activate(self, key):
@@ -129,6 +134,22 @@ class SettingsScreen(Screen):
                 pass
             self._dirty = True
             return
+        if key == "volume":
+            cur = self._settings.get("volume", 30)
+            idx = 0
+            for i in range(len(_VOLUME_OPTIONS)):
+                if _VOLUME_OPTIONS[i] == cur:
+                    idx = i
+                    break
+            self._settings["volume"] = _VOLUME_OPTIONS[(idx + 1) % len(_VOLUME_OPTIONS)]
+            try:
+                from bodn.storage import save_settings
+
+                save_settings(self._settings)
+            except Exception:
+                pass
+            self._dirty = True
+            return
         if key == "language":
             langs = available()
             cur = get_language()
@@ -159,6 +180,10 @@ class SettingsScreen(Screen):
                 for i in range(config.NEOPIXEL_COUNT):
                     self._np[i] = (0, 0, 0)
                 self._np.write()
+        elif key == "audio_enabled":
+            self._settings["audio_enabled"] = not self._settings.get(
+                "audio_enabled", True
+            )
         elif key == "sessions_enabled":
             self._settings["sessions_enabled"] = not self._settings.get(
                 "sessions_enabled", True

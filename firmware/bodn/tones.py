@@ -8,9 +8,6 @@ import math
 # 256-entry sine lookup table (int16 range)
 _SINE_LUT = [int(32767 * math.sin(2 * math.pi * i / 256)) for i in range(256)]
 
-# LFSR state for noise generation (16-bit maximal-length, taps at 16,15,13,4)
-_lfsr = 0xACE1
-
 
 def generate(buf, freq_hz, sample_rate=16000, wave="square"):
     """Fill *buf* with PCM 16-bit LE mono samples at *freq_hz*.
@@ -69,9 +66,10 @@ def _generate_noise(buf, n_samples, decay_rate, sample_rate):
 
     decay_rate: higher = faster decay. ~4000 gives a sharp 2-3ms click,
     ~1000 gives a softer 8-10ms tick.
+
+    Uses a fixed LFSR seed so every click sounds identical.
     """
-    global _lfsr
-    lfsr = _lfsr
+    lfsr = 0xACE1  # fixed seed — deterministic output
 
     # Exponential decay via fixed-point: amplitude *= (1 - decay_rate/sample_rate)
     # Pre-compute as a 16-bit multiplier applied each sample.
@@ -93,5 +91,4 @@ def _generate_noise(buf, n_samples, decay_rate, sample_rate):
         # Decay amplitude
         amp = (amp * decay_mult) >> 16
 
-    _lfsr = lfsr
     return n_samples * 2

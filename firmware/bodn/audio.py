@@ -189,8 +189,8 @@ class AudioEngine:
         # Small silence chunk for idle polling — keeps latency low (~8ms)
         # so the loop detects new audio quickly
         self._silence_short = bytes(512)
-        self._volume = 50  # 0-100
-        self._vol_mult = 50 * 655  # pre-computed fixed-point multiplier
+        self._volume = 30  # 0-100, synced from settings in main.py
+        self._vol_mult = 30 * 655  # pre-computed fixed-point multiplier
 
     @property
     def volume(self):
