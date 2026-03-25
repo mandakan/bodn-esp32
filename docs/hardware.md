@@ -11,7 +11,7 @@
 | 1 | Microphone | INMP441 I2S MEMS breakout (Mixitech) | ~95 SEK |
 | 1 | Amplifier | MAX98357A I2S 3W class-D (AZDelivery) | ~129 SEK |
 | 1 | Speaker | 3W 8Ω mini speaker (Quarkzman) | ~81 SEK |
-| 3 | Rotary encoder | KY-040 with push button (AZDelivery 5-pack) | ~119 SEK |
+| 2 | Rotary encoder | KY-040 with push button (AZDelivery 5-pack) | ~119 SEK |
 | 8 | Push buttons | 7mm mini momentary, mixed colors (Gebildet 24-pack) | ~110 SEK |
 | 5 | Arcade buttons | 30mm illuminated LED, mixed colors (Electrokit) | ~150 SEK |
 | 2 | Toggle switches | Mini SPST on/off (Gebildet 12-pack) | ~99 SEK |
@@ -95,9 +95,10 @@ Arcade button LEDs are driven by the PCA9685 PWM driver (see below).
 
 | Encoder | Role | CLK | DT | SW (button) |
 |---------|------|-----|----|-------------|
-| 1 (NAV) | Navigation | 19 | 18 | 17 |
-| 2 (ENC_A) | Parameter A | 16 | 3 | 40 |
-| 3 (ENC_B) | Parameter B | 41 | 42 | 0 |
+| 1 (NAV) | Navigation + Parameter B | 21 | 18 | 17 |
+| 2 (ENC_A) | Parameter A | 16 | 44 | 40 |
+
+NAV doubles as parameter B in game modes — rotation controls speed/cursor, short tap triggers game actions, long press (1.5s) opens the pause menu.
 
 ### NeoPixel LEDs (WS2812B)
 
@@ -206,7 +207,7 @@ Other GPIOs with board-level functions — see [`docs/schematics/`](schematics/)
 
 | GPIO | Board label | Our assignment | Notes |
 |------|-------------|----------------|-------|
-| 0 | BUT1 (user button) | ENC3_SW | Strapping pin; safe as input after boot |
+| 0 | BUT1 (user button) | (free) | Strapping pin; safe as input after boot |
 | 1 | — | TFT_BL (backlight) | Moved here from GPIO 43 (UART TX) |
 | 2 | — | I2S_MIC_SD | Moved here from GPIO 38 (on-board LED) |
 | 5 | PWR_SENS | `PWR_SENS_PIN` (battery module) | Active low when USB power present; **do not drive** |
@@ -246,8 +247,9 @@ for latency-sensitive tasks (encoders, SPI displays, I2S audio).
 The MCP23017 connects to the ESP32-S3 via I2C. The devkit provides hardware I2C with
 pull-ups on GPIO 47 (SCL) and GPIO 48 (SDA) via the pUEXT connector.
 
-Encoder pins that previously used GPIO 47 and 48 have been reassigned (ENC3_CLK → 41,
-ENC2_SW → 40) to free the I2C bus.
+Encoder pins that previously used GPIO 47 and 48 have been reassigned
+(ENC2_SW → 40) to free the I2C bus. The third encoder (ENC3) was removed —
+NAV now doubles as parameter B in game modes.
 
 ### Pin mapping
 

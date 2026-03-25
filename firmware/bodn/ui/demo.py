@@ -46,7 +46,7 @@ class DemoScreen(Screen):
         self._pause = PauseMenu(settings=settings)
         self._dirty = True
         # Snapshot of input state for dirty detection
-        self._prev_enc = [0, 0, 0]
+        self._prev_enc = [0, 0]
         self._prev_btn = []
         self._prev_sw = []
 

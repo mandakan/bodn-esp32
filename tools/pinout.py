@@ -112,7 +112,6 @@ def friendly_name(var_name: str) -> str:
         "I2S_SPK_",
         "ENC1_",
         "ENC2_",
-        "ENC3_",
         "SW_",
         "NEOPIXEL_",
     ):
