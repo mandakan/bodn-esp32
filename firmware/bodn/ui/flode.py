@@ -11,8 +11,8 @@ from bodn.flode_rules import FlodeEngine, PLAYING, COMPLETE, CELEBRATE
 from bodn.patterns import N_LEDS, zone_fill, zone_pulse, zone_clear, ZONE_LID_RING
 from bodn.ui.catface import CURIOUS, HAPPY
 
-ENC_A = const(1)  # config.ENC_A — select segment
-ENC_B = const(2)  # config.ENC_B — shift segment
+ENC_A = config.ENC_A  # select segment
+ENC_B = config.ENC_B  # shift segment
 
 # Layout constants
 _MARGIN_LEFT = const(20)  # space for source indicator

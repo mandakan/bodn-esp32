@@ -9,9 +9,9 @@ from bodn.ui.pause import PauseMenu
 from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING
 from bodn.i18n import t
 
-NAV = const(0)  # config.ENC_NAV
-ENC_A = const(1)  # config.ENC_A
-ENC_B = const(2)  # config.ENC_B
+NAV = config.ENC_NAV
+ENC_A = config.ENC_A
+ENC_B = config.ENC_B
 
 # Colour palette per pattern index — module-level to avoid per-frame allocation
 _COLOUR_RGB = [
