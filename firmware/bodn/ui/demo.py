@@ -42,11 +42,12 @@ class DemoScreen(Screen):
         self._overlay = overlay
         self._brightness = BrightnessControl(settings=settings)
         self._active_pattern = 0
+        self._speed = 5  # 1-20, controlled by NAV/ENC_B rotation
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._dirty = True
         # Snapshot of input state for dirty detection
-        self._prev_enc = [0, 0]
+        self._prev_enc = [0, 0]  # indexed by encoder index
         self._prev_btn = []
         self._prev_sw = []
 
@@ -92,11 +93,16 @@ class DemoScreen(Screen):
         if self._brightness.value != prev_bri:
             self._dirty = True
 
-        # Detect encoder changes for display redraw
-        for i in (NAV, ENC_B):
-            if inp.enc_pos[i] != self._prev_enc[i]:
-                self._prev_enc[i] = inp.enc_pos[i]
-                self._dirty = True
+        # NAV/ENC_B rotation adjusts speed
+        delta_b = inp.enc_delta[ENC_B]
+        if delta_b != 0:
+            self._speed = max(1, min(20, self._speed + delta_b))
+            self._dirty = True
+
+        # Detect encoder A changes for display redraw
+        if inp.enc_pos[ENC_A] != self._prev_enc[ENC_A]:
+            self._prev_enc[ENC_A] = inp.enc_pos[ENC_A]
+            self._dirty = True
         if not self._prev_btn:
             self._prev_btn = [False] * n_btn
         for i in range(n_btn):
@@ -114,7 +120,7 @@ class DemoScreen(Screen):
         # Only compute and write LEDs on NeoPixel-write frames
         if frame % 3 == 0:
             brightness = self._brightness.value
-            speed = max(1, min(20, inp.enc_pos[ENC_B]))
+            speed = self._speed
 
             _name, pat_fn = PATTERNS[self._active_pattern]
 
@@ -190,7 +196,7 @@ class DemoScreen(Screen):
         if self._manager:
             sw = self._manager.inp.sw
             held = self._manager.inp.btn_held
-            enc_spd = max(0, min(20, self._manager.inp.enc_pos[ENC_B]))
+            enc_spd = self._speed
 
         mid_x = theme.width // 2
 
@@ -260,7 +266,7 @@ class DemoScreen(Screen):
         if self._manager:
             sw = self._manager.inp.sw
             held = self._manager.inp.btn_held
-            enc_spd = max(0, min(20, self._manager.inp.enc_pos[ENC_B]))
+            enc_spd = self._speed
 
         tft.text(t("home_title"), 32, 3, theme.WHITE)
 
