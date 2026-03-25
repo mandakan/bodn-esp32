@@ -92,7 +92,7 @@ def encode(text):
     # Encode data: byte mode (0100), length, data, terminator, padding
     bits = []
     _add_bits(bits, 0b0100, 4)  # mode indicator: byte
-    _add_bits(bits, n, 8 if ver == 1 else 16)  # character count
+    _add_bits(bits, n, 8)  # character count (8 bits for V1-9 byte mode)
     for b in data:
         _add_bits(bits, b, 8)
 
