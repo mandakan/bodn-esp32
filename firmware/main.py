@@ -293,6 +293,21 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_soundboard():
+        from bodn.ui.soundboard import SoundboardScreen
+        from bodn.ui.soundboard_secondary import SoundboardSecondary
+
+        sb_sec = SoundboardSecondary()
+        secondary.set_content(sb_sec)
+        return SoundboardScreen(
+            np,
+            overlay,
+            audio=audio,
+            settings=settings,
+            secondary_screen=sb_sec,
+            on_exit=_reset_secondary,
+        )
+
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
 
@@ -305,6 +320,7 @@ def create_ui(
         "rulefollow": _make_rulefollow,
         "flode": _make_flode,
         "garden": _make_garden,
+        "soundboard": _make_soundboard,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, settings=settings),
@@ -318,6 +334,7 @@ def create_ui(
         "rulefollow",
         "flode",
         "garden",
+        "soundboard",
         "demo",
         "clock",
         "settings",
