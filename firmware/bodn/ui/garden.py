@@ -149,10 +149,7 @@ class GardenScreen(Screen):
         self._leds_dirty = True
         self._running = False
         self._plant_count = 0
-        # Consume the NAV button press that entered this screen
-        # so it doesn't register as a tap on the first frame
-        ch = manager.inp.gesture_enc(config.ENC_NAV)
-        manager.inp.gestures.reset_channel(ch)
+        self._skip_first_tap = True  # ignore NAV tap on first frame
         self._last_step_ms = time.ticks_ms()
 
     def exit(self):
@@ -240,7 +237,11 @@ class GardenScreen(Screen):
 
         # NAV button tap: toggle cell at cursor (plant/remove)
         # Uses gesture tap (not enc_btn_pressed) to avoid triggering hold-to-pause
-        if inp.gestures.tap[inp.gesture_enc(config.ENC_NAV)]:
+        nav_tap = inp.gestures.tap[inp.gesture_enc(config.ENC_NAV)]
+        if nav_tap and self._skip_first_tap:
+            self._skip_first_tap = False
+            nav_tap = False
+        if nav_tap:
             cx, cy = self._cursor_xy()
             was_empty = self._grid[cy * GRID_W + cx] == 0
             toggle(self._grid, cx, cy, GRID_W, self._cursor_color)
