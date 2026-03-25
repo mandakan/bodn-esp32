@@ -70,7 +70,7 @@ The secondary display shares SCK, MOSI, DC, and RST with the primary. Only CS is
 | BCLK | GPIO 13 |
 | LRCLK (WS) | GPIO 45 |
 | DIN | GPIO 7 |
-| SD | PCA9685 CH6 (software mute; add 100kΩ pull-down to GND for clean boot) |
+| SD | GPIO 3 (direct — PCA9685 glitches on boot; add 10kΩ pull-down to GND) |
 | GAIN | floating (9dB default) |
 
 ### Buttons (MCP23017)

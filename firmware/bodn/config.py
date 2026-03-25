@@ -50,6 +50,7 @@ I2S_MIC_SD = const(2)  # GPIO 38 is on-board LED — LED load (~15 mA) corrupts 
 I2S_SPK_BCK = const(13)
 I2S_SPK_WS = const(45)
 I2S_SPK_DIN = const(7)  # GPIO 5 is PWR_SENS (board reserved)
+AMP_SD_PIN = const(3)  # amp shutdown — direct GPIO (PCA9685 glitches on boot)
 
 # Rotary encoders (KY-040) — must stay on native GPIO for IRQ latency
 ENC1_CLK = const(21)  # CLK was 19 (USB OTG D−) → moved to 21
@@ -120,7 +121,7 @@ PWM_CH_ARC2 = const(2)  # Arcade button 2 LED (red)
 PWM_CH_ARC3 = const(3)  # Arcade button 3 LED (blue)
 PWM_CH_ARC4 = const(4)  # Arcade button 4 LED (green)
 PWM_CH_ARC5 = const(5)  # Arcade button 5 LED (white)
-PWM_CH_AMP_SD = const(6)  # MAX98357A SD pin — hardware mute (0=off, 4095=on)
+PWM_CH_AMP_SD = const(6)  # UNUSED — amp SD moved to GPIO 3 (PCA9685 glitches on boot)
 
 # Encoder sensitivity: detents per logical unit
 # 1=high (every click), 2=medium, 3=low (for young children)

@@ -108,8 +108,8 @@ def create_hardware():
         pwm = PCA9685(i2c, config.PCA9685_ADDR)
         pwm.set_freq(1000)
         hw_status["pca"] = True
-        # Keep amp in shutdown until AudioEngine is running (avoids boot static)
-        pwm.set_duty(config.PWM_CH_AMP_SD, 0)
+        # Amp SD managed via direct GPIO (config.AMP_SD_PIN), not PCA9685
+        # — PCA9685 glitches on power-up causing static.
     except Exception as e:
         print("PCA9685 not found, PWM dimming disabled:", e)
 
@@ -161,9 +161,10 @@ def create_hardware():
         )
         from bodn.audio import AudioEngine
 
+        _amp_sd = Pin(config.AMP_SD_PIN, Pin.OUT, value=0)
+
         def _enable_amp():
-            if pwm:
-                pwm.set_duty(config.PWM_CH_AMP_SD, 4095)
+            _amp_sd.value(1)
 
         audio = AudioEngine(i2s, amp_enable=_enable_amp)
         hw_status["audio"] = True

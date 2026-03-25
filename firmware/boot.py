@@ -6,6 +6,12 @@
 import gc
 import time
 
+# Keep amplifier in shutdown immediately — before anything else can make noise.
+# PCA9685 PWM glitches during power-on, so amp SD uses a direct GPIO.
+from machine import Pin
+
+Pin(3, Pin.OUT, value=0)  # config.AMP_SD_PIN — LOW = shutdown
+
 # Safe-boot window: pause briefly so Ctrl-C can interrupt before heavy init.
 # Also lets the ESP32 task watchdog breathe between reset cycles.
 print("boot.py: 1s safe-boot window (Ctrl-C to abort)...")
