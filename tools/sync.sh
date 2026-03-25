@@ -53,10 +53,8 @@ Path('.ota-hashes.json').write_text(json.dumps(hashes, indent=2) + '\n')
 print(f'  {len(hashes)} files hashed')
 "
 
-# If we got here without errors, auto-reboot the device
+# Reboot the device — machine.reset() kills the connection so mpremote
+# will return non-zero, which is expected.
 echo "Rebooting device..."
-if $MPREMOTE exec "import machine; machine.reset()" 2>/dev/null; then
-    echo "Done. Device is rebooting."
-else
-    echo "Auto-reboot failed. Press reset button or power-cycle to boot."
-fi
+$MPREMOTE exec "import machine; machine.reset()" 2>/dev/null || true
+echo "Done."
