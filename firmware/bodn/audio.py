@@ -9,8 +9,13 @@ except ImportError:
     import asyncio
 
 try:
+    import micropython
     from micropython import const
+
+    _has_viper = hasattr(micropython, "viper")
 except ImportError:
+    micropython = None
+    _has_viper = False
 
     def const(x):
         return x
@@ -26,6 +31,44 @@ CH_UI = const(2)
 CHANNEL_NAMES = {"music": CH_MUSIC, "sfx": CH_SFX, "ui": CH_UI}
 
 _BUF_SIZE = const(1024)  # bytes per audio buffer
+
+
+def _apply_volume_py(buf, n_bytes, mult):
+    """Pure-Python fallback for volume scaling (host tests)."""
+    for i in range(0, n_bytes, 2):
+        lo = buf[i]
+        hi = buf[i + 1]
+        val = lo | (hi << 8)
+        if val >= 0x8000:
+            val -= 0x10000
+        val = (val * mult) >> 16
+        val = val & 0xFFFF
+        buf[i] = val & 0xFF
+        buf[i + 1] = (val >> 8) & 0xFF
+
+
+if _has_viper:
+
+    @micropython.viper
+    def _apply_volume_viper(buf_ptr, n_bytes: int, mult: int):
+        """Scale int16 samples in-place — viper-emitted for ~10-20x speedup."""
+        p = ptr8(buf_ptr)
+        i = 0
+        while i < n_bytes:
+            lo = int(p[i])
+            hi = int(p[i + 1])
+            val = lo | (hi << 8)
+            if val >= 0x8000:
+                val -= 0x10000
+            val = (val * mult) >> 16
+            val = val & 0xFFFF
+            p[i] = val & 0xFF
+            p[i + 1] = (val >> 8) & 0xFF
+            i += 2
+
+    _apply_volume_fast = _apply_volume_viper
+else:
+    _apply_volume_fast = _apply_volume_py
 
 
 class ToneSource:
@@ -152,19 +195,7 @@ class AudioEngine:
         """Scale int16 samples in-place using fixed-point multiplication."""
         if self._volume >= 100:
             return
-        mult = self._vol_mult
-        for i in range(0, n_bytes, 2):
-            # Unpack int16 LE
-            lo = buf[i]
-            hi = buf[i + 1]
-            val = lo | (hi << 8)
-            if val >= 0x8000:
-                val -= 0x10000
-            # Scale and repack
-            val = (val * mult) >> 16
-            val = val & 0xFFFF
-            buf[i] = val & 0xFF
-            buf[i + 1] = (val >> 8) & 0xFF
+        _apply_volume_fast(buf, n_bytes, self._vol_mult)
 
     def _active_channel(self):
         """Return highest-priority active channel index, or -1."""
