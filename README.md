@@ -24,7 +24,7 @@ A colourful, tactile device that grows with a child (starting around age 4):
 | Microphone | INMP441 I2S MEMS |
 | Amplifier | MAX98357A I2S 3W class-D + 3W 8Ω speaker |
 | LEDs | WS2812 8-LED sticks × 2 (16 addressable RGB NeoPixels) |
-| Inputs | 2× KY-040 rotary encoders, 8× momentary push buttons, 4× toggle switches |
+| Inputs | 2× KY-040 rotary encoders, 8× momentary push buttons, 2× toggle switches, 5× illuminated arcade buttons |
 
 See [`docs/hardware.md`](docs/hardware.md) for full pinout, wiring, and BOM.
 

@@ -293,7 +293,7 @@ The PCA9685 shares the I2C bus on GPIO 47 (SCL) / GPIO 48 (SDA) with the MCP2301
 
 | Address | Device |
 |---------|--------|
-| 0x20 | MCP23017 (buttons, toggles, power switch) |
+| 0x27 | MCP23017 (buttons, toggles, power switch) |
 | 0x40 | PCA9685 (PWM dimming) |
 
 ### Channel assignments

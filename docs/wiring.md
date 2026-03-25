@@ -179,24 +179,22 @@ graph LR
 
 ## Encoder roles and placement
 
-The three KY-040 rotary encoders have fixed roles in the UI. Mount them in
-a horizontal row directly next to (or below) the TFT display, left to right:
+Two KY-040 rotary encoders with dual roles. Mount them in a horizontal row
+next to the TFT display:
 
 | Position | Encoder | Config index | Role | Rotation | Button press |
 |----------|---------|-------------|------|----------|--------------|
-| Left | ENC1 | `ENC_NAV` (0) | Navigation | Home: scroll modes | Home: enter mode / Modes: back |
-| Middle | ENC2 | `ENC_A` (1) | Parameter A | Mode-specific (e.g. brightness) | Cycle pattern |
-| Right | ENC3 | `ENC_B` (2) | Parameter B | Mode-specific (e.g. speed) | Cycle pattern |
+| Left | ENC1 | `ENC_NAV` (0) | Navigation + Param B | Home: scroll modes / Games: parameter B (speed, cursor X) | Home: enter mode / Games: tap = action, long hold = pause menu |
+| Right | ENC2 | `ENC_A` (1) | Parameter A | Mode-specific (e.g. brightness, cursor Y) | Mode-specific (e.g. start/stop, cycle) |
 
 **Key rules:**
 
-- **ENC_NAV is always navigation.** It never controls a mode parameter.
-  Its button is the universal "back" action inside any mode screen, and
-  "enter" on the home screen.
-- **ENC_A and ENC_B are mode-specific.** Each mode decides what they
-  control. In Demo mode: brightness (A) and speed (B). Future modes
-  may repurpose them freely.
-- **Place ENC_NAV closest to the display** so the child's dominant hand
+- **NAV doubles as parameter B in game modes.** Rotation controls a
+  second parameter (speed, horizontal cursor, etc.). Short taps trigger
+  game actions. Long press (1.5s hold) opens the pause menu.
+- **ENC_A is mode-specific.** Each mode decides what it controls.
+  In Demo mode: brightness. In Garden: cursor Y. In Flöde: segment select.
+- **Place NAV closest to the display** so the child's dominant hand
   naturally reaches both the screen and the nav knob.
 
 ### Suggested panel layout
@@ -206,15 +204,15 @@ a horizontal row directly next to (or below) the TFT display, left to right:
   │                                                          │
   │    ┌────────────┐                                        │
   │    │            │                                        │
-  │    │   Display  │    [NAV]    [ENC A]    [ENC B]         │
-  │    │   128×160  │     ◎         ◎          ◎             │
+  │    │   Display  │         [NAV]         [ENC A]          │
+  │    │  240×320   │           ◎              ◎             │
   │    │            │                                        │
   │    └────────────┘                                        │
   │                                                          │
-  │    [BTN0] [BTN1] [BTN2] [BTN3]    [SW0] [SW1] [SW2] [SW3] │
+  │    [BTN0] [BTN1] [BTN2] [BTN3]         [SW0] [SW1]      │
   │    [BTN4] [BTN5] [BTN6] [BTN7]                          │
   │                                                          │
-  │    ═══════ NeoPixel strip (16 LEDs) ═══════              │
+  │    ═══════ NeoPixel sticks (2×8 LEDs) ═══════            │
   │                                                          │
   └──────────────────────────────────────────────────────────┘
 ```
