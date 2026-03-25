@@ -49,12 +49,14 @@ import time
 
 NAV = const(0)
 
-# Cell size in pixels on primary display (240×320 landscape → 20px cells)
-CELL_PX = const(20)
+# Cell size in pixels on primary display (240×320 landscape → 18px cells)
+CELL_PX = const(18)
 
-# Grid offset on screen (centered in 320×240)
-GRID_OX = const(0)  # (320 - 16*20) // 2 = 0
-GRID_OY = const(0)  # (240 - 12*20) // 2 = 0
+# Grid offset on screen (centered in 320×240 with room for HUD)
+# Width:  16 * 18 = 288, margin = (320 - 288) / 2 = 16
+# Height: 12 * 18 = 216, HUD = 14px, remaining = 240 - 216 - 14 = 10, top = 5
+GRID_OX = const(16)
+GRID_OY = const(5)
 
 # Speed range (ms between generations)
 SPEED_MIN_MS = const(300)
@@ -384,11 +386,11 @@ class GardenScreen(Screen):
             for x in range(GRID_W + 1):
                 px = GRID_OX + x * CELL_PX
                 if px < w:
-                    tft.vline(px, GRID_OY, GRID_H * CELL_PX, theme.MUTED)
+                    tft.vline(px, GRID_OY, GRID_H * CELL_PX, theme.DIM)
             for y in range(GRID_H + 1):
                 py = GRID_OY + y * CELL_PX
                 if py < h:
-                    tft.hline(GRID_OX, py, GRID_W * CELL_PX, theme.MUTED)
+                    tft.hline(GRID_OX, py, GRID_W * CELL_PX, theme.DIM)
             # Draw all cells
             self._draw_all_cells(tft, theme)
             self._dirty_cells.clear()
@@ -513,15 +515,15 @@ class GardenScreen(Screen):
         sx = GRID_OX + cx * CELL_PX
         sy = GRID_OY + cy * CELL_PX
         # Left and top edges of this cell
-        tft.vline(sx, sy, CELL_PX + 1, theme.MUTED)
-        tft.hline(sx, sy, CELL_PX + 1, theme.MUTED)
+        tft.vline(sx, sy, CELL_PX + 1, theme.DIM)
+        tft.hline(sx, sy, CELL_PX + 1, theme.DIM)
         # Right and bottom edges (shared with next cell)
         rx = sx + CELL_PX
         by = sy + CELL_PX
         if rx <= GRID_OX + GRID_W * CELL_PX:
-            tft.vline(rx, sy, CELL_PX + 1, theme.MUTED)
+            tft.vline(rx, sy, CELL_PX + 1, theme.DIM)
         if by <= GRID_OY + GRID_H * CELL_PX:
-            tft.hline(sx, by, CELL_PX + 1, theme.MUTED)
+            tft.hline(sx, by, CELL_PX + 1, theme.DIM)
 
     def _draw_all_cells(self, tft, theme):
         """Draw every cell in the grid."""
