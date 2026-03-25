@@ -96,6 +96,46 @@ class ToneSource:
         self._bytes_left = self._total_bytes
 
 
+class SequenceSource:
+    """Plays a list of (freq_hz, duration_ms, wave) steps in order.
+
+    A freq_hz of 0 produces silence (a gap between notes).
+    """
+
+    def __init__(self, steps, sample_rate=16000):
+        self._steps = steps
+        self._sample_rate = sample_rate
+        self._idx = 0
+        self._current = self._make_tone(0) if steps else None
+
+    def _make_tone(self, idx):
+        if idx >= len(self._steps):
+            return None
+        freq, dur, wave = self._steps[idx]
+        if freq <= 0:
+            # Silent gap — return zero bytes for the duration
+            return ToneSource(1, dur, "square", self._sample_rate)
+        return ToneSource(freq, dur, wave, self._sample_rate)
+
+    def read_chunk(self, buf):
+        while self._current is not None:
+            n = self._current.read_chunk(buf)
+            if n > 0:
+                # Zero out silence gaps (freq=0 steps)
+                if self._steps[self._idx][0] <= 0:
+                    for i in range(n):
+                        buf[i] = 0
+                return n
+            # Current step exhausted — advance to next
+            self._idx += 1
+            self._current = self._make_tone(self._idx)
+        return 0
+
+    def seek_start(self):
+        self._idx = 0
+        self._current = self._make_tone(0)
+
+
 class _Channel:
     """Internal channel state."""
 
@@ -190,9 +230,22 @@ class AudioEngine:
         ch.source = ToneSource(freq_hz, duration_ms, wave)
         ch.loop = False
 
+    def play_sound(self, name, channel="ui"):
+        """Play a named sound from the sound design system."""
+        from bodn.sounds import SOUNDS
+
+        steps = SOUNDS.get(name)
+        if not steps:
+            return
+        ch_idx = CHANNEL_NAMES.get(channel, CH_UI)
+        ch = self._channels[ch_idx]
+        ch.stop()
+        ch.source = SequenceSource(steps)
+        ch.loop = False
+
     def boop(self):
         """Quick UI feedback beep."""
-        self.tone(440, 150, "square", "ui")
+        self.play_sound("boop")
 
     def stop(self, channel=None):
         """Stop playback on a channel, or all channels if None."""

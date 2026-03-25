@@ -133,6 +133,8 @@ class HomeScreen(Screen):
                 screen = factory()
                 if name != "settings":
                     self._session_mgr.try_wake(name)
+                if self._audio:
+                    self._audio.play_sound("select")
                 self._manager.push(screen)
             except Exception as e:
                 self._error = str(e)
@@ -158,7 +160,7 @@ class HomeScreen(Screen):
             self._dirty = True
             self._full_clear = True
             if self._audio:
-                self._audio.boop()
+                self._audio.play_sound("nav_click")
 
     def _anim_x(self, width):
         """Return the current x-offset for the slide animation."""

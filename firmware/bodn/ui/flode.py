@@ -275,7 +275,7 @@ class FlodeScreen(Screen):
             if eng.select_delta(units_a):
                 self._dirty = True
                 if self._audio:
-                    self._audio.boop()
+                    self._audio.play_sound("nav_click")
 
         # Shift encoder (ENC_B)
         delta_b = inp.enc_delta[ENC_B]
@@ -287,7 +287,7 @@ class FlodeScreen(Screen):
                 self._dirty = True
                 self._leds_dirty = True
                 if self._audio:
-                    self._audio.boop()
+                    self._audio.play_sound("boop")
 
         # Tick animations
         anim_active = self._tick_anim()
@@ -301,7 +301,7 @@ class FlodeScreen(Screen):
                 self._dirty = True
                 self._leds_dirty = True
                 if self._audio:
-                    self._audio.tone(880, 200, channel=1)
+                    self._audio.play_sound("complete", channel="sfx")
 
         # Update brightness from encoder A (velocity-aware)
         prev_bri = self._brightness.value
