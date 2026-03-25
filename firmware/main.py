@@ -38,13 +38,14 @@ N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 def create_hardware():
     """Initialise all hardware peripherals.
 
-    Returns (tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status).
+    Returns (tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, audio, hw_status).
     Components that fail to initialise degrade gracefully:
     - MCP23017 missing → buttons/switches are empty lists, mcp is None.
     - PCA9685 missing → pwm is None (no LED dimming), arcade LEDs disabled.
+    - AudioEngine missing → audio is None (no sound).
     - SPI displays can't be probed (push-only) so are always assumed present.
     """
-    hw_status = {"mcp": False, "pca": False, "temp": False}
+    hw_status = {"mcp": False, "pca": False, "temp": False, "audio": False}
 
     spi = SPI(
         1,
@@ -142,7 +143,43 @@ def create_hardware():
         Encoder(config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW),
     ]
 
-    return tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status
+    # I2S audio output (MAX98357A)
+    audio = None
+    try:
+        from machine import I2S
+
+        i2s = I2S(
+            0,
+            sck=Pin(config.I2S_SPK_BCK),
+            ws=Pin(config.I2S_SPK_WS),
+            sd=Pin(config.I2S_SPK_DIN),
+            mode=I2S.TX,
+            bits=16,
+            format=I2S.MONO,
+            rate=16000,
+            ibuf=2048,
+        )
+        from bodn.audio import AudioEngine
+
+        audio = AudioEngine(i2s)
+        hw_status["audio"] = True
+        print("AudioEngine initialised (I2S TX)")
+    except Exception as e:
+        print("Audio init failed:", e)
+
+    return (
+        tft,
+        tft2,
+        buttons,
+        switches,
+        encoders,
+        np,
+        mcp,
+        pwm,
+        arcade,
+        audio,
+        hw_status,
+    )
 
 
 def create_ui(
@@ -156,6 +193,7 @@ def create_ui(
     encoders,
     np,
     arcade=None,
+    audio=None,
 ):
     """Wire up UI components. Returns (manager, secondary, inp)."""
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
@@ -217,6 +255,7 @@ def create_ui(
         return RuleFollowScreen(
             np,
             overlay,
+            audio=audio,
             settings=settings,
             secondary_screen=cat,
             on_exit=_reset_secondary,
@@ -229,6 +268,7 @@ def create_ui(
         return FlodeScreen(
             np,
             overlay,
+            audio=audio,
             settings=settings,
             secondary_screen=cat,
             on_exit=_reset_secondary,
@@ -284,6 +324,7 @@ def create_ui(
         session_mgr,
         order=mode_order,
         settings=settings,
+        audio=audio,
     )
     manager.push(home)
 
@@ -596,7 +637,7 @@ async def main():
     except Exception as e:
         print("Web server failed to start:", e)
 
-    tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status = (
+    tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, audio, hw_status = (
         create_hardware()
     )
 
@@ -615,6 +656,7 @@ async def main():
         encoders,
         np,
         arcade=arcade,
+        audio=audio,
     )
 
     # Power management
@@ -624,11 +666,14 @@ async def main():
     )
     power_mgr = PowerManager(tft, tft2, np, mcp)
 
-    await asyncio.gather(
+    tasks = [
         primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr),
         secondary_task(secondary),
         housekeeping_task(session_mgr, np, settings),
-    )
+    ]
+    if audio:
+        tasks.append(audio.start())
+    await asyncio.gather(*tasks)
 
 
 try:

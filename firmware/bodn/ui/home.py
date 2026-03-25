@@ -30,11 +30,14 @@ class HomeScreen(Screen):
     Only redraws on input events or during active animation.
     """
 
-    def __init__(self, mode_screens, session_mgr, order=None, settings=None):
+    def __init__(
+        self, mode_screens, session_mgr, order=None, settings=None, audio=None
+    ):
         self._mode_screens = mode_screens
         self._session_mgr = session_mgr
         self._all_names = order if order else list(mode_screens.keys())
         self._settings = settings or {}
+        self._audio = audio
         self._names = []  # rebuilt on enter()
         self._index = 0
         self._manager = None
@@ -154,6 +157,8 @@ class HomeScreen(Screen):
             self._anim_dir = 1 if units > 0 else -1
             self._dirty = True
             self._full_clear = True
+            if self._audio:
+                self._audio.boop()
 
     def _anim_x(self, width):
         """Return the current x-offset for the slide animation."""
