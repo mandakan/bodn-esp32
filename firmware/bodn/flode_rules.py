@@ -8,6 +8,7 @@ from micropython import const
 # Game states
 PLAYING = const(0)
 COMPLETE = const(1)
+FLOWING = const(3)  # flow animation — shows WHY the solution works
 CELEBRATE = const(2)
 
 # Level definitions: (num_segments, num_positions, gap_slots)
@@ -25,6 +26,9 @@ _LEVELS = (
 )
 
 MAX_LEVEL = const(6)
+
+# Flow animation: frames per segment (~30ms each)
+FLOW_FRAMES_PER_SEG = const(12)  # ~360ms per segment
 
 # Celebration duration in frames (~30ms each)
 CELEBRATE_FRAMES = const(60)  # ~1.8 seconds
@@ -47,6 +51,8 @@ class FlodeEngine:
         self.selected = 0  # currently selected segment index
         self.state = PLAYING
         self._celebrate_frame = 0
+        self._flow_frame = 0
+        self._flow_progress = 0  # 0..num_segments*FLOW_FRAMES_PER_SEG
 
     def start_level(self, level):
         """Set up a new level. Level is 1-based."""
@@ -106,11 +112,36 @@ class FlodeEngine:
                 return i
         return self.num_segments
 
-    def start_celebration(self):
-        """Transition from COMPLETE to CELEBRATE."""
+    def start_flowing(self):
+        """Transition from COMPLETE to FLOWING — animate the solution."""
         if self.state == COMPLETE:
-            self.state = CELEBRATE
-            self._celebrate_frame = 0
+            self.state = FLOWING
+            self._flow_frame = 0
+            self._flow_progress = 0
+
+    def update_flowing(self):
+        """Advance flow animation. Returns True when done."""
+        if self.state != FLOWING:
+            return False
+        self._flow_frame += 1
+        total = (self.num_segments + 1) * FLOW_FRAMES_PER_SEG
+        self._flow_progress = self._flow_frame
+        if self._flow_frame >= total:
+            return True
+        return False
+
+    @property
+    def flow_anim_reaches(self):
+        """How many segments the animated flow has reached (fractional as 0-256 per seg)."""
+        if self.state != FLOWING:
+            return 0
+        segs = self._flow_frame * 256 // (FLOW_FRAMES_PER_SEG * (self.num_segments + 1))
+        return min(segs, (self.num_segments + 1) * 256)
+
+    def start_celebration(self):
+        """Transition to CELEBRATE."""
+        self.state = CELEBRATE
+        self._celebrate_frame = 0
 
     def update_celebration(self):
         """Advance celebration timer. Returns True when done."""

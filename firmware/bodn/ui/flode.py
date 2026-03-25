@@ -7,7 +7,7 @@ from bodn.ui.widgets import draw_centered
 from bodn.ui.pause import PauseMenu
 from bodn.ui.input import BrightnessControl, EncoderAccumulator
 from bodn.i18n import t
-from bodn.flode_rules import FlodeEngine, PLAYING, COMPLETE, CELEBRATE
+from bodn.flode_rules import FlodeEngine, PLAYING, COMPLETE, FLOWING, CELEBRATE
 from bodn.patterns import N_LEDS, zone_fill, zone_pulse, zone_clear, ZONE_LID_RING
 from bodn.ui.catface import CURIOUS, HAPPY
 
@@ -244,13 +244,21 @@ class FlodeScreen(Screen):
             self._dirty = True
             return
 
-        # Completion — trigger celebration
-        if eng.state == COMPLETE:
-            eng.start_celebration()
+        # Flow animation — shows the solution working
+        if eng.state == FLOWING:
+            if eng.update_flowing():
+                eng.start_celebration()
+                if self._secondary:
+                    self._secondary.set_emotion(HAPPY)
             self._dirty = True
             self._leds_dirty = True
-            if self._secondary:
-                self._secondary.set_emotion(HAPPY)
+            return
+
+        # Completion — start flow animation (not celebrate immediately)
+        if eng.state == COMPLETE:
+            eng.start_flowing()
+            self._dirty = True
+            self._leds_dirty = True
             if self._audio:
                 self._audio.tone(880, 200, channel=1)
             return
@@ -356,12 +364,13 @@ class FlodeScreen(Screen):
 
         wall_c = rgb(*_WALL_COLOR)
         wall_sel_c = rgb(*_WALL_SELECTED)
-        flow_c = rgb(*_FLOW_COLOR)
         source_c = rgb(*_SOURCE_COLOR)
+        locked_c = rgb(40, 160, 80)  # green tint for locked/solved segments
 
         seg_w = self._seg_w
         gap_h = self._gap_h
         flow_y = self._flow_y
+        is_flowing = eng.state == FLOWING
 
         # Draw source indicator (left edge)
         src_h = gap_h
@@ -378,8 +387,8 @@ class FlodeScreen(Screen):
             gap_cy = self._anim_current_y(i)
             gap_top = gap_cy - gap_h // 2
             gap_bot = gap_top + gap_h
-            is_selected = i == eng.selected
-            wc = wall_sel_c if is_selected else wall_c
+            is_selected = i == eng.selected and not is_flowing
+            wc = locked_c if is_flowing else (wall_sel_c if is_selected else wall_c)
 
             # Wall above gap
             wall_top = self._usable_y0
@@ -391,39 +400,89 @@ class FlodeScreen(Screen):
             if gap_bot < wall_bot:
                 tft.fill_rect(x, gap_bot, seg_w, wall_bot - gap_bot, wc)
 
-            # Selected indicator: thin border on sides
+            # Selected indicator (not during flow animation)
             if is_selected:
                 tft.fill_rect(x - 2, wall_top, 2, self._usable_h, theme.CYAN)
                 tft.fill_rect(x + seg_w, wall_top, 2, self._usable_h, theme.CYAN)
 
-        # Draw flow — animate from left through aligned gaps
-        reaches = eng.flow_reaches()
-        flow_h = max(4, gap_h // 3)  # flow is thinner than gap
-        fy = flow_y - flow_h // 2
+        # Draw flow
+        if is_flowing:
+            # Animated flow: progresses left to right over time
+            flow_frac = eng._flow_frame
+            total_frames = (eng.num_segments + 1) * 12  # FLOW_FRAMES_PER_SEG
+            self._render_animated_flow(tft, theme, flow_frac, total_frames)
+        else:
+            # Static flow: shows how far alignment reaches
+            reaches = eng.flow_reaches()
+            self._render_static_flow(tft, theme, reaches)
 
-        # Flow from source to first segment
+        # Level indicator (top-right, small)
+        level_str = t("flode_level", eng.level)
+        tft.text(level_str, w - len(level_str) * 8 - 4, 2, theme.MUTED)
+
+    def _render_static_flow(self, tft, theme, reaches):
+        """Draw flow up to the number of aligned segments."""
+        eng = self._engine
+        w = theme.width
+        flow_c = theme.rgb(*_FLOW_COLOR)
+        flow_h = max(4, self._gap_h // 3)
+        fy = self._flow_y - flow_h // 2
+
         if reaches > 0:
             fx_start = _MARGIN_LEFT - 2
             fx_end = self._seg_x[0]
             tft.fill_rect(fx_start, fy, fx_end - fx_start, flow_h, flow_c)
 
-        # Flow through aligned segments
         for i in range(reaches):
             x = self._seg_x[i]
-            # Flow through gap
-            tft.fill_rect(x, fy, seg_w, flow_h, flow_c)
-            # Flow between segments (or to target)
+            tft.fill_rect(x, fy, self._seg_w, flow_h, flow_c)
             if i < eng.num_segments - 1:
                 next_x = self._seg_x[i + 1]
-                tft.fill_rect(x + seg_w, fy, next_x - (x + seg_w), flow_h, flow_c)
+                tft.fill_rect(
+                    x + self._seg_w, fy, next_x - (x + self._seg_w), flow_h, flow_c
+                )
             else:
-                # Flow to target
                 tgt_x = w - _MARGIN_RIGHT + 2
-                tft.fill_rect(x + seg_w, fy, tgt_x - (x + seg_w), flow_h, flow_c)
+                tft.fill_rect(
+                    x + self._seg_w, fy, tgt_x - (x + self._seg_w), flow_h, flow_c
+                )
 
-        # Level indicator (top-right, small)
-        level_str = t("flode_level", eng.level)
-        tft.text(level_str, w - len(level_str) * 8 - 4, 2, theme.MUTED)
+    def _render_animated_flow(self, tft, theme, flow_frame, total_frames):
+        """Draw flow animating left to right through all segments."""
+        eng = self._engine
+        w = theme.width
+        flow_c = theme.rgb(*_FLOW_COLOR)
+        glow_c = theme.rgb(100, 255, 200)  # bright leading edge
+        flow_h = max(4, self._gap_h // 3)
+        fy = self._flow_y - flow_h // 2
+        n = eng.num_segments
+
+        # Calculate how far the flow has reached as a pixel x position
+        # Source → seg0 → gap → seg1 → ... → segN → target
+        source_x = _MARGIN_LEFT - 2
+        target_x = w - _MARGIN_RIGHT + 2
+
+        # Build waypoints: [source, seg0_start, seg0_end, seg1_start, ..., target]
+        waypoints = [source_x]
+        for i in range(n):
+            waypoints.append(self._seg_x[i])
+            waypoints.append(self._seg_x[i] + self._seg_w)
+        waypoints.append(target_x)
+
+        # Total pixel distance
+        total_dist = waypoints[-1] - waypoints[0]
+        # Current flow head position
+        progress = min(flow_frame * 256 // total_frames, 256)
+        head_x = source_x + total_dist * progress // 256
+
+        # Draw the filled flow from source to head
+        if head_x > source_x:
+            tft.fill_rect(source_x, fy, head_x - source_x, flow_h, flow_c)
+
+        # Bright leading edge
+        edge_w = min(8, head_x - source_x)
+        if edge_w > 0:
+            tft.fill_rect(head_x - edge_w, fy, edge_w, flow_h, glow_c)
 
     def _render_celebrate(self, tft, theme, frame):
         """Celebration screen — big star burst effect."""
