@@ -110,7 +110,12 @@ def load_manifest():
         bank_entry = result["banks"][idx]
         if isinstance(val.get("name"), str):
             bank_entry["name"] = val["name"]
-        # Accept hex color string "#RRGGBB" or RGB tuple
+        # Per-language names: "name_sv", "name_en", etc.
+        for lang in ("sv", "en"):
+            lang_key = "name_" + lang
+            if isinstance(val.get(lang_key), str):
+                bank_entry[lang_key] = val[lang_key]
+        # Accept hex color string "#RRGGBB"
         color = val.get("color")
         if isinstance(color, str) and color.startswith("#") and len(color) == 7:
             try:
@@ -122,9 +127,10 @@ def load_manifest():
                 pass
 
     # Labels: keys are "bank_slot" strings (e.g. "0_3")
+    # Values can be a plain string OR a dict {"sv": "...", "en": "..."}.
     labels_raw = raw.get("labels", {})
     for key, label in labels_raw.items():
-        if not isinstance(key, str) or not isinstance(label, str):
+        if not isinstance(key, str):
             continue
         parts = key.split("_")
         if len(parts) != 2:
@@ -134,7 +140,12 @@ def load_manifest():
             slot_idx = int(parts[1])
         except ValueError:
             continue
-        if 0 <= bank_idx < NUM_BANKS and 0 <= slot_idx < NUM_MINI_BUTTONS:
+        if not (0 <= bank_idx < NUM_BANKS and 0 <= slot_idx < NUM_MINI_BUTTONS):
+            continue
+        if isinstance(label, str):
+            result["labels"][(bank_idx, slot_idx)] = label
+        elif isinstance(label, dict):
+            # Store the whole dict; slot_label() picks the right language.
             result["labels"][(bank_idx, slot_idx)] = label
 
     return result
@@ -173,9 +184,13 @@ class SoundboardState:
         self.arcade_present = scan_arcade()
 
     def bank_name(self):
-        """Return the display name for the current bank."""
+        """Return the display name for the current bank in the active language."""
         if self.manifest:
-            return self.manifest["banks"][self.bank]["name"]
+            from bodn.i18n import get_language
+
+            entry = self.manifest["banks"][self.bank]
+            lang_key = "name_" + get_language()
+            return entry.get(lang_key) or entry["name"]
         return _DEFAULT_BANK_NAMES[self.bank]
 
     def bank_color(self):
@@ -185,12 +200,26 @@ class SoundboardState:
         return _DEFAULT_COLORS[self.bank]
 
     def slot_label(self, slot):
-        """Return the display label for a mini-button slot."""
+        """Return the display label for a mini-button slot in the active language.
+
+        Returns None if no label is configured (caller uses an i18n fallback).
+        Label values can be a plain string or a {lang: str} dict.
+        """
         if self.manifest:
             label = self.manifest["labels"].get((self.bank, slot))
-            if label:
-                return label
-        return None  # caller uses i18n fallback
+            if label is None:
+                return None
+            if isinstance(label, dict):
+                from bodn.i18n import get_language
+
+                lang = get_language()
+                return (
+                    label.get(lang)
+                    or label.get("sv")
+                    or next(iter(label.values()), None)
+                )
+            return label  # plain string — language-neutral
+        return None
 
     def adjust_volume(self, delta):
         """Adjust volume by delta detents, clamped to 0–100."""

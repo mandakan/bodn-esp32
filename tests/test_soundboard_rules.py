@@ -155,6 +155,27 @@ def test_load_manifest_bank_names_and_colors(monkeypatch):
     assert result["banks"][2]["color"] == _DEFAULT_COLORS[2]
 
 
+def test_load_manifest_per_language_bank_names(monkeypatch):
+    data = {
+        "banks": {
+            "0": {"name_sv": "Djur", "name_en": "Animals", "color": "#FF6B35"},
+        }
+    }
+    path = _write_manifest(data)
+    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
+    result = load_manifest()
+    assert result["banks"][0]["name_sv"] == "Djur"
+    assert result["banks"][0]["name_en"] == "Animals"
+
+
+def test_load_manifest_label_dict(monkeypatch):
+    data = {"labels": {"0_0": {"sv": "Hund", "en": "Dog"}}}
+    path = _write_manifest(data)
+    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
+    result = load_manifest()
+    assert result["labels"][(0, 0)] == {"sv": "Hund", "en": "Dog"}
+
+
 def test_load_manifest_labels(monkeypatch):
     data = {
         "labels": {
@@ -354,6 +375,47 @@ def test_bank_name_from_manifest(monkeypatch):
     assert state.bank_name() == "Djur"
 
 
+def test_bank_name_per_language_sv(monkeypatch):
+    import bodn.i18n as i18n
+
+    i18n.init("sv")
+    monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
+    data = {"banks": {"0": {"name": "Djur", "name_sv": "Djur", "name_en": "Animals"}}}
+    path = _write_manifest(data)
+    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
+    state = SoundboardState()
+    state.load()
+    assert state.bank_name() == "Djur"
+
+
+def test_bank_name_per_language_en(monkeypatch):
+    import bodn.i18n as i18n
+
+    i18n.init("en")
+    monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
+    data = {"banks": {"0": {"name": "Djur", "name_sv": "Djur", "name_en": "Animals"}}}
+    path = _write_manifest(data)
+    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
+    state = SoundboardState()
+    state.load()
+    assert state.bank_name() == "Animals"
+    i18n.init("sv")  # restore default
+
+
+def test_bank_name_falls_back_to_plain_name(monkeypatch):
+    import bodn.i18n as i18n
+
+    i18n.init("en")
+    monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
+    data = {"banks": {"0": {"name": "Djur"}}}  # no name_en
+    path = _write_manifest(data)
+    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
+    state = SoundboardState()
+    state.load()
+    assert state.bank_name() == "Djur"
+    i18n.init("sv")
+
+
 def test_slot_label_from_manifest(monkeypatch):
     monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
     data = {"labels": {"0_2": "Katt"}}
@@ -363,3 +425,44 @@ def test_slot_label_from_manifest(monkeypatch):
     state.load()
     assert state.slot_label(2) == "Katt"
     assert state.slot_label(3) is None
+
+
+def test_slot_label_dict_sv(monkeypatch):
+    import bodn.i18n as i18n
+
+    i18n.init("sv")
+    monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
+    data = {"labels": {"0_0": {"sv": "Hund", "en": "Dog"}}}
+    path = _write_manifest(data)
+    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
+    state = SoundboardState()
+    state.load()
+    assert state.slot_label(0) == "Hund"
+
+
+def test_slot_label_dict_en(monkeypatch):
+    import bodn.i18n as i18n
+
+    i18n.init("en")
+    monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
+    data = {"labels": {"0_0": {"sv": "Hund", "en": "Dog"}}}
+    path = _write_manifest(data)
+    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
+    state = SoundboardState()
+    state.load()
+    assert state.slot_label(0) == "Dog"
+    i18n.init("sv")
+
+
+def test_slot_label_dict_falls_back_to_sv(monkeypatch):
+    import bodn.i18n as i18n
+
+    i18n.init("en")
+    monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
+    data = {"labels": {"0_0": {"sv": "Hund"}}}  # no "en" key
+    path = _write_manifest(data)
+    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
+    state = SoundboardState()
+    state.load()
+    assert state.slot_label(0) == "Hund"
+    i18n.init("sv")
