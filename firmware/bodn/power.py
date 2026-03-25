@@ -103,6 +103,7 @@ class PowerManager:
             self._mcp.enable_interrupts()
 
         # Wake sources: encoder buttons (all active-low) + MCP INT if present
+        has_gpio_wake = False
         try:
             import esp32
 
@@ -112,16 +113,37 @@ class PowerManager:
             for pin_num in wake_pins:
                 p = Pin(pin_num, Pin.IN, Pin.PULL_UP)
                 esp32.gpio_wakeup(p, esp32.WAKEUP_ANY_LOW)
+            has_gpio_wake = True
         except (ImportError, AttributeError) as e:
-            # gpio_wakeup not available — use timed sleep as fallback
             print("POWER: gpio_wakeup unavailable:", e)
 
         # Clear pending MCP interrupts before sleeping
         if self._mcp:
             self._mcp.clear_interrupts()
 
-        print("POWER: entering light sleep")
-        machine.lightsleep(60_000)  # wake after 60s if no GPIO wake source
+        if has_gpio_wake:
+            print("POWER: entering light sleep (GPIO wake)")
+            machine.lightsleep()
+        else:
+            # Fallback: poll encoder buttons in a light sleep loop
+            print("POWER: entering poll sleep (no GPIO wake)")
+            enc_pins = [
+                Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP),
+                Pin(config.ENC2_SW, Pin.IN, Pin.PULL_UP),
+            ]
+            while True:
+                machine.lightsleep(200)  # wake every 200ms to check buttons
+                if any(p.value() == 0 for p in enc_pins):
+                    break
+                if self._mcp:
+                    self._mcp.refresh()
+                    # Check if any button was pressed on expander
+                    for bp in range(16):
+                        if self._mcp.pin_value(bp) == 0:
+                            break
+                    else:
+                        continue
+                    break
         print("POWER: woke up")
 
     def post_wake(self):
