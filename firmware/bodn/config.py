@@ -58,17 +58,13 @@ ENC1_SW = const(17)
 ENC2_CLK = const(16)
 ENC2_DT = const(44)
 ENC2_SW = const(40)
-ENC3_CLK = const(41)
-ENC3_DT = const(42)
-ENC3_SW = const(0)
 
-# Encoder role indices — mount left-to-right next to the display:
-#   ENC1 = NAV   (left,   nearest display — menu scroll + back button)
-#   ENC2 = ENC_A (middle, mode parameter 1 — e.g. brightness)
-#   ENC3 = ENC_B (right,  mode parameter 2 — e.g. speed)
-ENC_NAV = const(0)  # index: navigation (home: scroll modes, modes: back button)
+# Encoder role indices — two encoders, NAV doubles as parameter B in game modes:
+#   ENC1 = NAV   (left,  menu scroll + back button; rotation = param B in games)
+#   ENC2 = ENC_A (right, mode parameter 1 — e.g. brightness)
+ENC_NAV = const(0)  # index: navigation + parameter B in game modes
 ENC_A = const(1)  # index: mode parameter 1
-ENC_B = const(2)  # index: mode parameter 2
+ENC_B = const(0)  # same as NAV — NAV rotation doubles as param B in games
 
 # WS2812B NeoPixel LEDs — three zones daisy-chained on one data line:
 #   Stick A (8 LEDs)  →  Stick B (8 LEDs)  →  Lid Ring (92 LEDs)

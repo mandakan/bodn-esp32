@@ -106,7 +106,7 @@ class PowerManager:
         try:
             import esp32
 
-            wake_pins = [config.ENC1_SW, config.ENC2_SW, config.ENC3_SW]
+            wake_pins = [config.ENC1_SW, config.ENC2_SW]
             if self._mcp:
                 wake_pins.append(config.MCP_INT_PIN)
             for pin_num in wake_pins:

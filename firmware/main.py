@@ -140,7 +140,6 @@ def create_hardware():
     encoders = [
         Encoder(config.ENC1_CLK, config.ENC1_DT, config.ENC1_SW),
         Encoder(config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW),
-        Encoder(config.ENC3_CLK, config.ENC3_DT, config.ENC3_SW),
     ]
 
     return tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, hw_status
@@ -358,14 +357,15 @@ async def primary_task(manager, settings, inp, encoders, mcp, idle_tracker, powe
                 "1" if inp.btn_held[i] else "." for i in range(len(inp.btn_held))
             )
             sws = "".join("1" if inp.sw[i] else "." for i in range(len(inp.sw)))
-            enc_vals = " ".join("{}".format(inp.enc_pos[i]) for i in range(3))
+            n_enc = len(encoders)
+            enc_vals = " ".join("{}".format(inp.enc_pos[i]) for i in range(n_enc))
             enc_raw = " ".join(
                 "C{}D{}S{}".format(
                     encoders[i].clk.value(),
                     encoders[i].dt.value(),
                     encoders[i].sw.value(),
                 )
-                for i in range(3)
+                for i in range(n_enc)
             )
             print(
                 "INP btn[{}] sw[{}] enc[{}] raw[{}]".format(

@@ -392,7 +392,6 @@ if _diag_requested and tft:
     _enc_btns = [
         Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP),
         Pin(config.ENC2_SW, Pin.IN, Pin.PULL_UP),
-        Pin(config.ENC3_SW, Pin.IN, Pin.PULL_UP),
     ]
     # First wait for the held button to be released
     while _enc_btns[0].value() == 0:

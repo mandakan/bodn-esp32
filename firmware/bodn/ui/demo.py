@@ -79,8 +79,10 @@ class DemoScreen(Screen):
                 self._dirty = True
                 break
 
-        # Encoder A or B button → cycle pattern
-        if inp.enc_btn_pressed[ENC_A] or inp.enc_btn_pressed[ENC_B]:
+        # Encoder A button or NAV tap → cycle pattern
+        # NAV tap uses gesture to avoid triggering hold-to-pause
+        nav_tap = inp.gestures.tap[inp.gesture_enc(ENC_B)]
+        if inp.enc_btn_pressed[ENC_A] or nav_tap:
             self._active_pattern = (self._active_pattern + 1) % len(PATTERNS)
             self._dirty = True
 

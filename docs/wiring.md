@@ -21,7 +21,7 @@ graph LR
     MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN</sub>"]
     ESP -- I2S --> MAX98357AI2Samplifier
 
-    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 44 → DT<br/>GPIO 40 → SW<br/>GPIO 41 → CLK<br/>GPIO 42 → DT<br/>GPIO 0 → SW</sub>"]
+    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 44 → DT<br/>GPIO 40 → SW</sub>"]
     RotaryencodersmuststayonnativeGPIOforIRQlatency -.- ESP
 
     The144LEDmstriprunsaroundtheinsideofthetranslucentlidperimeter["The 144 LED/m strip runs around the inside of the translucent lid perimeter<br/><sub>GPIO 4 → PIN</sub>"]
@@ -87,9 +87,6 @@ graph LR
 | CLK | 16 | `ENC2_CLK` |
 | DT | 44 | `ENC2_DT` |
 | SW | 40 | `ENC2_SW` |
-| CLK | 41 | `ENC3_CLK` |
-| DT | 42 | `ENC3_DT` |
-| SW | 0 | `ENC3_SW` |
 
 ### The 144 LED/m strip runs around the inside of the translucent lid perimeter
 
@@ -141,7 +138,6 @@ graph LR
 
 | GPIO | Component | Signal |
 |------|-----------|--------|
-| 0 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 1 | detents per logical unit | ENCODER_SENS_DEFAULT |
 | 2 | detents per logical unit | ENCODER SENS OPTIONS 1 |
 | 3 | detents per logical unit | ENCODER SENS OPTIONS 2 |
@@ -164,8 +160,6 @@ graph LR
 | 21 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | DS18B20 1-Wire temperature sensors | TEMP_WARN_C |
-| 41 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
-| 42 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
 | 44 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
 | 45 | MAX98357A I2S amplifier | WS |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |

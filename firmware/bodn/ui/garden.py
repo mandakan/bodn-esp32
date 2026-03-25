@@ -227,8 +227,9 @@ class GardenScreen(Screen):
             if not self._running and self._population >= AUTO_START_CELLS:
                 self._running = True
 
-        # ENC_B button: toggle cell at cursor (plant/remove)
-        if inp.enc_btn_pressed[config.ENC_B]:
+        # NAV button tap: toggle cell at cursor (plant/remove)
+        # Uses gesture tap (not enc_btn_pressed) to avoid triggering hold-to-pause
+        if inp.gestures.tap[inp.gesture_enc(config.ENC_B)]:
             cx, cy = self._cursor_xy()
             toggle(self._grid, cx, cy, GRID_W, self._cursor_color)
             self._dirty_cells.add((cx, cy))
