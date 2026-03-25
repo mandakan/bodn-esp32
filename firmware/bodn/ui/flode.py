@@ -69,6 +69,7 @@ class FlodeScreen(Screen):
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._dirty = True
+        self._full_clear = True  # only clear on state transitions, not every frame
         self._leds_dirty = True
 
         # Game engine — use a simple RNG based on frame counter
@@ -115,6 +116,7 @@ class FlodeScreen(Screen):
         self._compute_layout(manager.theme)
         self._init_anim()
         self._dirty = True
+        self._full_clear = True
         self._leds_dirty = True
         if self._secondary:
             self._secondary.set_emotion(CURIOUS)
@@ -241,6 +243,7 @@ class FlodeScreen(Screen):
                     self._select_acc.reset()
                     self._shift_acc.reset()
                 self._leds_dirty = True
+                self._full_clear = True
             self._dirty = True
             return
 
@@ -248,6 +251,7 @@ class FlodeScreen(Screen):
         if eng.state == FLOWING:
             if eng.update_flowing():
                 eng.start_celebration()
+                self._full_clear = True
                 if self._secondary:
                     self._secondary.set_emotion(HAPPY)
             self._dirty = True
@@ -258,6 +262,7 @@ class FlodeScreen(Screen):
         if eng.state == COMPLETE:
             eng.start_flowing()
             self._dirty = True
+            self._full_clear = True
             self._leds_dirty = True
             return
 
@@ -348,14 +353,18 @@ class FlodeScreen(Screen):
         if self._pause.is_open:
             if self._dirty:
                 self._dirty = False
-                tft.fill(theme.BLACK)
+                if self._full_clear:
+                    tft.fill(theme.BLACK)
+                    self._full_clear = False
                 self._render_game(tft, theme, frame)
             self._pause.render(tft, theme, frame)
             return
 
         if self._dirty:
             self._dirty = False
-            tft.fill(theme.BLACK)
+            if self._full_clear:
+                tft.fill(theme.BLACK)
+                self._full_clear = False
             self._render_game(tft, theme, frame)
 
         self._pause.render(tft, theme, frame)
@@ -380,6 +389,16 @@ class FlodeScreen(Screen):
         flow_y = self._flow_y
         is_flowing = eng.state == FLOWING
 
+        # Clear margins and flow line area
+        tft.fill_rect(0, self._usable_y0, _MARGIN_LEFT, self._usable_h, theme.BLACK)
+        tft.fill_rect(
+            w - _MARGIN_RIGHT,
+            self._usable_y0,
+            _MARGIN_RIGHT,
+            self._usable_h,
+            theme.BLACK,
+        )
+
         # Draw source indicator (left edge)
         src_h = gap_h
         src_y = flow_y - src_h // 2
@@ -389,7 +408,7 @@ class FlodeScreen(Screen):
         tgt_x = w - _MARGIN_RIGHT + 2
         tft.fill_rect(tgt_x, src_y, _MARGIN_RIGHT - 2, src_h, source_c)
 
-        # Draw segments
+        # Draw segments — clear each column first to avoid flicker
         for i in range(eng.num_segments):
             x = self._seg_x[i]
             gap_cy = self._anim_current_y(i)
@@ -398,13 +417,17 @@ class FlodeScreen(Screen):
             is_selected = i == eng.selected and not is_flowing
             wc = locked_c if is_flowing else (wall_sel_c if is_selected else wall_c)
 
-            # Wall above gap
             wall_top = self._usable_y0
+            wall_bot = self._usable_y0 + self._usable_h
+
+            # Clear entire column (including selection indicators)
+            tft.fill_rect(x - 2, wall_top, seg_w + 4, self._usable_h, theme.BLACK)
+
+            # Wall above gap
             if gap_top > wall_top:
                 tft.fill_rect(x, wall_top, seg_w, gap_top - wall_top, wc)
 
             # Wall below gap
-            wall_bot = self._usable_y0 + self._usable_h
             if gap_bot < wall_bot:
                 tft.fill_rect(x, gap_bot, seg_w, wall_bot - gap_bot, wc)
 
