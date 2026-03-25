@@ -45,6 +45,7 @@ class DemoScreen(Screen):
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._dirty = True
+        self._full_clear = True
         # Snapshot of input state for dirty detection
         self._prev_enc = [0, 0]  # indexed by encoder index
         self._prev_btn = []
@@ -55,6 +56,7 @@ class DemoScreen(Screen):
         self._pause.set_manager(manager)
         self._brightness.reset()
         self._dirty = True
+        self._full_clear = True
 
     def needs_redraw(self):
         return self._dirty or self._pause.needs_render
@@ -67,6 +69,7 @@ class DemoScreen(Screen):
             return
         elif result == "resume":
             self._dirty = True
+            self._full_clear = True
         if self._pause.is_open or self._pause.is_holding:
             return
 
@@ -168,6 +171,7 @@ class DemoScreen(Screen):
             if self._dirty:
                 self._dirty = False
                 tft.fill(theme.BLACK)
+                self._full_clear = False
                 landscape = theme.width > theme.height
                 if landscape:
                     self._render_landscape(tft, theme, frame)
@@ -180,7 +184,9 @@ class DemoScreen(Screen):
             self._pause.render(tft, theme, frame)
             return
         self._dirty = False
-        tft.fill(theme.BLACK)
+        if self._full_clear:
+            self._full_clear = False
+            tft.fill(theme.BLACK)
         landscape = theme.width > theme.height
         if landscape:
             self._render_landscape(tft, theme, frame)
@@ -230,6 +236,7 @@ class DemoScreen(Screen):
         for i in range(len(toggle_labels)):
             x = i * 36
             y = 104
+            tft.fill_rect(x, y, 32, 14, theme.BLACK)
             if i < len(sw) and sw[i]:
                 tft.fill_rect(x, y, 32, 14, theme.GREEN)
                 tft.text(toggle_labels[i], x + 4, y + 3, theme.BLACK)
@@ -257,7 +264,8 @@ class DemoScreen(Screen):
                 tft, bar_x, y, bar_w, 14, val, max_val, colour_565, theme.BLACK
             )
 
-        # Back hint
+        # Back hint (static text, clear area first)
+        tft.fill_rect(rx, theme.height - 16, rw, 16, theme.BLACK)
         tft.text(t("demo_back"), rx, theme.height - 16, theme.MUTED)
 
     def _render_portrait(self, tft, theme, frame):
@@ -294,6 +302,7 @@ class DemoScreen(Screen):
         for i in range(len(toggle_labels)):
             x = i * 32
             y = 82
+            tft.fill_rect(x, y, 28, 14, theme.BLACK)
             if i < len(sw) and sw[i]:
                 tft.fill_rect(x, y, 28, 14, theme.GREEN)
                 tft.text(toggle_labels[i], x + 2, y + 3, theme.BLACK)

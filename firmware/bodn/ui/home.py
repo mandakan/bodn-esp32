@@ -41,6 +41,7 @@ class HomeScreen(Screen):
         self._error = None
         self._error_mode = None
         self._dirty = True
+        self._full_clear = True
         # Inline accumulator state
         self._accum = 0
         # Animation state
@@ -77,6 +78,7 @@ class HomeScreen(Screen):
         self._dpu = encoder_dpu(self._settings)
         self._anim_step = _ANIM_STEPS
         self._dirty = True
+        self._full_clear = True
 
     def needs_redraw(self):
         return self._dirty
@@ -135,10 +137,11 @@ class HomeScreen(Screen):
                 self._dirty = True
             return
 
-        # Advance animation if active
+        # Advance animation if active — needs full clear each frame
         if self._anim_step < _ANIM_STEPS:
             self._anim_step += 1
             self._dirty = True
+            self._full_clear = True
 
         # Nav encoder rotation cycles modes via accumulator
         delta = inp.enc_delta[NAV]
@@ -151,6 +154,7 @@ class HomeScreen(Screen):
             self._anim_step = 0
             self._anim_dir = 1 if units > 0 else -1
             self._dirty = True
+            self._full_clear = True
 
     def _anim_x(self, width):
         """Return the current x-offset for the slide animation."""
@@ -161,6 +165,7 @@ class HomeScreen(Screen):
 
     def render(self, tft, theme, frame):
         self._dirty = False
+        self._full_clear = False
         tft.fill(theme.BLACK)
 
         # Show error on screen if a mode failed to load
