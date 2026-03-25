@@ -146,8 +146,11 @@ class AudioEngine:
         self._buf = bytearray(_BUF_SIZE)
         self._buf_view = memoryview(self._buf)
         self._silence = bytes(_BUF_SIZE)
-        self._volume = 80  # 0-100
-        self._vol_mult = 52429  # pre-computed fixed-point multiplier (80%)
+        # Small silence chunk for idle polling — keeps latency low (~8ms)
+        # so the loop detects new audio quickly
+        self._silence_short = bytes(512)
+        self._volume = 50  # 0-100
+        self._vol_mult = 50 * 655  # pre-computed fixed-point multiplier
 
     @property
     def volume(self):
@@ -253,39 +256,44 @@ class AudioEngine:
             self._amp_enable()
             print("Amplifier enabled")
 
+        silence_short = self._silence_short
+
         while True:
             ch_idx = self._active_channel()
 
             if ch_idx < 0:
-                # Nothing playing — write silence (MAX98357A auto-mutes)
-                i2s.write(silence)
-                await sleep_ms(20)
+                # Nothing playing — short silence keeps poll latency ~8ms
+                i2s.write(silence_short)
+                await sleep_ms(5)
                 continue
 
+            # Play all chunks for this source without yielding so
+            # short tones (boops) come out as a single clean burst.
             ch = channels[ch_idx]
-            n = 0
-            try:
-                n = ch.source.read_chunk(mono_buf)
-            except Exception as e:
-                print("audio read error:", e)
-                ch.stop()
-                continue
-
-            if n == 0:
-                if ch.loop:
-                    ch.source.seek_start()
-                    continue
-                else:
+            while ch.source is not None:
+                n = 0
+                try:
+                    n = ch.source.read_chunk(mono_buf)
+                except Exception as e:
+                    print("audio read error:", e)
                     ch.stop()
-                    continue
+                    break
 
-            self._apply_volume(mono_buf, n)
-            # Expand mono → stereo (duplicate each sample to L+R)
-            mono_to_stereo(mono_buf, buf, n)
-            stereo_n = n * 2
-            try:
-                i2s.write(buf_view[:stereo_n])
-            except Exception as e:
-                print("audio write error:", e)
+                if n == 0:
+                    if ch.loop:
+                        ch.source.seek_start()
+                        continue
+                    else:
+                        ch.stop()
+                        break
+
+                self._apply_volume(mono_buf, n)
+                mono_to_stereo(mono_buf, buf, n)
+                stereo_n = n * 2
+                try:
+                    i2s.write(buf_view[:stereo_n])
+                except Exception as e:
+                    print("audio write error:", e)
+                    break
 
             await sleep_ms(0)
