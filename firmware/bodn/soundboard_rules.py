@@ -79,11 +79,28 @@ def scan_arcade():
 def load_manifest():
     """Load /sounds/manifest.json and return a normalised dict.
 
-    Returns a dict with keys:
-        "banks": {0: {"name": str, "color": (r,g,b)}, ...}
-        "labels": {(bank, slot): str, ...}
+    Manifest format::
 
-    Falls back gracefully on missing or malformed manifest.
+        {
+          "banks": {
+            "0": {
+              "name_sv": "Djur",
+              "name_en": "Animals",
+              "color": "#FF6B35",
+              "slots": {
+                "0": {"sv": "Hund", "en": "Dog"},
+                "1": "Katt"
+              }
+            }
+          }
+        }
+
+    All fields are optional. ``name`` is accepted as a language-neutral fallback.
+    Slot labels can be a plain string (language-neutral) or a ``{lang: str}`` dict.
+
+    Returns a dict with keys:
+        "banks": {0: {"name": str, ...per-lang keys..., "color": (r,g,b)}, ...}
+        "labels": {(bank, slot): str | dict, ...}
     """
     result = {
         "banks": {
@@ -98,24 +115,26 @@ def load_manifest():
     except Exception:
         return result
 
-    # Banks
     banks_raw = raw.get("banks", {})
     for key, val in banks_raw.items():
         try:
-            idx = int(key)
+            bank_idx = int(key)
         except (ValueError, TypeError):
             continue
-        if not (0 <= idx < NUM_BANKS):
+        if not (0 <= bank_idx < NUM_BANKS):
             continue
-        bank_entry = result["banks"][idx]
+        bank_entry = result["banks"][bank_idx]
+
+        # Language-neutral name fallback
         if isinstance(val.get("name"), str):
             bank_entry["name"] = val["name"]
-        # Per-language names: "name_sv", "name_en", etc.
+        # Per-language names: name_sv, name_en
         for lang in ("sv", "en"):
             lang_key = "name_" + lang
             if isinstance(val.get(lang_key), str):
                 bank_entry[lang_key] = val[lang_key]
-        # Accept hex color string "#RRGGBB"
+
+        # Color: "#RRGGBB"
         color = val.get("color")
         if isinstance(color, str) and color.startswith("#") and len(color) == 7:
             try:
@@ -126,27 +145,17 @@ def load_manifest():
             except ValueError:
                 pass
 
-    # Labels: keys are "bank_slot" strings (e.g. "0_3")
-    # Values can be a plain string OR a dict {"sv": "...", "en": "..."}.
-    labels_raw = raw.get("labels", {})
-    for key, label in labels_raw.items():
-        if not isinstance(key, str):
-            continue
-        parts = key.split("_")
-        if len(parts) != 2:
-            continue
-        try:
-            bank_idx = int(parts[0])
-            slot_idx = int(parts[1])
-        except ValueError:
-            continue
-        if not (0 <= bank_idx < NUM_BANKS and 0 <= slot_idx < NUM_MINI_BUTTONS):
-            continue
-        if isinstance(label, str):
-            result["labels"][(bank_idx, slot_idx)] = label
-        elif isinstance(label, dict):
-            # Store the whole dict; slot_label() picks the right language.
-            result["labels"][(bank_idx, slot_idx)] = label
+        # Slot labels nested inside the bank entry
+        slots_raw = val.get("slots", {})
+        for slot_key, label in slots_raw.items():
+            try:
+                slot_idx = int(slot_key)
+            except (ValueError, TypeError):
+                continue
+            if not (0 <= slot_idx < NUM_MINI_BUTTONS):
+                continue
+            if isinstance(label, (str, dict)):
+                result["labels"][(bank_idx, slot_idx)] = label
 
     return result
 

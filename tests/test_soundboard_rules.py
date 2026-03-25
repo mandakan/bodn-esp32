@@ -168,20 +168,11 @@ def test_load_manifest_per_language_bank_names(monkeypatch):
     assert result["banks"][0]["name_en"] == "Animals"
 
 
-def test_load_manifest_label_dict(monkeypatch):
-    data = {"labels": {"0_0": {"sv": "Hund", "en": "Dog"}}}
-    path = _write_manifest(data)
-    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
-    result = load_manifest()
-    assert result["labels"][(0, 0)] == {"sv": "Hund", "en": "Dog"}
-
-
 def test_load_manifest_labels(monkeypatch):
     data = {
-        "labels": {
-            "0_0": "Hund",
-            "0_1": "Katt",
-            "3_7": "Häst",
+        "banks": {
+            "0": {"slots": {"0": "Hund", "1": "Katt"}},
+            "3": {"slots": {"7": "Häst"}},
         }
     }
     path = _write_manifest(data)
@@ -190,6 +181,14 @@ def test_load_manifest_labels(monkeypatch):
     assert result["labels"][(0, 0)] == "Hund"
     assert result["labels"][(0, 1)] == "Katt"
     assert result["labels"][(3, 7)] == "Häst"
+
+
+def test_load_manifest_label_dict(monkeypatch):
+    data = {"banks": {"0": {"slots": {"0": {"sv": "Hund", "en": "Dog"}}}}}
+    path = _write_manifest(data)
+    monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
+    result = load_manifest()
+    assert result["labels"][(0, 0)] == {"sv": "Hund", "en": "Dog"}
 
 
 def test_load_manifest_malformed_json(monkeypatch):
@@ -418,7 +417,7 @@ def test_bank_name_falls_back_to_plain_name(monkeypatch):
 
 def test_slot_label_from_manifest(monkeypatch):
     monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
-    data = {"labels": {"0_2": "Katt"}}
+    data = {"banks": {"0": {"slots": {"2": "Katt"}}}}
     path = _write_manifest(data)
     monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
     state = SoundboardState()
@@ -432,7 +431,7 @@ def test_slot_label_dict_sv(monkeypatch):
 
     i18n.init("sv")
     monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
-    data = {"labels": {"0_0": {"sv": "Hund", "en": "Dog"}}}
+    data = {"banks": {"0": {"slots": {"0": {"sv": "Hund", "en": "Dog"}}}}}
     path = _write_manifest(data)
     monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
     state = SoundboardState()
@@ -445,7 +444,7 @@ def test_slot_label_dict_en(monkeypatch):
 
     i18n.init("en")
     monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
-    data = {"labels": {"0_0": {"sv": "Hund", "en": "Dog"}}}
+    data = {"banks": {"0": {"slots": {"0": {"sv": "Hund", "en": "Dog"}}}}}
     path = _write_manifest(data)
     monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
     state = SoundboardState()
@@ -459,7 +458,7 @@ def test_slot_label_dict_falls_back_to_sv(monkeypatch):
 
     i18n.init("en")
     monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
-    data = {"labels": {"0_0": {"sv": "Hund"}}}  # no "en" key
+    data = {"banks": {"0": {"slots": {"0": {"sv": "Hund"}}}}}  # no "en" key
     path = _write_manifest(data)
     monkeypatch.setattr(sbr, "MANIFEST_PATH", path)
     state = SoundboardState()
