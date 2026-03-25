@@ -339,7 +339,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
 
         elif method == "POST" and path == "/api/wifi":
             if body:
-                for k in ("wifi_mode", "wifi_ssid", "wifi_pass"):
+                for k in ("wifi_mode", "wifi_ssid", "wifi_pass", "hostname"):
                     if k in body:
                         settings[k] = body[k]
                 storage.save_settings(settings)

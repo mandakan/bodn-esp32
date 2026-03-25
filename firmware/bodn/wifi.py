@@ -109,11 +109,13 @@ def connect(settings):
     ssid = settings.get("wifi_ssid", "")
     password = settings.get("wifi_pass", "")
 
+    hostname = settings.get("hostname", "bodn")
+
     # User configured a network — try it
     if mode == "sta" and ssid:
         print("WiFi: connecting to", ssid)
         if connect_sta(ssid, password):
-            start_mdns()
+            start_mdns(hostname)
             return get_ip()
         print("WiFi: failed to connect to", ssid)
 
@@ -124,11 +126,11 @@ def connect(settings):
         # Once the user configures WiFi via the web UI, this path is skipped.
         print("WiFi: trying Wokwi-GUEST...")
         if connect_sta("Wokwi-GUEST", "", timeout=3):
-            start_mdns()
+            start_mdns(hostname)
             return get_ip()
 
     # Fall back to AP mode
     print("WiFi: starting AP mode")
     ip = start_ap()
-    start_mdns()
+    start_mdns(hostname)
     return ip
