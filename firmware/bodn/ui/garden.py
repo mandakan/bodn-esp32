@@ -116,6 +116,9 @@ class GardenScreen(Screen):
         self._leds_dirty = True
         self._empty_since_ms = 0
         self._prompt_visible = False  # tracks if center text prompt is on screen
+        self._grow_prompt_visible = False  # "press to grow" prompt
+        self._plant_count = 0  # user-planted cells (not from evolution)
+        self._last_plant_ms = 0  # for idle detection
 
         # Rule modifiers (from toggle switches)
         self._friendly = False
@@ -134,14 +137,20 @@ class GardenScreen(Screen):
         self._manager = manager
         self._pause.set_manager(manager)
         self._brightness.reset()
-        self._speed_acc.reset()
-        self._cursor_acc.reset()
-        self._cursor_pos = _GRID_TOTAL // 2  # start in center
+        self._cursor_x_acc.reset()
+        self._cursor_y_acc.reset()
+        self._cursor_x = GRID_W // 2
+        self._cursor_y = GRID_H // 2
         self._prev_cursor_pos = -1
         self._dirty = True
         self._full_redraw = True
         self._leds_dirty = True
         self._running = False
+        self._plant_count = 0
+        # Consume the NAV button press that entered this screen
+        # so it doesn't register as a tap on the first frame
+        ch = manager.inp.gesture_enc(config.ENC_NAV)
+        manager.inp.gestures.reset_channel(ch)
         self._last_step_ms = time.ticks_ms()
 
     def exit(self):
@@ -199,7 +208,9 @@ class GardenScreen(Screen):
             self._running = not self._running
             if self._running:
                 self._last_step_ms = now
+                self._plant_count = 0  # reset prompt tracking
             self._dirty = True
+            self._full_redraw = True
 
         # Button presses — plant at cursor AND at garden plot
         btn = inp.first_btn_pressed()
@@ -222,16 +233,22 @@ class GardenScreen(Screen):
             self._dirty = True
             self._leds_dirty = True
             self._population = population(self._grid)
+            self._plant_count += 1
+            self._last_plant_ms = now
 
         # NAV button tap: toggle cell at cursor (plant/remove)
         # Uses gesture tap (not enc_btn_pressed) to avoid triggering hold-to-pause
         if inp.gestures.tap[inp.gesture_enc(config.ENC_NAV)]:
             cx, cy = self._cursor_xy()
+            was_empty = self._grid[cy * GRID_W + cx] == 0
             toggle(self._grid, cx, cy, GRID_W, self._cursor_color)
             self._dirty_cells.add((cx, cy))
             self._dirty = True
             self._leds_dirty = True
             self._population = population(self._grid)
+            if was_empty:
+                self._plant_count += 1
+                self._last_plant_ms = now
 
         # Evolution tick
         if self._running and time.ticks_diff(now, self._last_step_ms) >= self._speed_ms:
@@ -244,6 +261,12 @@ class GardenScreen(Screen):
                 self._empty_since_ms = now
         else:
             self._empty_since_ms = 0
+
+        # Pulse the grow prompt (redraw every ~20 frames for blink)
+        if not self._running and self._plant_count >= 3 and self._population > 0:
+            if frame % 20 == 0:
+                self._dirty = True
+                self._full_redraw = True
 
         # Update LEDs
         if self._leds_dirty:
@@ -409,10 +432,7 @@ class GardenScreen(Screen):
         # Running/paused indicator
         if self._running:
             tft.text(">", 160, hud_y + 2, theme.GREEN)
-        elif self._population > 0 and self._population < AUTO_START_CELLS:
-            dots = "." * self._population
-            tft.text(dots, 160, hud_y + 2, theme.CYAN)
-        else:
+        elif self._population > 0:
             tft.text("||", 160, hud_y + 2, theme.YELLOW)
 
         tft.text(speed_text, w - len(speed_text) * 8 - 4, hud_y + 2, theme.MUTED)
@@ -449,6 +469,27 @@ class GardenScreen(Screen):
         elif self._prompt_visible:
             # Prompt was visible but grid is no longer empty — full redraw to clear it
             self._prompt_visible = False
+            self._full_redraw = True
+            self._dirty = True
+
+        # "Press to grow!" prompt — appears after planting 3+ cells, pulses
+        show_grow = (
+            not self._running and self._plant_count >= 3 and self._population > 0
+        )
+        if show_grow:
+            from bodn.ui.widgets import draw_centered
+
+            # Pulse: alternate visibility every ~20 frames
+            if (frame // 20) % 2 == 0:
+                draw_centered(
+                    tft, t("garden_grow"), h // 2 - 4, theme.GREEN, w, scale=2
+                )
+            if not self._grow_prompt_visible:
+                self._grow_prompt_visible = True
+                self._full_redraw = True
+                self._dirty = True
+        elif self._grow_prompt_visible:
+            self._grow_prompt_visible = False
             self._full_redraw = True
             self._dirty = True
 

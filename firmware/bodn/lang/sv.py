@@ -98,6 +98,7 @@ STRINGS = {
     # Garden of Life
     "mode_garden": "trädgården",
     "garden_plant": "Plantera!",
+    "garden_grow": "Tryck för att odla!",
     "garden_empty": "Plantera igen!",
     "garden_success": "FINT!",
     "garden_almost": "Nästan!",
