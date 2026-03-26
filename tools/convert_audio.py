@@ -23,7 +23,7 @@ Usage:
 
 import argparse
 import json
-import os
+import re
 import shutil
 import subprocess
 import sys
@@ -107,7 +107,14 @@ def process_soundboard(dry_run: bool, force: bool):
         return
 
     with open(SOUNDBOARD_JSON) as f:
-        sb = json.load(f)
+        raw = f.read()
+    # Strip trailing commas before closing braces/brackets — JSON doesn't allow
+    # them, but they're easy to leave when pasting stubs.
+    raw = re.sub(r",(\s*[}\]])", r"\1", raw)
+    try:
+        sb = json.loads(raw)
+    except json.JSONDecodeError as e:
+        sys.exit(f"ERROR: soundboard.json is not valid JSON: {e}")
 
     manifest_banks = {}
 

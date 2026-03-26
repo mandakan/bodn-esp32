@@ -22,13 +22,31 @@
       "name_sv": "",
       "name_en": "",
       "color": "#3B82F6",
-      "slots": {}
+      "slots": {
+        "0": {"sv": "Succe", "en": "Success", "source": "soundboard/833630__nomagician__success-sound-effect.mp3"},
+        "1": {"sv": "Dörrknarr", "en": "Creaky door", "source": "soundboard/832555__srirachasocks__creaky-door-in-dorm.m4a"},
+        "2": {"sv": "Bubbelknapp", "en": "Bubble button", "source": "soundboard/832418__kodshin__bubble-button.wav"},
+        "3": {"sv": "Retro-explosion", "en": "Retro explosion", "source": "soundboard/829803__cat-fox_alex__retro-game-explosion-2.flac"},
+        "4": {"sv": "Stöt 1", "en": "Impact 1", "source": "soundboard/828091__audiopapkin__sound-design-elements-impact-sfx-ps-122.wav"},
+        "5": {"sv": "Stöt 2", "en": "Impact 2", "source": "soundboard/828090__audiopapkin__sound-design-elements-impact-sfx-ps-121.wav"},
+        "6": {"sv": "Stöt 3", "en": "Impact 3", "source": "soundboard/828088__audiopapkin__sound-design-elements-impact-sfx-ps-119.wav"},
+        "7": {"sv": "Stöt 4", "en": "Impact 4", "source": "soundboard/828086__audiopapkin__sound-design-elements-impact-sfx-ps-117.wav"}
+      }
     },
     "2": {
       "name_sv": "",
       "name_en": "",
       "color": "#10B981",
-      "slots": {}
+      "slots": {
+        "0": {"sv": "Duuwip", "en": "Duuwip", "source": "soundboard/826602__floomatic__duuwip.wav"},
+        "1": {"sv": "Klocka", "en": "Bell ring", "source": "soundboard/826339__jadeh1204__bell-ring.wav"},
+        "2": {"sv": "Pop", "en": "Pop", "source": "soundboard/824189__sadiquecat__pop-in-sfx.wav"},
+        "3": {"sv": "Effekt 1", "en": "", "source": "soundboard/823587__happypizzabread__game-ui-sfx-practice-2.wav"},
+        "4": {"sv": "Xylofon", "en": "Xylophone", "source": "soundboard/823182__happypizzabread__glissando_xylophone.wav"},
+        "5": {"sv": "Toalett", "en": "Toilet flush", "source": "soundboard/819684__hahavoid__haha-void-toilet-flushing-fx.wav"},
+        "6": {"sv": "Piano", "en": "Piano notification", "source": "soundboard/818998__allesyt__studio-grand-notification.wav"},
+        "7": {"sv": "Linjal", "en": "Ruler table", "source": "soundboard/817400__chaos-kid__small-plastic-ruler-springing-against-table.wav"}
+      }
     },
     "3": {
       "name_sv": "",
