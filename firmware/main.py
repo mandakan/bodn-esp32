@@ -158,7 +158,7 @@ def create_hardware():
             bits=16,
             format=I2S.STEREO,
             rate=16000,
-            ibuf=4096,
+            ibuf=16384,
         )
         from bodn.audio import AudioEngine
 

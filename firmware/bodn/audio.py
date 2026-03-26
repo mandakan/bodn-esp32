@@ -12,7 +12,17 @@ try:
     import micropython
     from micropython import const
 
-    _has_viper = hasattr(micropython, "viper")
+    # hasattr() doesn't reliably detect viper on all builds —
+    # try to actually compile a viper function instead.
+    try:
+
+        @micropython.viper
+        def _viper_probe():
+            pass
+
+        _has_viper = True
+    except (AttributeError, NotImplementedError):
+        _has_viper = False
 except ImportError:
     micropython = None
     _has_viper = False
@@ -39,8 +49,8 @@ CH_MUSIC = V_MUSIC
 CH_SFX = V_SFX_BASE
 CH_UI = V_UI
 
-_MONO_BUF_SIZE = const(1024)  # bytes per mono read buffer (512 samples at 16-bit)
-_BUF_SIZE = const(2048)  # bytes per stereo output buffer
+_MONO_BUF_SIZE = const(2048)  # bytes per mono read buffer (1024 samples at 16-bit)
+_BUF_SIZE = const(4096)  # bytes per stereo output buffer
 
 # Per-voice gain staging (fixed-point 16.16 multipliers)
 # These keep the mix within int16 range under normal conditions.
@@ -139,11 +149,30 @@ if _has_viper:
             d[i + 1] = (total >> 8) & 0xFF
             i += 2
 
+    @micropython.viper
+    def _mono_to_stereo_viper(mono_ptr, stereo_ptr, n_mono_bytes: int):
+        """Duplicate mono int16 samples into stereo L+R — viper."""
+        m = ptr8(mono_ptr)  # noqa: F821
+        s = ptr8(stereo_ptr)  # noqa: F821
+        i = n_mono_bytes - 2
+        j = (n_mono_bytes - 2) * 2
+        while i >= 0:
+            lo = int(m[i])
+            hi = int(m[i + 1])
+            s[j] = lo
+            s[j + 1] = hi
+            s[j + 2] = lo
+            s[j + 3] = hi
+            i -= 2
+            j -= 4
+
     _apply_volume_fast = _apply_volume_viper
     _mix_add_fast = _mix_add_viper
+    _mono_to_stereo_fast = _mono_to_stereo_viper
 else:
     _apply_volume_fast = _apply_volume_py
     _mix_add_fast = _mix_add_py
+    _mono_to_stereo_fast = None  # use Python method fallback
 
 
 class ToneSource:
@@ -278,6 +307,7 @@ class AudioEngine:
 
         # Mix buffer (accumulated output) and stereo output buffer
         self._mix_buf = bytearray(_MONO_BUF_SIZE)
+        self._zero = bytes(_MONO_BUF_SIZE)  # pre-allocated zeros for fast clear
         self._buf = bytearray(_BUF_SIZE)
         self._buf_view = memoryview(self._buf)
         self._silence = bytes(_BUF_SIZE)
@@ -411,21 +441,25 @@ class AudioEngine:
         """Background audio loop — add to asyncio.gather()."""
         # Cache as locals
         mix_buf = self._mix_buf
+        zero = self._zero
         buf = self._buf
         buf_view = self._buf_view
         i2s = self._i2s
         voices = self._voices
         silence = self._silence
         sleep_ms = asyncio.sleep_ms
-        mono_to_stereo = self._mono_to_stereo
+        m2s_viper = _mono_to_stereo_fast
+        mono_to_stereo_py = self._mono_to_stereo
         apply_vol = _apply_volume_fast
         mix_add = _mix_add_fast
 
-        # Prime the I2S DMA with silence, then unmute the amp
-        i2s.write(silence)
+        # Prime the I2S DMA buffer fully with silence (blocking mode)
+        for _ in range(4):
+            i2s.write(silence)
+
         if self._amp_enable:
             self._amp_enable()
-            print("Amplifier enabled")
+        print("Amplifier enabled, viper:", _has_viper)
 
         silence_short = self._silence_short
 
@@ -451,9 +485,7 @@ class AudioEngine:
 
             # Read all active voices and mix
             max_n = 0
-            # Zero the mix buffer up front
-            for i in range(_MONO_BUF_SIZE):
-                mix_buf[i] = 0
+            mix_buf[:] = zero
 
             for v in voices:
                 if v.source is None:
@@ -504,11 +536,13 @@ class AudioEngine:
             self._apply_volume(mix_buf, max_n)
 
             # Mono to stereo expansion
-            mono_to_stereo(mix_buf, buf, max_n)
+            if m2s_viper:
+                m2s_viper(mix_buf, buf, max_n)
+            else:
+                mono_to_stereo_py(mix_buf, buf, max_n)
             stereo_n = max_n * 2
-            try:
-                i2s.write(buf_view[:stereo_n])
-            except Exception as e:
-                print("audio write error:", e)
 
+            # Blocking write — guarantees frame-aligned, complete transfer.
+            # With viper DSP (~5ms), the blocking time (~64ms max) is acceptable.
+            i2s.write(buf_view[:stereo_n])
             await sleep_ms(0)

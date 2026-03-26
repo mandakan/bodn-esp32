@@ -53,6 +53,9 @@ class _Viewport:
     def pixel(self, x, y, c):
         self._tft.pixel(x + self._xo, y + self._yo, c)
 
+    def rgb(self, r, g, b):
+        return self._tft.rgb(r, g, b)
+
 
 class SecondaryDisplay:
     """Manages the secondary display as two independent zones.

@@ -105,13 +105,18 @@ class WavReader:
         mono_16 = self.channels == 1 and self.bits_per_sample == 16
 
         if mono_16:
-            # Fast path: read directly into buffer
+            # Fast path: read directly into buffer (zero-alloc)
             to_read = min(len(buf), self._bytes_left)
             # Align to sample boundary
             to_read = (to_read // 2) * 2
-            data = f.read(to_read)
-            n = len(data)
-            buf[:n] = data
+            if to_read >= len(buf):
+                # Common case: full buffer read, no slice needed
+                n = f.readinto(buf)
+            else:
+                # Near EOF: read only remaining bytes
+                n = f.readinto(memoryview(buf)[:to_read])
+            if n is None:
+                n = 0
             self._bytes_left -= n
             return n
 
