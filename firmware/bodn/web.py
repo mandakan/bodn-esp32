@@ -96,7 +96,7 @@ def _verify_manifest():
                     if not chunk:
                         break
                     h.update(chunk)
-            actual = h.hexdigest()
+            actual = "".join("{:02x}".format(b) for b in h.digest())
             if actual != expected:
                 errors.append((rel_path, "hash mismatch"))
         except OSError:
