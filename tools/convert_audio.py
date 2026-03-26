@@ -16,9 +16,10 @@ The soundboard manifest (firmware/sounds/manifest.json) is generated from
 assets/audio/soundboard.json — never edit the device manifest by hand.
 
 Usage:
-  uv run python tools/convert_audio.py            # convert everything
-  uv run python tools/convert_audio.py --dry-run  # show what would be done
-  uv run python tools/convert_audio.py --force    # reconvert even if up-to-date
+  uv run python tools/convert_audio.py                  # convert everything
+  uv run python tools/convert_audio.py --dry-run        # show what would be done
+  uv run python tools/convert_audio.py --force          # reconvert even if up-to-date
+  uv run python tools/convert_audio.py --no-normalize   # skip loudness normalization
 """
 
 import argparse
@@ -48,6 +49,9 @@ FFMPEG_CONVERT = [
     "pcm_s16le",
 ]
 
+# EBU R128 loudness normalization: -16 LUFS integrated, -1.5 dBTP true peak
+LOUDNORM_FILTER = ["loudnorm=I=-16:TP=-1.5:LRA=11"]
+
 _converted = 0
 _skipped = 0
 _missing = 0
@@ -59,7 +63,9 @@ def check_ffmpeg():
         sys.exit("ERROR: ffmpeg not found. Install it: brew install ffmpeg")
 
 
-def _convert_file(src: Path, dst: Path, dry_run: bool, force: bool) -> str:
+def _convert_file(
+    src: Path, dst: Path, dry_run: bool, force: bool, normalize: bool
+) -> str:
     """
     Convert src → dst.  Returns 'converted', 'skipped', 'missing', or 'error'.
     """
@@ -82,8 +88,10 @@ def _convert_file(src: Path, dst: Path, dry_run: bool, force: bool) -> str:
         return "converted"
 
     dst.parent.mkdir(parents=True, exist_ok=True)
+    af_args = ["-af", *LOUDNORM_FILTER] if normalize else []
     cmd = (
         ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src)]
+        + af_args
         + FFMPEG_CONVERT
         + [str(dst)]
     )
@@ -100,7 +108,7 @@ def _convert_file(src: Path, dst: Path, dry_run: bool, force: bool) -> str:
     return "converted"
 
 
-def process_soundboard(dry_run: bool, force: bool):
+def process_soundboard(dry_run: bool, force: bool, normalize: bool):
     """Convert soundboard source files and regenerate firmware/sounds/manifest.json."""
     if not SOUNDBOARD_JSON.exists():
         print("assets/audio/soundboard.json not found — skipping soundboard.")
@@ -143,7 +151,7 @@ def process_soundboard(dry_run: bool, force: bool):
             if src_rel:
                 src = SOURCE_DIR / src_rel
                 dst = FIRMWARE_SOUNDS / f"bank_{bank_idx}" / f"{slot_idx}.wav"
-                _convert_file(src, dst, dry_run, force)
+                _convert_file(src, dst, dry_run, force, normalize)
 
             # Collect non-empty display labels for the manifest
             if isinstance(slot_val, dict):
@@ -168,7 +176,7 @@ def process_soundboard(dry_run: bool, force: bool):
         if src_rel:
             src = SOURCE_DIR / src_rel
             dst = FIRMWARE_SOUNDS / "arcade" / f"{slot_idx}.wav"
-            _convert_file(src, dst, dry_run, force)
+            _convert_file(src, dst, dry_run, force, normalize)
 
     # --- Write device manifest ---
     manifest = {"banks": manifest_banks}
@@ -182,7 +190,7 @@ def process_soundboard(dry_run: bool, force: bool):
         print(f"  wrote  firmware/sounds/manifest.json")
 
 
-def process_directory(category: str, dry_run: bool, force: bool):
+def process_directory(category: str, dry_run: bool, force: bool, normalize: bool):
     """Convert all WAVs in assets/audio/source/<category>/."""
     src_dir = SOURCE_DIR / category
     if not src_dir.exists():
@@ -198,7 +206,7 @@ def process_directory(category: str, dry_run: bool, force: bool):
     for src in wavs:
         rel = src.relative_to(src_dir)
         dst = dst_dir / rel
-        _convert_file(src, dst, dry_run, force)
+        _convert_file(src, dst, dry_run, force, normalize)
 
 
 def print_summary(dry_run: bool):
@@ -222,18 +230,24 @@ def main():
         action="store_true",
         help="Reconvert even if output is already up-to-date",
     )
+    parser.add_argument(
+        "--no-normalize",
+        action="store_true",
+        help="Skip EBU R128 loudness normalization (loudnorm)",
+    )
     args = parser.parse_args()
+    normalize = not args.no_normalize
 
     check_ffmpeg()
 
     print("=== Soundboard ===")
-    process_soundboard(args.dry_run, args.force)
+    process_soundboard(args.dry_run, args.force, normalize)
 
     print("\n=== SFX ===")
-    process_directory("sfx", args.dry_run, args.force)
+    process_directory("sfx", args.dry_run, args.force, normalize)
 
     print("\n=== Music ===")
-    process_directory("music", args.dry_run, args.force)
+    process_directory("music", args.dry_run, args.force, normalize)
 
     print_summary(args.dry_run)
 
