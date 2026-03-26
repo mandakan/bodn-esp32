@@ -1,0 +1,68 @@
+{
+  "_comment": "Source-side soundboard manifest. This file is the single source of truth for what plays on each bank/slot and what it is called. Run 'uv run python tools/convert_audio.py' to convert source WAVs and regenerate firmware/sounds/manifest.json. Never edit firmware/sounds/manifest.json by hand.",
+  "_workflow": "1) Import a Freesound license file with tools/import_freesound.py to get stub entries and populate sources.tsv. 2) Drop source files into assets/audio/source/soundboard/ (original names, no rename needed). 3) Paste stubs here, set bank/slot, fill in labels. 4) Run convert_audio.py.",
+  "_source_paths": "The 'source' field in each slot is relative to assets/audio/source/. Soundboard files live in soundboard/ with their original download names. Example: 'soundboard/832418__kodshin__bubble-button.wav.wav'",
+  "banks": {
+    "0": {
+      "name_sv": "",
+      "name_en": "",
+      "color": "#FF6B35",
+      "slots": {
+        "0": {"sv": "Krasch", "en": "Smash", "source": "soundboard/848472__elevatorfan2020__vintage-debris-smash.mp3"},
+        "1": {"sv": "Belöning", "en": "Reward", "source": "soundboard/848363__matustrm__sfx_reward.wav"},
+        "2": {"sv": "Virvel 1", "en": "Glitch snare", "source": "soundboard/846270__cat-fox_alex__glitch-snare-1.flac"},
+        "3": {"sv": "Bubblor", "en": "Bubbles", "source": "soundboard/844241__atp2-kh__bubbling-water-notification-ui-alert-cc0.wav"},
+        "4": {"sv": "Start", "en": "Startup", "source": "soundboard/844143__mihacappy__sfx_start_generic_lessreverb.wav"},
+        "5": {"sv": "Nycklar", "en": "Keys", "source": "soundboard/840213__anskukisu64__picking-up-keys.wav"},
+        "6": {"sv": "Alarm", "en": "Alarm", "source": "soundboard/834495__cvltiv8r__sci-fi-glitch-sweep-alarm-burst.wav"},
+        "7": {"sv": "Opera 1", "en": "Opera 1", "source": "soundboard/833690__cat-fox_alex__chinese-opera-sfx-4.flac"}
+      }
+    },
+    "1": {
+      "name_sv": "",
+      "name_en": "",
+      "color": "#3B82F6",
+      "slots": {
+        "0": {"sv": "Succe", "en": "Success", "source": "soundboard/833630__nomagician__success-sound-effect.mp3"},
+        "1": {"sv": "Dörrknarr", "en": "Creaky door", "source": "soundboard/832555__srirachasocks__creaky-door-in-dorm.m4a"},
+        "2": {"sv": "Bubbelknapp", "en": "Bubble button", "source": "soundboard/832418__kodshin__bubble-button.wav"},
+        "3": {"sv": "Retro-explosion", "en": "Retro explosion", "source": "soundboard/829803__cat-fox_alex__retro-game-explosion-2.flac"},
+        "4": {"sv": "Stöt 1", "en": "Impact 1", "source": "soundboard/828091__audiopapkin__sound-design-elements-impact-sfx-ps-122.wav"},
+        "5": {"sv": "Stöt 2", "en": "Impact 2", "source": "soundboard/828090__audiopapkin__sound-design-elements-impact-sfx-ps-121.wav"},
+        "6": {"sv": "Stöt 3", "en": "Impact 3", "source": "soundboard/828088__audiopapkin__sound-design-elements-impact-sfx-ps-119.wav"},
+        "7": {"sv": "Stöt 4", "en": "Impact 4", "source": "soundboard/828086__audiopapkin__sound-design-elements-impact-sfx-ps-117.wav"}
+      }
+    },
+    "2": {
+      "name_sv": "",
+      "name_en": "",
+      "color": "#10B981",
+      "slots": {
+        "0": {"sv": "Duuwip", "en": "Duuwip", "source": "soundboard/826602__floomatic__duuwip.wav"},
+        "1": {"sv": "Klocka", "en": "Bell ring", "source": "soundboard/826339__jadeh1204__bell-ring.wav"},
+        "2": {"sv": "Pop", "en": "Pop", "source": "soundboard/824189__sadiquecat__pop-in-sfx.wav"},
+        "3": {"sv": "Effekt 1", "en": "", "source": "soundboard/823587__happypizzabread__game-ui-sfx-practice-2.wav"},
+        "4": {"sv": "Xylofon", "en": "Xylophone", "source": "soundboard/823182__happypizzabread__glissando_xylophone.wav"},
+        "5": {"sv": "Toalett", "en": "Toilet flush", "source": "soundboard/819684__hahavoid__haha-void-toilet-flushing-fx.wav"},
+        "6": {"sv": "Piano", "en": "Piano notification", "source": "soundboard/818998__allesyt__studio-grand-notification.wav"},
+        "7": {"sv": "Linjal", "en": "Ruler table", "source": "soundboard/817400__chaos-kid__small-plastic-ruler-springing-against-table.wav"}
+      }
+    },
+    "3": {
+      "name_sv": "",
+      "name_en": "",
+      "color": "#F59E0B",
+      "slots": {
+        "0": {"sv": "Vissla", "en": "Whistle", "source": "soundboard/817398__chaos-kid__coach-whistle.wav"},
+        "1": {"sv": "Brytare", "en": "Switch", "source": "soundboard/815493__xkeril__mechanical-switch-latch-02.wav"},
+        "2": {"sv": "Tiiin", "en": "Tiiin", "source": "soundboard/815147__annabax01q__tiiin-sfx.m4a"},
+        "3": {"sv": "Öppning", "en": "Opening", "source": "soundboard/815093__switchds__sfx-opening-path2.wav"},
+        "4": {"sv": "Laser", "en": "Laser", "source": "soundboard/814254__its-slava__strong_laser_shoot.wav"},
+        "5": {"sv": "Magi", "en": "Magic", "source": "soundboard/813273__annabax01q__magic-sound-effect.m4a"},
+        "6": {"sv": "Konstig", "en": "Weird", "source": "soundboard/813128__coolguy198__weird-sound.wav"},
+        "7": {"sv": "Billarm", "en": "Car alarm", "source": "soundboard/812784__vazdaz__short-car-alarm-stretched-version.wav"}
+      }
+    }
+  },
+  "arcade": {}
+}

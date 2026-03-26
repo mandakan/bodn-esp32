@@ -128,8 +128,11 @@ The 5 arcade buttons are shared across all banks; their sounds live in `/sounds/
 
 ## Preparing audio files
 
-See `docs/audio.md` for encoding instructions. Quick reference:
+For the full workflow — downloading from Freesound, the conversion pipeline,
+`soundboard.json`, and `sources.tsv` — see `docs/audio_assets.md`.
+
+Quick manual conversion reference:
 
 ```bash
-ffmpeg -i input.mp3 -ar 22050 -ac 1 -sample_fmt s16 output.wav
+ffmpeg -i input.mp3 -ar 16000 -ac 1 -sample_fmt s16 -acodec pcm_s16le output.wav
 ```

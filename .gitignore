@@ -22,6 +22,13 @@ wokwi-api.h
 # OTA change tracking
 .ota-hashes.json
 
+# Audio source files (high-quality originals for CC0 downloads — re-fetchable via sources.tsv).
+# Your own recordings: commit them directly with git add -f, or use git-lfs for large files.
+assets/audio/source/**/*.wav
+assets/audio/source/**/*.mp3
+assets/audio/source/**/*.flac
+assets/audio/source/**/*.m4a
+
 # Backup files
 *.bak
 
