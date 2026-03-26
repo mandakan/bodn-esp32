@@ -1,20 +1,34 @@
 #!/usr/bin/env python3
 """
-Parse a Freesound bookmark-category license file and append new entries to
-assets/audio/sources.tsv, skipping any URLs already present.
+Parse a Freesound bookmark-category license file and:
+  1. Append new entries to assets/audio/sources.tsv (skipping duplicates).
+  2. Print stub JSON entries for soundboard.json so you can paste them in.
 
 Usage:
   uv run python tools/import_freesound.py path/to/license.txt
   uv run python tools/import_freesound.py path/to/license.txt --dry-run
+  uv run python tools/import_freesound.py path/to/license.txt --stubs-only
+
+Workflow:
+  1. Run this script on the downloaded license.txt.
+  2. Drop the audio files (original names, no renaming) into
+     assets/audio/source/soundboard/  — for soundboard sounds, or
+     assets/audio/source/sfx/         — renamed to a logical name (e.g. click.wav)
+     assets/audio/source/music/       — renamed to a logical name
+  3. For soundboard sounds: paste the printed stubs into soundboard.json,
+     assign each to the right bank slot, and fill in the sv/en labels.
+  4. Run: uv run python tools/convert_audio.py
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
 SOURCES_TSV = REPO_ROOT / "assets" / "audio" / "sources.tsv"
+SOUNDBOARD_JSON = REPO_ROOT / "assets" / "audio" / "soundboard.json"
 
 # Maps the license strings Freesound uses to the short canonical form we store.
 _LICENSE_MAP = {
@@ -94,15 +108,67 @@ def load_existing_urls(tsv_path: Path) -> set[str]:
     return urls
 
 
+def _already_in_soundboard(filename: str) -> bool:
+    """Return True if this source filename is already referenced in soundboard.json."""
+    if not SOUNDBOARD_JSON.exists():
+        return False
+    try:
+        with open(SOUNDBOARD_JSON) as f:
+            sb = json.load(f)
+    except Exception:
+        return False
+
+    needle = f"soundboard/{filename}"
+    for bank_val in sb.get("banks", {}).values():
+        for slot_val in bank_val.get("slots", {}).values():
+            if isinstance(slot_val, dict) and slot_val.get("source") == needle:
+                return True
+    for slot_val in sb.get("arcade", {}).values():
+        if isinstance(slot_val, dict) and slot_val.get("source") == needle:
+            return True
+    return False
+
+
+def print_soundboard_stubs(sounds: list[dict]) -> None:
+    """Print ready-to-paste JSON slot stubs for soundboard.json."""
+    unassigned = [s for s in sounds if not _already_in_soundboard(s["filename"])]
+    if not unassigned:
+        print("\nAll sounds already referenced in soundboard.json.")
+        return
+
+    print(
+        f"\n── Soundboard stubs ({len(unassigned)} unassigned) ──────────────────────────\n"
+        "Paste into the desired bank's 'slots' in assets/audio/soundboard.json.\n"
+        "Fill in 'sv' and 'en' labels and assign sequential slot numbers (0–7).\n"
+    )
+    for s in unassigned:
+        stub = {
+            "sv": "",
+            "en": "",
+            "source": f"soundboard/{s['filename']}",
+        }
+        # Print as a single-slot object so it's easy to paste
+        inner = json.dumps(stub, ensure_ascii=False)
+        print(f'        "N": {inner},')
+        print(f"        // {s['url']}")
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Import Freesound license file into sources.tsv"
+        description="Import Freesound license file into sources.tsv and print soundboard stubs"
     )
     parser.add_argument(
         "license_file", help="Path to the Freesound bookmark license .txt file"
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="Print rows without writing"
+        "--dry-run",
+        action="store_true",
+        help="Print rows without writing to sources.tsv",
+    )
+    parser.add_argument(
+        "--stubs-only",
+        action="store_true",
+        help="Only print soundboard stubs, skip sources.tsv",
     )
     args = parser.parse_args()
 
@@ -116,35 +182,44 @@ def main():
     if not sounds:
         sys.exit("No sound entries found — is this a Freesound bookmark license file?")
 
-    existing_urls = load_existing_urls(SOURCES_TSV)
-    new_sounds = [s for s in sounds if s["url"] not in existing_urls]
+    if not args.stubs_only:
+        existing_urls = load_existing_urls(SOURCES_TSV)
+        new_sounds = [s for s in sounds if s["url"] not in existing_urls]
 
-    if not new_sounds:
-        print(f"All {len(sounds)} entries already in sources.tsv — nothing to add.")
-        return
+        if not new_sounds:
+            print(f"All {len(sounds)} entries already in sources.tsv.")
+        else:
+            print(f"Adding {len(new_sounds)} of {len(sounds)} entries to sources.tsv:")
+            for s in new_sounds:
+                print(f"  {s['filename']}")
 
-    print(f"Found {len(sounds)} entries, {len(new_sounds)} new:")
-    for s in new_sounds:
-        print(f"  {s['filename']}")
-        print(f"    url:         {s['url']}")
-        print(f"    license:     {s['license']}")
-        print(f"    attribution: {s['attribution']}")
+            if not args.dry_run:
+                with open(SOURCES_TSV, "a", encoding="utf-8") as f:
+                    for s in new_sounds:
+                        row = "\t".join(
+                            [
+                                s["filename"],
+                                s["url"],
+                                s["license"],
+                                s["attribution"],
+                                "",
+                            ]
+                        )
+                        f.write(row + "\n")
+                print(f"Written to {SOURCES_TSV.relative_to(REPO_ROOT)}")
+            else:
+                print("--dry-run: sources.tsv not modified.")
 
-    if args.dry_run:
-        print("\n--dry-run: sources.tsv not modified.")
-        return
+    print_soundboard_stubs(sounds)
 
-    with open(SOURCES_TSV, "a", encoding="utf-8") as f:
-        for s in new_sounds:
-            row = "\t".join(
-                [s["filename"], s["url"], s["license"], s["attribution"], ""]
-            )
-            f.write(row + "\n")
-
-    print(f"\nAppended {len(new_sounds)} rows to {SOURCES_TSV.relative_to(REPO_ROOT)}")
-    print(
-        "Remember to add the downloaded files to assets/audio/source/ and run convert_audio.py."
-    )
+    if not args.stubs_only and not args.dry_run:
+        print(
+            "\nNext steps:\n"
+            "  1. Drop downloaded files into assets/audio/source/soundboard/ (no renaming)\n"
+            "     or into sfx/ / music/ with a logical name (e.g. click.wav)\n"
+            "  2. Paste stubs above into soundboard.json, set slot numbers and labels\n"
+            "  3. uv run python tools/convert_audio.py"
+        )
 
 
 if __name__ == "__main__":
