@@ -119,8 +119,9 @@ MCP23017 lives on board C and gets its 3.3 V via the lid harness.
 ```
 
 Place the DC-DC converter at one end (noisy switching) and the ESP32 + I2C
-modules at the other end. Run a solid ground tie between the two zones but
-avoid crossing signal traces through the DC-DC copper pour.
+modules at the other end. Connect the GND rows of both zones together with
+a short wire. Keep signal wires (SPI, I2C, I2S) to the ESP32 side of the
+board — don't route them through the area immediately around the DC-DC module.
 
 ### Outgoing connectors (all on connector edge)
 
