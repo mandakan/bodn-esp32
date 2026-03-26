@@ -8,8 +8,13 @@ def connect_sta(ssid, password, timeout=10):
     """Connect to a WiFi network in station mode. Returns True on success."""
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
+    # Allow WiFi radio to fully initialise after activation
+    time.sleep(0.1)
     if wlan.isconnected():
         return True
+    # Clear any stale connection state from a previous boot
+    wlan.disconnect()
+    time.sleep(0.1)
     wlan.connect(ssid, password)
     start = time.time()
     while not wlan.isconnected():

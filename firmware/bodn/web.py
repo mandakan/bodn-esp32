@@ -393,6 +393,10 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _send_json(writer, {"ok": True})
             # Reboot after response is sent
             await asyncio.sleep_ms(500)
+            try:
+                os.sync()
+            except AttributeError:
+                pass
             import machine
 
             machine.reset()
@@ -425,6 +429,12 @@ async def _handle_request(reader, writer, session_mgr, settings):
                     os.rename(staged, target)
                     count += 1
                 _rmtree(OTA_STAGE)
+                # Flush filesystem to flash before hard reset — without this,
+                # FAT metadata for unrelated dirs (e.g. /data/) can be lost.
+                try:
+                    os.sync()
+                except AttributeError:
+                    pass  # os.sync() not available on all builds
                 await _send_json(writer, {"ok": True, "committed": count})
                 try:
                     import machine
@@ -442,6 +452,10 @@ async def _handle_request(reader, writer, session_mgr, settings):
 
         elif method == "POST" and path == "/api/reboot":
             await _send_json(writer, {"ok": True, "rebooting": True})
+            try:
+                os.sync()
+            except AttributeError:
+                pass
             try:
                 import machine
 
