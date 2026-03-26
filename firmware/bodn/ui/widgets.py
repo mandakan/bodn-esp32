@@ -87,6 +87,9 @@ def draw_progress_bar(tft, x, y, w, h, value, max_val, fg, bg, border=None):
         fill_w = max(0, min(w, w * value // max_val))
     if fill_w > 0:
         tft.fill_rect(x, y, fill_w, h, fg)
+    unfill_w = w - fill_w
+    if unfill_w > 0:
+        tft.fill_rect(x + fill_w, y, unfill_w, h, bg)
 
 
 def draw_button_grid(tft, theme, names, held, cols=4, x0=0, y0=0, cell_w=32, cell_h=16):
@@ -103,6 +106,7 @@ def draw_button_grid(tft, theme, names, held, cols=4, x0=0, y0=0, cell_w=32, cel
             tft.fill_rect(x, y, bw, bh, theme.BTN_565[i])
             tft.text(names[i], x + 2, y + 2, theme.BLACK)
         else:
+            tft.fill_rect(x, y, bw, bh, theme.BLACK)
             tft.rect(x, y, bw, bh, theme.BTN_565[i])
 
 

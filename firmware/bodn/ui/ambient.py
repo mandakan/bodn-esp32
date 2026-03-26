@@ -263,6 +263,7 @@ class StatusStrip(Screen):
             frac = remaining / limit if limit > 0 else 0
             filled = int(frac * bar_h)
             tft.rect(bar_x, bar_y, 8, bar_h, theme.WHITE)
+            tft.fill_rect(bar_x + 1, bar_y + 1, 6, bar_h - 2, theme.BLACK)
             if filled > 0:
                 tft.fill_rect(
                     bar_x + 1, bar_y + bar_h - filled - 1, 6, filled, bar_color
