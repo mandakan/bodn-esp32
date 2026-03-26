@@ -1,7 +1,7 @@
 # bodn/audio.py — AudioEngine for Bodn ESP32
 #
 # Singleton created in main(), runs as an async background task.
-# Manages 3 priority channels (ui > sfx > music) with no mixing.
+# Mixes up to 6 simultaneous voices: 1 music + 4 SFX pool + 1 UI.
 
 try:
     import uasyncio as asyncio
@@ -24,13 +24,30 @@ except ImportError:
 from bodn import tones
 from bodn.wav import WavReader
 
-# Channel priorities (higher number = higher priority)
-CH_MUSIC = const(0)
-CH_SFX = const(1)
-CH_UI = const(2)
-CHANNEL_NAMES = {"music": CH_MUSIC, "sfx": CH_SFX, "ui": CH_UI}
+# Voice routing tags (used as indices into _voices)
+V_MUSIC = const(0)
+V_SFX_BASE = const(1)  # SFX pool: indices 1..4
+V_SFX_END = const(5)  # exclusive
+V_UI = const(5)
+_NUM_VOICES = const(6)
 
-_BUF_SIZE = const(2048)  # bytes per stereo audio buffer (1024 mono → 2048 stereo)
+# Channel name → routing tag (for API compatibility)
+CHANNEL_NAMES = {"music": V_MUSIC, "sfx": V_SFX_BASE, "ui": V_UI}
+
+# Legacy aliases for tests and callers that reference CH_* constants
+CH_MUSIC = V_MUSIC
+CH_SFX = V_SFX_BASE
+CH_UI = V_UI
+
+_MONO_BUF_SIZE = const(1024)  # bytes per mono read buffer (512 samples at 16-bit)
+_BUF_SIZE = const(2048)  # bytes per stereo output buffer
+
+# Per-voice gain staging (fixed-point 16.16 multipliers)
+# These keep the mix within int16 range under normal conditions.
+_GAIN_MUSIC = const(45875)  # 70% — solo music
+_GAIN_MUSIC_DUCKED = const(16384)  # 25% — music when other voices active
+_GAIN_SFX = const(45875)  # 70%
+_GAIN_UI = const(52428)  # 80%
 
 
 def _apply_volume_py(buf, n_bytes, mult):
@@ -45,6 +62,32 @@ def _apply_volume_py(buf, n_bytes, mult):
         val = val & 0xFFFF
         buf[i] = val & 0xFF
         buf[i + 1] = (val >> 8) & 0xFF
+
+
+def _mix_add_py(dst, src, n_bytes):
+    """Pure-Python fallback: add int16 samples from src into dst with saturation."""
+    for i in range(0, n_bytes, 2):
+        # Read dst sample
+        d_lo = dst[i]
+        d_hi = dst[i + 1]
+        d_val = d_lo | (d_hi << 8)
+        if d_val >= 0x8000:
+            d_val -= 0x10000
+        # Read src sample
+        s_lo = src[i]
+        s_hi = src[i + 1]
+        s_val = s_lo | (s_hi << 8)
+        if s_val >= 0x8000:
+            s_val -= 0x10000
+        # Sum with saturation
+        total = d_val + s_val
+        if total > 32767:
+            total = 32767
+        elif total < -32768:
+            total = -32768
+        total = total & 0xFFFF
+        dst[i] = total & 0xFF
+        dst[i + 1] = (total >> 8) & 0xFF
 
 
 if _has_viper:
@@ -66,9 +109,41 @@ if _has_viper:
             p[i + 1] = (val >> 8) & 0xFF
             i += 2
 
+    @micropython.viper
+    def _mix_add_viper(dst_ptr, src_ptr, n_bytes: int):
+        """Add int16 samples from src into dst with saturation — viper."""
+        d = ptr8(dst_ptr)  # noqa: F821
+        s = ptr8(src_ptr)  # noqa: F821
+        i = 0
+        while i < n_bytes:
+            # Read dst int16 LE
+            d_lo = int(d[i])
+            d_hi = int(d[i + 1])
+            d_val = d_lo | (d_hi << 8)
+            if d_val >= 0x8000:
+                d_val -= 0x10000
+            # Read src int16 LE
+            s_lo = int(s[i])
+            s_hi = int(s[i + 1])
+            s_val = s_lo | (s_hi << 8)
+            if s_val >= 0x8000:
+                s_val -= 0x10000
+            # Sum in int32, saturate to int16
+            total = d_val + s_val
+            if total > 32767:
+                total = 32767
+            elif total < -32768:
+                total = -32768
+            total = total & 0xFFFF
+            d[i] = total & 0xFF
+            d[i + 1] = (total >> 8) & 0xFF
+            i += 2
+
     _apply_volume_fast = _apply_volume_viper
+    _mix_add_fast = _mix_add_viper
 else:
     _apply_volume_fast = _apply_volume_py
+    _mix_add_fast = _mix_add_py
 
 
 class ToneSource:
@@ -136,15 +211,27 @@ class SequenceSource:
         self._current = self._make_tone(0)
 
 
-class _Channel:
-    """Internal channel state."""
+class _Voice:
+    """Internal voice state with its own read buffer."""
 
-    __slots__ = ("source", "loop", "file_obj")
+    __slots__ = (
+        "source",
+        "loop",
+        "file_obj",
+        "mono_buf",
+        "gain_mult",
+        "is_music",
+        "_start_seq",
+    )
 
-    def __init__(self):
+    def __init__(self, gain_mult, is_music=False):
         self.source = None
         self.loop = False
         self.file_obj = None
+        self.mono_buf = bytearray(_MONO_BUF_SIZE)
+        self.gain_mult = gain_mult
+        self.is_music = is_music
+        self._start_seq = 0  # monotonic counter for oldest-voice stealing
 
     def stop(self):
         if self.file_obj:
@@ -158,7 +245,10 @@ class _Channel:
 
 
 class AudioEngine:
-    """Cooperative async audio engine with priority channels.
+    """Cooperative async audio engine with multi-voice mixing.
+
+    6 simultaneous voices: 1 music + 4 SFX pool + 1 UI.
+    All active voices are mixed together each audio cycle.
 
     Usage::
 
@@ -172,22 +262,25 @@ class AudioEngine:
     """
 
     def __init__(self, i2s, amp_enable=None):
-        """Create the audio engine.
-
-        amp_enable: optional callable to unmute the amplifier.
-        Called once after the first silence write so the amp never
-        hears noise from unconfigured I2S pins during boot.
-        """
         self._i2s = i2s
         self._amp_enable = amp_enable
-        self._channels = [_Channel() for _ in range(3)]
-        # Mono sources write into _mono_buf; _buf holds stereo-expanded output
-        self._mono_buf = bytearray(_BUF_SIZE // 2)
+
+        # Voice slots: [music, sfx0, sfx1, sfx2, sfx3, ui]
+        self._voices = [
+            _Voice(_GAIN_MUSIC, is_music=True),  # V_MUSIC = 0
+            _Voice(_GAIN_SFX),  # SFX pool slot 0
+            _Voice(_GAIN_SFX),  # SFX pool slot 1
+            _Voice(_GAIN_SFX),  # SFX pool slot 2
+            _Voice(_GAIN_SFX),  # SFX pool slot 3
+            _Voice(_GAIN_UI),  # V_UI = 5
+        ]
+        self._seq_counter = 0  # monotonic counter for voice-steal ordering
+
+        # Mix buffer (accumulated output) and stereo output buffer
+        self._mix_buf = bytearray(_MONO_BUF_SIZE)
         self._buf = bytearray(_BUF_SIZE)
         self._buf_view = memoryview(self._buf)
         self._silence = bytes(_BUF_SIZE)
-        # Small silence chunk for idle polling — keeps latency low (~8ms)
-        # so the loop detects new audio quickly
         self._silence_short = bytes(512)
         self._volume = 10  # 0-100, synced from settings in main.py
         self._vol_mult = 10 * 655  # pre-computed fixed-point multiplier
@@ -200,35 +293,63 @@ class AudioEngine:
     def volume(self, val):
         val = max(0, min(100, val))
         self._volume = val
-        # Fixed-point 16.16 multiplier: (val / 100) * 65536
         self._vol_mult = val * 655
 
     @property
     def playing(self):
-        """True if any channel is active."""
-        return any(ch.source is not None for ch in self._channels)
+        """True if any voice is active."""
+        return any(v.source is not None for v in self._voices)
+
+    def _allocate_sfx(self):
+        """Find a free SFX pool voice, or steal the oldest."""
+        # Prefer a free slot
+        for i in range(V_SFX_BASE, V_SFX_END):
+            if self._voices[i].source is None:
+                return self._voices[i]
+        # All full — steal the oldest (lowest _start_seq)
+        oldest = self._voices[V_SFX_BASE]
+        for i in range(V_SFX_BASE + 1, V_SFX_END):
+            if self._voices[i]._start_seq < oldest._start_seq:
+                oldest = self._voices[i]
+        oldest.stop()
+        return oldest
+
+    def _assign_voice(self, channel):
+        """Get the voice slot for a channel name, stopping any existing source."""
+        if channel == "sfx":
+            return self._allocate_sfx()
+        idx = CHANNEL_NAMES.get(channel, V_SFX_BASE)
+        if idx == V_SFX_BASE and channel != "sfx":
+            # Unknown channel name mapped to SFX — use pool
+            return self._allocate_sfx()
+        v = self._voices[idx]
+        v.stop()
+        return v
+
+    def _stamp_voice(self, voice):
+        """Mark a voice with the current sequence number for age tracking."""
+        self._seq_counter += 1
+        voice._start_seq = self._seq_counter
 
     def play(self, path, loop=False, channel="sfx"):
         """Play a WAV file on the given channel."""
-        ch_idx = CHANNEL_NAMES.get(channel, CH_SFX)
-        ch = self._channels[ch_idx]
-        ch.stop()
+        v = self._assign_voice(channel)
         try:
             f = open(path, "rb")
-            ch.file_obj = f
-            ch.source = WavReader(f)
-            ch.loop = loop
+            v.file_obj = f
+            v.source = WavReader(f)
+            v.loop = loop
+            self._stamp_voice(v)
         except Exception as e:
             print("audio.play error:", e)
-            ch.stop()
+            v.stop()
 
     def tone(self, freq_hz, duration_ms=200, wave="square", channel="sfx"):
         """Play a procedural tone on the given channel."""
-        ch_idx = CHANNEL_NAMES.get(channel, CH_SFX)
-        ch = self._channels[ch_idx]
-        ch.stop()
-        ch.source = ToneSource(freq_hz, duration_ms, wave)
-        ch.loop = False
+        v = self._assign_voice(channel)
+        v.source = ToneSource(freq_hz, duration_ms, wave)
+        v.loop = False
+        self._stamp_voice(v)
 
     def play_sound(self, name, channel="ui"):
         """Play a named sound from the sound design system."""
@@ -237,37 +358,33 @@ class AudioEngine:
         steps = SOUNDS.get(name)
         if not steps:
             return
-        ch_idx = CHANNEL_NAMES.get(channel, CH_UI)
-        ch = self._channels[ch_idx]
-        ch.stop()
-        ch.source = SequenceSource(steps)
-        ch.loop = False
+        v = self._assign_voice(channel)
+        v.source = SequenceSource(steps)
+        v.loop = False
+        self._stamp_voice(v)
 
     def boop(self):
         """Quick UI feedback beep."""
         self.play_sound("boop")
 
     def stop(self, channel=None):
-        """Stop playback on a channel, or all channels if None."""
+        """Stop playback on a channel, or all voices if None."""
         if channel is None:
-            for ch in self._channels:
-                ch.stop()
+            for v in self._voices:
+                v.stop()
+        elif channel == "sfx":
+            for i in range(V_SFX_BASE, V_SFX_END):
+                self._voices[i].stop()
         else:
-            ch_idx = CHANNEL_NAMES.get(channel, CH_SFX)
-            self._channels[ch_idx].stop()
+            idx = CHANNEL_NAMES.get(channel, -1)
+            if 0 <= idx < _NUM_VOICES:
+                self._voices[idx].stop()
 
     def _apply_volume(self, buf, n_bytes):
         """Scale int16 samples in-place using fixed-point multiplication."""
         if self._volume >= 100:
             return
         _apply_volume_fast(buf, n_bytes, self._vol_mult)
-
-    def _active_channel(self):
-        """Return highest-priority active channel index, or -1."""
-        for idx in range(CH_UI, CH_MUSIC - 1, -1):
-            if self._channels[idx].source is not None:
-                return idx
-        return -1
 
     @staticmethod
     def _mono_to_stereo(mono, stereo, n_mono_bytes):
@@ -276,7 +393,6 @@ class AudioEngine:
         Reads n_mono_bytes from mono, writes n_mono_bytes*2 to stereo.
         Iterates backwards so mono and stereo can overlap (mono at start of stereo).
         """
-        # Each mono sample is 2 bytes; each stereo frame is 4 bytes (L+R)
         i = n_mono_bytes - 2
         j = (n_mono_bytes - 2) * 2
         while i >= 0:
@@ -293,15 +409,17 @@ class AudioEngine:
 
     async def start(self):
         """Background audio loop — add to asyncio.gather()."""
-        # Cache attributes as locals — avoids dict lookups each iteration
-        mono_buf = self._mono_buf
+        # Cache as locals
+        mix_buf = self._mix_buf
         buf = self._buf
         buf_view = self._buf_view
         i2s = self._i2s
-        channels = self._channels
+        voices = self._voices
         silence = self._silence
         sleep_ms = asyncio.sleep_ms
         mono_to_stereo = self._mono_to_stereo
+        apply_vol = _apply_volume_fast
+        mix_add = _mix_add_fast
 
         # Prime the I2S DMA with silence, then unmute the amp
         i2s.write(silence)
@@ -312,41 +430,85 @@ class AudioEngine:
         silence_short = self._silence_short
 
         while True:
-            ch_idx = self._active_channel()
+            # Collect active voices
+            has_active = False
+            for v in voices:
+                if v.source is not None:
+                    has_active = True
+                    break
 
-            if ch_idx < 0:
-                # Nothing playing — short silence keeps poll latency ~8ms
+            if not has_active:
                 i2s.write(silence_short)
                 await sleep_ms(5)
                 continue
 
-            # Play all chunks for this source without yielding so
-            # short tones (boops) come out as a single clean burst.
-            ch = channels[ch_idx]
-            while ch.source is not None:
+            # Determine if non-music voices are active (for ducking)
+            non_music_active = False
+            for v in voices:
+                if v.source is not None and not v.is_music:
+                    non_music_active = True
+                    break
+
+            # Read all active voices and mix
+            max_n = 0
+            # Zero the mix buffer up front
+            for i in range(_MONO_BUF_SIZE):
+                mix_buf[i] = 0
+
+            for v in voices:
+                if v.source is None:
+                    continue
+
                 n = 0
                 try:
-                    n = ch.source.read_chunk(mono_buf)
+                    n = v.source.read_chunk(v.mono_buf)
                 except Exception as e:
                     print("audio read error:", e)
-                    ch.stop()
-                    break
+                    v.stop()
+                    continue
 
                 if n == 0:
-                    if ch.loop:
-                        ch.source.seek_start()
-                        continue
+                    if v.loop:
+                        v.source.seek_start()
+                        try:
+                            n = v.source.read_chunk(v.mono_buf)
+                        except Exception as e:
+                            print("audio read error:", e)
+                            v.stop()
+                            continue
+                        if n == 0:
+                            v.stop()
+                            continue
                     else:
-                        ch.stop()
-                        break
+                        v.stop()
+                        continue
 
-                self._apply_volume(mono_buf, n)
-                mono_to_stereo(mono_buf, buf, n)
-                stereo_n = n * 2
-                try:
-                    i2s.write(buf_view[:stereo_n])
-                except Exception as e:
-                    print("audio write error:", e)
-                    break
+                # Apply per-voice gain
+                if v.is_music and non_music_active:
+                    gain = _GAIN_MUSIC_DUCKED
+                else:
+                    gain = v.gain_mult
+                apply_vol(v.mono_buf, n, gain)
+
+                # Accumulate into mix buffer
+                mix_add(mix_buf, v.mono_buf, n)
+
+                if n > max_n:
+                    max_n = n
+
+            if max_n == 0:
+                await sleep_ms(0)
+                continue
+
+            # Master volume
+            self._apply_volume(mix_buf, max_n)
+
+            # Mono to stereo expansion
+            mono_to_stereo(mix_buf, buf, max_n)
+            stereo_n = max_n * 2
+            try:
+                i2s.write(buf_view[:stereo_n])
+            except Exception as e:
+                print("audio write error:", e)
 
             await sleep_ms(0)
