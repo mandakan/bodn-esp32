@@ -1,7 +1,10 @@
 # Audio file guide
 
 Bodn plays sound effects and short audio clips through a MAX98357A amplifier.
-This page explains how to prepare audio files.
+This page explains how to prepare audio files manually.
+
+For the full asset management workflow (adding sounds, the conversion pipeline,
+`soundboard.json`, `sources.tsv`) see `docs/audio_assets.md`.
 
 ## Recommended format
 
