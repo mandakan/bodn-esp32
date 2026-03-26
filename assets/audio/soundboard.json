@@ -1,0 +1,72 @@
+{
+  "_comment": "Source-side soundboard manifest. Edit this file to add sounds and metadata. Run 'uv run python tools/convert_audio.py' to convert source WAVs and regenerate firmware/sounds/manifest.json. Never edit firmware/sounds/manifest.json by hand — it is generated. Source paths are relative to assets/audio/source/.",
+  "banks": {
+    "0": {
+      "name_sv": "",
+      "name_en": "",
+      "color": "#FF6B35",
+      "slots": {
+        "0": {"sv": "", "en": "", "source": "soundboard/bank_0/0.wav"},
+        "1": {"sv": "", "en": "", "source": "soundboard/bank_0/1.wav"},
+        "2": {"sv": "", "en": "", "source": "soundboard/bank_0/2.wav"},
+        "3": {"sv": "", "en": "", "source": "soundboard/bank_0/3.wav"},
+        "4": {"sv": "", "en": "", "source": "soundboard/bank_0/4.wav"},
+        "5": {"sv": "", "en": "", "source": "soundboard/bank_0/5.wav"},
+        "6": {"sv": "", "en": "", "source": "soundboard/bank_0/6.wav"},
+        "7": {"sv": "", "en": "", "source": "soundboard/bank_0/7.wav"}
+      }
+    },
+    "1": {
+      "name_sv": "",
+      "name_en": "",
+      "color": "#3B82F6",
+      "slots": {
+        "0": {"sv": "", "en": "", "source": "soundboard/bank_1/0.wav"},
+        "1": {"sv": "", "en": "", "source": "soundboard/bank_1/1.wav"},
+        "2": {"sv": "", "en": "", "source": "soundboard/bank_1/2.wav"},
+        "3": {"sv": "", "en": "", "source": "soundboard/bank_1/3.wav"},
+        "4": {"sv": "", "en": "", "source": "soundboard/bank_1/4.wav"},
+        "5": {"sv": "", "en": "", "source": "soundboard/bank_1/5.wav"},
+        "6": {"sv": "", "en": "", "source": "soundboard/bank_1/6.wav"},
+        "7": {"sv": "", "en": "", "source": "soundboard/bank_1/7.wav"}
+      }
+    },
+    "2": {
+      "name_sv": "",
+      "name_en": "",
+      "color": "#10B981",
+      "slots": {
+        "0": {"sv": "", "en": "", "source": "soundboard/bank_2/0.wav"},
+        "1": {"sv": "", "en": "", "source": "soundboard/bank_2/1.wav"},
+        "2": {"sv": "", "en": "", "source": "soundboard/bank_2/2.wav"},
+        "3": {"sv": "", "en": "", "source": "soundboard/bank_2/3.wav"},
+        "4": {"sv": "", "en": "", "source": "soundboard/bank_2/4.wav"},
+        "5": {"sv": "", "en": "", "source": "soundboard/bank_2/5.wav"},
+        "6": {"sv": "", "en": "", "source": "soundboard/bank_2/6.wav"},
+        "7": {"sv": "", "en": "", "source": "soundboard/bank_2/7.wav"}
+      }
+    },
+    "3": {
+      "name_sv": "",
+      "name_en": "",
+      "color": "#F59E0B",
+      "slots": {
+        "0": {"sv": "", "en": "", "source": "soundboard/bank_3/0.wav"},
+        "1": {"sv": "", "en": "", "source": "soundboard/bank_3/1.wav"},
+        "2": {"sv": "", "en": "", "source": "soundboard/bank_3/2.wav"},
+        "3": {"sv": "", "en": "", "source": "soundboard/bank_3/3.wav"},
+        "4": {"sv": "", "en": "", "source": "soundboard/bank_3/4.wav"},
+        "5": {"sv": "", "en": "", "source": "soundboard/bank_3/5.wav"},
+        "6": {"sv": "", "en": "", "source": "soundboard/bank_3/6.wav"},
+        "7": {"sv": "", "en": "", "source": "soundboard/bank_3/7.wav"}
+      }
+    }
+  },
+  "arcade": {
+    "0": {"sv": "", "en": "", "source": "soundboard/arcade/0.wav"},
+    "1": {"sv": "", "en": "", "source": "soundboard/arcade/1.wav"},
+    "2": {"sv": "", "en": "", "source": "soundboard/arcade/2.wav"},
+    "3": {"sv": "", "en": "", "source": "soundboard/arcade/3.wav"},
+    "4": {"sv": "", "en": "", "source": "soundboard/arcade/4.wav"}
+  }
+}
