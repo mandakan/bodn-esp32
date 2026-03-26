@@ -52,7 +52,16 @@
       "name_sv": "",
       "name_en": "",
       "color": "#F59E0B",
-      "slots": {}
+      "slots": {
+        "0": {"sv": "Vissla", "en": "Whistle", "source": "soundboard/817398__chaos-kid__coach-whistle.wav"},
+        "1": {"sv": "Brytare", "en": "Switch", "source": "soundboard/815493__xkeril__mechanical-switch-latch-02.wav"},
+        "2": {"sv": "Tiiin", "en": "Tiiin", "source": "soundboard/815147__annabax01q__tiiin-sfx.m4a"},
+        "3": {"sv": "Öppning", "en": "Opening", "source": "soundboard/815093__switchds__sfx-opening-path2.wav"},
+        "4": {"sv": "Laser", "en": "Laser", "source": "soundboard/814254__its-slava__strong_laser_shoot.wav"},
+        "5": {"sv": "Magi", "en": "Magic", "source": "soundboard/813273__annabax01q__magic-sound-effect.m4a"},
+        "6": {"sv": "Konstig", "en": "Weird", "source": "soundboard/813128__coolguy198__weird-sound.wav"},
+        "7": {"sv": "Billarm", "en": "Car alarm", "source": "soundboard/812784__vazdaz__short-car-alarm-stretched-version.wav"}
+      }
     }
   },
   "arcade": {}

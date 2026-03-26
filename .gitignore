@@ -27,6 +27,7 @@ wokwi-api.h
 assets/audio/source/**/*.wav
 assets/audio/source/**/*.mp3
 assets/audio/source/**/*.flac
+assets/audio/source/**/*.m4a
 
 # Backup files
 *.bak

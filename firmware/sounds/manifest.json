@@ -1,0 +1,151 @@
+{
+  "banks": {
+    "0": {
+      "color": "#FF6B35",
+      "slots": {
+        "0": {
+          "sv": "Krasch",
+          "en": "Smash"
+        },
+        "1": {
+          "sv": "Belöning",
+          "en": "Reward"
+        },
+        "2": {
+          "sv": "Virvel 1",
+          "en": "Glitch snare"
+        },
+        "3": {
+          "sv": "Bubblor",
+          "en": "Bubbles"
+        },
+        "4": {
+          "sv": "Start",
+          "en": "Startup"
+        },
+        "5": {
+          "sv": "Nycklar",
+          "en": "Keys"
+        },
+        "6": {
+          "sv": "Alarm",
+          "en": "Alarm"
+        },
+        "7": {
+          "sv": "Opera 1",
+          "en": "Opera 1"
+        }
+      }
+    },
+    "1": {
+      "color": "#3B82F6",
+      "slots": {
+        "0": {
+          "sv": "Succe",
+          "en": "Success"
+        },
+        "1": {
+          "sv": "Dörrknarr",
+          "en": "Creaky door"
+        },
+        "2": {
+          "sv": "Bubbelknapp",
+          "en": "Bubble button"
+        },
+        "3": {
+          "sv": "Retro-explosion",
+          "en": "Retro explosion"
+        },
+        "4": {
+          "sv": "Stöt 1",
+          "en": "Impact 1"
+        },
+        "5": {
+          "sv": "Stöt 2",
+          "en": "Impact 2"
+        },
+        "6": {
+          "sv": "Stöt 3",
+          "en": "Impact 3"
+        },
+        "7": {
+          "sv": "Stöt 4",
+          "en": "Impact 4"
+        }
+      }
+    },
+    "2": {
+      "color": "#10B981",
+      "slots": {
+        "0": {
+          "sv": "Duuwip",
+          "en": "Duuwip"
+        },
+        "1": {
+          "sv": "Klocka",
+          "en": "Bell ring"
+        },
+        "2": {
+          "sv": "Pop",
+          "en": "Pop"
+        },
+        "3": {
+          "sv": "Effekt 1"
+        },
+        "4": {
+          "sv": "Xylofon",
+          "en": "Xylophone"
+        },
+        "5": {
+          "sv": "Toalett",
+          "en": "Toilet flush"
+        },
+        "6": {
+          "sv": "Piano",
+          "en": "Piano notification"
+        },
+        "7": {
+          "sv": "Linjal",
+          "en": "Ruler table"
+        }
+      }
+    },
+    "3": {
+      "color": "#F59E0B",
+      "slots": {
+        "0": {
+          "sv": "Vissla",
+          "en": "Whistle"
+        },
+        "1": {
+          "sv": "Brytare",
+          "en": "Switch"
+        },
+        "2": {
+          "sv": "Tiiin",
+          "en": "Tiiin"
+        },
+        "3": {
+          "sv": "Öppning",
+          "en": "Opening"
+        },
+        "4": {
+          "sv": "Laser",
+          "en": "Laser"
+        },
+        "5": {
+          "sv": "Magi",
+          "en": "Magic"
+        },
+        "6": {
+          "sv": "Konstig",
+          "en": "Weird"
+        },
+        "7": {
+          "sv": "Billarm",
+          "en": "Car alarm"
+        }
+      }
+    }
+  }
+}
