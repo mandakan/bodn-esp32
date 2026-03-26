@@ -9,8 +9,9 @@ mythology — the drink that granted wisdom and poetic inspiration.
 A colourful, tactile device that grows with a child (starting around age 4):
 
 - **Press buttons and turn knobs** → hear sounds, see colours and animations
-- **Record and play back** short voice clips
-- **Create sequences** of lights and sounds → first steps into programming concepts
+- **Play games** → Simon memory game, Mystery Box discovery, Flöde flow puzzles, Rule Follow, Garden of Life, Soundboard
+- **Record and play back** short voice clips *(planned)*
+- **Create sequences** of lights and sounds → first steps into programming concepts *(planned)*
 - **Parental controls** → session time limits, break enforcement, quiet hours, lockdown — all configured from a phone via a local web UI
 
 ## Hardware
@@ -18,13 +19,19 @@ A colourful, tactile device that grows with a child (starting around age 4):
 | Component | Model |
 |---|---|
 | MCU | Olimex ESP32-S3-DevKit-Lipo (8 MB flash, 8 MB PSRAM, USB-C, LiPo charger) |
-| Battery | Olimex BATTERY-LIPO6600mAh |
+| Battery | Olimex BATTERY-LIPO6600mAh 6600 mAh |
 | Primary display | 2.8" 240×320 ILI9341 TFT with touch (SPI) |
 | Secondary display | 1.8" 128×160 ST7735 TFT (SPI, shared bus) |
 | Microphone | INMP441 I2S MEMS |
 | Amplifier | MAX98357A I2S 3W class-D + 3W 8Ω speaker |
-| LEDs | WS2812 8-LED sticks × 2 (16 addressable RGB NeoPixels) |
-| Inputs | 2× KY-040 rotary encoders, 8× momentary push buttons, 2× toggle switches, 5× illuminated arcade buttons |
+| LED sticks | WS2812 8-LED sticks × 2 (daisy-chained, 16 addressable RGB) |
+| LED strip | WS2812B 144 LED/m, 640 mm / ~92 LEDs (lid perimeter, chained after sticks) |
+| Inputs | 2× KY-040 rotary encoders, 8× momentary push buttons, 2× toggle switches |
+| Arcade buttons | 5× illuminated arcade buttons with PWM LED control |
+| GPIO expander | Waveshare MCP23017 16-IO board (I2C, addr 0x27) |
+| Temperature | DS18B20 × 2 (battery + enclosure, 1-Wire) |
+| DC-DC converter | Buck-boost 3–16 V → 5 V / 2 A (LiPo → 5 V for NeoPixels) |
+| Power switch | Panel-mount toggle switch |
 
 See [`docs/hardware.md`](docs/hardware.md) for full pinout, wiring, and BOM.
 
@@ -34,35 +41,66 @@ Written in MicroPython, runs directly on the ESP32-S3.
 
 ```
 firmware/
-  boot.py              # WiFi setup, NTP sync, load settings
+  boot.py              # WiFi setup, NTP sync, battery check, boot screen
   main.py              # async entry point (uasyncio)
-  st7735.py            # framebuf-based ST7735/ILI9341 display driver
+  st7735.py            # framebuf-based ST7735/ILI9341 driver + dirty rect tracking
   bodn/
-    config.py           # pin assignments, constants
+    config.py           # pin assignments, constants, encoder sensitivity
+    arcade.py           # arcade button input + LED output via MCP/PCA
+    audio.py            # async AudioEngine (multi-channel priority playback)
+    battery.py          # battery level reading and USB-only detection
+    chord.py            # multi-button chord/combo detection
+    cli.py              # serial REPL helpers (wifi, settings, reboot)
     debounce.py         # generic debounce logic
-    encoder.py          # IRQ-based rotary encoder reader
+    diag.py             # system diagnostics data gathering
+    encoder.py          # IRQ-based rotary encoder with velocity tracking
+    ftp.py              # FTP server for OTA bulk sync
+    gesture.py          # tap/hold/long-press gesture detection
+    i18n.py             # internationalisation: t(), set_language(), init()
+    lang/
+      sv.py             # Swedish string table (default)
+      en.py             # English string table
+    mcp23017.py         # MCP23017 I2C GPIO expander driver
     patterns.py         # LED animation patterns (shared buffer)
-    mystery_rules.py    # Mystery Box rule engine (pure logic)
-    session.py          # play session state machine
+    pca9685.py          # PCA9685 I2C PWM driver (arcade button LEDs)
+    power.py            # power management (sleep, wake, master switch)
+    qr.py               # minimal QR code encoder (V1–V2)
+    session.py          # play session state machine (pure logic)
+    sounds.py           # sound asset catalogue
     storage.py          # JSON settings & session history on flash
-    wifi.py             # WiFi connect (STA / AP) + runtime control
+    temperature.py      # DS18B20 1-Wire temperature monitoring
+    tones.py            # procedural tone generation (pure logic)
+    wav.py              # WAV header parser + streaming reader (pure logic)
+    wifi.py             # WiFi connect (STA / AP) + mDNS + runtime control
     web.py              # async HTTP server for parental controls
     web_ui.py           # HTML/CSS/JS served to the browser
+    *_rules.py          # pure-logic game engines (mystery, simon, flode,
+                        #   rulefollow, life, soundboard)
     ui/
       screen.py         # Screen base class + ScreenManager
       theme.py          # colour palette and layout constants
       input.py          # unified input state with debouncing
-      widgets.py        # stateless draw helpers (labels, bars, grids)
+      widgets.py        # stateless draw helpers
       icons.py          # 16×16 bitmap icons
-      home.py           # home screen with mode selection
+      font_ext.py       # extended glyphs: å ä ö Å Ä Ö
+      logo.py           # pixel-art boot logo
+      home.py           # home screen with animated carousel
       demo.py           # LED playground mode
       mystery.py        # Mystery Box discovery game
+      simon.py          # Simon memory game
+      flode.py          # Flöde flow-alignment puzzle
+      rulefollow.py     # Rule Follow (inhibition & flexibility)
+      garden.py         # Garden of Life (cellular automata)
+      soundboard.py     # Soundboard discovery mode
       clock.py          # clock display mode
-      ambient.py        # secondary display (clock + session bar)
-      settings.py       # on-device settings menu
+      catface.py        # animated cat face (secondary content)
+      ambient.py        # AmbientClock + StatusStrip (secondary display)
+      secondary.py      # two-zone secondary display manager
+      settings.py       # on-device settings menu (scrollable)
       overlay.py        # session state overlay
-      pause.py          # in-game pause menu
-      secondary.py      # secondary display manager
+      pause.py          # in-game pause menu (hold-to-open)
+      diag.py           # on-device diagnostics screen
+      admin_qr.py       # admin URL screen with QR code
 ```
 
 ## Getting started
@@ -93,11 +131,17 @@ uv run mpremote connect auto repl
 Once the device is running and on WiFi, you can push firmware updates over the air:
 
 ```bash
+# HTTP push — works in both AP and STA mode
 uv run python tools/ota-push.py                          # AP mode default (192.168.4.1)
 uv run python tools/ota-push.py 192.168.1.42             # specific device IP
-uv run python tools/ota-push.py --token SECRET            # with OTA auth token
 uv run python tools/ota-push.py --wokwi                   # Wokwi (localhost:9080)
+
+# FTP bulk sync — faster, STA/home network only; uses MD5 to skip unchanged files
+uv run python tools/ftp-sync.py 192.168.1.42             # sync changed files
+uv run python tools/ftp-sync.py 192.168.1.42 --force     # re-upload all files
 ```
+
+FTP credentials are set via `ftp_user` / `ftp_pass` in the device settings.
 
 **Note:** OTA reboot does not work in Wokwi — the simulator's filesystem is in RAM
 and is lost on reset. Use `wokwi-sync.py` for Wokwi development instead.
@@ -185,10 +229,11 @@ wind-down cycle.
 
 See [`docs/roadmap.md`](docs/roadmap.md) for detailed milestones.
 
-1. **Hardware bring-up** — display, buttons, encoders
-2. **Audio basics** — tones, samples, record/playback
-3. **Kid-facing UI** — home screen, sound modes, sequencing
-4. **Quality-of-life** — battery indicator, WiFi config, web UI
+1. ~~**Hardware bring-up**~~ — display, buttons, encoders ✓
+2. ~~**Audio basics**~~ — tones, WAV playback, volume control ✓
+3. **Kid-facing UI** — six game modes shipped; record/replay and sequencer planned
+4. ~~**Parental controls**~~ — web UI, session limits, OTA, FTP sync ✓
+5. **Quality-of-life** — battery indicator, temperature monitoring, i18n (Swedish/English) ✓
 
 ## Design goals
 

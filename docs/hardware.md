@@ -32,14 +32,18 @@ Pin assignments are defined in `firmware/bodn/config.py`. See `docs/wiring.md` f
 
 ### Primary display — 2.8" ILI9341 (SPI)
 
-| Signal | GPIO |
-|--------|------|
-| SCK | 12 |
-| MOSI | 11 |
-| CS | 10 |
-| DC | 8 |
-| RST | 9 |
-| Backlight | 43 |
+| Signal | GPIO / connection |
+|--------|-------------------|
+| SCK | GPIO 12 |
+| MOSI | GPIO 11 |
+| CS | GPIO 10 |
+| DC | GPIO 8 |
+| RST | GPIO 9 |
+| BL (PWM dim) | PCA9685 CH0 (control signal) |
+| LED+ (power) | 5 V from DC-DC converter (via PCA9685 V+) |
+
+The PCA9685 drives the backlight LED through its CH0 output; the LED anode power
+comes from the PCA9685 V+ pin, which is tied to the DC-DC 5 V rail.
 
 Touch controller (XPT2046) pins TBD — shares SPI bus with a separate CS.
 
@@ -322,18 +326,35 @@ ESP32-S3          PCA9685 breakout
 ─────────         ────────────────
 GPIO 47 (SCL) ──▶ SCL
 GPIO 48 (SDA) ──▶ SDA
-3V3           ──▶ VCC
+3V3           ──▶ VCC  (logic supply)
 GND           ──▶ GND
-GND           ──▶ OE  (active-low: GND = outputs enabled)
-                  V+ ← external LED supply or 3V3 for low-power LEDs
+GND           ──▶ OE   (active-low: GND = outputs enabled)
+DC-DC 5 V     ──▶ V+   (LED power rail — arcade LEDs + ILI9341 backlight)
 ```
 
 ## Power distribution
 
 The Olimex DevKit-Lipo has no boost converter. On battery the only rails are the
-raw LiPo voltage (3.0–4.2 V) and the on-board 3.3 V regulator. WS2812B NeoPixels
-require ≥ 3.5 V VDD and behave best at 5 V, so a buck-boost DC-DC converter
-provides a stable 5 V rail from either USB or battery power.
+raw LiPo voltage (3.0–4.2 V) and the on-board 3.3 V regulator. Several peripherals
+(NeoPixels, display backlights, arcade button LEDs) require a stable 5 V, so a
+buck-boost DC-DC converter provides a single 5 V rail that works on both USB and
+battery.
+
+### Power sources
+
+The device runs from either USB or LiPo battery:
+
+```
+USB VBUS (5 V) ─────────────────────────┐
+                                         ├──▶ DevKit-Lipo system rail
+LiPo BAT+ (3.0–4.2 V) ─▶ BL4054B ──────┘      │
+                          (charger)             ├──▶ On-board 3.3 V regulator ──▶ ESP32, logic
+                                                └──▶ DC-DC VIN (buck-boost) ──▶ 5 V rail
+```
+
+When USB is connected the BL4054B trickle-charges the LiPo and the system rail is
+held at ~USB VBUS. On battery the system rail follows the LiPo voltage (3.0–4.2 V).
+The buck-boost converter handles the full input range in both cases.
 
 ### DC-DC converter
 
@@ -341,21 +362,23 @@ provides a stable 5 V rail from either USB or battery power.
 |-----------|-------|
 | Module | Buck-boost 3–16 V → 5 V / 2 A ([Electrokit](https://www.electrokit.com/dcdc-omvandlare-step-up/step-down-3.3/5v)) |
 | Efficiency | Up to 95 % |
-| Input | LiPo BAT+ (3.0–4.2 V) or USB VBUS (5 V) |
+| Input | System power rail (USB VBUS or LiPo BAT+, 3.0–5.5 V) |
 | Output | 5 V regulated |
-| Consumers | NeoPixel VDD, PCA9685 V+ (arcade LEDs) |
+| Consumers | NeoPixel VDD, PCA9685 V+ (arcade LEDs + ILI9341 backlight), ST7735 VCC + BL |
 
 ```
-LiPo BAT+ ──▶ VIN (converter)
-               VOUT (5 V) ──▶ NeoPixel VDD (all 108 LEDs)
-                           ──▶ PCA9685 V+ (LED power rail)
-GND ────────▶ GND (converter) ──▶ NeoPixel GND
-                               ──▶ PCA9685 GND
+System rail ──▶ VIN (DC-DC converter)
+                VOUT (5 V) ──▶ NeoPixel VDD (108 LEDs — sticks + lid ring)
+                           ──▶ PCA9685 V+  ──▶ Arcade button LEDs (CH1–5)
+                                           ──▶ ILI9341 backlight LED+ (CH0)
+                           ──▶ ST7735 VCC  (ST7735 module requires 5 V on VCC;
+                           ──▶ ST7735 BL    onboard reg steps down to 3.3 V for SPI)
+GND ────────▶ GND (DC-DC) ──▶ NeoPixel GND, PCA9685 GND, ST7735 GND
 ```
 
-The ESP32 and all 3.3 V logic components (displays, audio, MCP23017) remain on
-the on-board 3.3 V regulator. Only the NeoPixels and PCA9685 LED outputs use
-the 5 V rail.
+The ESP32 core and all 3.3 V logic (SPI/I2S/I2C, MCP23017, audio, mic) run from
+the on-board 3.3 V regulator and do **not** depend on the DC-DC converter. If the
+DC-DC fails the ESP32 keeps running but LEDs and displays go dark.
 
 ## DS18B20 temperature sensors
 

@@ -395,7 +395,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await asyncio.sleep_ms(500)
             try:
                 os.sync()
-            except AttributeError:
+            except Exception:
                 pass
             import machine
 
@@ -433,7 +433,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 # FAT metadata for unrelated dirs (e.g. /data/) can be lost.
                 try:
                     os.sync()
-                except AttributeError:
+                except Exception:
                     pass  # os.sync() not available on all builds
                 await _send_json(writer, {"ok": True, "committed": count})
                 try:
@@ -454,7 +454,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _send_json(writer, {"ok": True, "rebooting": True})
             try:
                 os.sync()
-            except AttributeError:
+            except Exception:
                 pass
             try:
                 import machine

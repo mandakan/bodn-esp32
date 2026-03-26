@@ -35,13 +35,19 @@ DEFAULT_FTP_USER = "bodn"
 DEFAULT_FTP_PASS = "bodn"
 
 
+INCLUDE_PATTERNS = ("*.py", "*.wav", "*.json")
+
+
 def discover_files() -> list[str]:
     """Walk firmware/ and return relative paths in safe upload order."""
-    files = []
-    for p in sorted(FIRMWARE_DIR.rglob("*.py")):
-        if any(part in EXCLUDE for part in p.parts):
-            continue
-        files.append(str(p.relative_to(FIRMWARE_DIR)))
+    seen: set[str] = set()
+    for pattern in INCLUDE_PATTERNS:
+        for p in sorted(FIRMWARE_DIR.rglob(pattern)):
+            if any(part in EXCLUDE for part in p.parts):
+                continue
+            rel = str(p.relative_to(FIRMWARE_DIR))
+            seen.add(rel)
+    files = list(seen)
 
     def _key(rel: str) -> tuple[int, str]:
         if rel == "main.py":
