@@ -43,6 +43,17 @@ def _normalise_license(raw: str) -> str:
     return _LICENSE_MAP.get(raw.strip().lower(), raw.strip())
 
 
+def _strip_double_ext(filename: str) -> str:
+    """Remove a duplicated extension that Freesound appends in license files.
+
+    'foo.mp3.mp3' -> 'foo.mp3'   'bar.wav.wav' -> 'bar.wav'   'baz.mp3' -> 'baz.mp3'
+    """
+    p = Path(filename)
+    if p.suffix and Path(p.stem).suffix == p.suffix:
+        return p.stem
+    return filename
+
+
 def parse_license_file(text: str) -> list[dict]:
     """
     Return a list of dicts with keys: filename, url, license, attribution.
@@ -71,8 +82,12 @@ def parse_license_file(text: str) -> list[dict]:
             if m:
                 license_str = _normalise_license(m.group(1))
 
+        # Freesound's bookmark license file doubles the extension (foo.mp3.mp3).
+        # Strip the duplicate so the filename matches what's actually on disk.
+        filename = _strip_double_ext(filename)
+
         # Username is the second __-separated part of the filename.
-        # e.g. "848472__elevatorfan2020__vintage-debris-smash.mp3.mp3"
+        # e.g. "848472__elevatorfan2020__vintage-debris-smash.mp3"
         parts = filename.split("__")
         if len(parts) >= 2:
             username = parts[1]

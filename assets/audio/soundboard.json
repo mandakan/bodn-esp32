@@ -8,14 +8,14 @@
       "name_en": "",
       "color": "#FF6B35",
       "slots": {
-        "0": {"sv": "Krasch", "en": "Smash", "source": "soundboard/848472__elevatorfan2020__vintage-debris-smash.mp3.mp3"},
-        "1": {"sv": "Belöning", "en": "Reward", "source": "soundboard/848363__matustrm__sfx_reward.wav.wav"},
-        "2": {"sv": "Virvel 1", "en": "Glitch snare", "source": "soundboard/846270__cat-fox_alex__glitch-snare-1.flac.flac"},
-        "3": {"sv": "Bubblor", "en": "Bubbles", "source": "soundboard/844241__atp2-kh__bubbling-water-notification-ui-alert-cc0.wav.wav"},
-        "4": {"sv": "Start", "en": "Startup", "source": "soundboard/844143__mihacappy__sfx_start_generic_lessreverb.wav.wav"},
-        "5": {"sv": "Nycklar", "en": "Keys", "source": "soundboard/840213__anskukisu64__picking-up-keys.wav.wav"},
-        "6": {"sv": "Alarm", "en": "Alarm", "source": "soundboard/834495__cvltiv8r__sci-fi-glitch-sweep-alarm-burst.wav.wav"},
-        "7": {"sv": "Opera 1", "en": "Opera 1", "source": "soundboard/833690__cat-fox_alex__chinese-opera-sfx-4.flac.flac"}
+        "0": {"sv": "Krasch", "en": "Smash", "source": "soundboard/848472__elevatorfan2020__vintage-debris-smash.mp3"},
+        "1": {"sv": "Belöning", "en": "Reward", "source": "soundboard/848363__matustrm__sfx_reward.wav"},
+        "2": {"sv": "Virvel 1", "en": "Glitch snare", "source": "soundboard/846270__cat-fox_alex__glitch-snare-1.flac"},
+        "3": {"sv": "Bubblor", "en": "Bubbles", "source": "soundboard/844241__atp2-kh__bubbling-water-notification-ui-alert-cc0.wav"},
+        "4": {"sv": "Start", "en": "Startup", "source": "soundboard/844143__mihacappy__sfx_start_generic_lessreverb.wav"},
+        "5": {"sv": "Nycklar", "en": "Keys", "source": "soundboard/840213__anskukisu64__picking-up-keys.wav"},
+        "6": {"sv": "Alarm", "en": "Alarm", "source": "soundboard/834495__cvltiv8r__sci-fi-glitch-sweep-alarm-burst.wav"},
+        "7": {"sv": "Opera 1", "en": "Opera 1", "source": "soundboard/833690__cat-fox_alex__chinese-opera-sfx-4.flac"}
       }
     },
     "1": {
