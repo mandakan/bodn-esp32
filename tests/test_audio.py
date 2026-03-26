@@ -1,11 +1,26 @@
-"""Tests for bodn.audio — AudioEngine priority channels and playback."""
+"""Tests for bodn.audio — AudioEngine multi-voice mixing."""
 
-import io
 import struct
 
 import pytest
 
-from bodn.audio import AudioEngine, ToneSource, CH_UI, CH_SFX, CH_MUSIC
+from bodn.audio import (
+    AudioEngine,
+    ToneSource,
+    CH_UI,
+    CH_SFX,
+    CH_MUSIC,
+    V_MUSIC,
+    V_SFX_BASE,
+    V_SFX_END,
+    V_UI,
+    _GAIN_MUSIC,
+    _GAIN_MUSIC_DUCKED,
+    _GAIN_SFX,
+    _GAIN_UI,
+    _mix_add_py,
+    _apply_volume_py,
+)
 
 
 class FakeI2S:
@@ -86,29 +101,206 @@ class TestAudioEngine:
         engine, _ = self._make_engine()
         engine.boop()
         assert engine.playing
-        # Boop should use ui channel
-        assert engine._channels[CH_UI].source is not None
+        # Boop should use ui voice
+        assert engine._voices[V_UI].source is not None
 
-    def test_channel_priority(self):
+    def test_music_and_sfx_coexist(self):
+        """Both music and SFX voices can be active simultaneously."""
         engine, _ = self._make_engine()
         engine.tone(440, 500, channel="music")
         engine.tone(880, 500, channel="sfx")
-        # SFX has higher priority
-        assert engine._active_channel() == CH_SFX
+        assert engine._voices[V_MUSIC].source is not None
+        assert engine._voices[V_SFX_BASE].source is not None
 
-    def test_ui_highest_priority(self):
+    def test_all_voice_types_coexist(self):
+        """Music, SFX, and UI can all be active at once."""
         engine, _ = self._make_engine()
         engine.tone(440, 500, channel="music")
         engine.tone(880, 500, channel="sfx")
         engine.tone(1000, 500, channel="ui")
-        assert engine._active_channel() == CH_UI
+        assert engine._voices[V_MUSIC].source is not None
+        assert engine._voices[V_SFX_BASE].source is not None
+        assert engine._voices[V_UI].source is not None
 
-    def test_fallback_to_lower(self):
+    def test_stop_sfx_leaves_music(self):
         engine, _ = self._make_engine()
         engine.tone(440, 500, channel="music")
         engine.tone(880, 500, channel="sfx")
         engine.stop("sfx")
-        assert engine._active_channel() == CH_MUSIC
+        assert engine._voices[V_MUSIC].source is not None
+        assert engine.playing
+
+
+class TestSFXPool:
+    def _make_engine(self):
+        i2s = FakeI2S()
+        return AudioEngine(i2s)
+
+    def test_multiple_sfx_voices(self):
+        """Multiple SFX sounds can play simultaneously."""
+        engine = self._make_engine()
+        engine.tone(440, 500, channel="sfx")
+        engine.tone(880, 500, channel="sfx")
+        engine.tone(660, 500, channel="sfx")
+        # Should have 3 different SFX slots active
+        active_sfx = sum(
+            1
+            for i in range(V_SFX_BASE, V_SFX_END)
+            if engine._voices[i].source is not None
+        )
+        assert active_sfx == 3
+
+    def test_pool_fills_four(self):
+        """SFX pool holds 4 voices."""
+        engine = self._make_engine()
+        for freq in [440, 880, 660, 550]:
+            engine.tone(freq, 500, channel="sfx")
+        active_sfx = sum(
+            1
+            for i in range(V_SFX_BASE, V_SFX_END)
+            if engine._voices[i].source is not None
+        )
+        assert active_sfx == 4
+
+    def test_oldest_voice_stealing(self):
+        """When SFX pool is full, the oldest voice is stolen."""
+        engine = self._make_engine()
+        # Fill all 4 SFX slots
+        for freq in [440, 880, 660, 550]:
+            engine.tone(freq, 500, channel="sfx")
+        # Record which voice was started first (lowest _start_seq)
+        oldest_seq = min(
+            engine._voices[i]._start_seq for i in range(V_SFX_BASE, V_SFX_END)
+        )
+        # Play one more — should steal the oldest
+        engine.tone(1000, 500, channel="sfx")
+        # The oldest seq should no longer be present
+        current_seqs = [
+            engine._voices[i]._start_seq for i in range(V_SFX_BASE, V_SFX_END)
+        ]
+        assert oldest_seq not in current_seqs
+        # Still 4 active
+        active_sfx = sum(
+            1
+            for i in range(V_SFX_BASE, V_SFX_END)
+            if engine._voices[i].source is not None
+        )
+        assert active_sfx == 4
+
+    def test_stop_sfx_clears_pool(self):
+        """Stopping 'sfx' channel clears all pool voices."""
+        engine = self._make_engine()
+        engine.tone(440, 500, channel="sfx")
+        engine.tone(880, 500, channel="sfx")
+        engine.stop("sfx")
+        active_sfx = sum(
+            1
+            for i in range(V_SFX_BASE, V_SFX_END)
+            if engine._voices[i].source is not None
+        )
+        assert active_sfx == 0
+
+
+class TestMixAdd:
+    def test_simple_addition(self):
+        """Two signals are summed sample-by-sample."""
+        dst = bytearray(4)
+        src = bytearray(4)
+        # dst = [1000, 2000], src = [500, 1000]
+        struct.pack_into("<hh", dst, 0, 1000, 2000)
+        struct.pack_into("<hh", src, 0, 500, 1000)
+        _mix_add_py(dst, src, 4)
+        s0, s1 = struct.unpack_from("<hh", dst, 0)
+        assert s0 == 1500
+        assert s1 == 3000
+
+    def test_positive_saturation(self):
+        """Sum exceeding +32767 is clamped."""
+        dst = bytearray(2)
+        src = bytearray(2)
+        struct.pack_into("<h", dst, 0, 30000)
+        struct.pack_into("<h", src, 0, 10000)
+        _mix_add_py(dst, src, 2)
+        result = struct.unpack_from("<h", dst, 0)[0]
+        assert result == 32767
+
+    def test_negative_saturation(self):
+        """Sum below -32768 is clamped."""
+        dst = bytearray(2)
+        src = bytearray(2)
+        struct.pack_into("<h", dst, 0, -30000)
+        struct.pack_into("<h", src, 0, -10000)
+        _mix_add_py(dst, src, 2)
+        result = struct.unpack_from("<h", dst, 0)[0]
+        assert result == -32768
+
+    def test_mixed_signs(self):
+        """Positive + negative sums correctly."""
+        dst = bytearray(2)
+        src = bytearray(2)
+        struct.pack_into("<h", dst, 0, 10000)
+        struct.pack_into("<h", src, 0, -3000)
+        _mix_add_py(dst, src, 2)
+        result = struct.unpack_from("<h", dst, 0)[0]
+        assert result == 7000
+
+    def test_zero_src_is_noop(self):
+        """Adding silence (zeros) leaves dst unchanged."""
+        dst = bytearray(4)
+        src = bytearray(4)  # zeros
+        struct.pack_into("<hh", dst, 0, 5000, -5000)
+        _mix_add_py(dst, src, 4)
+        s0, s1 = struct.unpack_from("<hh", dst, 0)
+        assert s0 == 5000
+        assert s1 == -5000
+
+
+class TestGainStaging:
+    def test_gain_constants_are_reasonable(self):
+        """Gain multipliers produce expected attenuation levels."""
+        # 70% gain on a full-scale sample
+        buf = bytearray(2)
+        struct.pack_into("<h", buf, 0, 32767)
+        _apply_volume_py(buf, 2, _GAIN_SFX)
+        result = struct.unpack_from("<h", buf, 0)[0]
+        # 32767 * 0.70 ≈ 22937
+        assert 22000 < result < 24000
+
+    def test_ducked_music_gain(self):
+        """Ducked music at 25% is significantly quieter."""
+        buf = bytearray(2)
+        struct.pack_into("<h", buf, 0, 32767)
+        _apply_volume_py(buf, 2, _GAIN_MUSIC_DUCKED)
+        result = struct.unpack_from("<h", buf, 0)[0]
+        # 32767 * 0.25 ≈ 8192
+        assert 7500 < result < 9000
+
+    def test_music_solo_vs_ducked(self):
+        """Solo music is louder than ducked music."""
+        buf_solo = bytearray(2)
+        buf_duck = bytearray(2)
+        struct.pack_into("<h", buf_solo, 0, 20000)
+        struct.pack_into("<h", buf_duck, 0, 20000)
+        _apply_volume_py(buf_solo, 2, _GAIN_MUSIC)
+        _apply_volume_py(buf_duck, 2, _GAIN_MUSIC_DUCKED)
+        solo = struct.unpack_from("<h", buf_solo, 0)[0]
+        duck = struct.unpack_from("<h", buf_duck, 0)[0]
+        assert solo > duck * 2  # solo is ~2.8x louder than ducked
+
+    def test_ui_gain_highest(self):
+        """UI gain is higher than SFX gain."""
+        assert _GAIN_UI > _GAIN_SFX
+
+    def test_voice_gain_assignment(self):
+        """Voices are created with correct gain multipliers."""
+        engine = AudioEngine(FakeI2S())
+        assert engine._voices[V_MUSIC].gain_mult == _GAIN_MUSIC
+        assert engine._voices[V_MUSIC].is_music is True
+        for i in range(V_SFX_BASE, V_SFX_END):
+            assert engine._voices[i].gain_mult == _GAIN_SFX
+            assert engine._voices[i].is_music is False
+        assert engine._voices[V_UI].gain_mult == _GAIN_UI
+        assert engine._voices[V_UI].is_music is False
 
 
 class TestVolume:

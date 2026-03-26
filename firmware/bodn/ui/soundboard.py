@@ -152,7 +152,6 @@ class SoundboardScreen(Screen):
                 self._flash = ("mini", i, frame + _FLASH_FRAMES)
                 changed = True
                 self._leds_dirty = True
-                break  # one press per frame
 
         # --- Arcade button presses ---
         for i in range(NUM_ARCADE_BUTTONS):
@@ -165,7 +164,6 @@ class SoundboardScreen(Screen):
                 self._flash = ("arc", i, frame + _FLASH_FRAMES)
                 changed = True
                 self._leds_dirty = True
-                break
 
         # --- Check if audio finished ---
         if not self._audio.playing:

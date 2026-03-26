@@ -176,6 +176,11 @@ Audio can be CPU- and memory-intensive if handled carelessly.
 - Keep recordings **short** (1-3 seconds) for now to avoid memory pressure on PSRAM and flash wear.
 - When not recording or playing:
   - **Stop or pause I2S** and keep amplifier in a low-power/idle state if supported.
+- **Multi-voice mixing**: The AudioEngine mixes up to 6 simultaneous voices
+  (1 music + 4 SFX pool + 1 UI). Each voice has its own 1024-byte mono read
+  buffer plus a shared 1024-byte mix buffer = **~7 KB** total audio RAM.
+  Per-voice gain staging keeps the mix within int16 range; a viper-accelerated
+  `_mix_add` kernel sums voices with saturation clipping as a safety net.
 
 ---
 
