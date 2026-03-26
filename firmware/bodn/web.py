@@ -3,6 +3,11 @@
 import os
 
 try:
+    import hashlib
+except ImportError:
+    hashlib = None
+
+try:
     import uasyncio as asyncio
 except ImportError:
     import asyncio
@@ -16,6 +21,7 @@ from bodn.web_ui import HTML
 from bodn import storage
 
 OTA_STAGE = "/.ota"
+_OTA_MANIFEST = OTA_STAGE + "/MANIFEST.json"
 
 
 def _mkdirs(path):
@@ -56,6 +62,47 @@ def _ota_walk(stage_dir):
             # It's a file — compute the target path by stripping the stage prefix
             target = full[len(OTA_STAGE) :]
             yield full, target
+
+
+def _verify_manifest():
+    """Check MANIFEST.json in staging against actual file hashes.
+
+    Returns (ok: bool, errors: list[tuple]).
+    If no manifest exists (HTTP OTA path), returns (True, []) — backward compat.
+    If hashlib is unavailable, skips verification and returns (True, []).
+    """
+    if hashlib is None:
+        return True, []
+    try:
+        with open(_OTA_MANIFEST) as f:
+            manifest = json.load(f)
+    except OSError:
+        return True, []  # no manifest → HTTP OTA path, skip
+    except Exception as e:
+        return False, [("MANIFEST.json", "parse error: " + str(e))]
+
+    files = manifest.get("files", {})
+    if not files:
+        return False, [("MANIFEST.json", "empty files list")]
+
+    errors = []
+    for rel_path, expected in files.items():
+        staged = OTA_STAGE + "/" + rel_path
+        try:
+            h = hashlib.md5()
+            with open(staged, "rb") as f:
+                while True:
+                    chunk = f.read(512)
+                    if not chunk:
+                        break
+                    h.update(chunk)
+            actual = h.hexdigest()
+            if actual != expected:
+                errors.append((rel_path, "hash mismatch"))
+        except OSError:
+            errors.append((rel_path, "missing from staging"))
+
+    return len(errors) == 0, errors
 
 
 async def _send(writer, status, content_type, body, extra_headers=None):
@@ -354,10 +401,21 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _handle_upload(reader, writer, headers)
 
         elif method == "POST" and path == "/api/ota/commit":
-            # Move all staged files into place and reboot.
+            # Verify integrity (when MANIFEST.json is present), then move
+            # staged files into place and reboot.
             try:
+                ok, errors = _verify_manifest()
+                if not ok:
+                    await _send_json(
+                        writer,
+                        {"error": "integrity check failed", "details": errors},
+                        400,
+                    )
+                    return
                 count = 0
                 for staged, target in _ota_walk(OTA_STAGE):
+                    if staged == _OTA_MANIFEST:
+                        continue  # control file — never deploy to live filesystem
                     parent = target.rsplit("/", 1)[0]
                     _mkdirs(parent)
                     try:

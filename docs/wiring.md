@@ -42,6 +42,9 @@ graph LR
     detentsperlogicalunit["detents per logical unit<br/><sub>GPIO 1 → ENCODER SENS OPTIONS 0<br/>GPIO 2 → ENCODER SENS OPTIONS 1<br/>GPIO 3 → ENCODER SENS OPTIONS 2<br/>GPIO 1 → ENCODER_SENS_DEFAULT</sub>"]
     detentsperlogicalunit -.- ESP
 
+    FTPserver["FTP server<br/><sub>GPIO 21 → FTP_PORT</sub>"]
+    FTPserver -.- ESP
+
 ```
 
 ### ILI9341 TFT
@@ -135,6 +138,12 @@ graph LR
 | ENCODER SENS OPTIONS 2 | 3 | `ENCODER_SENS_OPTIONS[2]` |
 | ENCODER_SENS_DEFAULT | 1 | `ENCODER_SENS_DEFAULT` |
 
+### FTP server
+
+| Signal | GPIO | Config variable |
+|--------|------|-----------------|
+| FTP_PORT | 21 | `FTP_PORT` |
+
 ### All GPIOs
 
 | GPIO | Component | Signal |
@@ -158,7 +167,7 @@ graph LR
 | 17 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
 | 18 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
 | 20 | DS18B20 1-Wire temperature sensors | ONEWIRE_PIN |
-| 21 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
+| 21 | FTP server | FTP_PORT |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | DS18B20 1-Wire temperature sensors | TEMP_WARN_C |
 | 44 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
@@ -177,6 +186,7 @@ graph LR
 > - **GPIO 2**: INMP441 I2S microphone: SD / detents per logical unit: ENCODER SENS OPTIONS 1
 > - **GPIO 3**: MAX98357A I2S amplifier: AMP_SD_PIN / detents per logical unit: ENCODER SENS OPTIONS 2
 > - **GPIO 1**: detents per logical unit: ENCODER SENS OPTIONS 0 / detents per logical unit: ENCODER_SENS_DEFAULT
+> - **GPIO 21**: Rotary encoders — must stay on native GPIO for IRQ latency: CLK / FTP server: FTP_PORT
 <!-- pinout:end -->
 
 ## Encoder roles and placement

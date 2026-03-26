@@ -137,7 +137,8 @@ bodn-esp32/
 │  ├─ pinout.py             # generate wiring docs from config.py
 │  ├─ sync.sh               # deploy firmware to device via mpremote
 │  ├─ wokwi-sync.py         # deploy firmware to Wokwi simulator (raw TCP)
-│  └─ ota-push.py           # push firmware over WiFi (no USB needed)
+│  ├─ ota-push.py           # push firmware over WiFi via HTTP (no USB needed)
+│  └─ ftp-sync.py           # push firmware over WiFi via FTP (faster, STA mode only)
 ├─ tests/
 │  ├─ conftest.py           # MicroPython hardware stubs
 │  └─ test_*.py             # host-side unit tests
@@ -182,10 +183,15 @@ uv run pytest
 # In Wokwi: requires Wokwi Private Gateway for inbound port forwarding
 # Without gateway, test via REPL: import boot; boot.settings["lockdown"] = True
 
-# OTA firmware push (no USB needed)
+# OTA firmware push via HTTP (works in AP and STA mode)
 uv run python tools/ota-push.py               # AP mode (192.168.4.1)
 uv run python tools/ota-push.py 192.168.1.42  # specific IP
 uv run python tools/ota-push.py --wokwi        # Wokwi (localhost:9080)
+
+# OTA firmware push via FTP (faster bulk sync — STA/home network only)
+# Device must be in STA mode; credentials set via ftp_user/ftp_pass in settings
+uv run python tools/ftp-sync.py 192.168.1.42       # specific IP
+uv run python tools/ftp-sync.py 192.168.1.42 --force  # re-upload all files
 ```
 
 ## Git hooks

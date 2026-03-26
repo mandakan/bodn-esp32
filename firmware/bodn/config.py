@@ -137,3 +137,6 @@ def encoder_dpu(settings):
 
 # Power save
 SLEEP_TIMEOUT_S = 300  # default 5 minutes of inactivity before light sleep
+
+# FTP server (dev mode — STA only, never exposed on AP)
+FTP_PORT = 21
