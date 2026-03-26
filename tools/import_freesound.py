@@ -147,10 +147,8 @@ def print_soundboard_stubs(sounds: list[dict]) -> None:
             "en": "",
             "source": f"soundboard/{s['filename']}",
         }
-        # Print as a single-slot object so it's easy to paste
         inner = json.dumps(stub, ensure_ascii=False)
         print(f'        "N": {inner},')
-        print(f"        // {s['url']}")
 
 
 def main():
