@@ -52,13 +52,7 @@ _BTN_WAV_NAMES = [
     "lights",
     "horn",
 ]
-_ARC_WAV_NAMES = [
-    "green",
-    "blue",
-    "white",
-    "yellow",
-    "red",
-]  # left-to-right physical order
+_ARC_WAV_NAMES = ["land", "course", "engines", "repair", "distress"]
 _SPACE_SND_DIR = "/sounds/space/"
 
 

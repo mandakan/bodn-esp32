@@ -42,13 +42,21 @@ TIMEOUTS = [240, 180, 150]  # level 1/2/3 → 8 s / 6 s / 5 s
 CRUISE_BASE = const(200)  # minimum frames between scenarios (~6.5 s)
 CRUISE_SPREAD = const(150)  # additional random frames (~5 s)
 
-# Arcade button colours — physical left-to-right order
+# Arcade button roles — fixed mapping, physical left-to-right order.
+# Indices are stable so future difficulty levels can remap without touching scenarios.
+ARC_LAND = const(0)  # green  — landing
+ARC_COURSE = const(1)  # blue   — course correction
+ARC_ENGINES = const(2)  # white  — engines
+ARC_REPAIR = const(3)  # yellow — repair
+ARC_DISTRESS = const(4)  # red    — distress
+
+# Arcade button colours matching the above roles
 ARC_COLORS = [
-    (0, 220, 50),  # 0 green
-    (0, 80, 255),  # 1 blue
-    (220, 220, 220),  # 2 white
-    (255, 200, 0),  # 3 yellow
-    (255, 30, 0),  # 4 red
+    (0, 220, 50),  # ARC_LAND     green
+    (0, 80, 255),  # ARC_COURSE   blue
+    (220, 220, 220),  # ARC_ENGINES  white
+    (255, 200, 0),  # ARC_REPAIR   yellow
+    (255, 30, 0),  # ARC_DISTRESS red
 ]
 
 
@@ -226,9 +234,9 @@ class SpaceEngine:
         self._throttle_clicks = 0
 
         if sc == SC_COURSE:
-            self._target_arc = _rand8() % 5
+            self._target_arc = ARC_COURSE
         elif sc == SC_LANDING:
-            self._target_arc = _rand8() % 5
+            self._target_arc = ARC_LAND
         elif sc == SC_ASTEROID:
             self._steer_dir = 1 if (_rand8() & 1) else -1
         elif sc == SC_ENGINE:
