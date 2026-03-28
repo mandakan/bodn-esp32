@@ -12,6 +12,8 @@ except ImportError:
 
 import os
 
+from bodn.assets import resolve
+
 NUM_MINI_BUTTONS = 8
 NUM_ARCADE_BUTTONS = 5
 NUM_BANKS = 4  # 2 toggles → 2² = 4 banks
@@ -45,17 +47,19 @@ def bank_from_toggles(sw0, sw1):
 def wav_path(bank, slot):
     """Return the filesystem path for a mini-button sound.
 
+    Checks SD card first, falls back to flash via assets.resolve().
     bank: 0–3, slot: 0–7
     """
-    return "{}/bank_{}/{}".format(SOUNDS_ROOT, bank, slot) + ".wav"
+    return resolve("{}/bank_{}/{}".format(SOUNDS_ROOT, bank, slot) + ".wav")
 
 
 def arcade_wav_path(slot):
     """Return the filesystem path for an arcade-button sound (shared across banks).
 
+    Checks SD card first, falls back to flash via assets.resolve().
     slot: 0–4
     """
-    return "{}/arcade/{}".format(SOUNDS_ROOT, slot) + ".wav"
+    return resolve("{}/arcade/{}".format(SOUNDS_ROOT, slot) + ".wav")
 
 
 def _file_exists(path):

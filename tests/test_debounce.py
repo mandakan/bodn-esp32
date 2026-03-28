@@ -102,10 +102,10 @@ class TestConfig:
             config.I2S_SPK_DIN,
             config.ENC1_CLK,
             config.ENC1_DT,
-            config.ENC1_SW,
+            config.SD_SCK,  # was ENC1_SW — now SD SPI3
             config.ENC2_CLK,
             config.ENC2_DT,
-            config.ENC2_SW,
+            config.SD_MOSI,  # was ENC2_SW — now SD SPI3
             config.NEOPIXEL_PIN,
             config.I2C_SCL,
             config.I2C_SDA,
@@ -133,10 +133,10 @@ class TestConfig:
             config.I2S_SPK_DIN,
             config.ENC1_CLK,
             config.ENC1_DT,
-            config.ENC1_SW,
+            config.SD_SCK,  # was ENC1_SW — now SD SPI3
             config.ENC2_CLK,
             config.ENC2_DT,
-            config.ENC2_SW,
+            config.SD_MOSI,  # was ENC2_SW — now SD SPI3
             config.NEOPIXEL_PIN,
             config.I2C_SCL,
             config.I2C_SDA,

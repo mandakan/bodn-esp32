@@ -118,3 +118,13 @@ class MCPPin:
 
     def value(self):
         return self._mcp.pin_value(self._pin)
+
+
+class _StubPin:
+    """Fallback pin that always reads 1 (not pressed).
+
+    Used when MCP2 is unavailable so encoder objects remain functional.
+    """
+
+    def value(self):
+        return 1

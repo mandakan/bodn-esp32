@@ -21,8 +21,8 @@ graph LR
     MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN<br/>GPIO 3 → AMP_SD_PIN</sub>"]
     ESP -- I2S --> MAX98357AI2Samplifier
 
-    RotaryencodersmuststayonnativeGPIOforIRQlatency["Rotary encoders — must stay on native GPIO for IRQ latency<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 17 → SW<br/>GPIO 16 → CLK<br/>GPIO 44 → DT<br/>GPIO 40 → SW</sub>"]
-    RotaryencodersmuststayonnativeGPIOforIRQlatency -.- ESP
+    PushbuttonsmovedtoMCP2tofreeGPIOs17and40forSDcardSPI3["Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 16 → CLK<br/>GPIO 44 → DT</sub>"]
+    ESP -- SPI --> PushbuttonsmovedtoMCP2tofreeGPIOs17and40forSDcardSPI3
 
     The144LEDmstriprunsaroundtheinsideofthetranslucentlidperimeter["The 144 LED/m strip runs around the inside of the translucent lid perimeter<br/><sub>GPIO 4 → PIN</sub>"]
     The144LEDmstriprunsaroundtheinsideofthetranslucentlidperimeter -.- ESP
@@ -38,6 +38,9 @@ graph LR
 
     I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
     I2CbuspUEXTconnector -.- ESP
+
+    previouslyreservedfortouchCS["previously reserved for touch CS .<br/><sub>GPIO 0 → SD_CS<br/>GPIO 17 → SD_SCK<br/>GPIO 40 → SD_MOSI<br/>GPIO 19 → SD_MISO</sub>"]
+    previouslyreservedfortouchCS -.- ESP
 
     detentsperlogicalunit["detents per logical unit<br/><sub>GPIO 1 → ENCODER SENS OPTIONS 0<br/>GPIO 2 → ENCODER SENS OPTIONS 1<br/>GPIO 3 → ENCODER SENS OPTIONS 2<br/>GPIO 1 → ENCODER_SENS_DEFAULT</sub>"]
     detentsperlogicalunit -.- ESP
@@ -81,16 +84,14 @@ graph LR
 | DIN | 7 | `I2S_SPK_DIN` |
 | AMP_SD_PIN | 3 | `AMP_SD_PIN` |
 
-### Rotary encoders — must stay on native GPIO for IRQ latency
+### Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
 | CLK | 21 | `ENC1_CLK` |
 | DT | 18 | `ENC1_DT` |
-| SW | 17 | `ENC1_SW` |
 | CLK | 16 | `ENC2_CLK` |
 | DT | 44 | `ENC2_DT` |
-| SW | 40 | `ENC2_SW` |
 
 ### The 144 LED/m strip runs around the inside of the translucent lid perimeter
 
@@ -129,6 +130,15 @@ graph LR
 | I2C_SCL | 47 | `I2C_SCL` |
 | I2C_SDA | 48 | `I2C_SDA` |
 
+### previously reserved for touch CS .
+
+| Signal | GPIO | Config variable |
+|--------|------|-----------------|
+| SD_CS | 0 | `SD_CS` |
+| SD_SCK | 17 | `SD_SCK` |
+| SD_MOSI | 40 | `SD_MOSI` |
+| SD_MISO | 19 | `SD_MISO` |
+
 ### detents per logical unit
 
 | Signal | GPIO | Config variable |
@@ -148,6 +158,7 @@ graph LR
 
 | GPIO | Component | Signal |
 |------|-----------|--------|
+| 0 | previously reserved for touch CS . | SD_CS |
 | 1 | detents per logical unit | ENCODER_SENS_DEFAULT |
 | 2 | detents per logical unit | ENCODER SENS OPTIONS 1 |
 | 3 | detents per logical unit | ENCODER SENS OPTIONS 2 |
@@ -163,14 +174,15 @@ graph LR
 | 13 | MAX98357A I2S amplifier | BCK |
 | 14 | INMP441 I2S microphone | SCK |
 | 15 | INMP441 I2S microphone | WS |
-| 16 | Rotary encoders — must stay on native GPIO for IRQ latency | CLK |
-| 17 | Rotary encoders — must stay on native GPIO for IRQ latency | SW |
-| 18 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 16 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | CLK |
+| 17 | previously reserved for touch CS . | SD_SCK |
+| 18 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | DT |
+| 19 | previously reserved for touch CS . | SD_MISO |
 | 20 | DS18B20 1-Wire temperature sensors | ONEWIRE_PIN |
 | 21 | FTP server | FTP_PORT |
 | 39 | ST7735 TFT | TFT2_CS |
-| 40 | DS18B20 1-Wire temperature sensors | TEMP_WARN_C |
-| 44 | Rotary encoders — must stay on native GPIO for IRQ latency | DT |
+| 40 | previously reserved for touch CS . | SD_MOSI |
+| 44 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | DT |
 | 45 | MAX98357A I2S amplifier | WS |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |
 | 48 | I2C bus — pUEXT connector | I2C_SDA |
@@ -181,12 +193,12 @@ graph LR
 | 3400 | so we treat software as the only reliable protection. | BAT_WARN_MV |
 
 > **Pin conflicts detected:**
-> - **GPIO 40**: Rotary encoders — must stay on native GPIO for IRQ latency: SW / DS18B20 1-Wire temperature sensors: TEMP_WARN_C
+> - **GPIO 40**: DS18B20 1-Wire temperature sensors: TEMP_WARN_C / previously reserved for touch CS .: SD_MOSI
 > - **GPIO 1**: ILI9341 TFT: BL / detents per logical unit: ENCODER SENS OPTIONS 0
 > - **GPIO 2**: INMP441 I2S microphone: SD / detents per logical unit: ENCODER SENS OPTIONS 1
 > - **GPIO 3**: MAX98357A I2S amplifier: AMP_SD_PIN / detents per logical unit: ENCODER SENS OPTIONS 2
 > - **GPIO 1**: detents per logical unit: ENCODER SENS OPTIONS 0 / detents per logical unit: ENCODER_SENS_DEFAULT
-> - **GPIO 21**: Rotary encoders — must stay on native GPIO for IRQ latency: CLK / FTP server: FTP_PORT
+> - **GPIO 21**: Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.: CLK / FTP server: FTP_PORT
 <!-- pinout:end -->
 
 ## Encoder roles and placement

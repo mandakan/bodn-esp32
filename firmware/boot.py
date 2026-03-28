@@ -30,10 +30,22 @@ try:
     from bodn import config
     from st7735 import ST7735
 
-    # Check NAV encoder button (active-low with pull-up) for diagnostic mode
-    _diag_btn = Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP)
-    _diag_requested = _diag_btn.value() == 0
-    _diag_btn = None  # release pin — encoder driver will reclaim it
+    # Check NAV encoder button (ENC1 SW, now on MCP2 GPA0) for diagnostic mode.
+    # Initialise I2C + MCP2 early; if MCP2 is absent, skip diag check.
+    try:
+        from machine import SoftI2C
+        from bodn.mcp23017 import MCP23017
+
+        _i2c_boot = SoftI2C(
+            scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000
+        )
+        _mcp2_boot = MCP23017(_i2c_boot, config.MCP2_ADDR)
+        _mcp2_boot.refresh()
+        _diag_requested = _mcp2_boot.pin_value(config.MCP2_ENC1_SW) == 0
+        _mcp2_boot = None
+        _i2c_boot = None
+    except Exception:
+        _diag_requested = False
 
     spi = SPI(
         1,
@@ -291,6 +303,15 @@ if settings is None:
         _results[0] = "warn"  # defaults used
 
 print("BOOT [CFG]", _results[0])
+
+# --- SD card mount (silent — device boots without it) ---
+try:
+    from bodn.sdcard import mount as _sd_mount
+
+    _sd_mount()
+except Exception as e:
+    print("SD card mount skipped:", e)
+
 _show_progress(1, STEPS[0][1], STEPS[0][2])
 
 # --- Step 1: Connect WiFi ---
@@ -434,18 +455,35 @@ if _diag_requested and tft:
     tft.text(_hint, _hx, tft.height - 16, COL_CYAN)
     tft.show()
 
-    # Wait for any encoder button press (MCP23017 not available yet)
-    _enc_btns = [
-        Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP),
-        Pin(config.ENC2_SW, Pin.IN, Pin.PULL_UP),
-    ]
-    # First wait for the held button to be released
-    while _enc_btns[0].value() == 0:
-        time.sleep_ms(50)
-    # Then wait for any encoder button press to dismiss
-    while all(b.value() == 1 for b in _enc_btns):
-        time.sleep_ms(50)
-    _enc_btns = None
+    # Wait for any encoder button press via MCP2 to dismiss.
+    # Re-initialise MCP2 (boot I2C instance was released above).
+    try:
+        from machine import SoftI2C
+        from bodn.mcp23017 import MCP23017
+
+        _i2c_diag = SoftI2C(
+            scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000
+        )
+        _mcp2_diag = MCP23017(_i2c_diag, config.MCP2_ADDR)
+        # Wait for the initially-held button to be released
+        _mcp2_diag.refresh()
+        while _mcp2_diag.pin_value(config.MCP2_ENC1_SW) == 0:
+            time.sleep_ms(50)
+            _mcp2_diag.refresh()
+        # Then wait for any encoder button press to dismiss
+        while True:
+            _mcp2_diag.refresh()
+            if (
+                _mcp2_diag.pin_value(config.MCP2_ENC1_SW) == 0
+                or _mcp2_diag.pin_value(config.MCP2_ENC2_SW) == 0
+            ):
+                break
+            time.sleep_ms(50)
+        _mcp2_diag = None
+        _i2c_diag = None
+    except Exception:
+        # MCP2 unavailable — just show for 5 s then continue
+        time.sleep(5)
 
     print("BOOT [DIAG] screen shown")
 

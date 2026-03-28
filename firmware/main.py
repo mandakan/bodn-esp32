@@ -90,7 +90,7 @@ def create_hardware():
     # Shared I2C bus for MCP23017 and PCA9685
     i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
 
-    # MCP23017 GPIO expander for buttons, toggles, and arcade switches
+    # MCP1 — MCP23017 GPIO expander for buttons, toggles, and arcade switches
     mcp = None
     pwm = None
     arcade = None
@@ -103,6 +103,16 @@ def create_hardware():
         hw_status["mcp"] = True
     except Exception as e:
         print("MCP23017 not found, buttons/switches disabled:", e)
+
+    # MCP2 — second MCP23017 for encoder push buttons
+    mcp2 = None
+    try:
+        mcp2 = MCP23017(i2c, config.MCP2_ADDR)
+        print(
+            "MCP2 (0x{:02X}) initialised for encoder switches".format(config.MCP2_ADDR)
+        )
+    except Exception as e:
+        print("MCP2 not found, encoder buttons via fallback:", e)
 
     # PCA9685 PWM driver for LED dimming + arcade LEDs + amp mute
     try:
@@ -139,9 +149,21 @@ def create_hardware():
         print("DS18B20 init failed:", e)
 
     np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
+
+    # Encoder push buttons are on MCP2. If MCP2 is unavailable, the sw
+    # attribute falls back to a stub that always reads 1 (not pressed).
+    if mcp2:
+        enc1_sw = mcp2.pin(config.MCP2_ENC1_SW)
+        enc2_sw = mcp2.pin(config.MCP2_ENC2_SW)
+    else:
+        from bodn.mcp23017 import _StubPin
+
+        enc1_sw = _StubPin()
+        enc2_sw = _StubPin()
+
     encoders = [
-        Encoder(config.ENC1_CLK, config.ENC1_DT, config.ENC1_SW),
-        Encoder(config.ENC2_CLK, config.ENC2_DT, config.ENC2_SW),
+        Encoder(config.ENC1_CLK, config.ENC1_DT, enc1_sw),
+        Encoder(config.ENC2_CLK, config.ENC2_DT, enc2_sw),
     ]
 
     # I2S audio output (MAX98357A)
@@ -181,6 +203,7 @@ def create_hardware():
         encoders,
         np,
         mcp,
+        mcp2,
         pwm,
         arcade,
         audio,
@@ -366,7 +389,9 @@ def create_ui(
 # ---------------------------------------------------------------------------
 
 
-async def primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr):
+async def primary_task(
+    manager, settings, inp, encoders, mcp, mcp2, idle_tracker, power_mgr
+):
     """Input scanning + primary display: ~30 ms tick."""
     print("primary_task started, debug_input={}".format(settings.get("debug_input")))
     frame = 0
@@ -375,6 +400,8 @@ async def primary_task(manager, settings, inp, encoders, mcp, idle_tracker, powe
         try:
             if mcp:
                 mcp.refresh()
+            if mcp2:
+                mcp2.refresh()
             manager.tick()
         except KeyboardInterrupt:
             raise
@@ -674,9 +701,20 @@ async def main():
     except Exception as e:
         print("FTP server failed to start:", e)
 
-    tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, audio, hw_status = (
-        create_hardware()
-    )
+    (
+        tft,
+        tft2,
+        buttons,
+        switches,
+        encoders,
+        np,
+        mcp,
+        mcp2,
+        pwm,
+        arcade,
+        audio,
+        hw_status,
+    ) = create_hardware()
 
     # Publish hardware status for diagnostics
     from bodn.diag import set_hw_status
@@ -715,7 +753,9 @@ async def main():
     #         audio.play_sound("start")
 
     tasks = [
-        primary_task(manager, settings, inp, encoders, mcp, idle_tracker, power_mgr),
+        primary_task(
+            manager, settings, inp, encoders, mcp, mcp2, idle_tracker, power_mgr
+        ),
         secondary_task(secondary),
         housekeeping_task(session_mgr, np, settings, audio=audio),
     ]
