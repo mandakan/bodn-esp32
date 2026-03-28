@@ -4,6 +4,8 @@
 # Ship AI "Stellar" narrates scenarios via TTS.  No win/lose state —
 # the ship keeps flying regardless.
 
+import os
+
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
@@ -36,6 +38,35 @@ from bodn.patterns import (
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY, SURPRISED
 
 NAV = const(0)  # config.ENC_NAV
+
+# SD sound paths for spaceship mode.
+# Drop WAV files on the card to override the procedural fallbacks:
+#   /sd/sounds/space/btn_0.wav … btn_7.wav   (8 ship-system buttons)
+#   /sd/sounds/space/arc_0.wav … arc_4.wav   (5 arcade emergency buttons)
+_BTN_WAV_TEMPLATE = "/sounds/space/btn_{}.wav"
+_ARC_WAV_TEMPLATE = "/sounds/space/arc_{}.wav"
+
+
+def _resolve_sound_paths(template, count):
+    """Resolve WAV paths for `count` files matching `template` at mode enter.
+
+    Returns a list of `count` entries: a resolved path string if the file
+    exists (SD preferred, flash fallback), or None if absent.
+    Called once per mode entry — zero per-press overhead after that.
+    """
+    from bodn.assets import resolve
+
+    paths = []
+    for i in range(count):
+        p = template.format(i)
+        resolved = resolve(p)
+        try:
+            os.stat(resolved)
+            paths.append(resolved)
+        except OSError:
+            paths.append(None)
+    return paths
+
 
 # Scenario type → TTS key (played on "announce" event)
 _SC_TTS = [
@@ -116,6 +147,8 @@ class SpaceScreen(Screen):
         self._prev_sw0 = None  # None = not yet initialised
         self._prev_sw1 = None
         self._drone_zone = -1  # current throttle zone (0/1/2), -1 = not started
+        self._btn_wav_paths = None  # resolved at enter(); None = use procedural tones
+        self._arc_wav_paths = None
 
     def enter(self, manager):
         self._manager = manager
@@ -129,6 +162,8 @@ class SpaceScreen(Screen):
         self._prev_sw0 = None  # reset so first-frame state is read without TTS
         self._prev_sw1 = None
         self._drone_zone = -1
+        self._btn_wav_paths = _resolve_sound_paths(_BTN_WAV_TEMPLATE, 8)
+        self._arc_wav_paths = _resolve_sound_paths(_ARC_WAV_TEMPLATE, 5)
         if self._arcade:
             self._arcade.all_off()
         # Welcome message
@@ -306,9 +341,17 @@ class SpaceScreen(Screen):
     ]
 
     def _play_btn_tone(self, btn):
-        """Play a ship-system sound for each button."""
-        freq, dur, wave = self._BTN_SFX[btn % len(self._BTN_SFX)]
-        self._audio.tone(freq, dur, wave, channel="sfx")
+        """Play a ship-system sound for each button.
+
+        Uses a pre-cached WAV path if one was found at enter(); otherwise
+        falls back to the procedural tone defined in _BTN_SFX.
+        """
+        path = self._btn_wav_paths[btn] if self._btn_wav_paths else None
+        if path:
+            self._audio.play(path, channel="sfx")
+        else:
+            freq, dur, wave = self._BTN_SFX[btn % len(self._BTN_SFX)]
+            self._audio.tone(freq, dur, wave, channel="sfx")
 
     # Engine drone: three throttle zones → three pitches
     # Square wave at sub-bass frequencies gives a convincing engine rumble.
@@ -326,10 +369,18 @@ class SpaceScreen(Screen):
             self._audio.tone(self._DRONE_FREQS[zone], 60000, "square", channel="music")
 
     def _play_arc_tone(self, arc):
-        """Big satisfying tone for arcade buttons."""
-        freqs = [220, 277, 330, 415, 523]
-        freq = freqs[arc % len(freqs)]
-        self._audio.tone(freq, 250, "square", channel="sfx")
+        """Big satisfying tone for arcade buttons.
+
+        Uses a pre-cached WAV path if one was found at enter(); otherwise
+        falls back to the procedural tone.
+        """
+        path = self._arc_wav_paths[arc] if self._arc_wav_paths else None
+        if path:
+            self._audio.play(path, channel="sfx")
+        else:
+            freqs = [220, 277, 330, 415, 523]
+            freq = freqs[arc % len(freqs)]
+            self._audio.tone(freq, 250, "square", channel="sfx")
 
     def _speak_toggle(self, tts_key, state_on):
         """Speak a toggle confirmation; fall back to a short tone."""
