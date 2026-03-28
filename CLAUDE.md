@@ -24,6 +24,7 @@
 - **Performance**: follow `docs/PERFORMANCE_GUIDELINES.md`. Key rules: event-driven over polling, no full-screen redraws every frame, cooperative async tasks, minimal per-frame allocations, sparse `print()` usage. The review checklist (section 10) applies to all code changes.
 - **Thermal safety**: the LiPo charger (BL4054B) and battery have NO hardware thermal protection — software is the only safeguard. Any new peripheral that draws significant power (LEDs, motors, RF) **must** be added to the power-shedding logic in `main.py` `housekeeping_task()`. Non-critical loads are disabled at ≥ 50 °C (critical) and the device deep-sleeps at ≥ 60 °C (emergency). See `docs/hardware.md` § "Thermal protection" for the escalation table.
 - **i18n**: all user-facing UI strings go through `bodn/i18n.py`. Never hardcode display text in screen modules — use `from bodn.i18n import t` and `t("key")` or `t("key", arg)`. Swedish is the default language. String keys follow `screen_concept` naming (e.g. `simon_watch`, `pause_resume`). Translation files live in `firmware/bodn/lang/sv.py` and `firmware/bodn/lang/en.py`. When adding new strings, add to **both** language files. The `test_i18n.py` test enforces key parity. Extended font glyphs for å, ä, ö, Å, Ä, Ö are in `bodn/ui/font_ext.py`. The web UI stays in English (parent-facing).
+- **TTS**: spoken audio for game instructions and system alerts is generated offline with Piper TTS (`tools/generate_tts.py`) from the i18n STRINGS dicts. The allowlist and voice config live in `assets/audio/tts.json`. Flash keys (generic/safety) go to `assets/audio/source/tts/{lang}/` and are converted by `tools/convert_audio.py` into `firmware/sounds/tts/`. SD keys (game-mode-specific) stage in `build/tts/` and convert to `build/tts_converted/` for copying to the card. On the device, use `from bodn.tts import say` — `say(key, audio)` resolves the language-appropriate path via `bodn.assets.resolve` and returns `False` if the file is missing (caller falls back to procedural tones).
 
 ## Project overview
 
@@ -193,6 +194,15 @@ uv run python tools/ota-push.py --wokwi        # Wokwi (localhost:9080)
 # Device must be in STA mode; credentials set via ftp_user/ftp_pass in settings
 uv run python tools/ftp-sync.py 192.168.1.42       # specific IP
 uv run python tools/ftp-sync.py 192.168.1.42 --force  # re-upload all files
+
+# TTS pipeline (generate spoken instructions from i18n strings)
+# Install Piper TTS once: pip install piper-tts
+uv run python tools/generate_tts.py               # generate all TTS WAVs
+uv run python tools/generate_tts.py --dry-run     # preview without generating
+uv run python tools/generate_tts.py --lang sv      # Swedish only
+uv run python tools/generate_tts.py --key simon_watch  # single key
+uv run python tools/convert_audio.py              # convert flash + SD TTS to device format
+cp -r build/tts_converted/ /Volumes/BODN_SD/sounds/tts/  # copy SD files to card
 ```
 
 ## Git hooks
