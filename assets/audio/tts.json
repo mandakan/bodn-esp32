@@ -1,0 +1,29 @@
+{
+  "voices": {
+    "sv": { "model": "sv_SE-alma-medium" },
+    "en": { "model": "en_US-amy-medium" }
+  },
+  "keys": {
+    "simon_watch":        { "storage": "sd" },
+    "simon_watch_repeat": { "storage": "sd" },
+    "simon_your_turn":    { "storage": "sd" },
+    "simon_yes":          { "storage": "sd" },
+    "simon_try_again":    { "storage": "sd" },
+    "simon_great":        { "storage": "sd" },
+    "rf_instructions1":   { "storage": "sd" },
+    "rf_instructions2":   { "storage": "sd" },
+    "rf_match":           { "storage": "sd" },
+    "rf_opposite":        { "storage": "sd" },
+    "rf_new_rule":        { "storage": "sd" },
+    "rf_yes":             { "storage": "sd" },
+    "rf_try_again":       { "storage": "sd" },
+    "rf_great":           { "storage": "sd" },
+    "bat_critical":       { "storage": "flash" },
+    "bat_low":            { "storage": "flash" },
+    "overlay_goodnight":  { "storage": "flash" }
+  },
+  "overrides": {
+    "sv": {},
+    "en": {}
+  }
+}

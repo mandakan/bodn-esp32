@@ -1,6 +1,13 @@
 # tests/test_i18n.py — i18n module tests
 
+import json
+from pathlib import Path
+
+import pytest
+
 from bodn.i18n import init, t, set_language, get_language, available
+
+_TTS_JSON = Path(__file__).parent.parent / "assets" / "audio" / "tts.json"
 
 
 class TestI18n:
@@ -70,3 +77,40 @@ class TestI18n:
         empty_en = [k for k, v in en.items() if not v]
         assert empty_sv == [], "Empty values in sv.py: {}".format(empty_sv)
         assert empty_en == [], "Empty values in en.py: {}".format(empty_en)
+
+    def test_tts_keys_exist_in_both_languages(self):
+        """Every TTS key in tts.json must be present in sv.py and en.py."""
+        if not _TTS_JSON.exists():
+            pytest.skip("assets/audio/tts.json not found")
+
+        with open(_TTS_JSON) as f:
+            manifest = json.load(f)
+
+        from bodn.lang.sv import STRINGS as sv
+        from bodn.lang.en import STRINGS as en
+
+        missing_sv = [k for k in manifest["keys"] if k not in sv]
+        missing_en = [k for k in manifest["keys"] if k not in en]
+        assert missing_sv == [], "TTS keys missing from sv.py: {}".format(missing_sv)
+        assert missing_en == [], "TTS keys missing from en.py: {}".format(missing_en)
+
+    def test_tts_keys_have_no_placeholders(self):
+        """TTS keys must not contain {} format placeholders in either language."""
+        if not _TTS_JSON.exists():
+            pytest.skip("assets/audio/tts.json not found")
+
+        with open(_TTS_JSON) as f:
+            manifest = json.load(f)
+
+        from bodn.lang.sv import STRINGS as sv
+        from bodn.lang.en import STRINGS as en
+
+        for lang_name, strings in (("sv", sv), ("en", en)):
+            with_placeholder = [
+                k for k in manifest["keys"] if k in strings and "{" in strings[k]
+            ]
+            assert with_placeholder == [], (
+                "TTS keys with {{}} placeholders in {}.py: {}".format(
+                    lang_name, with_placeholder
+                )
+            )

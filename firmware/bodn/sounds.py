@@ -19,6 +19,9 @@
 # WAV file paths on the device filesystem.
 # Add an entry here when you add a new converted file to firmware/sounds/sfx/
 # or firmware/sounds/music/.  Keep keys stable — they are referenced in code.
+#
+# TTS paths are NOT listed here — use bodn.tts.say(key, audio) instead.
+# say() resolves the language-partitioned path automatically via bodn.assets.resolve.
 WAV = {
     "sfx": {
         # e.g. "click": "/sounds/sfx/click.wav",
@@ -26,6 +29,7 @@ WAV = {
     "music": {
         # e.g. "ambient": "/sounds/music/ambient.wav",
     },
+    # "tts" category lives at /sounds/tts/{lang}/{key}.wav — use bodn.tts.say().
 }
 
 SOUNDS = {

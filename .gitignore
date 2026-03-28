@@ -34,3 +34,4 @@ assets/audio/source/**/*.m4a
 
 # OS
 .DS_Store
+build/
