@@ -307,6 +307,7 @@ class SpaceScreen(Screen):
         try:
             from bodn import tts
 
+            self._audio.stop("ui")
             if not tts.say(tts_key, self._audio):
                 # Fallback: rising tone for ON, falling for OFF
                 self._audio.tone(880 if state_on else 440, 120, "sine", channel="ui")
