@@ -8,6 +8,52 @@
 #   Working memory   — remember which system needs attention
 #   Inhibitory control — wait for the right moment, then act
 #   Cognitive flexibility — switch between different scenario types
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# INPUT MAP
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   Encoder A (throttle)     — always tracked, drives engine drone pitch
+#   Encoder B (steering)     — always tracked, drives steering indicator
+#   Toggle sw0 (shields)     — always tracked; spoken confirmation on change
+#   Toggle sw1 (stealth)     — always tracked; spoken confirmation on change
+#   Buttons 0–7              — ambient ship-system sounds only (no scenario target)
+#   Arcade 0–4               — scenario targets + PCA9685 LED brightness hints
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ARCADE BUTTON ROLES  (fixed mapping — physical left-to-right)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   Index  Constant      Colour   Role              Sound file
+#   ─────────────────────────────────────────────────────────
+#     0    ARC_LAND      green    Landing           land.wav
+#     1    ARC_COURSE    blue     Course correction course.wav
+#     2    ARC_ENGINES   white    Engines           engines.wav
+#     3    ARC_REPAIR    yellow   Repair            repair.wav
+#     4    ARC_DISTRESS  red      Distress          distress.wav
+#
+#   LED brightness is 12-bit PWM (0–4095) via PCA9685.  The colour itself is
+#   fixed hardware; only brightness changes.  Remap by changing the ARC_*
+#   constants — the scenario logic references constants, not raw indices.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# HOW TO ADD A SCENARIO
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   1. Add a SC_* constant and increment NUM_SCENARIOS.
+#   2. Add i18n keys (see firmware/bodn/lang/sv.py and en.py):
+#        space_sc_<name>        — TTS announcement (full sentence)
+#        space_sc_<name>_short  — short display label
+#        space_instr_<name>     — on-screen instruction text
+#   3. In _pick_scenario(): add an elif branch to set up scenario state
+#      (e.g. pick a target arcade button via an ARC_* constant).
+#   4. In _check_solution(): add an elif branch returning True when solved.
+#   5. In make_static_leds(): add a branch for stick LED hint visuals.
+#   6. In space.py _update_arcade_leds(): add the scenario to the
+#      (SC_LANDING, SC_COURSE) tuple if an arcade LED should pulse.
+#   7. In space.py _render_active(): add rendering for any on-screen hints.
+#   8. Add TTS key to assets/audio/tts.json with "storage": "sd".
+#   9. Add tests in tests/test_space_rules.py.
 
 import os
 
@@ -23,7 +69,7 @@ HINT = const(4)  # first timeout — show hint, then retry
 
 # --- Scenario types ---
 SC_ASTEROID = const(0)  # turn steering encoder to dodge
-SC_COURSE = const(1)  # press the indicated coloured button
+SC_COURSE = const(1)  # press the indicated arcade button (LED pulses)
 SC_SHIELD = const(2)  # flip toggle switch 0 ON
 SC_ENGINE = const(3)  # push throttle encoder up (N clicks)
 SC_LANDING = const(4)  # press the indicated arcade button
@@ -42,23 +88,21 @@ TIMEOUTS = [240, 180, 150]  # level 1/2/3 → 8 s / 6 s / 5 s
 CRUISE_BASE = const(200)  # minimum frames between scenarios (~6.5 s)
 CRUISE_SPREAD = const(150)  # additional random frames (~5 s)
 
-# Arcade button colours (index 0–4 → yellow, red, blue, green, white)
-ARC_COLORS = [
-    (255, 200, 0),  # yellow
-    (255, 30, 0),  # red
-    (0, 80, 255),  # blue
-    (0, 220, 50),  # green
-    (220, 220, 220),  # white
-]
+# Arcade button roles — fixed mapping, physical left-to-right order.
+# Indices are stable so future difficulty levels can remap without touching scenarios.
+ARC_LAND = const(0)  # green  — landing
+ARC_COURSE = const(1)  # blue   — course correction
+ARC_ENGINES = const(2)  # white  — engines
+ARC_REPAIR = const(3)  # yellow — repair
+ARC_DISTRESS = const(4)  # red    — distress
 
-# Button colours for SC_COURSE (buttons 0–5)
-BTN_COLORS = [
-    (255, 0, 0),
-    (0, 255, 0),
-    (0, 0, 255),
-    (255, 255, 0),
-    (0, 255, 255),
-    (255, 0, 255),
+# Arcade button colours matching the above roles
+ARC_COLORS = [
+    (0, 220, 50),  # ARC_LAND     green
+    (0, 80, 255),  # ARC_COURSE   blue
+    (220, 220, 220),  # ARC_ENGINES  white
+    (255, 200, 0),  # ARC_REPAIR   yellow
+    (255, 30, 0),  # ARC_DISTRESS red
 ]
 
 
@@ -106,8 +150,7 @@ class SpaceEngine:
         self._timeouts = 0  # consecutive timeouts at current level
 
         # Internal scenario details
-        self._target_btn = -1  # SC_COURSE: which button to press
-        self._target_arc = -1  # SC_LANDING: which arcade button
+        self._target_arc = -1  # SC_COURSE / SC_LANDING: which arcade button
         self._steer_dir = 1  # SC_ASTEROID: 1=right, -1=left
         self._throttle_clicks = 0  # SC_ENGINE: clicks accumulated
         self._throttle_needed = 3  # SC_ENGINE: clicks required
@@ -187,9 +230,7 @@ class SpaceEngine:
     @property
     def target_color(self):
         """RGB of the target input for the current scenario, or None."""
-        if self.scenario_type == SC_COURSE and self._target_btn >= 0:
-            return BTN_COLORS[self._target_btn]
-        if self.scenario_type == SC_LANDING and self._target_arc >= 0:
+        if self.scenario_type in (SC_COURSE, SC_LANDING) and self._target_arc >= 0:
             return ARC_COLORS[self._target_arc]
         if self.scenario_type == SC_SHIELD:
             return (255, 50, 50)
@@ -200,13 +241,8 @@ class SpaceEngine:
         return None
 
     @property
-    def target_btn_idx(self):
-        """Button index for SC_COURSE, -1 otherwise."""
-        return self._target_btn
-
-    @property
     def target_arc_idx(self):
-        """Arcade button index for SC_LANDING, -1 otherwise."""
+        """Arcade button index for SC_COURSE or SC_LANDING, -1 otherwise."""
         return self._target_arc
 
     @property
@@ -244,9 +280,9 @@ class SpaceEngine:
         self._throttle_clicks = 0
 
         if sc == SC_COURSE:
-            self._target_btn = _rand8() % 6
+            self._target_arc = ARC_COURSE
         elif sc == SC_LANDING:
-            self._target_arc = _rand8() % 5
+            self._target_arc = ARC_LAND
         elif sc == SC_ASTEROID:
             self._steer_dir = 1 if (_rand8() & 1) else -1
         elif sc == SC_ENGINE:
@@ -263,7 +299,7 @@ class SpaceEngine:
             # Correct steering direction
             return enc_b_delta * self._steer_dir > 0
         elif sc == SC_COURSE:
-            return btn == self._target_btn
+            return arc == self._target_arc
         elif sc == SC_SHIELD:
             return sw0 and not self._sw0_was_on
         elif sc == SC_ENGINE:
@@ -289,7 +325,6 @@ class SpaceEngine:
         self._timer = 0
         self._state_frame = frame
         self.scenario_type = -1
-        self._target_btn = -1
         self._target_arc = -1
         self._cruise_countdown = CRUISE_BASE + _rand8() % CRUISE_SPREAD
 
@@ -328,13 +363,11 @@ class SpaceEngine:
                 else:  # steer left → light stick A
                     for i in range(0, 8):
                         buf[i] = arrow_col
-            elif sc == SC_COURSE and self._target_btn >= 0:
-                # Target button lit bright, rest dim
-                tgt = _s(BTN_COLORS[self._target_btn], brightness)
-                dim = _s(BTN_COLORS[self._target_btn], brightness // 8)
-                buf[self._target_btn] = tgt
-                if self._target_btn < 8:
-                    buf[15 - self._target_btn] = dim
+            elif sc == SC_COURSE and self._target_arc >= 0:
+                # Sticks glow with the target arcade button's colour as ambient hint
+                c = _s(ARC_COLORS[self._target_arc], brightness // 3)
+                for i in range(n):
+                    buf[i] = c
             elif sc == SC_SHIELD:
                 # Alternating red warning
                 c = _s((255, 0, 0), brightness // 2)

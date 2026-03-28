@@ -4,6 +4,8 @@
 # Ship AI "Stellar" narrates scenarios via TTS.  No win/lose state —
 # the ship keeps flying regardless.
 
+import os
+
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
@@ -37,31 +39,103 @@ from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY, SURPRISED
 
 NAV = const(0)  # config.ENC_NAV
 
-# Scenario type → TTS key (played on "announce" event)
+# ─────────────────────────────────────────────────────────────────────────────
+# AUDIO — WAV override system
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Every sound has a procedural fallback (tone) that plays when no WAV file is
+# present.  To add real sounds, drop WAV files on the SD card — no code changes
+# needed.  Paths are resolved once at mode enter (see _resolve_sound_paths) so
+# there is zero per-press overhead during play.
+#
+# Directory: /sd/sounds/space/
+#
+# Regular buttons (0–7) — named by ship system (index = list position):
+#   thruster.wav  shields.wav  scanner.wav  comms.wav
+#   repair.wav    cargo.wav    lights.wav   horn.wav
+#
+# Arcade buttons (0–4) — named by role (see space_rules.ARC_* constants):
+#   land.wav  course.wav  engines.wav  repair.wav  distress.wav
+#
+# TTS announcements live separately — see assets/audio/tts.json ("storage":"sd").
+# To add a new scenario sound: add its i18n key there and run tools/generate_tts.py.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Regular button sounds — index matches button index 0–7
+_BTN_WAV_NAMES = [
+    "thruster",  # 0
+    "shields",  # 1
+    "scanner",  # 2
+    "comms",  # 3
+    "repair",  # 4
+    "cargo",  # 5
+    "lights",  # 6
+    "horn",  # 7
+]
+
+# Arcade button sounds — index matches ARC_* constants in space_rules
+_ARC_WAV_NAMES = [
+    "land",  # 0 ARC_LAND     green
+    "course",  # 1 ARC_COURSE   blue
+    "engines",  # 2 ARC_ENGINES  white
+    "repair",  # 3 ARC_REPAIR   yellow
+    "distress",  # 4 ARC_DISTRESS red
+]
+
+_SPACE_SND_DIR = "/sounds/space/"
+
+
+def _resolve_sound_paths(names):
+    """Resolve WAV paths for a list of named sound files at mode enter.
+
+    Returns a list with a resolved path string for each file that exists
+    (SD preferred, flash fallback), or None if absent.
+    Called once per mode entry — zero per-press overhead after that.
+    """
+    from bodn.assets import resolve
+
+    paths = []
+    for name in names:
+        resolved = resolve(_SPACE_SND_DIR + name + ".wav")
+        try:
+            os.stat(resolved)
+            paths.append(resolved)
+        except OSError:
+            paths.append(None)
+    return paths
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCENARIO LOOKUP TABLES
+# Indexed by SC_* constant from space_rules.  Add a new entry to all three
+# lists when adding a scenario (keep them in sync with NUM_SCENARIOS).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# TTS key spoken by Stellar on the "announce" event
 _SC_TTS = [
-    "space_sc_asteroid",
-    "space_sc_course",
-    "space_sc_shield",
-    "space_sc_engine",
-    "space_sc_landing",
+    "space_sc_asteroid",  # SC_ASTEROID
+    "space_sc_course",  # SC_COURSE
+    "space_sc_shield",  # SC_SHIELD
+    "space_sc_engine",  # SC_ENGINE
+    "space_sc_landing",  # SC_LANDING
 ]
 
-# Scenario type → short display label key
+# Short display label shown on screen during ANNOUNCE and ACTIVE
 _SC_LABEL = [
-    "space_sc_asteroid_short",
-    "space_sc_course_short",
-    "space_sc_shield_short",
-    "space_sc_engine_short",
-    "space_sc_landing_short",
+    "space_sc_asteroid_short",  # SC_ASTEROID
+    "space_sc_course_short",  # SC_COURSE
+    "space_sc_shield_short",  # SC_SHIELD
+    "space_sc_engine_short",  # SC_ENGINE
+    "space_sc_landing_short",  # SC_LANDING
 ]
 
-# Scenario type → instruction key
+# Instruction text shown during ACTIVE ("what to do")
 _SC_INSTR = [
-    "space_instr_asteroid",
-    "space_instr_course",
-    "space_instr_shield",
-    "space_instr_engine",
-    "space_instr_landing",
+    "space_instr_asteroid",  # SC_ASTEROID
+    "space_instr_course",  # SC_COURSE
+    "space_instr_shield",  # SC_SHIELD
+    "space_instr_engine",  # SC_ENGINE
+    "space_instr_landing",  # SC_LANDING
 ]
 
 # Cat face emotions per state
@@ -115,6 +189,9 @@ class SpaceScreen(Screen):
         self._active_state_frame = 0  # frame when ACTIVE began (for countdown)
         self._prev_sw0 = None  # None = not yet initialised
         self._prev_sw1 = None
+        self._drone_zone = -1  # current throttle zone (0/1/2), -1 = not started
+        self._btn_wav_paths = None  # resolved at enter(); None = use procedural tones
+        self._arc_wav_paths = None
 
     def enter(self, manager):
         self._manager = manager
@@ -127,6 +204,9 @@ class SpaceScreen(Screen):
         self._prev_state = None
         self._prev_sw0 = None  # reset so first-frame state is read without TTS
         self._prev_sw1 = None
+        self._drone_zone = -1
+        self._btn_wav_paths = _resolve_sound_paths(_BTN_WAV_NAMES)
+        self._arc_wav_paths = _resolve_sound_paths(_ARC_WAV_NAMES)
         if self._arcade:
             self._arcade.all_off()
         # Welcome message
@@ -139,6 +219,8 @@ class SpaceScreen(Screen):
                 pass
 
     def exit(self):
+        if self._audio:
+            self._audio.stop("music")
         if self._arcade:
             self._arcade.all_off()
         if self._on_exit:
@@ -246,7 +328,7 @@ class SpaceScreen(Screen):
             if self._secondary:
                 self._secondary.set_emotion(_STATE_EMOTIONS.get(state, NEUTRAL))
 
-        # Throttle/steering changes → redraw instruments
+        # Throttle/steering changes → redraw instruments + update drone pitch
         if (
             abs(self._engine.throttle - self._prev_throttle) >= 4
             or abs(self._engine.steering - self._prev_steering) >= 4
@@ -255,6 +337,8 @@ class SpaceScreen(Screen):
             self._prev_steering = self._engine.steering
             self._dirty = True
             self._leds_dirty = True
+
+        self._update_drone(self._engine.throttle)
 
         # Toggle switches: detect edges, play spoken confirmation
         if self._prev_sw0 is None:
@@ -287,18 +371,59 @@ class SpaceScreen(Screen):
             self._leds_dirty = False
             self._write_leds(state, frame)
 
+    # (freq_hz, duration_ms, wave) — one distinct sound per ship system
+    _BTN_SFX = [
+        (110, 220, "square"),  # 0 Thrusters  — deep engine pulse
+        (880, 100, "sine"),  # 1 Shields     — bright chime
+        (1320, 70, "sine"),  # 2 Scanner     — high-pitched ping
+        (440, 160, "square"),  # 3 Comms       — radio buzz
+        (587, 120, "triangle"),  # 4 Repair      — soft mid beep
+        (165, 250, "square"),  # 5 Cargo       — low thud
+        (1760, 55, "sine"),  # 6 Lights      — crisp click
+        (220, 320, "square"),  # 7 Horn        — long foghorn blast
+    ]
+
     def _play_btn_tone(self, btn):
-        """Play a unique tone for each button (ship system feedback)."""
-        # Map buttons 0–7 to pentatonic-ish frequencies
-        freqs = [261, 294, 329, 392, 440, 523, 587, 659]
-        freq = freqs[btn % len(freqs)]
-        self._audio.tone(freq, 150, "sine", channel="sfx")
+        """Play a ship-system sound for each button.
+
+        Uses a pre-cached WAV path if one was found at enter(); otherwise
+        falls back to the procedural tone defined in _BTN_SFX.
+        """
+        path = self._btn_wav_paths[btn] if self._btn_wav_paths else None
+        if path:
+            self._audio.play(path, channel="sfx")
+        else:
+            freq, dur, wave = self._BTN_SFX[btn % len(self._BTN_SFX)]
+            self._audio.tone(freq, dur, wave, channel="sfx")
+
+    # Engine drone: three throttle zones → three pitches
+    # Square wave at sub-bass frequencies gives a convincing engine rumble.
+    # 60 000 ms duration means it runs ~2 min before needing a re-trigger;
+    # zone changes re-trigger immediately with the new pitch.
+    _DRONE_FREQS = [55, 82, 110]  # zone 0/1/2 → A1 / E2 / A2
+
+    def _update_drone(self, throttle):
+        """Keep the engine drone in sync with the throttle zone."""
+        if not self._audio:
+            return
+        zone = 0 if throttle < 85 else (1 if throttle < 170 else 2)
+        if zone != self._drone_zone:
+            self._drone_zone = zone
+            self._audio.tone(self._DRONE_FREQS[zone], 60000, "square", channel="music")
 
     def _play_arc_tone(self, arc):
-        """Big satisfying tone for arcade buttons."""
-        freqs = [220, 277, 330, 415, 523]
-        freq = freqs[arc % len(freqs)]
-        self._audio.tone(freq, 250, "square", channel="sfx")
+        """Big satisfying tone for arcade buttons.
+
+        Uses a pre-cached WAV path if one was found at enter(); otherwise
+        falls back to the procedural tone.
+        """
+        path = self._arc_wav_paths[arc] if self._arc_wav_paths else None
+        if path:
+            self._audio.play(path, channel="sfx")
+        else:
+            freqs = [220, 277, 330, 415, 523]
+            freq = freqs[arc % len(freqs)]
+            self._audio.tone(freq, 250, "square", channel="sfx")
 
     def _speak_toggle(self, tts_key, state_on):
         """Speak a toggle confirmation; fall back to a short tone."""
@@ -329,7 +454,7 @@ class SpaceScreen(Screen):
 
         elif state in (ACTIVE, HINT):
             sc = self._engine.scenario_type
-            if sc == SC_LANDING:
+            if sc in (SC_LANDING, SC_COURSE):
                 tgt = self._engine.target_arc_idx
                 for i in range(5):
                     if i == tgt:
@@ -499,16 +624,8 @@ class SpaceScreen(Screen):
             instr = t(_SC_INSTR[sc])
             draw_centered(tft, instr, h // 2 - 16, theme.WHITE, w)
 
-        # For SC_COURSE: show coloured button hint
-        if sc == SC_COURSE and eng.target_btn_idx >= 0:
-            btn_col = theme.BTN_565[eng.target_btn_idx]
-            bw = 40
-            bx = (w - bw) // 2
-            by = h // 2 + 4
-            tft.fill_rect(bx, by, bw, 20, btn_col)
-
-        # For SC_LANDING: show arcade button colour swatch
-        if sc == SC_LANDING and eng.target_arc_idx >= 0:
+        # For SC_COURSE / SC_LANDING: show target arcade button colour swatch
+        if sc in (SC_COURSE, SC_LANDING) and eng.target_arc_idx >= 0:
             arc_rgb = ARC_COLORS[eng.target_arc_idx]
             # Convert RGB888 to RGB565
             r5 = (arc_rgb[0] >> 3) & 0x1F
