@@ -208,7 +208,7 @@ def _force_scenario(eng, sc_type, frame=0):
             if sc_type == SC_ASTEROID:
                 eng._steer_dir = 1
             elif sc_type == SC_COURSE:
-                eng._target_btn = 2
+                eng._target_arc = 2
             elif sc_type == SC_LANDING:
                 eng._target_arc = 1
             elif sc_type == SC_ENGINE:
@@ -254,17 +254,17 @@ class TestCourseScenario:
         eng = SpaceEngine()
         return _force_scenario(eng, SC_COURSE)
 
-    def test_correct_button_resolves(self):
+    def test_correct_arcade_button_resolves(self):
         eng, f = self._setup()
-        tgt = eng.target_btn_idx
-        ev = _tick(eng, f + 1, btn=tgt)
+        tgt = eng.target_arc_idx
+        ev = _tick(eng, f + 1, arc=tgt)
         assert ev == "success"
 
-    def test_wrong_button_does_not_resolve(self):
+    def test_wrong_arcade_button_does_not_resolve(self):
         eng, f = self._setup()
-        tgt = eng.target_btn_idx
-        wrong = (tgt + 1) % 6
-        ev = _tick(eng, f + 1, btn=wrong)
+        tgt = eng.target_arc_idx
+        wrong = (tgt + 1) % 5
+        ev = _tick(eng, f + 1, arc=wrong)
         assert ev is None
         assert eng.state == ACTIVE
 

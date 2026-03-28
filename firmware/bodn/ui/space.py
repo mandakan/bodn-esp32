@@ -39,27 +39,41 @@ from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY, SURPRISED
 
 NAV = const(0)  # config.ENC_NAV
 
-# SD sound paths for spaceship mode.
-# Drop WAV files on the card to override the procedural fallbacks:
-#   /sd/sounds/space/btn_0.wav … btn_7.wav   (8 ship-system buttons)
-#   /sd/sounds/space/arc_0.wav … arc_4.wav   (5 arcade emergency buttons)
-_BTN_WAV_TEMPLATE = "/sounds/space/btn_{}.wav"
-_ARC_WAV_TEMPLATE = "/sounds/space/arc_{}.wav"
+# Named WAV files under /sd/sounds/space/ (or flash fallback).
+# Drop files on the SD card to override procedural tones — no code changes needed.
+# Button names describe the ship system; arcade names match the button's LED colour.
+_BTN_WAV_NAMES = [
+    "thruster",
+    "shields",
+    "scanner",
+    "comms",
+    "repair",
+    "cargo",
+    "lights",
+    "horn",
+]
+_ARC_WAV_NAMES = [
+    "green",
+    "blue",
+    "white",
+    "yellow",
+    "red",
+]  # left-to-right physical order
+_SPACE_SND_DIR = "/sounds/space/"
 
 
-def _resolve_sound_paths(template, count):
-    """Resolve WAV paths for `count` files matching `template` at mode enter.
+def _resolve_sound_paths(names):
+    """Resolve WAV paths for a list of named sound files at mode enter.
 
-    Returns a list of `count` entries: a resolved path string if the file
-    exists (SD preferred, flash fallback), or None if absent.
+    Returns a list with a resolved path string for each file that exists
+    (SD preferred, flash fallback), or None if absent.
     Called once per mode entry — zero per-press overhead after that.
     """
     from bodn.assets import resolve
 
     paths = []
-    for i in range(count):
-        p = template.format(i)
-        resolved = resolve(p)
+    for name in names:
+        resolved = resolve(_SPACE_SND_DIR + name + ".wav")
         try:
             os.stat(resolved)
             paths.append(resolved)
@@ -162,8 +176,8 @@ class SpaceScreen(Screen):
         self._prev_sw0 = None  # reset so first-frame state is read without TTS
         self._prev_sw1 = None
         self._drone_zone = -1
-        self._btn_wav_paths = _resolve_sound_paths(_BTN_WAV_TEMPLATE, 8)
-        self._arc_wav_paths = _resolve_sound_paths(_ARC_WAV_TEMPLATE, 5)
+        self._btn_wav_paths = _resolve_sound_paths(_BTN_WAV_NAMES)
+        self._arc_wav_paths = _resolve_sound_paths(_ARC_WAV_NAMES)
         if self._arcade:
             self._arcade.all_off()
         # Welcome message
@@ -411,7 +425,7 @@ class SpaceScreen(Screen):
 
         elif state in (ACTIVE, HINT):
             sc = self._engine.scenario_type
-            if sc == SC_LANDING:
+            if sc in (SC_LANDING, SC_COURSE):
                 tgt = self._engine.target_arc_idx
                 for i in range(5):
                     if i == tgt:
@@ -581,16 +595,8 @@ class SpaceScreen(Screen):
             instr = t(_SC_INSTR[sc])
             draw_centered(tft, instr, h // 2 - 16, theme.WHITE, w)
 
-        # For SC_COURSE: show coloured button hint
-        if sc == SC_COURSE and eng.target_btn_idx >= 0:
-            btn_col = theme.BTN_565[eng.target_btn_idx]
-            bw = 40
-            bx = (w - bw) // 2
-            by = h // 2 + 4
-            tft.fill_rect(bx, by, bw, 20, btn_col)
-
-        # For SC_LANDING: show arcade button colour swatch
-        if sc == SC_LANDING and eng.target_arc_idx >= 0:
+        # For SC_COURSE / SC_LANDING: show target arcade button colour swatch
+        if sc in (SC_COURSE, SC_LANDING) and eng.target_arc_idx >= 0:
             arc_rgb = ARC_COLORS[eng.target_arc_idx]
             # Convert RGB888 to RGB565
             r5 = (arc_rgb[0] >> 3) & 0x1F

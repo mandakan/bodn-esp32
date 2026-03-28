@@ -23,7 +23,7 @@ HINT = const(4)  # first timeout — show hint, then retry
 
 # --- Scenario types ---
 SC_ASTEROID = const(0)  # turn steering encoder to dodge
-SC_COURSE = const(1)  # press the indicated coloured button
+SC_COURSE = const(1)  # press the indicated arcade button (LED pulses)
 SC_SHIELD = const(2)  # flip toggle switch 0 ON
 SC_ENGINE = const(3)  # push throttle encoder up (N clicks)
 SC_LANDING = const(4)  # press the indicated arcade button
@@ -42,23 +42,13 @@ TIMEOUTS = [240, 180, 150]  # level 1/2/3 → 8 s / 6 s / 5 s
 CRUISE_BASE = const(200)  # minimum frames between scenarios (~6.5 s)
 CRUISE_SPREAD = const(150)  # additional random frames (~5 s)
 
-# Arcade button colours (index 0–4 → yellow, red, blue, green, white)
+# Arcade button colours — physical left-to-right order
 ARC_COLORS = [
-    (255, 200, 0),  # yellow
-    (255, 30, 0),  # red
-    (0, 80, 255),  # blue
-    (0, 220, 50),  # green
-    (220, 220, 220),  # white
-]
-
-# Button colours for SC_COURSE (buttons 0–5)
-BTN_COLORS = [
-    (255, 0, 0),
-    (0, 255, 0),
-    (0, 0, 255),
-    (255, 255, 0),
-    (0, 255, 255),
-    (255, 0, 255),
+    (0, 220, 50),  # 0 green
+    (0, 80, 255),  # 1 blue
+    (220, 220, 220),  # 2 white
+    (255, 200, 0),  # 3 yellow
+    (255, 30, 0),  # 4 red
 ]
 
 
@@ -106,8 +96,7 @@ class SpaceEngine:
         self._timeouts = 0  # consecutive timeouts at current level
 
         # Internal scenario details
-        self._target_btn = -1  # SC_COURSE: which button to press
-        self._target_arc = -1  # SC_LANDING: which arcade button
+        self._target_arc = -1  # SC_COURSE / SC_LANDING: which arcade button
         self._steer_dir = 1  # SC_ASTEROID: 1=right, -1=left
         self._throttle_clicks = 0  # SC_ENGINE: clicks accumulated
         self._throttle_needed = 3  # SC_ENGINE: clicks required
@@ -187,9 +176,7 @@ class SpaceEngine:
     @property
     def target_color(self):
         """RGB of the target input for the current scenario, or None."""
-        if self.scenario_type == SC_COURSE and self._target_btn >= 0:
-            return BTN_COLORS[self._target_btn]
-        if self.scenario_type == SC_LANDING and self._target_arc >= 0:
+        if self.scenario_type in (SC_COURSE, SC_LANDING) and self._target_arc >= 0:
             return ARC_COLORS[self._target_arc]
         if self.scenario_type == SC_SHIELD:
             return (255, 50, 50)
@@ -200,13 +187,8 @@ class SpaceEngine:
         return None
 
     @property
-    def target_btn_idx(self):
-        """Button index for SC_COURSE, -1 otherwise."""
-        return self._target_btn
-
-    @property
     def target_arc_idx(self):
-        """Arcade button index for SC_LANDING, -1 otherwise."""
+        """Arcade button index for SC_COURSE or SC_LANDING, -1 otherwise."""
         return self._target_arc
 
     @property
@@ -244,7 +226,7 @@ class SpaceEngine:
         self._throttle_clicks = 0
 
         if sc == SC_COURSE:
-            self._target_btn = _rand8() % 6
+            self._target_arc = _rand8() % 5
         elif sc == SC_LANDING:
             self._target_arc = _rand8() % 5
         elif sc == SC_ASTEROID:
@@ -263,7 +245,7 @@ class SpaceEngine:
             # Correct steering direction
             return enc_b_delta * self._steer_dir > 0
         elif sc == SC_COURSE:
-            return btn == self._target_btn
+            return arc == self._target_arc
         elif sc == SC_SHIELD:
             return sw0 and not self._sw0_was_on
         elif sc == SC_ENGINE:
@@ -289,7 +271,6 @@ class SpaceEngine:
         self._timer = 0
         self._state_frame = frame
         self.scenario_type = -1
-        self._target_btn = -1
         self._target_arc = -1
         self._cruise_countdown = CRUISE_BASE + _rand8() % CRUISE_SPREAD
 
@@ -328,13 +309,11 @@ class SpaceEngine:
                 else:  # steer left → light stick A
                     for i in range(0, 8):
                         buf[i] = arrow_col
-            elif sc == SC_COURSE and self._target_btn >= 0:
-                # Target button lit bright, rest dim
-                tgt = _s(BTN_COLORS[self._target_btn], brightness)
-                dim = _s(BTN_COLORS[self._target_btn], brightness // 8)
-                buf[self._target_btn] = tgt
-                if self._target_btn < 8:
-                    buf[15 - self._target_btn] = dim
+            elif sc == SC_COURSE and self._target_arc >= 0:
+                # Sticks glow with the target arcade button's colour as ambient hint
+                c = _s(ARC_COLORS[self._target_arc], brightness // 3)
+                for i in range(n):
+                    buf[i] = c
             elif sc == SC_SHIELD:
                 # Alternating red warning
                 c = _s((255, 0, 0), brightness // 2)
