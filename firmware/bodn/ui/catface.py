@@ -11,6 +11,7 @@ NEUTRAL = "neutral"
 CURIOUS = "curious"
 HAPPY = "happy"
 SLEEPY = "sleepy"
+SURPRISED = "surprised"  # used by space mode; catface renders it as wide-eyed neutral
 
 
 class CatFaceScreen(Screen):
@@ -65,12 +66,13 @@ class CatFaceScreen(Screen):
                 dy = -(4 - abs(dx - 6)) if abs(dx - 6) <= 4 else 0
                 tft.fill_rect(47 + dx, 52 + dy, 2, 2, theme.BLACK)
                 tft.fill_rect(69 + dx, 52 + dy, 2, 2, theme.BLACK)
-        elif e == CURIOUS:
-            # Wide eyes — larger circles
-            _fill_circle(tft, 53, 54, 7, theme.WHITE)
-            _fill_circle(tft, 75, 54, 7, theme.WHITE)
-            _fill_circle(tft, 53, 54, 4, theme.BLACK)
-            _fill_circle(tft, 75, 54, 4, theme.BLACK)
+        elif e == CURIOUS or e == SURPRISED:
+            # Wide eyes — larger circles (surprised = extra wide)
+            r = 9 if e == SURPRISED else 7
+            _fill_circle(tft, 53, 54, r, theme.WHITE)
+            _fill_circle(tft, 75, 54, r, theme.WHITE)
+            _fill_circle(tft, 53, 54, r - 3, theme.BLACK)
+            _fill_circle(tft, 75, 54, r - 3, theme.BLACK)
             # Highlight
             tft.fill_rect(50, 51, 2, 2, theme.WHITE)
             tft.fill_rect(72, 51, 2, 2, theme.WHITE)

@@ -334,15 +334,17 @@ def create_ui(
 
     def _make_space():
         from bodn.ui.space import SpaceScreen
+        from bodn.ui.android import AndroidFaceScreen
 
-        _reset_secondary()
+        stellar = AndroidFaceScreen()
+        secondary.set_content(stellar)
         return SpaceScreen(
             np,
             overlay,
             audio=audio,
             arcade=arcade,
             settings=settings,
-            secondary_screen=cat,
+            secondary_screen=stellar,
             on_exit=_reset_secondary,
         )
 

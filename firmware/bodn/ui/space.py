@@ -35,7 +35,7 @@ from bodn.patterns import (
     zone_clear,
     ZONE_LID_RING,
 )
-from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY, SURPRISED
+from bodn.ui.android import NEUTRAL, CURIOUS, HAPPY, SURPRISED
 
 NAV = const(0)  # config.ENC_NAV
 
