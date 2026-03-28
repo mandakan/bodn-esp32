@@ -115,6 +115,7 @@ class SpaceScreen(Screen):
         self._active_state_frame = 0  # frame when ACTIVE began (for countdown)
         self._prev_sw0 = None  # None = not yet initialised
         self._prev_sw1 = None
+        self._drone_zone = -1  # current throttle zone (0/1/2), -1 = not started
 
     def enter(self, manager):
         self._manager = manager
@@ -127,6 +128,7 @@ class SpaceScreen(Screen):
         self._prev_state = None
         self._prev_sw0 = None  # reset so first-frame state is read without TTS
         self._prev_sw1 = None
+        self._drone_zone = -1
         if self._arcade:
             self._arcade.all_off()
         # Welcome message
@@ -139,6 +141,8 @@ class SpaceScreen(Screen):
                 pass
 
     def exit(self):
+        if self._audio:
+            self._audio.stop("music")
         if self._arcade:
             self._arcade.all_off()
         if self._on_exit:
@@ -246,7 +250,7 @@ class SpaceScreen(Screen):
             if self._secondary:
                 self._secondary.set_emotion(_STATE_EMOTIONS.get(state, NEUTRAL))
 
-        # Throttle/steering changes → redraw instruments
+        # Throttle/steering changes → redraw instruments + update drone pitch
         if (
             abs(self._engine.throttle - self._prev_throttle) >= 4
             or abs(self._engine.steering - self._prev_steering) >= 4
@@ -255,6 +259,8 @@ class SpaceScreen(Screen):
             self._prev_steering = self._engine.steering
             self._dirty = True
             self._leds_dirty = True
+
+        self._update_drone(self._engine.throttle)
 
         # Toggle switches: detect edges, play spoken confirmation
         if self._prev_sw0 is None:
@@ -287,12 +293,37 @@ class SpaceScreen(Screen):
             self._leds_dirty = False
             self._write_leds(state, frame)
 
+    # (freq_hz, duration_ms, wave) — one distinct sound per ship system
+    _BTN_SFX = [
+        (110, 220, "square"),  # 0 Thrusters  — deep engine pulse
+        (880, 100, "sine"),  # 1 Shields     — bright chime
+        (1320, 70, "sine"),  # 2 Scanner     — high-pitched ping
+        (440, 160, "square"),  # 3 Comms       — radio buzz
+        (587, 120, "triangle"),  # 4 Repair      — soft mid beep
+        (165, 250, "square"),  # 5 Cargo       — low thud
+        (1760, 55, "sine"),  # 6 Lights      — crisp click
+        (220, 320, "square"),  # 7 Horn        — long foghorn blast
+    ]
+
     def _play_btn_tone(self, btn):
-        """Play a unique tone for each button (ship system feedback)."""
-        # Map buttons 0–7 to pentatonic-ish frequencies
-        freqs = [261, 294, 329, 392, 440, 523, 587, 659]
-        freq = freqs[btn % len(freqs)]
-        self._audio.tone(freq, 150, "sine", channel="sfx")
+        """Play a ship-system sound for each button."""
+        freq, dur, wave = self._BTN_SFX[btn % len(self._BTN_SFX)]
+        self._audio.tone(freq, dur, wave, channel="sfx")
+
+    # Engine drone: three throttle zones → three pitches
+    # Square wave at sub-bass frequencies gives a convincing engine rumble.
+    # 60 000 ms duration means it runs ~2 min before needing a re-trigger;
+    # zone changes re-trigger immediately with the new pitch.
+    _DRONE_FREQS = [55, 82, 110]  # zone 0/1/2 → A1 / E2 / A2
+
+    def _update_drone(self, throttle):
+        """Keep the engine drone in sync with the throttle zone."""
+        if not self._audio:
+            return
+        zone = 0 if throttle < 85 else (1 if throttle < 170 else 2)
+        if zone != self._drone_zone:
+            self._drone_zone = zone
+            self._audio.tone(self._DRONE_FREQS[zone], 60000, "square", channel="music")
 
     def _play_arc_tone(self, arc):
         """Big satisfying tone for arcade buttons."""
