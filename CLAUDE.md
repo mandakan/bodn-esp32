@@ -5,7 +5,8 @@
 - **Target audience**: a 4-year-old child. Keep UX simple, colourful, and forgiving.
 - **Language**: MicroPython on ESP32-S3. No C/C++ unless absolutely required.
 - **Style**: keep modules small and self-contained. Prefer clarity over cleverness.
-- **Hardware**: check `firmware/bodn/config.py` before assigning pins. Non-time-critical I/O (buttons, toggles, status LEDs) should use the MCP23017 I2C expander; latency-sensitive peripherals (encoders, SPI, I2S) stay on native GPIOs. See `docs/hardware.md` for reserved pins and the GPIO budget.
+- **Hardware**: check `firmware/bodn/config.py` before assigning pins. Non-time-critical I/O (buttons, toggles, status LEDs) should use the MCP23017 I2C expanders; latency-sensitive peripherals (encoder CLK/DT, SPI, I2S) stay on native GPIOs. See `docs/hardware.md` for reserved pins and the GPIO budget.
+- **SD card**: media assets (sound banks, images, animations) live on `/sd/`. Use `from bodn.assets import resolve` to look up any asset path — it checks SD first, falls back to flash transparently. See `docs/assets.md` for the directory structure and asset management workflow. The SD card is mounted at boot; the device runs normally without one.
 - **Testing**: pure logic modules (debounce, UI state, audio format) are tested with `pytest` on the host. Hardware wrappers are tested on-device via `mpremote` or in Wokwi.
 - **Dependencies**: host tools are managed with `uv`. MicroPython libs go directly into `firmware/`.
 - **Pin assignments**: `firmware/bodn/config.py` is the single source of truth. Never hardcode GPIO numbers elsewhere.

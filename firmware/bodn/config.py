@@ -1,10 +1,11 @@
 # bodn/config.py — pin assignments and constants for ESP32-S3-DevKit-Lipo
 #
 # GPIO 35, 36, 37 are reserved by OSPI PSRAM on the N8R8 module — never use.
-# GPIO 19 is USB OTG D− — left unassigned so OTG port remains usable.
 # GPIO 20 (USB OTG D+) is used for 1-Wire (OTG port not used in this project).
 # GPIO 47 (SCL) and 48 (SDA) are reserved for the I2C bus (pUEXT pull-ups).
-# Buttons and toggle switches are on the MCP23017 I2C GPIO expander.
+# Buttons and toggle switches are on MCP1 (MCP23017 at 0x27) I2C GPIO expander.
+# Encoder push buttons are on MCP2 (MCP23017 at 0x26).
+# SD card uses a dedicated SPI3 bus on freed GPIOs (see SD card section below).
 
 from micropython import const
 
@@ -52,13 +53,12 @@ I2S_SPK_WS = const(45)
 I2S_SPK_DIN = const(7)  # GPIO 5 is PWR_SENS (board reserved)
 AMP_SD_PIN = const(3)  # amp shutdown — direct GPIO (PCA9685 glitches on boot)
 
-# Rotary encoders (KY-040) — must stay on native GPIO for IRQ latency
+# Rotary encoders (KY-040) — CLK/DT stay on native GPIO for IRQ latency.
+# Push buttons (SW) moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.
 ENC1_CLK = const(21)  # CLK was 19 (USB OTG D−) → moved to 21
 ENC1_DT = const(18)
-ENC1_SW = const(17)
 ENC2_CLK = const(16)
 ENC2_DT = const(44)
-ENC2_SW = const(40)
 
 # Encoder role indices — two encoders, NAV doubles as parameter B in game modes:
 #   ENC1 = NAV   (left,  menu scroll + back button; rotation = param B in games)
@@ -105,9 +105,23 @@ BAT_SHUTDOWN_MV = const(3100)  # ~2 % — forced light sleep to protect cell
 I2C_SCL = const(47)
 I2C_SDA = const(48)
 
-# MCP23017 GPIO expander — buttons and toggles over I2C
+# MCP1 — MCP23017 GPIO expander: buttons, toggles, arcade switches over I2C
 MCP23017_ADDR = const(0x27)  # A0-A2 jumpers all high (Waveshare default)
 MCP_INT_PIN = const(46)  # MCP23017 INTA/INTB → GPIO 46 (active-low, open-drain)
+
+# MCP2 — second MCP23017: encoder push buttons (frees GPIOs 17/40 for SD SPI3)
+MCP2_ADDR = const(0x26)  # A0 jumper low, A1-A2 high (differs from MCP1)
+MCP2_ENC1_SW = const(0)  # GPA0 — ENC1 push button (was GPIO 17)
+MCP2_ENC2_SW = const(1)  # GPA1 — ENC2 push button (was GPIO 40)
+
+# SD card — dedicated SPI3 bus on ILI9341 display breakout SD slot
+# GPIOs 17 and 40 freed by moving encoder buttons to MCP2.
+# GPIO 0: strapping pin with pull-up → CS deasserted at boot (safe default).
+# GPIO 19: previously reserved for touch CS (touch dropped).
+SD_CS = const(0)  # SD chip select (strapping pull-up = deasserted at boot)
+SD_SCK = const(17)  # freed from ENC1_SW
+SD_MOSI = const(40)  # freed from ENC2_SW
+SD_MISO = const(19)  # previously reserved for touch CS
 MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
 MCP_SW_PINS = [8, 9]  # GPB0–GPB1 (2 toggle switches; GPB2–3 freed for arcade)
 MCP_MASTER_SW_PIN = const(12)  # GPB4 — red-cover flip switch (active-low: 0 = ON)
