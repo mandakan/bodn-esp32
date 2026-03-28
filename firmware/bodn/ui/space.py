@@ -80,9 +80,9 @@ class SpaceScreen(Screen):
     Encoder A (right): throttle (engine speed).
     Encoder B / Nav (left): steering (course heading).
     Buttons 0–7: ship systems (sounds + LED feedback).
-    Toggle 0: shields on/off.
-    Toggle 1: stealth mode.
-    Arcade 0–4: emergency action stations.
+    Toggle 0: shields on/off — spoken confirmation on every toggle.
+    Toggle 1: stealth mode — spoken confirmation on every toggle.
+    Arcade 0–4: emergency action stations; target LED pulses during SC_LANDING.
     Hold nav encoder button to pause.
     """
 
@@ -91,6 +91,7 @@ class SpaceScreen(Screen):
         np,
         overlay,
         audio=None,
+        arcade=None,
         settings=None,
         secondary_screen=None,
         on_exit=None,
@@ -98,6 +99,7 @@ class SpaceScreen(Screen):
         self._np = np
         self._overlay = overlay
         self._audio = audio
+        self._arcade = arcade
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = SpaceEngine()
@@ -111,6 +113,8 @@ class SpaceScreen(Screen):
         self._prev_throttle = 128
         self._prev_steering = 0
         self._active_state_frame = 0  # frame when ACTIVE began (for countdown)
+        self._prev_sw0 = None  # None = not yet initialised
+        self._prev_sw1 = None
 
     def enter(self, manager):
         self._manager = manager
@@ -121,6 +125,10 @@ class SpaceScreen(Screen):
         self._full_clear = True
         self._leds_dirty = True
         self._prev_state = None
+        self._prev_sw0 = None  # reset so first-frame state is read without TTS
+        self._prev_sw1 = None
+        if self._arcade:
+            self._arcade.all_off()
         # Welcome message
         if self._audio:
             try:
@@ -131,6 +139,8 @@ class SpaceScreen(Screen):
                 pass
 
     def exit(self):
+        if self._arcade:
+            self._arcade.all_off()
         if self._on_exit:
             self._on_exit()
 
@@ -246,9 +256,23 @@ class SpaceScreen(Screen):
             self._dirty = True
             self._leds_dirty = True
 
-        # Shield toggle → audio feedback
-        if sw0 != (self._prev_state == SUCCESS):  # simple change detect
-            pass  # shield audio handled as ambient in _update_ambient_audio
+        # Toggle switches: detect edges, play spoken confirmation
+        if self._prev_sw0 is None:
+            self._prev_sw0 = sw0  # initialise silently on first frame
+        elif sw0 != self._prev_sw0:
+            self._prev_sw0 = sw0
+            self._speak_toggle("space_shield_on" if sw0 else "space_shield_off", sw0)
+            self._dirty = True
+
+        if self._prev_sw1 is None:
+            self._prev_sw1 = sw1
+        elif sw1 != self._prev_sw1:
+            self._prev_sw1 = sw1
+            self._speak_toggle("space_stealth_on" if sw1 else "space_stealth_off", sw1)
+            self._dirty = True
+
+        # Arcade LEDs — called every frame (animation driven by frame counter)
+        self._update_arcade_leds(state, frame)
 
         # Brightness from encoder A
         prev_bri = self._brightness.value
@@ -275,6 +299,60 @@ class SpaceScreen(Screen):
         freqs = [220, 277, 330, 415, 523]
         freq = freqs[arc % len(freqs)]
         self._audio.tone(freq, 250, "square", channel="sfx")
+
+    def _speak_toggle(self, tts_key, state_on):
+        """Speak a toggle confirmation; fall back to a short tone."""
+        if not self._audio:
+            return
+        try:
+            from bodn import tts
+
+            if not tts.say(tts_key, self._audio):
+                # Fallback: rising tone for ON, falling for OFF
+                self._audio.tone(880 if state_on else 440, 120, "sine", channel="ui")
+        except Exception:
+            pass
+
+    def _update_arcade_leds(self, state, frame):
+        """Drive arcade button LEDs based on game state.
+
+        Called every frame from update() so animations stay smooth.
+        All LED writes are no-ops when self._arcade is None.
+        """
+        arc = self._arcade
+        if arc is None:
+            return
+
+        if state == SUCCESS:
+            # All buttons lit solid briefly
+            arc.set_all_leds(220)
+
+        elif state in (ACTIVE, HINT):
+            sc = self._engine.scenario_type
+            if sc == SC_LANDING:
+                tgt = self._engine.target_arc_idx
+                for i in range(5):
+                    if i == tgt:
+                        arc.pulse_led(i, frame, speed=5)  # fast bright pulse
+                    else:
+                        arc.set_led(i, 18)  # dim background
+            else:
+                # Slow uniform heartbeat — buttons are "on standby"
+                for i in range(5):
+                    arc.pulse_led(i, frame, speed=1)
+
+        elif state == ANNOUNCE:
+            # Fast unified flash — alert!
+            for i in range(5):
+                arc.pulse_led(i, frame, speed=4)
+
+        elif state == CRUISING:
+            # Gentle slow heartbeat — ship is alive
+            for i in range(5):
+                arc.pulse_led(i, frame, speed=1)
+
+        else:
+            arc.set_all_leds(0)
 
     def _write_leds(self, state, frame):
         """Update NeoPixel sticks and lid ring."""

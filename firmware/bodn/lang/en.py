@@ -192,6 +192,10 @@ STRINGS = {
     "space_sc_landing": "A planet! Press the landing button!",
     "space_hint": "Try again! You can do it, captain!",
     "space_success": "Great job, captain!",
+    "space_shield_on": "Shield activated!",
+    "space_shield_off": "Shield deactivated.",
+    "space_stealth_on": "Stealth mode activated.",
+    "space_stealth_off": "Stealth mode deactivated.",
     # Boot screen
     "boot_cfg": "Waking up...",
     "boot_net": "Finding friends...",

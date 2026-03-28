@@ -26,6 +26,10 @@
     "space_sc_landing":    { "storage": "sd" },
     "space_hint":          { "storage": "sd" },
     "space_success":       { "storage": "sd" },
+    "space_shield_on":    { "storage": "flash" },
+    "space_shield_off":   { "storage": "flash" },
+    "space_stealth_on":   { "storage": "flash" },
+    "space_stealth_off":  { "storage": "flash" },
     "bat_critical":       { "storage": "flash" },
     "bat_low":            { "storage": "flash" },
     "overlay_goodnight":  { "storage": "flash" }

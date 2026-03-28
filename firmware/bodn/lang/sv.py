@@ -192,6 +192,10 @@ STRINGS = {
     "space_sc_landing": "En planet! Tryck på landning!",
     "space_hint": "Försök igen! Du klarar det, kapten!",
     "space_success": "Bra jobbat, kapten!",
+    "space_shield_on": "Skölden är aktiverad!",
+    "space_shield_off": "Skölden är inaktiverad.",
+    "space_stealth_on": "Smygläge aktiverat.",
+    "space_stealth_off": "Smygläge inaktiverat.",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_net": "Söker vänner...",

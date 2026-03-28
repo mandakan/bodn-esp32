@@ -340,6 +340,7 @@ def create_ui(
             np,
             overlay,
             audio=audio,
+            arcade=arcade,
             settings=settings,
             secondary_screen=cat,
             on_exit=_reset_secondary,
