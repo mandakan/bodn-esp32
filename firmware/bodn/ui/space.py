@@ -39,20 +39,49 @@ from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY, SURPRISED
 
 NAV = const(0)  # config.ENC_NAV
 
-# Named WAV files under /sd/sounds/space/ (or flash fallback).
-# Drop files on the SD card to override procedural tones — no code changes needed.
-# Button names describe the ship system; arcade names match the button's LED colour.
+# ─────────────────────────────────────────────────────────────────────────────
+# AUDIO — WAV override system
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Every sound has a procedural fallback (tone) that plays when no WAV file is
+# present.  To add real sounds, drop WAV files on the SD card — no code changes
+# needed.  Paths are resolved once at mode enter (see _resolve_sound_paths) so
+# there is zero per-press overhead during play.
+#
+# Directory: /sd/sounds/space/
+#
+# Regular buttons (0–7) — named by ship system (index = list position):
+#   thruster.wav  shields.wav  scanner.wav  comms.wav
+#   repair.wav    cargo.wav    lights.wav   horn.wav
+#
+# Arcade buttons (0–4) — named by role (see space_rules.ARC_* constants):
+#   land.wav  course.wav  engines.wav  repair.wav  distress.wav
+#
+# TTS announcements live separately — see assets/audio/tts.json ("storage":"sd").
+# To add a new scenario sound: add its i18n key there and run tools/generate_tts.py.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Regular button sounds — index matches button index 0–7
 _BTN_WAV_NAMES = [
-    "thruster",
-    "shields",
-    "scanner",
-    "comms",
-    "repair",
-    "cargo",
-    "lights",
-    "horn",
+    "thruster",  # 0
+    "shields",  # 1
+    "scanner",  # 2
+    "comms",  # 3
+    "repair",  # 4
+    "cargo",  # 5
+    "lights",  # 6
+    "horn",  # 7
 ]
-_ARC_WAV_NAMES = ["land", "course", "engines", "repair", "distress"]
+
+# Arcade button sounds — index matches ARC_* constants in space_rules
+_ARC_WAV_NAMES = [
+    "land",  # 0 ARC_LAND     green
+    "course",  # 1 ARC_COURSE   blue
+    "engines",  # 2 ARC_ENGINES  white
+    "repair",  # 3 ARC_REPAIR   yellow
+    "distress",  # 4 ARC_DISTRESS red
+]
+
 _SPACE_SND_DIR = "/sounds/space/"
 
 
@@ -76,31 +105,37 @@ def _resolve_sound_paths(names):
     return paths
 
 
-# Scenario type → TTS key (played on "announce" event)
+# ─────────────────────────────────────────────────────────────────────────────
+# SCENARIO LOOKUP TABLES
+# Indexed by SC_* constant from space_rules.  Add a new entry to all three
+# lists when adding a scenario (keep them in sync with NUM_SCENARIOS).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# TTS key spoken by Stellar on the "announce" event
 _SC_TTS = [
-    "space_sc_asteroid",
-    "space_sc_course",
-    "space_sc_shield",
-    "space_sc_engine",
-    "space_sc_landing",
+    "space_sc_asteroid",  # SC_ASTEROID
+    "space_sc_course",  # SC_COURSE
+    "space_sc_shield",  # SC_SHIELD
+    "space_sc_engine",  # SC_ENGINE
+    "space_sc_landing",  # SC_LANDING
 ]
 
-# Scenario type → short display label key
+# Short display label shown on screen during ANNOUNCE and ACTIVE
 _SC_LABEL = [
-    "space_sc_asteroid_short",
-    "space_sc_course_short",
-    "space_sc_shield_short",
-    "space_sc_engine_short",
-    "space_sc_landing_short",
+    "space_sc_asteroid_short",  # SC_ASTEROID
+    "space_sc_course_short",  # SC_COURSE
+    "space_sc_shield_short",  # SC_SHIELD
+    "space_sc_engine_short",  # SC_ENGINE
+    "space_sc_landing_short",  # SC_LANDING
 ]
 
-# Scenario type → instruction key
+# Instruction text shown during ACTIVE ("what to do")
 _SC_INSTR = [
-    "space_instr_asteroid",
-    "space_instr_course",
-    "space_instr_shield",
-    "space_instr_engine",
-    "space_instr_landing",
+    "space_instr_asteroid",  # SC_ASTEROID
+    "space_instr_course",  # SC_COURSE
+    "space_instr_shield",  # SC_SHIELD
+    "space_instr_engine",  # SC_ENGINE
+    "space_instr_landing",  # SC_LANDING
 ]
 
 # Cat face emotions per state

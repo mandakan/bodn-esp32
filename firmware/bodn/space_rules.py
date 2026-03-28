@@ -8,6 +8,52 @@
 #   Working memory   — remember which system needs attention
 #   Inhibitory control — wait for the right moment, then act
 #   Cognitive flexibility — switch between different scenario types
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# INPUT MAP
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   Encoder A (throttle)     — always tracked, drives engine drone pitch
+#   Encoder B (steering)     — always tracked, drives steering indicator
+#   Toggle sw0 (shields)     — always tracked; spoken confirmation on change
+#   Toggle sw1 (stealth)     — always tracked; spoken confirmation on change
+#   Buttons 0–7              — ambient ship-system sounds only (no scenario target)
+#   Arcade 0–4               — scenario targets + PCA9685 LED brightness hints
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ARCADE BUTTON ROLES  (fixed mapping — physical left-to-right)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   Index  Constant      Colour   Role              Sound file
+#   ─────────────────────────────────────────────────────────
+#     0    ARC_LAND      green    Landing           land.wav
+#     1    ARC_COURSE    blue     Course correction course.wav
+#     2    ARC_ENGINES   white    Engines           engines.wav
+#     3    ARC_REPAIR    yellow   Repair            repair.wav
+#     4    ARC_DISTRESS  red      Distress          distress.wav
+#
+#   LED brightness is 12-bit PWM (0–4095) via PCA9685.  The colour itself is
+#   fixed hardware; only brightness changes.  Remap by changing the ARC_*
+#   constants — the scenario logic references constants, not raw indices.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# HOW TO ADD A SCENARIO
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   1. Add a SC_* constant and increment NUM_SCENARIOS.
+#   2. Add i18n keys (see firmware/bodn/lang/sv.py and en.py):
+#        space_sc_<name>        — TTS announcement (full sentence)
+#        space_sc_<name>_short  — short display label
+#        space_instr_<name>     — on-screen instruction text
+#   3. In _pick_scenario(): add an elif branch to set up scenario state
+#      (e.g. pick a target arcade button via an ARC_* constant).
+#   4. In _check_solution(): add an elif branch returning True when solved.
+#   5. In make_static_leds(): add a branch for stick LED hint visuals.
+#   6. In space.py _update_arcade_leds(): add the scenario to the
+#      (SC_LANDING, SC_COURSE) tuple if an arcade LED should pulse.
+#   7. In space.py _render_active(): add rendering for any on-screen hints.
+#   8. Add TTS key to assets/audio/tts.json with "storage": "sd".
+#   9. Add tests in tests/test_space_rules.py.
 
 import os
 
