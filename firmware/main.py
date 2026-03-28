@@ -332,6 +332,20 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_space():
+        from bodn.ui.space import SpaceScreen
+
+        _reset_secondary()
+        return SpaceScreen(
+            np,
+            overlay,
+            audio=audio,
+            arcade=arcade,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
+        )
+
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
 
@@ -344,6 +358,7 @@ def create_ui(
         "rulefollow": _make_rulefollow,
         "flode": _make_flode,
         "garden": _make_garden,
+        "space": _make_space,
         "soundboard": _make_soundboard,
         "demo": lambda: (
             _reset_secondary(),
@@ -356,6 +371,7 @@ def create_ui(
         "mystery",
         "simon",
         "rulefollow",
+        "space",
         "flode",
         "garden",
         "soundboard",

@@ -456,6 +456,44 @@ ICON_SOUNDBOARD = bytes(
     ]
 )
 
+# Rocket — Spaceship Cockpit mode
+ICON_SPACE = bytes(
+    [
+        0x03,
+        0x00,  # ......##........  tip
+        0x07,
+        0x80,  # .....####.......  nose
+        0x0F,
+        0xC0,  # ....######......
+        0x0F,
+        0xC0,  # ....######......
+        0x1F,
+        0xE0,  # ...########.....
+        0x1F,
+        0xE0,  # ...########.....
+        0x3F,
+        0xF0,  # ..##########....  widest
+        0x3F,
+        0xF0,  # ..##########....
+        0x1F,
+        0xE0,  # ...########.....
+        0x1F,
+        0xE0,  # ...########.....
+        0x4F,
+        0xC8,  # .#..######..#...  fins
+        0x4F,
+        0xC8,  # .#..######..#...
+        0x0F,
+        0xC0,  # ....######......
+        0x07,
+        0x80,  # .....####.......  nozzle
+        0x0F,
+        0xC0,  # ....######......  exhaust
+        0x0F,
+        0xC0,  # ....######......
+    ]
+)
+
 MODE_ICONS = {
     "soundboard": ICON_SOUNDBOARD,
     "demo": ICON_DEMO,
@@ -469,4 +507,5 @@ MODE_ICONS = {
     "rulefollow": ICON_RULEFOLLOW,
     "flode": ICON_FLODE,
     "garden": ICON_GARDEN,
+    "space": ICON_SPACE,
 }
