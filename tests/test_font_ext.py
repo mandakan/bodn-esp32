@@ -8,6 +8,15 @@ class TestFontExt:
         for ch in "åäöÅÄÖ":
             assert ch in GLYPHS, "Missing glyph for '{}'".format(ch)
 
+    def test_eth_chars_present(self):
+        for ch in "ðÐ":
+            assert ch in GLYPHS, "Missing glyph for '{}'".format(ch)
+
+    def test_eth_has_crossbar(self):
+        """ð crossbar is row 1 (0x7E); Ð crossbar is row 3 (0xFE)."""
+        assert GLYPHS["ð"][1] == 0x7E, "ð missing crossbar"
+        assert GLYPHS["Ð"][3] == 0xFE, "Ð missing crossbar"
+
     def test_glyph_size(self):
         """Each glyph must be exactly 8 bytes (8 rows × 1 byte)."""
         for ch, data in GLYPHS.items():

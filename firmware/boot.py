@@ -195,7 +195,7 @@ def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
         logo_w = 16 * logo_scale
         logo_h = 16 * logo_scale
         # Center logo + name as a unit
-        title = "Bodn"
+        title = "Böðn"
         title_w = len(title) * 8
         block_h = logo_h + 4 + 8  # logo + gap + text height
         ly = max(2, (h * 3 // 8 - block_h) // 2)
@@ -204,7 +204,7 @@ def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
         tx = (w - title_w) // 2
         _boot_text(tft, title, tx, ly + logo_h + 4, COL_TITLE)
     else:
-        title = "~ Bodn ~"
+        title = "~ Böðn ~"
         tx = (w - len(title) * 8) // 2
         _boot_text(tft, title, tx, h // 8, COL_TITLE)
 
