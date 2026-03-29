@@ -32,6 +32,17 @@ assets/audio/source/**/*.m4a
 # Backup files
 *.bak
 
+# LaTeX build artefacts (docs/science/report.pdf is the only output worth keeping)
+docs/science/report.aux
+docs/science/report.bbl
+docs/science/report.blg
+docs/science/report.log
+docs/science/report.out
+docs/science/report.toc
+docs/science/report.fls
+docs/science/report.fdb_latexmk
+docs/science/report.synctex.gz
+
 # OS
 .DS_Store
 build/

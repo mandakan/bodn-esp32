@@ -235,6 +235,23 @@ See [`docs/roadmap.md`](docs/roadmap.md) for detailed milestones.
 4. ~~**Parental controls**~~ — web UI, session limits, OTA, FTP sync ✓
 5. **Quality-of-life** — battery indicator, temperature monitoring, i18n (Swedish/English) ✓
 
+## Developmental foundations
+
+Every game mode is grounded in developmental science — executive functions,
+sensorimotor skills, guided play, and tangible interface research. Three
+companion documents live in [`docs/science/`](docs/science/):
+
+- **[Development Matrix](docs/science/development_matrix.md)** — feature × developmental aspect coverage, gap analysis, and age progression timeline
+- **[Development Guide](docs/science/development_guide.md)** — plain-language overview for parents and educators
+- **[Report](docs/science/report.tex)** — scientific report skeleton with proper citations ([bibliography](docs/science/report.bib))
+
+Build the report PDF (requires a TeX distribution):
+
+```bash
+docs/science/build.sh        # render report.pdf
+docs/science/build.sh clean  # remove build artefacts
+```
+
 ## Design goals
 
 - **Cheap-ish**: ≤ 1500 SEK total

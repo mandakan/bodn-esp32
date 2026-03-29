@@ -1,0 +1,486 @@
+% report.tex — Skeleton for a scientific report on Bodn's developmental foundations
+%
+% Compile with: ./build.sh (or: latexmk -pdf report.tex)
+%
+% This is a SKELETON — sections marked [TODO] need expansion with original writing.
+% Citations are real and verifiable; verify DOIs before final submission.
+
+\documentclass[12pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+\usepackage{natbib}
+\bibliographystyle{apalike}
+\usepackage{enumitem}
+
+% --- Title ---
+\title{Developmental Foundations of Tangible Interactive Learning Systems\\
+       for Early Childhood:\\
+       \large The Bodn Project}
+\author{
+  Mathias [Surname]\\
+  {\small [Affiliation or independent researcher]}\\
+  {\small \texttt{[email]}}
+}
+\date{\today}
+
+% =============================================================================
+\begin{document}
+\maketitle
+
+% --- Abstract ---
+\begin{abstract}
+Bodn is an open-source, battery-powered tangible learning system designed for
+children aged 3--7. The device combines physical controls (buttons, rotary
+encoders, toggle switches) with multimodal feedback (LED animations, synthesized
+audio, screen graphics) to deliver play experiences that target core executive
+functions---working memory, inhibitory control, and cognitive flexibility---as
+well as sensorimotor, cognitive, language, and social-emotional development.
+This paper reviews the developmental science that informs Bodn's design,
+maps each feature to established developmental domains, and identifies areas
+for future development. We argue that tangible interfaces offer advantages over
+touchscreen-only systems for early childhood learning, and that game-based,
+guided play can meaningfully support executive function development during the
+critical preschool window.
+
+\medskip
+\noindent\textbf{Keywords:} executive functions, tangible user interfaces,
+early childhood, guided play, physical computing, open-source hardware
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Introduction}
+\label{sec:introduction}
+
+The preschool years (ages 3--7) represent a critical period for the development
+of executive functions (EF)---the cognitive control processes that enable
+goal-directed behaviour \citep{diamond2013executive}. A large body of evidence
+links early EF to school readiness \citep{blair2007relating}, social competence,
+and lifelong well-being \citep{moffitt2011gradient}. Unlike IQ, which is
+relatively stable, executive functions are highly malleable during early
+childhood and respond to targeted practice
+\citep{diamond2013executive, montroy2016development}.
+
+At the same time, the proliferation of touchscreen devices has raised concerns
+about passive screen time in young children \citep{radesky2015mobile}. The
+World Health Organization recommends no more than one hour of sedentary screen
+time per day for children aged 2--4 \citep{who2019guidelines}. This creates a
+tension: digital systems can deliver adaptive, engaging practice that physical
+toys cannot, yet the medium itself may undermine the developmental benefits.
+
+Tangible user interfaces (TUI)---physical objects that bridge the digital and
+physical worlds---offer a potential resolution. Since \citet{ishii1997tangible}
+introduced the concept, a growing literature has explored TUI for educational
+contexts, finding advantages in engagement, spatial understanding, and
+embodied learning \citep{marshall2007tangible, price2003tangibles}.
+
+This paper presents \textbf{Bodn}, an open-source tangible learning system that
+combines physical controls with adaptive, game-based experiences designed around
+the developmental science of early childhood. We review the theoretical
+foundations, describe the system design, map each feature to developmental
+domains, and identify directions for future work.
+
+% =============================================================================
+\section{Background}
+\label{sec:background}
+
+% --- 2.1 Executive Functions ---
+\subsection{Executive Functions in Early Childhood}
+\label{sec:ef}
+
+\citet{miyake2000unity} proposed the influential three-factor model of executive
+functions: \emph{working memory} (updating), \emph{inhibitory control}
+(inhibition), and \emph{cognitive flexibility} (shifting). While originally
+validated in adults, subsequent work has confirmed this structure in preschoolers,
+with important developmental nuances \citep{montroy2016development}.
+
+\textbf{Working memory} is the ability to hold and manipulate information in
+mind. In 4-year-olds, typical capacity is 2--4 items \citep{diamond2013executive}.
+Tasks like remembering a sequence of coloured lights and reproducing it from
+memory directly exercise this capacity.
+
+\textbf{Inhibitory control} encompasses both response inhibition (suppressing a
+prepotent motor response) and interference control (resisting distracting
+information). The classic ``day--night'' task, where children must say ``night''
+when shown a sun card, illustrates the challenge for preschoolers
+\citep{diamond2013executive}.
+
+\textbf{Cognitive flexibility} requires disengaging from one rule set and
+engaging a new one. The Dimensional Change Card Sort (DCCS) task
+\citep{zelazo2006dccs} is the standard assessment: children sort cards first by
+colour, then by shape. Most 3-year-olds fail the switch; most 5-year-olds
+succeed. The transition period (ages 3--5) represents a critical window for
+practice.
+
+% [TODO: Expand with developmental trajectory data and EF training literature]
+
+% --- 2.2 Guided Play ---
+\subsection{Guided Play and Playful Learning}
+\label{sec:guided_play}
+
+\citet{weisberg2013guided} define guided play as adult-scaffolded activities
+where children explore within a structured environment designed to make
+discovery productive. Guided play occupies a middle ground between free play
+(child-directed, no adult structure) and direct instruction (adult-directed,
+no child agency). Evidence suggests that guided play produces deeper learning
+than either extreme for concept acquisition and problem-solving
+\citep{hirshpasek2015putting}.
+
+% [TODO: Expand with specific studies on guided play and EF outcomes]
+
+% --- 2.3 Tangible User Interfaces ---
+\subsection{Tangible User Interfaces for Young Children}
+\label{sec:tui}
+
+\citet{ishii1997tangible} introduced the concept of tangible user interfaces
+as a way to ``give physical form to digital information.'' For young children,
+who are still developing fine motor skills and abstract thinking, the physical
+affordances of tangible interfaces offer several advantages over touchscreens:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Embodied interaction}: Physical manipulation engages motor
+    planning, proprioception, and spatial reasoning simultaneously
+    \citep{price2003tangibles}.
+  \item \textbf{Reduced cognitive load}: Physical affordances (a button looks
+    pressable, a knob looks turnable) reduce the interface learning burden,
+    freeing cognitive resources for content \citep{marshall2007tangible}.
+  \item \textbf{Multimodal feedback}: Tactile confirmation (button click,
+    encoder detent) combines with visual and auditory feedback to strengthen
+    sensorimotor associations.
+\end{itemize}
+
+% [TODO: Expand with TUI studies specifically targeting preschool age]
+
+% --- 2.4 Multimodal Feedback and Sensory Integration ---
+\subsection{Multimodal Feedback and Sensory Integration}
+\label{sec:multimodal}
+
+Young children benefit from redundant, multimodal feedback---receiving the same
+information through multiple sensory channels simultaneously
+\citep{price2003tangibles}. In Bodn, every user action produces visual
+(LED/screen), auditory (tone/sound), and tactile (physical click/detent)
+feedback. This redundancy:
+
+\begin{itemize}[noitemsep]
+  \item Strengthens cross-modal neural connections
+  \item Provides confirmation even if one channel is missed
+  \item Supports different learning preferences and sensory profiles
+\end{itemize}
+
+% [TODO: Cite specific multisensory integration studies in early childhood]
+
+% --- 2.5 Music and Auditory Development ---
+\subsection{Auditory Processing and Musical Exposure}
+\label{sec:auditory}
+
+Early exposure to structured sound environments supports auditory processing
+skills that underpin language acquisition and musical development
+\citep{kraus2010music, trainor2005critical}. Active sound production (as
+opposed to passive listening) is particularly effective.
+
+% [TODO: Expand with findings on sound categorisation and auditory discrimination]
+
+% --- 2.6 Bilingualism ---
+\subsection{Bilingualism and Executive Function}
+\label{sec:bilingualism}
+
+A substantial literature documents enhanced executive functions in bilingual
+children, attributed to the constant need to manage two active language systems
+\citep{bialystok2011reshaping}. The bilingual advantage is most pronounced for
+inhibitory control and cognitive flexibility---the same skills that Bodn's
+game modes target.
+
+% [TODO: Discuss the bilingual advantage debate (Paap et al., 2015 critique)
+%  and the specific context of Swedish-English bilingualism]
+
+% --- 2.7 Pretend Play ---
+\subsection{Pretend Play and Social-Cognitive Development}
+\label{sec:pretend_play}
+
+\citet{lillard2013impact} reviewed the evidence linking pretend play to
+cognitive development, finding associations with theory of mind, narrative
+skills, and emotional understanding. While the causal direction remains debated,
+the correlational evidence is strong, and pretend play is universally observed
+across cultures during the preschool years.
+
+% [TODO: Discuss the Spaceship cockpit mode as structured pretend play]
+
+% --- 2.8 Growth Mindset and Failure Tolerance ---
+\subsection{Feedback, Failure, and Growth Mindset}
+\label{sec:mindset}
+
+\citet{dweck2006mindset} distinguishes between fixed mindset (ability is innate)
+and growth mindset (ability develops through effort). The type of feedback
+children receive after failure shapes which mindset they develop. Process-focused
+feedback (``You tried a different strategy, good!'') promotes growth mindset;
+outcome-focused feedback (``Wrong!'') promotes fixed mindset.
+
+Bodn's feedback design follows this principle: errors produce soft, warm cues
+(gentle tone, dim red glow) rather than punitive signals. The intent is to
+frame failure as information, not judgement.
+
+% [TODO: Expand with specific feedback design decisions and their rationale]
+
+% =============================================================================
+\section{System Design}
+\label{sec:system}
+
+% --- 3.1 Hardware ---
+\subsection{Hardware Architecture}
+\label{sec:hardware}
+
+Bodn is built around an ESP32-S3 microcontroller with the following physical
+interface components:
+
+\begin{itemize}[noitemsep]
+  \item 8 mini push buttons (colour-coded, via MCP23017 I2C expander)
+  \item 5 arcade buttons with PWM-controlled LEDs (via PCA9685)
+  \item 2 toggle switches (via MCP23017)
+  \item 3 rotary encoders with push buttons (navigation, volume, throttle)
+  \item 2.8'' ILI9341 TFT primary display (240$\times$320, landscape)
+  \item 1.8'' ST7735 TFT secondary display (128$\times$160, portrait)
+  \item 2$\times$ WS2812 8-LED sticks + 92-LED perimeter strip (RGB)
+  \item MAX98357A I2S amplifier with 3W speaker
+  \item INMP441 I2S MEMS microphone
+  \item 6600\,mAh LiPo battery with thermal monitoring (DS18B20$\times$2)
+\end{itemize}
+
+% [TODO: Add hardware diagram or reference to docs/hardware.md]
+
+% --- 3.2 Software Architecture ---
+\subsection{Software Architecture}
+\label{sec:software}
+
+The firmware is written in MicroPython and follows a modular architecture:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Rule engines} (\texttt{*\_rules.py}): Pure logic modules with
+    no hardware dependencies, testable via standard pytest on the host.
+  \item \textbf{Screen modules} (\texttt{ui/*.py}): Render game state to
+    displays and LEDs; handle input events.
+  \item \textbf{Audio engine}: 6-voice mixer with priority channels
+    (music, SFX pool, UI feedback).
+  \item \textbf{Session manager}: Enforces play time limits, breaks, and
+    quiet hours.
+  \item \textbf{i18n system}: All user-facing strings localised
+    (Swedish default, English available).
+\end{itemize}
+
+% [TODO: Architectural diagram]
+
+% =============================================================================
+\section{Developmental Analysis}
+\label{sec:analysis}
+
+This section maps each Bodn feature to established developmental domains and
+analyses coverage. Table~\ref{tab:matrix} presents the full feature--domain
+matrix.
+
+% --- 4.1 Feature Mapping ---
+\subsection{Feature--Domain Mapping}
+\label{sec:mapping}
+
+% [TODO: Expand each feature description with specific design decisions
+%  linked to developmental literature]
+
+\subsubsection{Simon (H\"armapa)}
+The Simon memory game directly targets \textbf{working memory} capacity. The
+starting sequence length of 2 items is calibrated to the lower bound of
+4-year-old WM capacity \citep{diamond2013executive}. Each successful round
+adds one item, providing adaptive difficulty within the child's zone of
+proximal development \citep{vygotsky1978mind}.
+
+\subsubsection{Rule Follow (Regelleken)}
+Modelled after the DCCS task \citep{zelazo2006dccs}, Rule Follow alternates
+between ``match'' and ``opposite'' rules. The ``opposite'' rule requires
+\textbf{inhibitory control} (suppressing the prepotent matching response), while
+the rule switch exercises \textbf{cognitive flexibility}. The frequency of rule
+switches (every 4--6 correct answers) is within the range used in DCCS research.
+
+\subsubsection{Mystery Box (Mysterium)}
+An open-ended \textbf{cause-and-effect} exploration mode with no failure state.
+The design follows the ``guided play'' model \citep{weisberg2013guided}: the
+environment is structured (specific button--colour mappings, discoverable
+combinations) but the child's exploration is entirely self-directed.
+
+\subsubsection{Fl\"ode}
+A \textbf{spatial reasoning} and \textbf{problem-solving} puzzle that requires
+aligning gaps in vertical walls. The snap-to-grid mechanic reduces motor
+precision demands while preserving the cognitive challenge.
+
+\subsubsection{Garden of Life (Tr\"adg\aa rden)}
+A \textbf{pattern recognition} mode based on Conway's Game of Life. The child
+plants coloured seeds and observes emergent behaviour---an implicit introduction
+to complex systems and self-organisation. The mode exercises no executive
+functions but provides rich visual stimulation and cause-and-effect learning.
+
+\subsubsection{Soundboard (Ljudbr\"ada)}
+An \textbf{auditory processing} and \textbf{open exploration} mode.
+Customisable sound banks allow parents to create themed experiences. The volume
+encoder provides fine motor practice with immediate auditory feedback.
+
+\subsubsection{Spaceship Cockpit (Rymdskepp)}
+The most developmentally comprehensive mode, targeting \textbf{cognitive
+flexibility} (5 scenario types requiring different inputs),
+\textbf{listening comprehension} (TTS-driven instructions), and
+\textbf{imaginative play} (structured pretend-play as a spaceship captain).
+The adaptive difficulty system adjusts timeout windows based on the child's
+recent performance, maintaining an appropriate challenge level.
+
+% --- 4.2 Coverage Matrix ---
+\subsection{Coverage Matrix}
+\label{sec:coverage}
+
+\begin{table}[htbp]
+\centering
+\caption{Feature--developmental domain coverage matrix. %
+  $\bullet\bullet\bullet$ = primary target;
+  $\bullet\bullet$ = significant;
+  $\bullet$ = incidental;
+  blank = not applicable.}
+\label{tab:matrix}
+\small
+\begin{tabular}{lccccccc}
+\toprule
+\textbf{Domain} & \rotatebox{70}{Simon} & \rotatebox{70}{Rule Follow}
+  & \rotatebox{70}{Mystery Box} & \rotatebox{70}{Fl\"ode}
+  & \rotatebox{70}{Garden} & \rotatebox{70}{Soundboard}
+  & \rotatebox{70}{Spaceship} \\
+\midrule
+Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ \\
+Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ \\
+Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ \\
+\midrule
+Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & \\
+Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & \\
+Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & \\
+Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & \\
+Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ \\
+\midrule
+Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ \\
+Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ \\
+Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ \\
+Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ \\
+\midrule
+Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ \\
+Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ \\
+\midrule
+Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ \\
+Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ \\
+Imaginative play     & & & & & & & $\bullet\bullet\bullet$ \\
+\midrule
+Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & \\
+Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & \\
+Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% --- 4.3 Gap Analysis ---
+\subsection{Gap Analysis}
+\label{sec:gaps}
+
+The matrix reveals strong coverage for executive functions, visual processing,
+and open exploration. Areas with limited coverage include:
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Spatial reasoning}: Currently addressed only by Fl\"ode. A
+    tangram or construction mode would add breadth.
+  \item \textbf{Listening comprehension}: Only the Spaceship mode exercises
+    active listening. A story or audio scavenger hunt mode could strengthen
+    this domain.
+  \item \textbf{Bilingual exposure}: Currently passive (UI labels). An active
+    language-switching game would be more impactful, leveraging the bilingual
+    advantage for EF development \citep{bialystok2011reshaping}.
+  \item \textbf{Imaginative play}: Only the Spaceship mode provides structured
+    pretend play. Additional narrative modes could expand this.
+  \item \textbf{Creative expression}: Primarily addressed by Soundboard and
+    Garden. The planned Sequencer mode will significantly strengthen this area.
+\end{enumerate}
+
+% =============================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+% [TODO: Discuss the following themes]
+
+\subsection{Tangible Interfaces vs.\ Touchscreen Applications}
+% Advantages of physical controls for this age group.
+% Compare with tablet-based EF training (e.g., Cogmed, PBS games).
+% Discuss the embodied cognition perspective.
+
+\subsection{Adaptive Difficulty and the Zone of Proximal Development}
+% How Bodn's difficulty scaling relates to Vygotsky's ZPD.
+% The Spaceship mode's adaptive timeout system as a case study.
+% Simon's sequence length progression.
+
+\subsection{Feedback Design and Growth Mindset}
+% How error feedback was designed to support a growth mindset (Dweck, 2006).
+% Contrast with commercial children's games that use punitive feedback.
+
+\subsection{Session Limits and Healthy Technology Use}
+% How parental controls relate to AAP and WHO screen time guidelines.
+% The distinction between ``active screen time'' and ``passive screen time.''
+% Ethical considerations for children's technology design.
+
+\subsection{Limitations}
+% No formal user studies or experimental validation yet.
+% Single-user focus: no cooperative play features.
+% Hardware constraints: limited display resolution, no haptic feedback.
+% The bilingual advantage literature is debated (cite Paap et al., 2015).
+
+% =============================================================================
+\section{Future Work}
+\label{sec:future}
+
+\begin{enumerate}
+  \item \textbf{Empirical validation}: Conduct pre--post studies comparing
+    EF measures (DCCS, digit span) in children using Bodn vs.\ control
+    activities.
+  \item \textbf{Sequencer mode}: Implement the planned sequencing mode to
+    strengthen creative expression and computational thinking
+    (cf.\ \citealt{papert1980mindstorms}).
+  \item \textbf{Cooperative play}: Add turn-taking and collaborative modes to
+    support social-cognitive development.
+  \item \textbf{Adaptive difficulty modelling}: Implement Bayesian difficulty
+    estimation to maintain each child in their zone of proximal development
+    across play sessions.
+  \item \textbf{Longitudinal tracking}: Use the existing session logging
+    infrastructure to track developmental progress over months and years.
+  \item \textbf{Active bilingual features}: Develop language-switching games
+    that leverage the bilingual EF advantage.
+\end{enumerate}
+
+% =============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+% [TODO: Summarise the argument]
+
+Bodn demonstrates that tangible, open-source hardware can deliver
+developmentally informed play experiences for young children. By grounding each
+feature in established developmental science---particularly the executive
+function literature---and by providing physical controls rather than touchscreen
+interaction, the system aims to combine the adaptability of digital systems with
+the developmental benefits of hands-on play. The open-source design invites
+collaboration from educators, developmental psychologists, and the maker
+community to extend and validate the approach.
+
+% =============================================================================
+% References
+\bibliography{report}
+
+\end{document}
