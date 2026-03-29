@@ -1,4 +1,4 @@
-% report.tex — Skeleton for a scientific report on Bodn's developmental foundations
+% report.tex — Skeleton for a scientific report on Böðn's developmental foundations
 %
 % Compile with: ./build.sh (or: latexmk -pdf report.tex)
 %
@@ -23,10 +23,15 @@
 \bibliographystyle{apalike}
 \usepackage{enumitem}
 
+% --- Project name ---
+% \dh produces the eth character (ð) via T1 fontenc; \Bodn{} ensures
+% the trailing space is not consumed after the macro.
+\newcommand{\Bodn}{B\"o\dh{}n}
+
 % --- Title ---
 \title{Developmental Foundations of Tangible Interactive Learning Systems\\
        for Early Childhood:\\
-       \large The Bodn Project}
+       \large The \Bodn{} Project}
 \author{
   Mathias [Surname]\\
   {\small [Affiliation or independent researcher]}\\
@@ -40,13 +45,13 @@
 
 % --- Abstract ---
 \begin{abstract}
-Bodn is an open-source, battery-powered tangible learning system designed for
+\Bodn{} is an open-source, battery-powered tangible learning system designed for
 children aged 3--7. The device combines physical controls (buttons, rotary
 encoders, toggle switches) with multimodal feedback (LED animations, synthesized
 audio, screen graphics) to deliver play experiences that target core executive
 functions---working memory, inhibitory control, and cognitive flexibility---as
 well as sensorimotor, cognitive, language, and social-emotional development.
-This paper reviews the developmental science that informs Bodn's design,
+This paper reviews the developmental science that informs \Bodn{}'s design,
 maps each feature to established developmental domains, and identifies areas
 for future development. We argue that tangible interfaces offer advantages over
 touchscreen-only systems for early childhood learning, and that game-based,
@@ -87,7 +92,7 @@ introduced the concept, a growing literature has explored TUI for educational
 contexts, finding advantages in engagement, spatial understanding, and
 embodied learning \citep{marshall2007tangible, price2003tangibles}.
 
-This paper presents \textbf{Bodn}, an open-source tangible learning system that
+This paper presents \textbf{\Bodn{}}, an open-source tangible learning system that
 combines physical controls with adaptive, game-based experiences designed around
 the developmental science of early childhood. We review the theoretical
 foundations, describe the system design, map each feature to developmental
@@ -170,7 +175,7 @@ affordances of tangible interfaces offer several advantages over touchscreens:
 
 Young children benefit from redundant, multimodal feedback---receiving the same
 information through multiple sensory channels simultaneously
-\citep{price2003tangibles}. In Bodn, every user action produces visual
+\citep{price2003tangibles}. In \Bodn{}, every user action produces visual
 (LED/screen), auditory (tone/sound), and tactile (physical click/detent)
 feedback. This redundancy:
 
@@ -200,7 +205,7 @@ opposed to passive listening) is particularly effective.
 A substantial literature documents enhanced executive functions in bilingual
 children, attributed to the constant need to manage two active language systems
 \citep{bialystok2011reshaping}. The bilingual advantage is most pronounced for
-inhibitory control and cognitive flexibility---the same skills that Bodn's
+inhibitory control and cognitive flexibility---the same skills that \Bodn{}'s
 game modes target.
 
 % [TODO: Discuss the bilingual advantage debate (Paap et al., 2015 critique)
@@ -228,7 +233,7 @@ children receive after failure shapes which mindset they develop. Process-focuse
 feedback (``You tried a different strategy, good!'') promotes growth mindset;
 outcome-focused feedback (``Wrong!'') promotes fixed mindset.
 
-Bodn's feedback design follows this principle: errors produce soft, warm cues
+\Bodn{}'s feedback design follows this principle: errors produce soft, warm cues
 (gentle tone, dim red glow) rather than punitive signals. The intent is to
 frame failure as information, not judgement.
 
@@ -242,7 +247,7 @@ frame failure as information, not judgement.
 \subsection{Hardware Architecture}
 \label{sec:hardware}
 
-Bodn is built around an ESP32-S3 microcontroller with the following physical
+\Bodn{} is built around an ESP32-S3 microcontroller with the following physical
 interface components:
 
 \begin{itemize}[noitemsep]
@@ -285,7 +290,7 @@ The firmware is written in MicroPython and follows a modular architecture:
 \section{Developmental Analysis}
 \label{sec:analysis}
 
-This section maps each Bodn feature to established developmental domains and
+This section maps each \Bodn{} feature to established developmental domains and
 analyses coverage. Table~\ref{tab:matrix} presents the full feature--domain
 matrix.
 
@@ -423,7 +428,7 @@ and open exploration. Areas with limited coverage include:
 % Discuss the embodied cognition perspective.
 
 \subsection{Adaptive Difficulty and the Zone of Proximal Development}
-% How Bodn's difficulty scaling relates to Vygotsky's ZPD.
+% How Böðn's difficulty scaling relates to Vygotsky's ZPD.
 % The Spaceship mode's adaptive timeout system as a case study.
 % Simon's sequence length progression.
 
@@ -448,7 +453,7 @@ and open exploration. Areas with limited coverage include:
 
 \begin{enumerate}
   \item \textbf{Empirical validation}: Conduct pre--post studies comparing
-    EF measures (DCCS, digit span) in children using Bodn vs.\ control
+    EF measures (DCCS, digit span) in children using \Bodn{} vs.\ control
     activities.
   \item \textbf{Sequencer mode}: Implement the planned sequencing mode to
     strengthen creative expression and computational thinking
@@ -470,7 +475,7 @@ and open exploration. Areas with limited coverage include:
 
 % [TODO: Summarise the argument]
 
-Bodn demonstrates that tangible, open-source hardware can deliver
+\Bodn{} demonstrates that tangible, open-source hardware can deliver
 developmentally informed play experiences for young children. By grounding each
 feature in established developmental science---particularly the executive
 function literature---and by providing physical controls rather than touchscreen

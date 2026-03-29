@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Bodn developmental foundations report (PDF).
+# Build the Böðn developmental foundations report (PDF).
 #
 # Usage:
 #   ./build.sh          # build report.pdf
