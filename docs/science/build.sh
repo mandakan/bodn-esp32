@@ -11,6 +11,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# MacTeX installs to /Library/TeX/texbin which is not in PATH for non-login shells
+export PATH="/Library/TeX/texbin:$PATH"
+
 if [[ "${1:-}" == "clean" ]]; then
     rm -f report.{pdf,aux,bbl,blg,log,out,toc,fls,fdb_latexmk,synctex.gz}
     echo "Cleaned."
