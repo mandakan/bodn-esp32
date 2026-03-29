@@ -2,7 +2,7 @@
 
 STRINGS = {
     # Home screen
-    "home_title": "~ Bodn ~",
+    "home_title": "~ Böðn ~",
     "home_browse": "< vrid för att bläddra >",
     "home_browse_short": "< >",
     "home_plays_left": "{} spel kvar",
@@ -160,7 +160,7 @@ STRINGS = {
     "sb_empty": "tom",
     # Spaceship Cockpit
     "mode_space": "rymdskeppet",
-    "space_title": "RYMDSKEPPET BODN",
+    "space_title": "RYMDSKEPPET BÖÐN",
     "space_title_short": "RYMDSK.",
     "space_cruising_label": "Flyger genom rymden...",
     "space_shields": "SKÖLD: ",
