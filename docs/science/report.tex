@@ -345,6 +345,16 @@ flexibility} (5 scenario types requiring different inputs),
 The adaptive difficulty system adjusts timeout windows based on the child's
 recent performance, maintaining an appropriate challenge level.
 
+\subsubsection{Story Mode (Saga)}
+A data-driven branching narrative engine where the child listens to narrated
+scenes and makes choices via arcade buttons to steer the plot. Primary targets:
+\textbf{listening comprehension} (must listen to narration to choose),
+\textbf{bilingual exposure} (full narration in both Swedish and English), and
+\textbf{imaginative play} (guiding a character through a narrative world).
+Stories are defined as script files on the SD card; adding new stories requires
+no code changes.  The first story adapts Beatrix Potter's \emph{The Tale of
+Peter Rabbit} (public domain) into a choose-your-own-adventure with four endings.
+
 % --- 4.2 Coverage Matrix ---
 \subsection{Coverage Matrix}
 \label{sec:coverage}
@@ -358,38 +368,38 @@ recent performance, maintaining an appropriate challenge level.
   blank = not applicable.}
 \label{tab:matrix}
 \small
-\begin{tabular}{lccccccc}
+\begin{tabular}{lcccccccc}
 \toprule
 \textbf{Domain} & \rotatebox{70}{Simon} & \rotatebox{70}{Rule Follow}
   & \rotatebox{70}{Mystery Box} & \rotatebox{70}{Fl\"ode}
   & \rotatebox{70}{Garden} & \rotatebox{70}{Soundboard}
-  & \rotatebox{70}{Spaceship} \\
+  & \rotatebox{70}{Spaceship} & \rotatebox{70}{Story Mode} \\
 \midrule
-Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ \\
-Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ \\
-Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ \\
+Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet$ \\
+Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ & \\
+Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & \\
 \midrule
-Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & \\
-Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & \\
-Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & \\
-Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & \\
-Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ \\
+Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ \\
+Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & \\
+Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & & \\
+Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & & $\bullet\bullet$ \\
+Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ & \\
 \midrule
-Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ \\
-Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ \\
-Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ \\
-Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ \\
+Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ \\
+Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & \\
+Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ \\
+Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ \\
 \midrule
-Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ \\
-Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ \\
+Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ \\
+Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ \\
 \midrule
-Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ \\
-Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ \\
-Imaginative play     & & & & & & & $\bullet\bullet\bullet$ \\
+Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ & $\bullet$ \\
+Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet$ \\
+Imaginative play     & & & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ \\
 \midrule
-Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & \\
-Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & \\
-Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & \\
+Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & \\
+Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & \\
+Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -399,19 +409,20 @@ Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & \\
 \label{sec:gaps}
 
 The matrix reveals strong coverage for executive functions, visual processing,
-and open exploration. Areas with limited coverage include:
+and open exploration. Story Mode significantly improved three previously
+identified gaps: listening comprehension, bilingual exposure, and imaginative
+play each now have two primary-level features (Spaceship + Story Mode).
+Remaining areas with limited coverage include:
 
 \begin{enumerate}[noitemsep]
   \item \textbf{Spatial reasoning}: Currently addressed only by Fl\"ode. A
     tangram or construction mode would add breadth.
-  \item \textbf{Listening comprehension}: Only the Spaceship mode exercises
-    active listening. A story or audio scavenger hunt mode could strengthen
-    this domain.
-  \item \textbf{Bilingual exposure}: Currently passive (UI labels). An active
-    language-switching game would be more impactful, leveraging the bilingual
-    advantage for EF development \citep{bialystok2011reshaping}.
-  \item \textbf{Imaginative play}: Only the Spaceship mode provides structured
-    pretend play. Additional narrative modes could expand this.
+  \item \textbf{Problem solving}: Only Fl\"ode and (incidentally) Spaceship
+    exercise strategic planning. More puzzle types would strengthen this domain.
+  \item \textbf{Bilingual exposure}: Story Mode provides the first active
+    bilingual experience (full narration in both languages), but a dedicated
+    language-switching game could further leverage the bilingual advantage for
+    EF development \citep{bialystok2011reshaping}.
   \item \textbf{Creative expression}: Primarily addressed by Soundboard and
     Garden. The planned Sequencer mode will significantly strengthen this area.
 \end{enumerate}

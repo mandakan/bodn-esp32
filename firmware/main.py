@@ -348,6 +348,20 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_story():
+        from bodn.ui.story import StoryScreen
+
+        _reset_secondary()
+        return StoryScreen(
+            np,
+            overlay,
+            audio=audio,
+            arcade=arcade,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
+        )
+
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
 
@@ -361,6 +375,7 @@ def create_ui(
         "flode": _make_flode,
         "garden": _make_garden,
         "space": _make_space,
+        "story": _make_story,
         "soundboard": _make_soundboard,
         "demo": lambda: (
             _reset_secondary(),
@@ -374,6 +389,7 @@ def create_ui(
         "simon",
         "rulefollow",
         "space",
+        "story",
         "flode",
         "garden",
         "soundboard",
