@@ -196,6 +196,15 @@ STRINGS = {
     "space_shield_off": "Shield deactivated.",
     "space_stealth_on": "Stealth mode activated.",
     "space_stealth_off": "Stealth mode deactivated.",
+    # Story Mode
+    "mode_story": "story",
+    "story_title": "STORIES",
+    "story_no_stories": "No stories found",
+    "story_press_start": "Press to start",
+    "story_the_end": "THE END!",
+    "story_listen": "Listen...",
+    "story_choose": "Choose!",
+    "story_again": "Again?",
     # Boot screen
     "boot_cfg": "Waking up...",
     "boot_net": "Finding friends...",

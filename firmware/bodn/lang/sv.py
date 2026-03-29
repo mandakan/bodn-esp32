@@ -196,6 +196,15 @@ STRINGS = {
     "space_shield_off": "Skölden är inaktiverad.",
     "space_stealth_on": "Smygläge aktiverat.",
     "space_stealth_off": "Smygläge inaktiverat.",
+    # Story Mode
+    "mode_story": "saga",
+    "story_title": "SAGOR",
+    "story_no_stories": "Inga sagor hittades",
+    "story_press_start": "Tryck for att borja",
+    "story_the_end": "SLUT!",
+    "story_listen": "Lyssna...",
+    "story_choose": "Valj!",
+    "story_again": "Igen?",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_net": "Söker vänner...",

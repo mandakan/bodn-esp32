@@ -90,6 +90,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Garden of Life | | | | Observation-only; no EF demand |
 | Soundboard | | | | Free-form; no EF demand |
 | Spaceship | ● | ● | ◉ | Hold scenario in mind (WM), wait for right input (IC), different scenarios need different actions (CF) |
+| Story Mode | ● | | | Remember earlier scenes to inform choices (WM) |
 | *Record & Replay* | ● | | | Remember what to record and play back |
 | *Sequencer* | ◉ | | ● | Build and hold patterns in mind (WM), switch between edit/play modes (CF) |
 
@@ -104,6 +105,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Garden of Life | ● | ◉ | | | | Watch patterns emerge; placement affects evolution |
 | Soundboard | ● | | | | | Button → sound (cause-effect) |
 | Spaceship | | | | | ○ | Mild problem-solving when matching scenario to action |
+| Story Mode | ● | | | ● | | Choices have narrative consequences (CE); story arc is sequential (ST) |
 | *Record & Replay* | ● | | | ○ | | Voice causes recording; sequential playback |
 | *Sequencer* | ● | ◉ | | ◉ | ● | Build patterns step by step; debug sequences |
 
@@ -118,6 +120,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Garden of Life | ○ | | | ◉ | Rich visual tracking of evolving grid |
 | Soundboard | ○ | | ◉ | | Core mechanic is listening to and distinguishing sounds |
 | Spaceship | ● | ● | ● | ● | Multiple input types + visual cues + audio TTS |
+| Story Mode | ○ | | ◉ | ● | Simple button press (FM); listen to narration (AP); mood colour wash + text (VP) |
 | *Record & Replay* | ○ | | ◉ | | Listen to own voice, discriminate recordings |
 | *Sequencer* | ● | ● | ● | ● | Precise input, visual-audio feedback loop |
 
@@ -132,6 +135,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Garden of Life | | ○ | UI labels only |
 | Soundboard | ○ | ○ | Themed sound banks may include words |
 | Spaceship | ◉ | ○ | TTS instructions drive gameplay; must listen and understand |
+| Story Mode | ◉ | ◉ | Full narration + choices in both languages; must listen to choose meaningfully |
 | *Record & Replay* | ● | ● | Hear and produce speech in both languages |
 | *Sequencer* | | ○ | UI labels only |
 
@@ -146,6 +150,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Garden of Life | ○ | | | Patience in watching slow evolution |
 | Soundboard | | | | Free-form, no emotional challenge |
 | Spaceship | ● | ○ | ◉ | Wait for right moment; pretend to be a captain |
+| Story Mode | ○ | ○ | ◉ | Wait through narration (SReg); replay for all endings (PE); guide character through narrative world (IP) |
 | *Record & Replay* | | | ○ | Mild pretend-play with voice |
 | *Sequencer* | | ● | ● | Debug patience; pretend to be a musician/programmer |
 
@@ -160,6 +165,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Garden of Life | ◉ | ● | ● | Endless seed placements; emergent "art" |
 | Soundboard | ◉ | | ◉ | Browse freely; create sound combinations |
 | Spaceship | | | | Narrative-driven, not open-ended |
+| Story Mode | | | | Goal-directed narrative; no creative latitude |
 | *Record & Replay* | ● | | ◉ | Record anything; creative voice play |
 | *Sequencer* | | ◉ | ◉ | Compose original patterns; divergent solutions |
 
@@ -171,15 +177,20 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 
 | Aspect | Primary (◉) | Significant (●) | Total strong |
 |--------|:-----------:|:----------------:|:------------:|
-| Visual Processing (VP) | 2 | 4 | 6 |
-| Working Memory (WM) | 1 | 2 | 3 |
-| Cause & Effect (CE) | 1 | 3 | 4 |
+| Visual Processing (VP) | 2 | 5 | 7 |
+| Working Memory (WM) | 1 | 3 | 4 |
+| Cause & Effect (CE) | 1 | 4 | 5 |
 | Pattern Recognition (PR) | 1 | 2 | 3 |
 | Hand-Eye Coordination (HC) | 0 | 4 | 4 |
 | Open Exploration (OE) | 3 | 0 | 3 |
 | Self-Regulation (SReg) | 1 | 2 | 3 |
 | Cognitive Flexibility (CF) | 2 | 0 | 2+ |
 | Inhibitory Control (IC) | 1 | 1 | 2+ |
+| Listening Comprehension (LC) | 2 | 0 | 2 |
+| Bilingual Exposure (BL) | 1 | 0 | 1+ |
+| Imaginative Play (IP) | 2 | 0 | 2 |
+| Auditory Processing (AP) | 1 | 1 | 2+ |
+| Sequential Thinking (ST) | 1 | 2 | 3 |
 
 ### Gaps (1 or fewer features at ◉ or ●)
 
@@ -187,9 +198,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 |--------|---------------|-------------------|
 | **Spatial Reasoning (SR)** | Only Flöde | Building/construction mode; tangram puzzles |
 | **Problem Solving (PS)** | Only Flöde | More puzzle types; scavenger hunts |
-| **Listening Comprehension (LC)** | Only Spaceship | Story mode; audio scavenger hunt |
-| **Bilingual Exposure (BL)** | Passive only (UI labels) | Language-switch game; bilingual story mode |
-| **Imaginative Play (IP)** | Only Spaceship | More narrative modes; character creator |
+| **Bilingual Exposure (BL)** | Story Mode + passive UI labels | Language-switch game; more bilingual content |
 | **Fine Motor (FM)** | Mostly incidental | Tracing/drawing mode; precision encoder challenge |
 
 ---
@@ -209,6 +218,7 @@ The foundation — everything should produce immediate, rewarding feedback.
 | Garden of Life | **Core** — watch pretty patterns emerge | Just press and observe |
 | Simon | Introduce gently — 2-step sequences | Easiest |
 | Spaceship | Exposure — long timeouts, few scenarios | Easiest |
+| Story Mode | **Introduce** — simple stories, 2 choices, short paths | Easy |
 
 ### Age 4–5: Executive Functions Emerge
 
@@ -219,6 +229,7 @@ The child can follow rules, hold short sequences, and switch between ideas.
 | Simon | **Growing challenge** — 3–4 step sequences | Medium |
 | Rule Follow | **Introduce** — start with mostly MATCH rule | Easy |
 | Spaceship | **Growing challenge** — 5 scenario types, medium timeouts | Medium |
+| Story Mode | **Growing** — longer stories, 3 choices, remember plot points | Medium |
 | Flöde | **Introduce** — levels 1–2 (1–2 segments) | Easy |
 | Mystery Box | Still engaging — modifier discovery deepens | Same |
 
@@ -259,35 +270,28 @@ Features that would fill developmental gaps, ordered by coverage impact.
 **Concept:** Chain lights + sounds into programs. Introduces computational thinking through tangible sequencing.
 **References:** Papert (1980) Mindstorms; Bers (2018) Coding as a Playground
 
-### 2. Story Mode / Interactive Narrative
-
-**Primary targets:** LC, BL, IP, WM
-**Fills gaps in:** Listening comprehension, bilingual exposure, imaginative play
-**Concept:** Branching audio stories where child makes choices via buttons. Swedish and English versions.
-**References:** Lillard et al. (2013) pretend play; Bialystok (2011) bilingualism benefits
-
-### 3. Rhythm Game
+### 2. Rhythm Game
 
 **Primary targets:** ST, AP, FM, PR
 **Fills gaps in:** Fine motor (dedicated challenge), auditory processing (rhythmic)
 **Concept:** Follow a beat pattern with buttons; create own rhythms.
 **References:** Kraus & Chandrasekaran (2010) music and auditory development
 
-### 4. Tangram / Construction Puzzle
+### 3. Tangram / Construction Puzzle
 
 **Primary targets:** SR, PS, FM, HC
 **Fills gaps in:** Spatial reasoning (second source), problem solving
 **Concept:** Arrange shapes on screen using encoder + buttons to match a target pattern.
 **References:** Verdine et al. (2014) spatial assembly and math readiness
 
-### 5. Sorting / Categorization Game
+### 4. Sorting / Categorization Game
 
 **Primary targets:** CF, IC, PR, ST
 **Fills gaps in:** Adds another cognitive flexibility source; strengthens inhibitory control
 **Concept:** Sort items by one rule (color), then switch to another (shape). Based on the DCCS task.
 **References:** Zelazo (2006) Dimensional Change Card Sort
 
-### 6. Record & Replay (planned)
+### 5. Record & Replay (planned)
 
 **Primary targets:** CX, AP, LC, BL
 **Fills gaps in:** Creative expression, listening comprehension, bilingual exposure

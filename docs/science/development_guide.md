@@ -270,8 +270,9 @@ smoother transition to formal education.
   physical action. This is active listening with a physical response — far more
   engaging than passive audio.
 
-- *Future opportunity:* A story mode with branching choices would deeply exercise
-  listening comprehension and narrative understanding.
+- **Story Mode** (core mechanic): Branching narratives with full TTS narration
+  in both languages. The child must listen to the scene to understand which
+  choice to make — active listening comprehension with meaningful consequences.
 
 ### Bilingual Exposure
 
@@ -289,9 +290,10 @@ bilingualism.
 - The entire UI supports Swedish (default) and English, switchable in settings.
   All game labels, instructions, and TTS audio exist in both languages.
 
-- *Current limitation:* Bilingual exposure is mostly passive (UI labels and TTS).
-  Active bilingual features — like a language-switching game or bilingual story
-  mode — would strengthen this dimension significantly.
+- **Story Mode** provides the first truly active bilingual experience: complete
+  narration and choice labels in both Swedish and English, requiring the child
+  to engage with whichever language is selected. A dedicated language-switching
+  game could further strengthen this dimension.
 
 ---
 
@@ -358,8 +360,10 @@ learning in early childhood.
   "throttle," "shields," and "steering." This transforms button-pressing into
   narrative-driven role-play.
 
-- *Future opportunity:* More narrative modes (pirate ship, animal rescue,
-  kitchen) could expand imaginative play significantly.
+- **Story Mode**: The child guides a character through a branching narrative,
+  making choices that shape the plot. The data-driven engine supports an
+  expanding library of stories (starting with Peter Rabbit), each a new world
+  for imaginative engagement.
 
 ---
 
