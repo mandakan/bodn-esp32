@@ -243,7 +243,7 @@ companion documents live in [`docs/science/`](docs/science/):
 
 - **[Development Matrix](docs/science/development_matrix.md)** — feature × developmental aspect coverage, gap analysis, and age progression timeline
 - **[Development Guide](docs/science/development_guide.md)** — plain-language overview for parents and educators
-- **[Report](docs/science/report.tex)** — scientific report skeleton with proper citations ([bibliography](docs/science/report.bib))
+- **[Report (PDF)](docs/science/report.pdf)** — scientific report with proper citations ([LaTeX source](docs/science/report.tex), [bibliography](docs/science/report.bib))
 
 Build the report PDF (requires a TeX distribution):
 

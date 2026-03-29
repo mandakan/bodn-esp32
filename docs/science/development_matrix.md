@@ -1,10 +1,10 @@
-# Bodn Development Matrix
+# Böðn Development Matrix
 
 *Mapping features to developmental domains for ages 3–7*
 
 ## How to Read This Document
 
-This matrix tracks how each Bodn feature supports established child development
+This matrix tracks how each Böðn feature supports established child development
 domains. Use it to evaluate coverage, identify gaps, and plan new features.
 
 **Coverage levels:**
@@ -196,7 +196,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 
 ## Developmental Timeline
 
-How Bodn serves the child as they grow.
+How Böðn serves the child as they grow.
 
 ### Age 3–4: Exploration & Cause-Effect
 

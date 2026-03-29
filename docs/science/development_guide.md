@@ -1,12 +1,12 @@
-# How Bodn Supports Child Development
+# How Böðn Supports Child Development
 
 *A guide for parents, educators, and collaborators*
 
 ---
 
-## What is Bodn?
+## What is Böðn?
 
-Bodn is a physical, battery-powered box with buttons, knobs, lights, sounds, and
+Böðn is a physical, battery-powered box with buttons, knobs, lights, sounds, and
 a screen — designed for children starting around age 3–4. It is not a tablet or
 an app. The child interacts by pressing real buttons, turning real knobs, and
 flipping real switches. Every input produces immediate feedback: lights, colors,
@@ -15,7 +15,7 @@ sounds, animations.
 The name comes from Norse mythology — Böðn is one of the vessels holding the
 mead of poetry, the drink granting wisdom and inspiration.
 
-This document explains *why* each aspect of Bodn's design matters for a child's
+This document explains *why* each aspect of Böðn's design matters for a child's
 development, and what the research says.
 
 ---
@@ -28,7 +28,7 @@ watching (Hirsh-Pasek et al., 2015). The American Academy of Pediatrics and the
 World Health Organization both recommend limiting passive screen time for
 children under 5 and emphasize interactive, physical play.
 
-Bodn is designed around this principle. Even though it has screens, the primary
+Böðn is designed around this principle. Even though it has screens, the primary
 interaction is always through physical controls — pressing, turning, flipping.
 The screens provide feedback; the hands do the work. This is what researchers
 call a **tangible interface** (Ishii & Ullmer, 1997) — a bridge between the
@@ -70,14 +70,14 @@ early childhood.
 The good news: executive functions are highly trainable, especially between ages
 3 and 7 (Diamond, 2013; Montroy et al., 2016).
 
-### How Bodn Supports Executive Functions
+### How Böðn Supports Executive Functions
 
 #### Working Memory
 
 **What it looks like:** remembering a sequence of 3 colored buttons that just
 flashed on the screen, then pressing them back in the right order.
 
-**Bodn features that exercise it:**
+**Böðn features that exercise it:**
 
 - **Simon** (core mechanic): The child watches a sequence of lights and sounds,
   then reproduces it from memory. Starts at 2 steps (age-appropriate) and grows
@@ -96,7 +96,7 @@ flashed on the screen, then pressing them back in the right order.
 **What it looks like:** seeing a bright red button flash and resisting the urge
 to press it because the current rule says to press the *opposite* color.
 
-**Bodn features that exercise it:**
+**Böðn features that exercise it:**
 
 - **Rule Follow** (core mechanic): Modeled after the Dimensional Change Card
   Sort (Zelazo, 2006), the most widely used assessment of EF in preschoolers.
@@ -113,7 +113,7 @@ to press it because the current rule says to press the *opposite* color.
 **What it looks like:** the rules change mid-game — what worked 30 seconds ago
 no longer applies, and the child must switch strategies.
 
-**Bodn features that exercise it:**
+**Böðn features that exercise it:**
 
 - **Rule Follow** (core mechanic): The rule switches between "match" and
   "opposite" every 4–6 correct answers. The child must notice the switch and
@@ -139,7 +139,7 @@ different sounds — is critical for language development and musical awareness.
 Research shows that early musical and sound-rich experiences strengthen auditory
 neural pathways (Kraus & Chandrasekaran, 2010; Trainor, 2005).
 
-### How Bodn Supports Sensorimotor Development
+### How Böðn Supports Sensorimotor Development
 
 - **Buttons and encoders**: Every interaction involves pressing buttons with
   finger precision or turning knobs with wrist rotation. The encoders in
@@ -173,7 +173,7 @@ earliest and most fundamental cognitive skills.
 reasoning, problem-solving, and understanding the physical world. Young children
 are natural scientists — they test hypotheses through action (Gopnik, 2012).
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - **Mystery Box** (core mechanic): The entire mode is a cause-and-effect
   laboratory. Press one button → one color. Press two buttons → a mixed color.
@@ -197,7 +197,7 @@ similar, things that have structure.
 melody). Children who are better at recognizing patterns in preschool perform
 better in mathematics throughout elementary school.
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - **Garden of Life** (core mechanic): Conway's Game of Life produces endlessly
   surprising patterns from simple rules. Even without understanding the rules,
@@ -220,7 +220,7 @@ more strongly than early counting skills (Verdine et al., 2014). It is also
 linked to success in STEM fields. Importantly, spatial skills are highly
 trainable through practice.
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - **Flöde** (core mechanic): The child must align gaps in vertical walls so that
   "flow" can pass through. This requires understanding vertical position,
@@ -239,7 +239,7 @@ persistence into a higher-order skill. Children who engage in guided
 problem-solving develop stronger **metacognition** — awareness of their own
 thinking process (Weisberg et al., 2013).
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - **Flöde** (core mechanic): Each puzzle has a clear goal (align the gaps) and
   requires trial-and-error to solve. The snap-to-grid design ensures the child
@@ -263,7 +263,7 @@ of reading comprehension at age 8 (Kendeou et al., 2009). Children who are
 practiced at listening, understanding, and acting on verbal instructions have a
 smoother transition to formal education.
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - **Spaceship** (core mechanic): The AI "Stellar" speaks scenario descriptions
   via text-to-speech. The child must listen, understand, and choose the right
@@ -284,7 +284,7 @@ languages is itself an executive function exercise (Bialystok, 2011). Sweden,
 with its strong English-language media environment, is an ideal setting for early
 bilingualism.
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - The entire UI supports Swedish (default) and English, switchable in settings.
   All game labels, instructions, and TTS audio exist in both languages.
@@ -307,9 +307,9 @@ predicts social competence, academic success, and mental health. Children who
 learn to manage frustration in safe, supportive contexts build resilience that
 transfers to harder situations.
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
-- **Design principle: no shame.** Every error in Bodn produces gentle, warm
+- **Design principle: no shame.** Every error in Böðn produces gentle, warm
   feedback — a soft sound, a dim red glow, a friendly "try again" cue. There is
   no buzzer, no score counter dropping, no "game over" screen in large red
   letters. This follows research showing that children learn better from failure
@@ -319,7 +319,7 @@ transfers to harder situations.
   is inherently frustrating. The gentle feedback design lets the child practice
   managing that frustration safely.
 
-- **Session limits**: Bodn enforces healthy play boundaries (session time,
+- **Session limits**: Böðn enforces healthy play boundaries (session time,
   breaks, quiet hours) with gradual wind-down animations rather than abrupt
   cutoffs. The child learns that "time to stop" is normal and predictable.
 
@@ -332,7 +332,7 @@ fail and try again.
 "grit" or "mastery motivation." Children who persist through challenges develop
 stronger skills and greater confidence (Dweck, 2006).
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - **Simon**: After a wrong answer, the game gently invites another try (up to 3
   attempts). The sequence length only grows on success — the child is never
@@ -351,7 +351,7 @@ others have different thoughts and feelings), narrative skills, and emotional
 understanding (Lillard et al., 2013). It is one of the most powerful forms of
 learning in early childhood.
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - **Spaceship** (core mechanic): The child pretends to be a spaceship captain,
   responding to an AI companion's announcements. The physical controls become
@@ -377,7 +377,7 @@ al., 2013). Researchers call this "guided play" — a middle ground between free
 play and direct instruction where the environment is designed to make discovery
 productive.
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - **Mystery Box**: No instructions, no scoring, no timer. The child explores
   freely and discovers color combinations through action. Modifiers (hue shift,
@@ -398,7 +398,7 @@ a composition.
 aesthetic sense, and connects multiple developmental domains (motor, cognitive,
 emotional) in a single activity.
 
-**How Bodn supports it:**
+**How Böðn supports it:**
 
 - **Soundboard**: The child becomes a DJ — mixing sounds from different banks,
   layering them with button timing.
@@ -428,7 +428,7 @@ touchscreen-only interaction for young children:
 - **Healthier posture and motor development**: Pushing buttons and turning knobs
   exercises different muscle groups than swiping a screen
 
-Bodn is intentionally designed as a physical-first device. The screens provide
+Böðn is intentionally designed as a physical-first device. The screens provide
 visual feedback, but the interaction surface is entirely physical — 8 buttons, 5
 arcade buttons, 2 toggle switches, and 3 rotary encoders.
 
@@ -442,7 +442,7 @@ The World Health Organization (2019) recommends:
 - **2–4 years**: No more than 1 hour per day of sedentary screen time
 - **All ages**: More physical activity is better
 
-Bodn addresses these guidelines through:
+Böðn addresses these guidelines through:
 
 1. **Active, not passive**: All screen time involves physical interaction —
    pressing, turning, flipping. This is closer to "physical play with visual
@@ -460,7 +460,7 @@ Bodn addresses these guidelines through:
 
 ## Summary
 
-| Developmental Area | Key Finding | Bodn Response |
+| Developmental Area | Key Finding | Böðn Response |
 |--------------------|-------------|---------------|
 | Executive functions | Strongest predictor of school readiness (Diamond, 2013) | Simon (WM), Rule Follow (IC, CF), Spaceship (CF) |
 | Self-control | Predicts lifelong outcomes in a gradient (Moffitt et al., 2011) | Gentle failure feedback, session limits, pause mechanics |
