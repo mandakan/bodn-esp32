@@ -145,7 +145,8 @@ bodn-esp32/
 │  ├─ sync.sh               # deploy firmware to device via mpremote
 │  ├─ wokwi-sync.py         # deploy firmware to Wokwi simulator (raw TCP)
 │  ├─ ota-push.py           # push firmware over WiFi via HTTP (no USB needed)
-│  └─ ftp-sync.py           # push firmware over WiFi via FTP (faster, STA mode only)
+│  ├─ ftp-sync.py           # push firmware over WiFi via FTP (faster, STA mode only)
+│  └─ sd-sync.py            # build + sync SD card assets (TTS, etc.)
 ├─ tests/
 │  ├─ conftest.py           # MicroPython hardware stubs
 │  └─ test_*.py             # host-side unit tests
@@ -207,7 +208,13 @@ uv run python tools/generate_tts.py --dry-run     # preview without generating
 uv run python tools/generate_tts.py --lang sv      # Swedish only
 uv run python tools/generate_tts.py --key simon_watch  # single key
 uv run python tools/convert_audio.py              # convert flash + SD TTS to device format
-cp -r build/tts_converted/ /Volumes/BODN_SD/sounds/tts/  # copy SD files to card
+
+# SD card asset sync (build + copy in one step)
+uv run python tools/sd-sync.py                    # auto-detect BODN* SD card on macOS
+uv run python tools/sd-sync.py /Volumes/BODN_SD   # explicit mount point
+uv run python tools/sd-sync.py --build-only        # build without copying
+uv run python tools/sd-sync.py --no-build /Volumes/BODN_SD  # copy without rebuilding
+uv run python tools/sd-sync.py --dry-run           # preview what would happen
 ```
 
 ## Git hooks

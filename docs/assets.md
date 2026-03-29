@@ -58,15 +58,39 @@ WAV files must be:
 
 Use `tools/convert_audio.py` to batch-convert and normalise source files.
 
-## Managing assets via PC card reader
+## Building and syncing SD assets
+
+`tools/sd-sync.py` is a one-command pipeline that generates TTS audio, converts all
+assets to device format, and copies them to a mounted SD card:
+
+```bash
+# Full pipeline: build + sync (auto-detects /Volumes/BODN* on macOS)
+uv run python tools/sd-sync.py
+
+# Explicit mount point
+uv run python tools/sd-sync.py /Volumes/BODN_SD
+
+# Build only (no SD card needed)
+uv run python tools/sd-sync.py --build-only
+
+# Sync previously built assets without rebuilding
+uv run python tools/sd-sync.py --no-build /Volumes/BODN_SD
+
+# Preview what would happen
+uv run python tools/sd-sync.py --dry-run /Volumes/BODN_SD
+```
+
+Tip: name your SD card `BODN` (or any name starting with `BODN`) for auto-detection.
+
+### Manual workflow
+
+If you prefer to manage files by hand:
 
 1. Remove the SD card from the device.
 2. Insert it into a PC card reader.
 3. Copy WAV files into the appropriate directory (see structure above).
 4. Eject the card and reinsert it in the device.
 5. Restart the device — assets are available immediately.
-
-This is the recommended method for bulk loading. No tooling required beyond a file manager.
 
 ## Incremental updates via WiFi
 
