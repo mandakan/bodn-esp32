@@ -223,12 +223,21 @@ class StoryEngine:
         """Number of nodes visited so far."""
         return len(self.visited)
 
+    @staticmethod
+    def _strip_pause(s):
+        """Remove {pause} / {pause N} markers (TTS-only hints)."""
+        if "{pause" not in s:
+            return s
+        import re
+
+        return re.sub(r"\{pause(?:\s+[\d.]+)?\}\s*", "", s)
+
     def text(self, lang):
         """Return narration text for current node in the given language."""
         if not self.node:
             return ""
         t = self.node.get("text", {})
-        return t.get(lang, t.get("en", ""))
+        return self._strip_pause(t.get(lang, t.get("en", "")))
 
     def choice_label(self, index, lang):
         """Return choice label for given index and language."""
