@@ -21,12 +21,14 @@ Usage:
 import argparse
 import hashlib
 import json
+import re
 import sys
 import wave
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
 STORIES_DIR = REPO_ROOT / "assets" / "stories"
+BUILTIN_STORIES = REPO_ROOT / "firmware" / "bodn" / "stories" / "__init__.py"
 OUTPUT_DIR = REPO_ROOT / "build" / "story_tts"
 HASHES_JSON = REPO_ROOT / "build" / "story_tts_hashes.json"
 VOICES_DIR = Path.home() / ".cache" / "piper"
@@ -37,6 +39,16 @@ VOICES = {
     "en": {"model": "en_US-amy-medium"},
 }
 
+# --- Prosody defaults (storytelling pace for ages 3-5) ---
+# length_scale > 1.0 = slower speech.  1.2 is a gentle storytelling pace.
+DEFAULT_LENGTH_SCALE = 1.2
+# Silence inserted between sentences (seconds).
+DEFAULT_SENTENCE_SILENCE = 0.4
+# Silence inserted where the author places a {pause} marker (seconds).
+DEFAULT_PAUSE_SILENCE = 0.8
+# Regex matching {pause} or {pause 1.2} markers in story text.
+PAUSE_RE = re.compile(r"\{pause(?:\s+([\d.]+))?\}")
+
 # Arcade button names for narrating choices
 ARC_BUTTON_NAMES = {
     "sv": ["grön", "blå", "vit", "gul", "röd"],
@@ -45,22 +57,29 @@ ARC_BUTTON_NAMES = {
 
 
 def discover_stories():
-    """Find all story scripts under assets/stories/. Returns list of (id, path)."""
+    """Find all stories (built-in flash + assets/stories/). Returns list of (id, story_dict)."""
     stories = []
-    if not STORIES_DIR.exists():
-        return stories
-    for entry in sorted(STORIES_DIR.iterdir()):
-        script = entry / "script.py"
-        if script.exists():
-            stories.append((entry.name, script))
+
+    # Built-in flash story
+    if BUILTIN_STORIES.exists():
+        ns = {}
+        exec(BUILTIN_STORIES.read_text(), ns)
+        s = ns.get("BUILTIN_STORY")
+        if s:
+            stories.append((s["id"], s))
+
+    # SD card stories
+    if STORIES_DIR.exists():
+        for entry in sorted(STORIES_DIR.iterdir()):
+            script = entry / "script.py"
+            if script.exists():
+                ns = {}
+                exec(script.read_text(), ns)
+                s = ns.get("STORY")
+                if s:
+                    stories.append((s["id"], s))
+
     return stories
-
-
-def load_story(path):
-    """Load STORY dict from a script.py file."""
-    ns = {}
-    exec(path.read_text(), ns)
-    return ns["STORY"]
 
 
 def load_hashes():
@@ -74,8 +93,12 @@ def save_hashes(hashes):
     HASHES_JSON.write_text(json.dumps(hashes, indent=2, ensure_ascii=False) + "\n")
 
 
-def text_hash(text):
-    return hashlib.md5(text.encode()).hexdigest()[:12]
+def text_hash(text, prosody=None):
+    """Hash text + prosody settings so changes to either trigger regeneration."""
+    h = hashlib.md5(text.encode())
+    if prosody:
+        h.update(json.dumps(prosody, sort_keys=True).encode())
+    return h.hexdigest()[:12]
 
 
 def ensure_voice(model_name):
@@ -91,18 +114,78 @@ def ensure_voice(model_name):
     return PiperVoice.load(model_path)
 
 
-def generate_wav(text, voice, out_path, dry_run):
-    """Synthesize text to WAV. Returns True on success."""
+def make_silence(seconds, sample_rate):
+    """Generate silent PCM bytes (16-bit mono)."""
+    return b"\x00\x00" * int(sample_rate * seconds)
+
+
+def split_on_pauses(text):
+    """Split text on {pause} markers.
+
+    Returns a list of (segment_text, pause_seconds) tuples.
+    The pause after the last segment is 0.
+    """
+    segments = []
+    last_end = 0
+    for m in PAUSE_RE.finditer(text):
+        seg = text[last_end : m.start()].strip()
+        pause = float(m.group(1)) if m.group(1) else DEFAULT_PAUSE_SILENCE
+        if seg:
+            segments.append((seg, pause))
+        last_end = m.end()
+    trailing = text[last_end:].strip()
+    if trailing:
+        segments.append((trailing, 0))
+    if not segments:
+        segments.append((text, 0))
+    return segments
+
+
+def generate_wav(text, voice, out_path, dry_run, prosody=None):
+    """Synthesize text to WAV with storytelling prosody.
+
+    Supports:
+    - length_scale: speech rate (> 1.0 = slower, default 1.2)
+    - sentence_silence: pause between sentences in seconds (default 0.4)
+    - {pause} / {pause 1.5} markers in text for longer dramatic pauses
+    """
     if dry_run:
         print(f"  would generate  {out_path.relative_to(REPO_ROOT)}")
         return True
+
+    from piper.config import SynthesisConfig
+
+    prosody = prosody or {}
+    length_scale = prosody.get("length_scale", DEFAULT_LENGTH_SCALE)
+    sentence_silence = prosody.get("sentence_silence", DEFAULT_SENTENCE_SILENCE)
+    syn_cfg = SynthesisConfig(length_scale=length_scale)
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    segments = split_on_pauses(text)
+
     try:
         with wave.open(str(out_path), "wb") as wav_file:
-            voice.synthesize_wav(text, wav_file)
+            sr = voice.config.sample_rate
+            wav_file.setframerate(sr)
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setnchannels(1)  # mono
+
+            for seg_idx, (seg_text, pause_after) in enumerate(segments):
+                # Synthesize segment sentence by sentence with inter-sentence silence
+                chunks = list(voice.synthesize(seg_text, syn_config=syn_cfg))
+                for i, chunk in enumerate(chunks):
+                    wav_file.writeframes(chunk.audio_int16_bytes)
+                    # Add silence between sentences (not after the last one in segment)
+                    if i < len(chunks) - 1 and sentence_silence > 0:
+                        wav_file.writeframes(make_silence(sentence_silence, sr))
+
+                # Add the {pause} marker silence between segments
+                if pause_after > 0:
+                    wav_file.writeframes(make_silence(pause_after, sr))
     except Exception as exc:
         print(f"  ERROR: {exc}", file=sys.stderr)
         return False
+
     kib = out_path.stat().st_size // 1024
     print(f"  generated  {out_path.relative_to(REPO_ROOT)}  ({kib} KiB)")
     return True
@@ -111,16 +194,14 @@ def generate_wav(text, voice, out_path, dry_run):
 def build_choices_text(node, lang):
     """Build a sentence that reads out the choice labels.
 
-    E.g. "Press green to go to the garden. Press blue to pick berries."
+    Swedish: "{Label} genom att trycka på {color}." — imperative label first,
+    no conjugation issues.
+    English: "Press {color} to {label}." — works since infinitive = imperative.
     """
     choices = node.get("choices", [])
     if not choices:
         return None
     button_names = ARC_BUTTON_NAMES.get(lang, ARC_BUTTON_NAMES["en"])
-    if lang == "sv":
-        template = "Tryck {} för att {}."
-    else:
-        template = "Press {} to {}."
 
     parts = []
     for i, ch in enumerate(choices):
@@ -128,9 +209,16 @@ def build_choices_text(node, lang):
             break
         label = ch.get("label", {})
         text = label.get(lang, label.get("en", ""))
-        if text:
-            # Lowercase the label for a natural sentence
-            parts.append(template.format(button_names[i], text[0].lower() + text[1:]))
+        if not text:
+            continue
+        # Strip trailing punctuation for clean sentence construction
+        clean = text.rstrip("!.")
+        if lang == "sv":
+            # Label first (imperative), then button instruction
+            parts.append(f"{clean} genom att trycka på {button_names[i]}.")
+        else:
+            # Lowercase for "to {verb}" construction
+            parts.append(f"Press {button_names[i]} to {clean[0].lower() + clean[1:]}.")
     return " ".join(parts) if parts else None
 
 
@@ -153,12 +241,11 @@ def main():
 
     generated = skipped = errors = 0
 
-    for story_id, story_path in stories:
+    for story_id, story in stories:
         if args.story and story_id != args.story:
             continue
-
-        story = load_story(story_path)
         narrate_choices = story.get("narrate_choices", True)
+        prosody = story.get("prosody", {})
         nodes = story.get("nodes", {})
 
         print(f"\n=== Story: {story_id} ({len(nodes)} nodes) ===")
@@ -183,14 +270,14 @@ def main():
                 out_key = f"story_{story_id}_{node_id}"
                 out_path = OUTPUT_DIR / lang / f"{out_key}.wav"
                 hash_key = f"{lang}/{out_key}"
-                h = text_hash(text)
+                h = text_hash(text, prosody)
 
                 if not args.force and hashes.get(hash_key) == h and out_path.exists():
                     skipped += 1
                 else:
                     if not args.dry_run and voice is None:
                         voice = ensure_voice(model_name)
-                    ok = generate_wav(text, voice, out_path, args.dry_run)
+                    ok = generate_wav(text, voice, out_path, args.dry_run, prosody)
                     if ok:
                         generated += 1
                         if not args.dry_run:
@@ -205,7 +292,7 @@ def main():
                         ch_key = f"{out_key}_choices"
                         ch_path = OUTPUT_DIR / lang / f"{ch_key}.wav"
                         ch_hash_key = f"{lang}/{ch_key}"
-                        ch_h = text_hash(choices_text)
+                        ch_h = text_hash(choices_text, prosody)
 
                         if (
                             not args.force
@@ -217,7 +304,7 @@ def main():
                             if not args.dry_run and voice is None:
                                 voice = ensure_voice(model_name)
                             ok = generate_wav(
-                                choices_text, voice, ch_path, args.dry_run
+                                choices_text, voice, ch_path, args.dry_run, prosody
                             )
                             if ok:
                                 generated += 1
