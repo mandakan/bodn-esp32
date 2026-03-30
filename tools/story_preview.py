@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 """
-Offline web preview for Bodn Story Mode.
+Offline web preview for Bodn — stories and audio assets.
 
-Serves a local web page that lets you navigate branching stories,
-play TTS audio, and inspect the node graph — without an ESP32.
-
-Discovers stories from:
-  - assets/stories/*/script.py   (SD card stories)
-  - firmware/bodn/stories/       (built-in flash story)
-
-TTS audio served from build/story_tts/{lang}/ if available.
+Two views served from one local server:
+  /        Story mode preview (navigate branching narratives, play TTS)
+  /audio   Audio asset browser (play all WAVs, see usage status)
 
 Usage:
   uv run python tools/story_preview.py            # http://localhost:8033
@@ -18,7 +13,10 @@ Usage:
 
 import argparse
 import json
+import re
+import struct
 import sys
+import wave
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -27,6 +25,11 @@ REPO_ROOT = Path(__file__).parent.parent
 STORIES_DIR = REPO_ROOT / "assets" / "stories"
 BUILTIN_STORIES = REPO_ROOT / "firmware" / "bodn" / "stories" / "__init__.py"
 TTS_DIR = REPO_ROOT / "build" / "story_tts"
+FIRMWARE_SOUNDS = REPO_ROOT / "firmware" / "sounds"
+BUILD_TTS = REPO_ROOT / "build" / "tts"
+ASSETS_SOURCE = REPO_ROOT / "assets" / "audio" / "source"
+TTS_JSON = REPO_ROOT / "assets" / "audio" / "tts.json"
+SOUNDBOARD_JSON = REPO_ROOT / "assets" / "audio" / "soundboard.json"
 
 MOOD_COLORS = {
     "warm": "#ffa028",
@@ -353,7 +356,9 @@ def build_html(stories):
 </head>
 <body>
 <header>
-  <h1>Bodn Story Preview</h1>
+  <h1>Bodn Preview</h1>
+  <a href="/" style="color:var(--accent);text-decoration:none;font-weight:bold;padding:6px 12px;border:1px solid var(--accent);border-radius:6px">Stories</a>
+  <a href="/audio" style="color:var(--text);text-decoration:none;padding:6px 12px;border:1px solid #444;border-radius:6px">Audio</a>
   <select id="story-select"></select>
   <div class="lang-toggle">
     <button data-lang="sv" class="active">SV</button>
@@ -555,63 +560,623 @@ if (sel.options.length) loadStory(sel.options[0].value);
 """
 
 
-class PreviewHandler(SimpleHTTPRequestHandler):
-    """Serves the preview HTML and TTS audio files."""
+# ---------------------------------------------------------------------------
+# Audio asset browser
+# ---------------------------------------------------------------------------
 
-    def __init__(self, *args, stories=None, html=None, **kwargs):
-        self._stories = stories
-        self._html = html
+WAV_DIRS = {
+    "soundboard": FIRMWARE_SOUNDS,
+    "tts_game": BUILD_TTS,
+    "tts_story": TTS_DIR,
+    "source": ASSETS_SOURCE,
+}
+
+
+def wav_metadata(path):
+    """Read WAV header for duration and format info."""
+    try:
+        with wave.open(str(path), "rb") as w:
+            frames = w.getnframes()
+            rate = w.getframerate()
+            channels = w.getnchannels()
+            sampwidth = w.getsampwidth()
+            duration = frames / rate if rate else 0
+            return {
+                "duration": round(duration, 2),
+                "sample_rate": rate,
+                "channels": channels,
+                "bits": sampwidth * 8,
+            }
+    except Exception:
+        return {"duration": 0, "sample_rate": 0, "channels": 0, "bits": 0}
+
+
+def find_code_references():
+    """Scan firmware code for audio key references. Returns set of keys."""
+    refs = set()
+    firmware_dir = REPO_ROOT / "firmware"
+
+    # Scan all .py files for say() calls and play_sound() calls
+    for py_file in firmware_dir.rglob("*.py"):
+        try:
+            content = py_file.read_text()
+        except Exception:
+            continue
+
+        # say("key", ...) — TTS playback
+        for m in re.finditer(r'say\(\s*["\']([^"\']+)["\']', content):
+            refs.add(m.group(1))
+
+        # play_sound("key") — procedural sounds
+        for m in re.finditer(r'play_sound\(\s*["\']([^"\']+)["\']', content):
+            refs.add(m.group(1))
+
+        # TTS key construction: f"story_{...}_{...}" patterns
+        for m in re.finditer(r'f["\']story_\{', content):
+            refs.add("story_*")  # mark story TTS as used
+
+        # Direct WAV path references
+        for m in re.finditer(r'["\'](/sounds/[^"\']+\.wav)["\']', content):
+            refs.add(m.group(1))
+
+        # Soundboard wav_path references (bank_N/slot.wav)
+        for m in re.finditer(r"bank_\d+/\d+\.wav", content):
+            refs.add("soundboard_*")
+
+    return refs
+
+
+def scan_audio_assets():
+    """Scan all audio directories and cross-reference with code usage."""
+    assets = []
+    code_refs = find_code_references()
+
+    # Load TTS allowlist
+    tts_keys = set()
+    if TTS_JSON.exists():
+        tts_cfg = json.loads(TTS_JSON.read_text())
+        tts_keys = set(tts_cfg.get("keys", {}).keys())
+
+    # Load soundboard manifest
+    sb_slots = {}
+    if SOUNDBOARD_JSON.exists():
+        sb_cfg = json.loads(SOUNDBOARD_JSON.read_text())
+        for bank_id, bank in sb_cfg.get("banks", {}).items():
+            for slot_id, slot in bank.get("slots", {}).items():
+                sb_slots[f"bank_{bank_id}/{slot_id}.wav"] = {
+                    "sv": slot.get("sv", ""),
+                    "en": slot.get("en", ""),
+                }
+
+    # Load story scripts to identify story TTS keys
+    story_tts_keys = set()
+    stories = discover_stories()
+    for sid, story in stories.items():
+        for node_id, node in story.get("nodes", {}).items():
+            story_tts_keys.add(f"story_{sid}_{node_id}")
+            if node.get("choices") and story.get("narrate_choices", False):
+                story_tts_keys.add(f"story_{sid}_{node_id}_choices")
+
+    # 1. Soundboard banks
+    for bank_dir in sorted(FIRMWARE_SOUNDS.glob("bank_*")):
+        bank_id = bank_dir.name.split("_")[1]
+        for wav in sorted(bank_dir.glob("*.wav")):
+            slot_key = f"{bank_dir.name}/{wav.name}"
+            labels = sb_slots.get(slot_key, {})
+            meta = wav_metadata(wav)
+            assets.append(
+                {
+                    "path": str(wav.relative_to(REPO_ROOT)),
+                    "abs_path": str(wav),
+                    "category": "soundboard",
+                    "label_sv": labels.get("sv", ""),
+                    "label_en": labels.get("en", ""),
+                    "bank": int(bank_id),
+                    "slot": int(wav.stem),
+                    "used": True,  # soundboard files are always used
+                    "usage": f"Bank {bank_id}, slot {wav.stem}",
+                    **meta,
+                }
+            )
+
+    # 2. TTS flash (firmware/sounds/tts/)
+    tts_flash = FIRMWARE_SOUNDS / "tts"
+    if tts_flash.exists():
+        for lang_dir in sorted(tts_flash.iterdir()):
+            if not lang_dir.is_dir():
+                continue
+            for wav in sorted(lang_dir.glob("*.wav")):
+                key = wav.stem
+                meta = wav_metadata(wav)
+                in_allowlist = key in tts_keys
+                in_code = key in code_refs
+                assets.append(
+                    {
+                        "path": str(wav.relative_to(REPO_ROOT)),
+                        "abs_path": str(wav),
+                        "category": "tts_flash",
+                        "label_sv": "",
+                        "label_en": key.replace("_", " "),
+                        "lang": lang_dir.name,
+                        "tts_key": key,
+                        "used": in_allowlist or in_code,
+                        "usage": f"TTS flash ({lang_dir.name})"
+                        + (" — in allowlist" if in_allowlist else "")
+                        + (" — in code" if in_code else ""),
+                        **meta,
+                    }
+                )
+
+    # 3. TTS game (build/tts/)
+    if BUILD_TTS.exists():
+        for lang_dir in sorted(BUILD_TTS.iterdir()):
+            if not lang_dir.is_dir():
+                continue
+            for wav in sorted(lang_dir.glob("*.wav")):
+                key = wav.stem
+                meta = wav_metadata(wav)
+                in_allowlist = key in tts_keys
+                in_code = key in code_refs
+                assets.append(
+                    {
+                        "path": str(wav.relative_to(REPO_ROOT)),
+                        "abs_path": str(wav),
+                        "category": "tts_game",
+                        "label_sv": "",
+                        "label_en": key.replace("_", " "),
+                        "lang": lang_dir.name,
+                        "tts_key": key,
+                        "used": in_allowlist or in_code,
+                        "usage": f"TTS game ({lang_dir.name})"
+                        + (" — in allowlist" if in_allowlist else "")
+                        + (" — in code" if in_code else ""),
+                        **meta,
+                    }
+                )
+
+    # 4. Story TTS (build/story_tts/)
+    if TTS_DIR.exists():
+        for lang_dir in sorted(TTS_DIR.iterdir()):
+            if not lang_dir.is_dir():
+                continue
+            for wav in sorted(lang_dir.glob("*.wav")):
+                key = wav.stem
+                meta = wav_metadata(wav)
+                used = key in story_tts_keys
+                assets.append(
+                    {
+                        "path": str(wav.relative_to(REPO_ROOT)),
+                        "abs_path": str(wav),
+                        "category": "tts_story",
+                        "label_sv": "",
+                        "label_en": key.replace("_", " "),
+                        "lang": lang_dir.name,
+                        "tts_key": key,
+                        "used": used,
+                        "usage": f"Story TTS ({lang_dir.name})"
+                        + (" — in story script" if used else " — ORPHAN"),
+                        **meta,
+                    }
+                )
+
+    # 5. Check for expected TTS keys that are MISSING files
+    # (referenced in allowlist but no WAV exists)
+    existing_tts = set()
+    for a in assets:
+        if a.get("tts_key"):
+            existing_tts.add(a["tts_key"])
+
+    for key in sorted(tts_keys - existing_tts):
+        in_code = key in code_refs
+        assets.append(
+            {
+                "path": f"(missing) {key}.wav",
+                "abs_path": "",
+                "category": "missing",
+                "label_sv": "",
+                "label_en": key.replace("_", " "),
+                "tts_key": key,
+                "used": in_code,
+                "usage": "In allowlist but NO FILE"
+                + (" — referenced in code" if in_code else ""),
+                "duration": 0,
+                "sample_rate": 0,
+                "channels": 0,
+                "bits": 0,
+            }
+        )
+
+    return assets
+
+
+def build_audio_html(assets):
+    """Generate the audio browser HTML page."""
+    assets_json = json.dumps(assets, ensure_ascii=False, indent=2)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bodn Audio Browser</title>
+<style>
+  :root {{
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --card: #1f3460;
+    --text: #e0e0e0;
+    --muted: #888;
+    --accent: #ffa028;
+    --green: #28ff50;
+    --red: #e61e28;
+  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }}
+  nav {{
+    background: var(--surface);
+    padding: 12px 20px;
+    border-bottom: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }}
+  nav h1 {{ font-size: 1.2em; color: var(--accent); }}
+  nav a {{
+    color: var(--text);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    font-size: 0.9em;
+  }}
+  nav a:hover {{ background: #2a4a80; }}
+  nav a.active {{ background: var(--accent); color: #000; font-weight: bold; border-color: var(--accent); }}
+  #controls {{
+    max-width: 1100px;
+    margin: 16px auto;
+    padding: 0 20px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }}
+  .filter-btn {{
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.85em;
+  }}
+  .filter-btn:hover {{ background: #2a4a80; }}
+  .filter-btn.active {{ background: var(--accent); color: #000; font-weight: bold; }}
+  .filter-btn.unused {{ border-color: var(--red); }}
+  .stats {{
+    margin-left: auto;
+    font-size: 0.85em;
+    color: var(--muted);
+  }}
+  #app {{
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 20px 40px;
+  }}
+  table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em;
+  }}
+  th {{
+    text-align: left;
+    padding: 10px 8px;
+    border-bottom: 2px solid #444;
+    color: var(--accent);
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    user-select: none;
+  }}
+  th:hover {{ color: #fff; }}
+  td {{
+    padding: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    vertical-align: middle;
+  }}
+  tr:hover td {{ background: rgba(255,255,255,0.03); }}
+  tr.unused td {{ opacity: 0.5; }}
+  tr.missing td {{ color: var(--red); opacity: 0.7; }}
+  .play-btn {{
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid #555;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .play-btn:hover {{ background: #2a4a80; }}
+  .play-btn.playing {{ background: var(--accent); color: #000; }}
+  .play-btn.disabled {{ opacity: 0.2; cursor: default; }}
+  .cat-badge {{
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+  }}
+  .cat-soundboard {{ background: #FF6B3533; color: #FF6B35; }}
+  .cat-tts_flash {{ background: #8B5CF633; color: #8B5CF6; }}
+  .cat-tts_game {{ background: #3B82F633; color: #3B82F6; }}
+  .cat-tts_story {{ background: #10B98133; color: #10B981; }}
+  .cat-missing {{ background: #e61e2833; color: var(--red); }}
+  .status-dot {{
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }}
+  .status-used {{ background: var(--green); }}
+  .status-unused {{ background: var(--red); }}
+  .status-missing {{ background: var(--red); animation: pulse 1s infinite; }}
+  @keyframes pulse {{ 0%,100% {{ opacity: 1; }} 50% {{ opacity: 0.3; }} }}
+  .dur {{ font-family: monospace; color: var(--muted); }}
+  .meta-detail {{ font-size: 0.75em; color: var(--muted); font-family: monospace; }}
+  .usage-text {{ font-size: 0.8em; color: var(--muted); }}
+  .file-path {{ font-family: monospace; font-size: 0.8em; word-break: break-all; }}
+</style>
+</head>
+<body>
+<nav>
+  <h1>Bodn Preview</h1>
+  <a href="/">Stories</a>
+  <a href="/audio" class="active">Audio</a>
+</nav>
+<div id="controls">
+  <button class="filter-btn active" data-filter="all">All</button>
+  <button class="filter-btn" data-filter="soundboard">Soundboard</button>
+  <button class="filter-btn" data-filter="tts_flash">TTS Flash</button>
+  <button class="filter-btn" data-filter="tts_game">TTS Game</button>
+  <button class="filter-btn" data-filter="tts_story">TTS Story</button>
+  <button class="filter-btn unused" data-filter="unused">Unused</button>
+  <button class="filter-btn unused" data-filter="missing">Missing</button>
+  <span class="stats" id="stats"></span>
+</div>
+<div id="app"></div>
+
+<script>
+const ASSETS = {assets_json};
+let currentFilter = 'all';
+let audioEl = null;
+let playingIdx = -1;
+
+const CAT_LABELS = {{
+  soundboard: 'Soundboard',
+  tts_flash: 'TTS Flash',
+  tts_game: 'TTS Game',
+  tts_story: 'TTS Story',
+  missing: 'Missing',
+}};
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn => {{
+  btn.addEventListener('click', () => {{
+    currentFilter = btn.dataset.filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    render();
+  }});
+}});
+
+function stopAudio() {{
+  if (audioEl) {{
+    audioEl.pause();
+    audioEl = null;
+  }}
+  playingIdx = -1;
+  document.querySelectorAll('.play-btn.playing').forEach(b => b.classList.remove('playing'));
+}}
+
+function playFile(idx, btn) {{
+  const a = ASSETS[idx];
+  if (!a.abs_path) return;
+
+  if (playingIdx === idx) {{
+    stopAudio();
+    return;
+  }}
+
+  stopAudio();
+  const url = `/wav/${{encodeURIComponent(a.path)}}`;
+  audioEl = new Audio(url);
+  playingIdx = idx;
+  btn.classList.add('playing');
+  btn.textContent = '\\u25A0';
+  audioEl.addEventListener('ended', () => {{
+    btn.classList.remove('playing');
+    btn.textContent = '\\u25B6';
+    playingIdx = -1;
+    audioEl = null;
+  }});
+  audioEl.addEventListener('error', () => {{
+    btn.classList.remove('playing');
+    btn.textContent = '!';
+    playingIdx = -1;
+    audioEl = null;
+  }});
+  audioEl.play();
+}}
+
+function fmtDuration(s) {{
+  if (!s) return '-';
+  if (s < 1) return s.toFixed(2) + 's';
+  const m = Math.floor(s / 60);
+  const sec = (s % 60).toFixed(1);
+  return m > 0 ? m + ':' + sec.padStart(4, '0') : sec + 's';
+}}
+
+function fmtSize(path) {{
+  // We don't have file size in JS but duration + sample rate gives a rough idea
+  return '';
+}}
+
+function render() {{
+  const filtered = ASSETS.filter(a => {{
+    if (currentFilter === 'all') return true;
+    if (currentFilter === 'unused') return !a.used && a.category !== 'missing';
+    if (currentFilter === 'missing') return a.category === 'missing';
+    return a.category === currentFilter;
+  }});
+
+  const total = ASSETS.length;
+  const used = ASSETS.filter(a => a.used && a.category !== 'missing').length;
+  const unused = ASSETS.filter(a => !a.used && a.category !== 'missing').length;
+  const missing = ASSETS.filter(a => a.category === 'missing').length;
+  document.getElementById('stats').textContent =
+    `${{total}} files | ${{used}} used | ${{unused}} unused | ${{missing}} missing`;
+
+  let html = '<table><thead><tr>';
+  html += '<th></th><th>File</th><th>Category</th><th>Label</th>';
+  html += '<th>Duration</th><th>Format</th><th>Status</th><th>Usage</th>';
+  html += '</tr></thead><tbody>';
+
+  filtered.forEach((a, i) => {{
+    const realIdx = ASSETS.indexOf(a);
+    const rowClass = a.category === 'missing' ? 'missing' : (!a.used ? 'unused' : '');
+    const isPlaying = playingIdx === realIdx;
+    const canPlay = !!a.abs_path;
+
+    html += `<tr class="${{rowClass}}">`;
+
+    // Play button
+    html += `<td><button class="play-btn ${{isPlaying ? 'playing' : ''}} ${{!canPlay ? 'disabled' : ''}}"
+      onclick="playFile(${{realIdx}}, this)" ${{!canPlay ? 'disabled' : ''}}>
+      ${{isPlaying ? '\\u25A0' : '\\u25B6'}}</button></td>`;
+
+    // File path
+    html += `<td class="file-path">${{a.path}}</td>`;
+
+    // Category badge
+    html += `<td><span class="cat-badge cat-${{a.category}}">${{CAT_LABELS[a.category] || a.category}}</span></td>`;
+
+    // Label
+    const label = a.label_en || a.label_sv || '';
+    html += `<td>${{label}}</td>`;
+
+    // Duration
+    html += `<td class="dur">${{fmtDuration(a.duration)}}</td>`;
+
+    // Format
+    if (a.sample_rate) {{
+      html += `<td class="meta-detail">${{a.sample_rate/1000}}kHz ${{a.bits}}bit ${{a.channels === 1 ? 'mono' : 'stereo'}}</td>`;
+    }} else {{
+      html += `<td class="meta-detail">-</td>`;
+    }}
+
+    // Status
+    const statusClass = a.category === 'missing' ? 'status-missing' : (a.used ? 'status-used' : 'status-unused');
+    const statusLabel = a.category === 'missing' ? 'missing' : (a.used ? 'used' : 'unused');
+    html += `<td><span class="status-dot ${{statusClass}}"></span>${{statusLabel}}</td>`;
+
+    // Usage
+    html += `<td class="usage-text">${{a.usage || ''}}</td>`;
+
+    html += '</tr>';
+  }});
+
+  html += '</tbody></table>';
+  document.getElementById('app').innerHTML = html;
+}}
+
+render();
+</script>
+</body>
+</html>
+"""
+
+
+class PreviewHandler(SimpleHTTPRequestHandler):
+    """Serves story preview, audio browser, and WAV files."""
+
+    def __init__(self, *args, pages=None, **kwargs):
+        self._pages = pages or {}
         super().__init__(*args, **kwargs)
+
+    def _serve_html(self, html):
+        data = html.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", len(data))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_wav(self, wav_path):
+        if wav_path.exists() and wav_path.suffix == ".wav":
+            data = wav_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", len(data))
+            self.end_headers()
+            self.wfile.write(data)
+        else:
+            self.send_error(404)
 
     def do_GET(self):
         parsed = urlparse(self.path)
 
-        if parsed.path == "/" or parsed.path == "/index.html":
-            data = self._html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", len(data))
-            self.end_headers()
-            self.wfile.write(data)
+        if parsed.path in ("/", "/index.html"):
+            self._serve_html(self._pages["story"])
+            return
+
+        if parsed.path == "/audio":
+            self._serve_html(self._pages["audio"])
             return
 
         if parsed.path.startswith("/tts/"):
-            # Serve TTS audio from build/story_tts/
-            rel = parsed.path[5:]  # strip /tts/
-            wav_path = TTS_DIR / rel
-            if wav_path.exists() and wav_path.suffix == ".wav":
-                data = wav_path.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "audio/wav")
-                self.send_header("Content-Length", len(data))
-                self.end_headers()
-                self.wfile.write(data)
-            else:
-                self.send_error(404, f"TTS file not found: {rel}")
+            self._serve_wav(TTS_DIR / parsed.path[5:])
+            return
+
+        if parsed.path.startswith("/wav/"):
+            # Serve any WAV by repo-relative path
+            from urllib.parse import unquote
+
+            rel = unquote(parsed.path[5:])
+            self._serve_wav(REPO_ROOT / rel)
             return
 
         self.send_error(404)
 
     def log_message(self, format, *args):
-        # Suppress 404 noise from missing TTS files
         if args and "404" in str(args[0]):
             return
         super().log_message(format, *args)
 
 
-def make_handler(stories, html):
-    """Create handler class with stories/html bound."""
+def make_handler(pages):
+    """Create handler class with pages bound."""
 
     class Handler(PreviewHandler):
         def __init__(self, *args, **kwargs):
-            super().__init__(*args, stories=stories, html=html, **kwargs)
+            super().__init__(*args, pages=pages, **kwargs)
 
     return Handler
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Bodn Story Mode — offline web preview"
+        description="Bodn preview server — stories and audio assets"
     )
     parser.add_argument("--port", type=int, default=8033, help="Port (default: 8033)")
     args = parser.parse_args()
@@ -621,20 +1186,28 @@ def main():
         print("No stories found!", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Loaded {len(stories)} story/stories: {', '.join(stories.keys())}")
+    print(f"Stories: {len(stories)} ({', '.join(stories.keys())})")
 
-    has_tts = TTS_DIR.exists() and any(TTS_DIR.rglob("*.wav"))
-    if has_tts:
-        n = len(list(TTS_DIR.rglob("*.wav")))
-        print(f"TTS audio: {n} WAV files in build/story_tts/")
-    else:
-        print("TTS audio: not found (run tools/generate_story_tts.py to generate)")
+    audio_assets = scan_audio_assets()
+    used = sum(1 for a in audio_assets if a["used"] and a["category"] != "missing")
+    unused = sum(
+        1 for a in audio_assets if not a["used"] and a["category"] != "missing"
+    )
+    missing = sum(1 for a in audio_assets if a["category"] == "missing")
+    print(
+        f"Audio: {len(audio_assets)} files ({used} used, {unused} unused, {missing} missing)"
+    )
 
-    html = build_html(stories)
-    handler = make_handler(stories, html)
+    pages = {
+        "story": build_html(stories),
+        "audio": build_audio_html(audio_assets),
+    }
+    handler = make_handler(pages)
 
     server = HTTPServer(("127.0.0.1", args.port), handler)
     print(f"\nServing at http://localhost:{args.port}")
+    print(f"  /       Story preview")
+    print(f"  /audio  Audio browser")
     print("Press Ctrl+C to stop.\n")
     try:
         server.serve_forever()
