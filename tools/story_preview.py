@@ -182,9 +182,9 @@ def build_html(stories):
   }}
   .node-id {{
     font-size: 0.8em;
-    color: var(--muted);
+    color: #aaa;
     font-family: monospace;
-    background: rgba(255,255,255,0.05);
+    background: rgba(255,255,255,0.08);
     padding: 2px 8px;
     border-radius: 4px;
   }}
@@ -192,9 +192,8 @@ def build_html(stories):
     font-size: 0.8em;
     padding: 3px 10px;
     border-radius: 12px;
-    color: #fff;
-    font-weight: 600;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    color: #000;
+    font-weight: 700;
   }}
   .narration {{
     font-size: 1.15em;
@@ -372,6 +371,8 @@ const STORIES = {stories_json};
 const MOOD_COLORS = {mood_colors_json};
 const ARC_COLORS = {arc_colors_json};
 const ARC_NAMES = {{ sv: ['gron', 'bla', 'vit', 'gul', 'rod'], en: ['green', 'blue', 'white', 'yellow', 'red'] }};
+// WCAG-safe text color per mood background (black for light, white for dark)
+const MOOD_TEXT = {{ warm: '#000', tense: '#fff', happy: '#000', wonder: '#fff', calm: '#fff' }};
 
 let currentStory = null;
 let currentNode = null;
@@ -498,7 +499,7 @@ function render() {{
   html += `<div class="node-card" style="border-left-color: ${{moodColor}}">`;
   html += `<div class="node-header">
     <span class="node-id">${{currentNode}}</span>
-    <span class="mood-badge" style="background: ${{moodColor}}">${{node.mood || 'calm'}}</span>
+    <span class="mood-badge" style="background: ${{moodColor}}; color: ${{MOOD_TEXT[node.mood] || '#fff'}}">${{node.mood || 'calm'}}</span>
   </div>`;
 
   html += `<div class="narration">${{getText(node.text)}}</div>`;
@@ -891,8 +892,8 @@ def build_audio_html(assets):
     vertical-align: middle;
   }}
   tr:hover td {{ background: rgba(255,255,255,0.03); }}
-  tr.unused td {{ opacity: 0.5; }}
-  tr.missing td {{ color: var(--red); opacity: 0.7; }}
+  tr.unused td {{ color: #9a9a9a; }}
+  tr.missing td {{ color: #ff8a8a; }}
   .play-btn {{
     width: 32px;
     height: 32px;
@@ -908,7 +909,7 @@ def build_audio_html(assets):
   }}
   .play-btn:hover {{ background: #2a4a80; }}
   .play-btn.playing {{ background: var(--accent); color: #000; }}
-  .play-btn.disabled {{ opacity: 0.2; cursor: default; }}
+  .play-btn.disabled {{ opacity: 0.35; cursor: default; }}
   .cat-badge {{
     display: inline-block;
     padding: 2px 8px;
@@ -920,7 +921,7 @@ def build_audio_html(assets):
   .cat-tts_flash {{ background: #8B5CF633; color: #8B5CF6; }}
   .cat-tts_game {{ background: #3B82F633; color: #3B82F6; }}
   .cat-tts_story {{ background: #10B98133; color: #10B981; }}
-  .cat-missing {{ background: #e61e2833; color: var(--red); }}
+  .cat-missing {{ background: #ff8a8a22; color: #ff8a8a; }}
   .status-dot {{
     display: inline-block;
     width: 8px;
