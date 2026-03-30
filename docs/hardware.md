@@ -17,7 +17,7 @@
 | 2 | Toggle switches | Mini SPST on/off (Gebildet 12-pack) | ~99 SEK |
 | 2 | LED sticks | WS2812 8-LED RGB modules (from 10-pack) | ~incl. |
 | 1 | LED strip | WS2812B 144 LED/m RGBIC strip, cut to 640 mm (~92 LEDs) | ~169 SEK |
-| 2 | GPIO expander | Waveshare MCP23017 I2C 16-IO expansion board | ~170 SEK |
+| 2 | GPIO expander | CJMCU-2317 MCP23017 I2C 16-IO expansion board | ~80 SEK |
 | 1 | PWM driver | PCA9685 16-channel 12-bit PWM I2C breakout ([Adafruit 815](https://www.adafruit.com/product/815)) | ~120 SEK |
 | 1 | SD card | Micro SD card, 4–32 GB FAT32 (any brand) | ~50 SEK |
 | 1 | DC-DC converter | Buck-boost 3–16V → 5V/2A ([Electrokit](https://www.electrokit.com/dcdc-omvandlare-step-up/step-down-3.3/5v)) | ~99 SEK |
@@ -147,7 +147,7 @@ Both share SPI bus 2. The driver deasserts CS after each `show()`, so they can c
 - Both displays on SPI bus 2 with separate CS pins. Touch controller (XPT2046) not used.
 - SD card on dedicated SPI3 bus (GPIOs 0/17/40/19) — independent of display SPI2.
 - INMP441 and MAX98357A on I2S (separate IN/OUT peripherals on ESP32-S3).
-- Buttons, toggles, arcade switches on MCP1 (0x27). Encoder push buttons on MCP2 (0x26). Both share the I2C bus with internal pull-ups and software debouncing.
+- Buttons, toggles, arcade switches on MCP1 (0x23). Encoder push buttons on MCP2 (0x21). Both share the I2C bus with internal pull-ups and software debouncing. RESET pins must be tied to VCC (no on-board pull-up on the CJMCU-2317 modules).
 - NeoPixel chain on a single GPIO — data line through 108 LEDs (2 sticks + lid ring).
 - WS2812 LEDs powered from the DC-DC converter's 5V output. The 3.3V data line from GPIO 4 works reliably with short wires. If you get flicker, add a 330Ω series resistor on the data line.
 - Battery voltage can be read via the DevKit-Lipo's built-in ADC circuit.
@@ -247,14 +247,14 @@ Two MCP23017 boards share the same I2C bus with different addresses:
 
 | Board | I2C address | A0–A2 jumpers | Role |
 |-------|-------------|---------------|------|
-| MCP1 | 0x27 | all high (Waveshare default) | Buttons, toggles, arcade switches |
-| MCP2 | 0x26 | A0 low, A1–A2 high | Encoder push buttons |
+| MCP1 | 0x23 | A0=high, A1=high, A2=low | Buttons, toggles, arcade switches |
+| MCP2 | 0x21 | A0=high, A1=low, A2=low | Encoder push buttons |
 
 ### Module specs
 
 | Parameter | Value |
 |-----------|-------|
-| Board | Waveshare MCP23017 I2C 16-IO Expansion Board |
+| Board | CJMCU-2317 MCP23017 I2C 16-IO Expansion Board |
 | Chip | Microchip MCP23017 |
 | Interface | I2C (up to 1.7 MHz in fast-mode plus, 400 kHz standard) |
 | I/O pins | 16 (two 8-bit ports: GPA0–7, GPB0–7) |
@@ -267,7 +267,7 @@ Two MCP23017 boards share the same I2C bus with different addresses:
 Both boards share GPIO 47 (SCL) / GPIO 48 (SDA) with 2.2 kΩ pull-ups on the devkit.
 The MCP interrupt line from MCP1 is on GPIO 46 (active-low, open-drain).
 
-### MCP1 pin mapping (addr 0x27)
+### MCP1 pin mapping (addr 0x23)
 
 | MCP1 pin | Peripheral | Notes |
 |----------|-----------|-------|
@@ -279,7 +279,7 @@ The MCP interrupt line from MCP1 is on GPIO 46 (active-low, open-drain).
 
 All 16 MCP1 pins are allocated.
 
-### MCP2 pin mapping (addr 0x26)
+### MCP2 pin mapping (addr 0x21)
 
 | MCP2 pin | Peripheral | Notes |
 |----------|-----------|-------|
@@ -321,8 +321,8 @@ The PCA9685 shares the I2C bus on GPIO 47 (SCL) / GPIO 48 (SDA) with the MCP2301
 
 | Address | Device |
 |---------|--------|
-| 0x27 | MCP1 — MCP23017 (buttons, toggles, power switch, arcade) |
-| 0x26 | MCP2 — MCP23017 (encoder push buttons) |
+| 0x23 | MCP1 — MCP23017 (buttons, toggles, power switch, arcade) |
+| 0x21 | MCP2 — MCP23017 (encoder push buttons) |
 | 0x40 | PCA9685 (PWM dimming) |
 
 ### Channel assignments
@@ -518,9 +518,9 @@ See `docs/assets.md` for the directory structure.
 | Native GPIOs free | 0 (all pins assigned) |
 | PSRAM-reserved (never use) | GPIO 35, 36, 37 |
 | UART console (avoid) | GPIO 43 (TX), 44 (RX) |
-| MCP1 (0x27) in use | 16 (8 buttons + 2 toggles + master switch + 5 arcade) |
+| MCP1 (0x23) in use | 16 (8 buttons + 2 toggles + master switch + 5 arcade) |
 | MCP1 spare | 0 |
-| MCP2 (0x26) in use | 2 (encoder push buttons GPA0–GPA1) |
+| MCP2 (0x21) in use | 2 (encoder push buttons GPA0–GPA1) |
 | MCP2 spare | 14 (GPA2–7, GPB0–7 — future expansion) |
 | PCA9685 in use | 7 (backlight + 5 arcade LEDs + amp mute) |
 | PCA9685 spare | 9 (channels 7–15) |

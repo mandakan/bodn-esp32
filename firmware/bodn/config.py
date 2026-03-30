@@ -3,8 +3,8 @@
 # GPIO 35, 36, 37 are reserved by OSPI PSRAM on the N8R8 module — never use.
 # GPIO 20 (USB OTG D+) is used for 1-Wire (OTG port not used in this project).
 # GPIO 47 (SCL) and 48 (SDA) are reserved for the I2C bus (pUEXT pull-ups).
-# Buttons and toggle switches are on MCP1 (MCP23017 at 0x27) I2C GPIO expander.
-# Encoder push buttons are on MCP2 (MCP23017 at 0x26).
+# Buttons and toggle switches are on MCP1 (MCP23017 at 0x23) I2C GPIO expander.
+# Encoder push buttons are on MCP2 (MCP23017 at 0x21).
 # SD card uses a dedicated SPI3 bus on freed GPIOs (see SD card section below).
 
 from micropython import const
@@ -106,11 +106,11 @@ I2C_SCL = const(47)
 I2C_SDA = const(48)
 
 # MCP1 — MCP23017 GPIO expander: buttons, toggles, arcade switches over I2C
-MCP23017_ADDR = const(0x27)  # A0-A2 jumpers all high (Waveshare default)
+MCP23017_ADDR = const(0x23)  # A0=high, A1=high, A2=low
 MCP_INT_PIN = const(46)  # MCP23017 INTA/INTB → GPIO 46 (active-low, open-drain)
 
 # MCP2 — second MCP23017: encoder push buttons (frees GPIOs 17/40 for SD SPI3)
-MCP2_ADDR = const(0x26)  # A0 jumper low, A1-A2 high (differs from MCP1)
+MCP2_ADDR = const(0x21)  # A0=high, A1=low, A2=low
 MCP2_ENC1_SW = const(0)  # GPA0 — ENC1 push button (was GPIO 17)
 MCP2_ENC2_SW = const(1)  # GPA1 — ENC2 push button (was GPIO 40)
 

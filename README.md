@@ -28,7 +28,7 @@ A colourful, tactile device that grows with a child (starting around age 4):
 | LED strip | WS2812B 144 LED/m, 640 mm / ~92 LEDs (lid perimeter, chained after sticks) |
 | Inputs | 2× KY-040 rotary encoders, 8× momentary push buttons, 2× toggle switches |
 | Arcade buttons | 5× illuminated arcade buttons with PWM LED control |
-| GPIO expander | Waveshare MCP23017 16-IO board (I2C, addr 0x27) |
+| GPIO expanders | CJMCU-2317 MCP23017 16-IO boards × 2 (I2C, MCP1 0x23 / MCP2 0x21) |
 | Temperature | DS18B20 × 2 (battery + enclosure, 1-Wire) |
 | DC-DC converter | Buck-boost 3–16 V → 5 V / 2 A (LiPo → 5 V for NeoPixels) |
 | Power switch | Panel-mount toggle switch |

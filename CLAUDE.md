@@ -62,7 +62,7 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 | Toggle switches | SPST mini toggle switches × 2 | MCP23017 I2C expander |
 | LED sticks | WS2812 8-LED modules × 2 (on lid) | NeoPixel (1 GPIO, daisy-chained) |
 | LED strip | WS2812B 144 LED/m strip, 640 mm / ~92 LEDs (inside lid perimeter) | NeoPixel (chained after sticks) |
-| GPIO expander | Waveshare MCP23017 16-IO board | I2C (addr 0x27) |
+| GPIO expanders | CJMCU-2317 MCP23017 16-IO boards × 2 | I2C (MCP1 0x23, MCP2 0x21) |
 | DC-DC converter | Buck-boost 3–16 V → 5 V / 2 A | LiPo → 5 V for NeoPixels |
 | Temperature sensors | DS18B20 × 2 (battery + enclosure) | 1-Wire (GPIO 20) |
 | Power switch | Panel-mount toggle switch | — |

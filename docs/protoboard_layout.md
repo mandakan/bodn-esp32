@@ -201,7 +201,7 @@ switch wires.
 
 | Component | Notes |
 |-----------|-------|
-| MCP23017 (Waveshare breakout) | I2C GPIO expander, addr 0x27 — sits here, close to controls |
+| MCP23017 (CJMCU-2317 breakout) | I2C GPIO expander, addr 0x23 — sits here, close to controls |
 | 10-pin header (input) | From board A `J-LID` |
 | 8 × 2-pin JST (buttons) | Mini momentary buttons (8 off) |
 | 2 × 2-pin JST (toggles) | SPST toggle switches |
@@ -409,19 +409,19 @@ LiPo 3.0–4.2 V ─── DevKit-Lipo system rail
 ## Expanding with a second MCP23017
 
 The I2C bus supports up to 8 MCP23017 boards at addresses 0x20–0x27 (set via A0–A2
-jumpers). The current board uses **0x27** (all address pins high). A second expander
-gets a unique address by pulling one or more address pins low, e.g. **0x26** (A0 low).
+jumpers). The current boards use **0x23** (MCP1: A0=high, A1=high, A2=low) and
+**0x21** (MCP2: A0=high, A1=low, A2=low).
 
 ### Where to place it
 
-The first MCP23017 (0x27) is already on board C. The second expander goes wherever
+MCP1 (0x23) is already on board C. A third expander would go wherever
 the new switches are physically located:
 
 | Option | Location | Good for |
 |--------|----------|---------|
 | **Board C (lid)** | Inside lid | More toggle switches on the lid; taps the existing SCL/SDA spine on board C |
 | **Board A (main)** | Base of enclosure | Toggle switches on the box body; taps the I2C bus locally on board A |
-| **Both** | One per location | Lid on C (0x26), box on A (0x25) — no harness changes needed either way |
+| **Both** | One per location | Lid on C, box on A — no harness changes needed either way |
 
 Since the I2C bus runs continuously from board A through the harness to board C,
 both boards can host MCP23017 devices and the ESP32 will see all of them.
@@ -429,8 +429,9 @@ both boards can host MCP23017 devices and the ESP32 will see all of them.
 ### Wiring changes
 
 - Second expander connects to the same SCL/SDA/3.3V/GND lines (parallel tap).
-- Set address jumpers before soldering: e.g. on the Waveshare board, A0 pad — bridge
-  to GND for 0x26 instead of the default 0x27.
+- Set address pins before soldering: solder A0–A2 to VCC or GND as needed.
+  CJMCU-2317 modules have 10K pull-downs on A0–A2 (default address 0x20).
+  RESET must be tied to VCC (no on-board pull-up).
 - The `J-LID` harness carries I2C already; board C simply gets a second MCP23017
   breakout tapped onto its SCL/SDA spine. No connector changes.
 
@@ -440,7 +441,7 @@ Add a second driver instance with the new address. This is a one-line change:
 
 ```python
 # config.py (add)
-MCP23017_ADDR2 = const(0x26)   # second expander — lid toggles
+MCP23017_ADDR3 = const(0x22)   # third expander (example)
 ```
 
 ```python
@@ -559,6 +560,6 @@ loops that add noise to audio and I2S signals.
    Document any exception.
 
 8. **Test each board standalone** before mating:
-   - Board A alone: flash firmware, confirm I2C scan sees 0x40 (PCA9685). MCP23017 (0x27) will only appear once the lid harness is connected, because it lives on board C.
-   - Board A + C connected: I2C scan should now see both 0x27 and 0x40.
+   - Board A alone: flash firmware, confirm I2C scan sees 0x40 (PCA9685). MCP1 (0x23) will only appear once the lid harness is connected, because it lives on board C.
+   - Board A + C connected: I2C scan should now see 0x21, 0x23, and 0x40.
    - Board B: verify display SPI bus with both CS lines; check mic I2S with a quick record test.
