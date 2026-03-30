@@ -93,6 +93,9 @@ def build_html(stories):
 
     mood_colors_json = json.dumps(MOOD_COLORS)
     arc_colors_json = json.dumps(ARC_COLORS)
+    # JS regex for stripping {pause} markers — kept outside f-string to avoid
+    # Python 3.12 SyntaxWarnings about \s, \d, \{ escape sequences.
+    pause_re_js = r"/\{pause(?:\s+[\d.]+)?\}/g"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -458,10 +461,11 @@ function playTTS(key, btn) {{
   audioEl.play();
 }}
 
+const PAUSE_RE = {pause_re_js};
 function getText(textObj) {{
   if (!textObj) return '';
   let t = textObj[lang] || textObj.en || '';
-  return t.replace(/\{{pause(?:\s+[\d.]+)?\}}/g, '');
+  return t.replace(PAUSE_RE, '');
 }}
 
 function render() {{
