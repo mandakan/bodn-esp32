@@ -53,7 +53,7 @@ I2S_SPK_WS = const(45)
 I2S_SPK_DIN = const(7)  # GPIO 5 is PWR_SENS (board reserved)
 AMP_SD_PIN = const(3)  # amp shutdown — direct GPIO (PCA9685 glitches on boot)
 
-# Rotary encoders (KY-040) — CLK/DT stay on native GPIO for IRQ latency.
+# Rotary encoders (KY-040) — CLK/DT on native GPIO, decoded by PCNT hardware.
 # Push buttons (SW) moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.
 ENC1_CLK = const(21)  # CLK was 19 (USB OTG D−) → moved to 21
 ENC1_DT = const(18)

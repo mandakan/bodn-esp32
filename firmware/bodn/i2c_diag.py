@@ -12,7 +12,8 @@
 # then typing: exec(open('bodn/i2c_diag.py').read())
 
 import time
-from machine import SoftI2C, Pin
+from machine import I2C, Pin
+from micropython import const
 from bodn import config
 
 _EXPECTED = {
@@ -53,7 +54,7 @@ def _fmt_pins(val):
 
 def run():
     """Main diagnostic loop. Ctrl-C to exit."""
-    i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+    i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
 
     print()
     print("=== I2C Bus Diagnostic ===")

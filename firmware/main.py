@@ -7,7 +7,7 @@ except ImportError:
 
 import time
 import neopixel
-from machine import Pin, SPI, SoftI2C
+from machine import Pin, SPI, I2C
 from micropython import const
 from bodn import config
 from bodn.encoder import Encoder
@@ -88,7 +88,7 @@ def create_hardware():
     )
 
     # Shared I2C bus for MCP23017 and PCA9685
-    i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+    i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
 
     # I2C bus scan — show all devices for diagnostics
     i2c_devs = i2c.scan()
@@ -579,72 +579,70 @@ async def housekeeping_task(session_mgr, np, settings, audio=None):
             errors += 1
             print("housekeeping_task error #{}: {}".format(errors, e))
 
-        # Temperature overwatch — poll is cheap (cached 30 s in temperature.py)
+        # Temperature overwatch — SoC sensor is always available; DS18B20 cached 30 s
         try:
-            if temperature.sensor_count() > 0:
-                temp_status = temperature.status()
-                t_max = temperature.max_temp()
-                settings["_temp_status"] = temp_status
-                settings["_temp_c"] = t_max
+            temp_status = temperature.status()
+            t_max = temperature.max_temp()
+            settings["_temp_status"] = temp_status
+            settings["_temp_c"] = t_max
 
-                # Emergency: forced deep sleep — only way to cut power draw
-                if temp_status == "emergency":
-                    print(
-                        "TEMP EMERGENCY ({}C >= {}C): FORCED DEEP SLEEP".format(
-                            int(t_max), config.TEMP_EMERGENCY_C
-                        )
+            # Emergency: forced deep sleep — only way to cut power draw
+            if temp_status == "emergency":
+                print(
+                    "TEMP EMERGENCY ({}C >= {}C): FORCED DEEP SLEEP".format(
+                        int(t_max), config.TEMP_EMERGENCY_C
                     )
-                    # Kill everything before sleeping
-                    for i in range(N_LEDS):
-                        np[i] = (0, 0, 0)
-                    np.write()
-                    try:
-                        from machine import Pin, deepsleep
+                )
+                # Kill everything before sleeping
+                for i in range(N_LEDS):
+                    np[i] = (0, 0, 0)
+                np.write()
+                try:
+                    from machine import Pin, deepsleep
 
-                        Pin(config.TFT_BL, Pin.OUT).value(0)
-                        # Deep sleep for 5 minutes, then wake to re-check
-                        deepsleep(300_000)
-                    except Exception:
-                        pass
+                    Pin(config.TFT_BL, Pin.OUT).value(0)
+                    # Deep sleep for 5 minutes, then wake to re-check
+                    deepsleep(300_000)
+                except Exception:
+                    pass
 
-                if temp_status == "critical" and _prev_temp != "critical":
-                    print(
-                        "TEMP CRITICAL ({}C >= {}C): "
-                        "killing NeoPixels, dimming backlight".format(
-                            int(t_max), config.TEMP_CRIT_C
-                        )
+            elif temp_status == "critical" and _prev_temp != "critical":
+                print(
+                    "TEMP CRITICAL ({}C >= {}C): "
+                    "killing NeoPixels, dimming backlight".format(
+                        int(t_max), config.TEMP_CRIT_C
                     )
-                    # Kill NeoPixels — biggest heat contributor
-                    for i in range(N_LEDS):
-                        np[i] = (0, 0, 0)
-                    np.write()
-                    # Dim display backlight to minimum
-                    try:
-                        from machine import Pin
+                )
+                # Kill NeoPixels — biggest heat contributor
+                for i in range(N_LEDS):
+                    np[i] = (0, 0, 0)
+                np.write()
+                # Dim display backlight to minimum
+                try:
+                    from machine import Pin
 
-                        Pin(config.TFT_BL, Pin.OUT).value(0)
-                    except Exception:
-                        pass
+                    Pin(config.TFT_BL, Pin.OUT).value(0)
+                except Exception:
+                    pass
 
-                elif temp_status == "warn" and _prev_temp == "ok":
-                    print(
-                        "TEMP WARNING ({}C >= {}C): "
-                        "reducing NeoPixel brightness".format(
-                            int(t_max), config.TEMP_WARN_C
-                        )
+            elif temp_status == "warn" and _prev_temp == "ok":
+                print(
+                    "TEMP WARNING ({}C >= {}C): reducing NeoPixel brightness".format(
+                        int(t_max), config.TEMP_WARN_C
                     )
+                )
 
-                elif temp_status == "ok" and _prev_temp != "ok":
-                    print("TEMP OK ({}C): resumed normal operation".format(int(t_max)))
-                    # Restore backlight
-                    try:
-                        from machine import Pin
+            elif temp_status == "ok" and _prev_temp != "ok":
+                print("TEMP OK ({}C): resumed normal operation".format(int(t_max)))
+                # Restore backlight
+                try:
+                    from machine import Pin
 
-                        Pin(config.TFT_BL, Pin.OUT).value(1)
-                    except Exception:
-                        pass
+                    Pin(config.TFT_BL, Pin.OUT).value(1)
+                except Exception:
+                    pass
 
-                _prev_temp = temp_status
+            _prev_temp = temp_status
         except Exception as e:
             errors += 1
             print("temp_monitor error #{}: {}".format(errors, e))
@@ -834,11 +832,7 @@ if not _skip:
         print("FATAL:", e)
         sys.print_exception(e)
     finally:
-        # Disable encoder IRQs so Ctrl-C can reach the REPL on next attempt
-        for pin_num in (config.ENC1_CLK, config.ENC2_CLK):
-            try:
-                Pin(pin_num, Pin.IN).irq(handler=None)
-            except Exception:
-                pass
+        # Release PCNT encoder units
+        pass
 else:
     print("main.py: skipped — REPL active. Reset to boot normally.")

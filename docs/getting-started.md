@@ -159,20 +159,52 @@ uv run mpremote connect auto fs touch :/skip_main
 # The flag auto-deletes so the next reset boots normally
 ```
 
-From the REPL you can run I2C diagnostics, upload files, etc:
+From the REPL you can run the built-in diagnostic tools:
+
+### I2C bus monitor
+
+Live-polls the I2C bus and reports devices appearing/disappearing. Also
+reads MCP23017 pin states so you can verify buttons while wiggling wires.
 
 ```python
 >>> from bodn.i2c_diag import run
->>> run()     # live I2C bus monitor — Ctrl-C to stop
+>>> run()     # Ctrl-C to stop
 ```
+
+Example output:
+```
+[SCAN] Found: 0x21, 0x23, 0x40
+0x23 A=[11111111] B=[11111111]  MCP1 (buttons/switches)
+[-] 0x23 LOST      (MCP1 (buttons/switches))    ← wire disconnected
+[+] 0x23 appeared  (MCP1 (buttons/switches))    ← reconnected
+```
+
+### Encoder oscilloscope
+
+Displays raw CLK and DT signals on the primary TFT as a rolling scope
+trace. Useful for checking quadrature waveforms, spotting noise from long
+wires, or confirming that pull-up resistors are working.
+
+```python
+>>> from bodn.encoder_scope import run
+>>> run()             # both encoders (4 traces: CLK1, DT1, CLK2, DT2)
+>>> run(enc=1)        # ENC1 (NAV) only — larger traces
+>>> run(enc=2)        # ENC2 only
+>>> run(sample_ms=1)  # fastest sweep (1ms per pixel)
+>>> run(sample_ms=5)  # slower sweep, easier to see individual detents
+```
+
+Turn the encoder slowly and look for clean square waves with CLK leading
+DT by 90°. Noise shows up as ragged edges or random spikes — add 4.7kΩ
+pull-ups to 3.3V on the CLK and DT lines if you see this.
 
 ## 8. Common debug tasks
 
 ### Check if I2C devices are detected
 
 ```python
->>> from machine import SoftI2C, Pin
->>> i2c = SoftI2C(scl=Pin(47), sda=Pin(48))
+>>> from machine import I2C, Pin
+>>> i2c = I2C(0, scl=Pin(47), sda=Pin(48))
 >>> [hex(a) for a in i2c.scan()]
 ['0x21', '0x23', '0x40']    # MCP2 + MCP1 + PCA9685
 ```
@@ -181,8 +213,8 @@ From the REPL you can run I2C diagnostics, upload files, etc:
 
 ```python
 >>> from bodn.mcp23017 import MCP23017
->>> from machine import SoftI2C, Pin
->>> i2c = SoftI2C(scl=Pin(47), sda=Pin(48))
+>>> from machine import I2C, Pin
+>>> i2c = I2C(0, scl=Pin(47), sda=Pin(48))
 >>> mcp = MCP23017(i2c, 0x23)
 >>> mcp.read_port_a()  # returns byte — bit 0 = GPA0, etc.
 ```

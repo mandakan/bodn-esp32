@@ -1,52 +1,56 @@
-# bodn/encoder.py — IRQ-based rotary encoder reader
-from machine import Pin
-import time
+# bodn/encoder.py — hardware PCNT rotary encoder reader
+#
+# Uses the ESP32-S3 Pulse Counter (PCNT) peripheral for quadrature
+# decoding in hardware. Zero CPU overhead, atomic pin reads, built-in
+# glitch filter — no IRQ handler, no bounce issues.
+from machine import Encoder as _HWEncoder, Pin
 
 
 class Encoder:
-    """Reads a KY-040 rotary encoder using hardware interrupts.
+    """Reads a KY-040 rotary encoder using the hardware PCNT peripheral.
 
     value increments/decrements on each detent. Read it from the main loop.
-    Uses a 2ms debounce window to reject contact bounce.
 
     Args:
-        clk_pin: GPIO number for CLK (hardware IRQ).
-        dt_pin:  GPIO number for DT.
+        clk_pin: GPIO number for CLK (phase A).
+        dt_pin:  GPIO number for DT (phase B).
         sw_pin:  GPIO number for SW, or a pin-like object with .value().
                  Pass an MCPPin to route the push button through MCP23017.
+        pcnt_id: PCNT unit number (0–7). Each encoder needs its own unit.
+        filter_ns: Glitch filter in nanoseconds (rejects pulses shorter than this).
     """
 
-    def __init__(self, clk_pin, dt_pin, sw_pin):
+    _next_id = 0  # auto-assign PCNT unit IDs
+
+    def __init__(self, clk_pin, dt_pin, sw_pin, pcnt_id=None, filter_ns=1000):
+        if pcnt_id is None:
+            pcnt_id = Encoder._next_id
+            Encoder._next_id += 1
         self.clk = Pin(clk_pin, Pin.IN, Pin.PULL_UP)
         self.dt = Pin(dt_pin, Pin.IN, Pin.PULL_UP)
+        self._hw = _HWEncoder(
+            pcnt_id,
+            phase_a=self.clk,
+            phase_b=self.dt,
+            filter_ns=filter_ns,
+        )
         if isinstance(sw_pin, int):
             self.sw = Pin(sw_pin, Pin.IN, Pin.PULL_UP)
         else:
             self.sw = sw_pin  # MCPPin or any object with .value()
-        self.value = 0
-        self._last_clk = self.clk.value()
-        self._last_us = time.ticks_us()
-        self.clk.irq(
-            trigger=Pin.IRQ_FALLING,
-            handler=self._on_clk,
-        )
+        self._offset = 0
 
-    def _on_clk(self, pin):
-        now = time.ticks_us()
-        if time.ticks_diff(now, self._last_us) < 4000:  # 4ms debounce
-            return
-        clk_val = self.clk.value()
-        if clk_val != self._last_clk:
-            if clk_val != self.dt.value():
-                self.value += 1
-            else:
-                self.value -= 1
-            self._last_clk = clk_val
-            self._last_us = now
+    @property
+    def value(self):
+        return self._hw.value() + self._offset
+
+    @value.setter
+    def value(self, v):
+        self._offset = v - self._hw.value()
 
     def deinit(self):
-        """Disable the CLK interrupt so Ctrl-C can reach the REPL."""
-        self.clk.irq(handler=None)
+        """Release the PCNT unit."""
+        self._hw.deinit()
 
     def pressed(self):
         """Return True if the encoder button is currently pressed."""

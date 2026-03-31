@@ -53,7 +53,7 @@ firmware/
     cli.py              # serial REPL helpers (wifi, settings, reboot)
     debounce.py         # generic debounce logic
     diag.py             # system diagnostics data gathering
-    encoder.py          # IRQ-based rotary encoder with velocity tracking
+    encoder.py          # PCNT hardware rotary encoder (zero-CPU quadrature)
     ftp.py              # FTP server for OTA bulk sync
     gesture.py          # tap/hold/long-press gesture detection
     i18n.py             # internationalisation: t(), set_language(), init()
@@ -68,7 +68,7 @@ firmware/
     session.py          # play session state machine (pure logic)
     sounds.py           # sound asset catalogue
     storage.py          # JSON settings & session history on flash
-    temperature.py      # DS18B20 1-Wire temperature monitoring
+    temperature.py      # DS18B20 + SoC temperature monitoring
     tones.py            # procedural tone generation (pure logic)
     wav.py              # WAV header parser + streaming reader (pure logic)
     wifi.py             # WiFi connect (STA / AP) + mDNS + runtime control
@@ -160,8 +160,18 @@ reboot()
 ```bash
 uv run mpremote connect auto fs touch :/skip_main
 # Press RST — boots to REPL without starting the UI/encoder IRQs
-# Run I2C diagnostics:  from bodn.i2c_diag import run; run()
 # The flag auto-deletes — next reset boots normally
+```
+
+**Built-in diagnostic tools** (run from REPL after skipping main):
+
+```python
+# I2C bus monitor — live device detection + MCP pin states
+from bodn.i2c_diag import run; run()
+
+# Encoder oscilloscope — raw CLK/DT waveforms on the TFT
+from bodn.encoder_scope import run; run()       # both encoders
+from bodn.encoder_scope import run; run(enc=1)  # ENC1 only
 ```
 
 ### OTA push (no USB needed)

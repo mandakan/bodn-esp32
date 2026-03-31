@@ -65,6 +65,21 @@ class FakeI2S:
         pass
 
 
+class FakeHWEncoder:
+    """Stub for machine.Encoder (PCNT hardware encoder)."""
+
+    def __init__(self, unit_id, phase_a=None, phase_b=None, filter_ns=0):
+        self._value = 0
+
+    def value(self, v=None):
+        if v is not None:
+            self._value = v
+        return self._value
+
+    def deinit(self):
+        pass
+
+
 class FakePWM:
     def __init__(self, pin, freq=1000, duty=0):
         self.pin = pin
@@ -89,8 +104,15 @@ machine.Pin = FakePin
 machine.SPI = FakeSPI
 machine.I2S = FakeI2S
 machine.PWM = FakePWM
+machine.Encoder = FakeHWEncoder
 
 sys.modules["machine"] = machine
+
+# Stub 'esp32' module (SoC temperature sensor, wake sources, etc.)
+esp32 = types.ModuleType("esp32")
+esp32.raw_temperature = lambda: 42.0  # fake SoC temp in °C
+esp32.gpio_wakeup = lambda *a, **kw: None
+sys.modules["esp32"] = esp32
 
 # Stub 'framebuf' (used by display drivers)
 framebuf = types.ModuleType("framebuf")

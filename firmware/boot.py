@@ -49,11 +49,11 @@ try:
     # Check NAV encoder button (ENC1 SW, now on MCP2 GPA0) for diagnostic mode.
     # Initialise I2C + MCP2 early; if MCP2 is absent, skip diag check.
     try:
-        from machine import SoftI2C
+        from machine import I2C
         from bodn.mcp23017 import MCP23017
 
-        _i2c_boot = SoftI2C(
-            scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000
+        _i2c_boot = I2C(
+            0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000
         )
         _mcp2_boot = MCP23017(_i2c_boot, config.MCP2_ADDR)
         _mcp2_boot.refresh()
@@ -474,11 +474,11 @@ if _diag_requested and tft:
     # Wait for any encoder button press via MCP2 to dismiss.
     # Re-initialise MCP2 (boot I2C instance was released above).
     try:
-        from machine import SoftI2C
+        from machine import I2C
         from bodn.mcp23017 import MCP23017
 
-        _i2c_diag = SoftI2C(
-            scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000
+        _i2c_diag = I2C(
+            0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000
         )
         _mcp2_diag = MCP23017(_i2c_diag, config.MCP2_ADDR)
         # Wait for the initially-held button to be released

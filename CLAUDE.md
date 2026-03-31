@@ -84,9 +84,11 @@ bodn-esp32/
 │     ├─ config.py          # pin assignments, constants, encoder sensitivity
 │     ├─ debounce.py        # generic debounce logic
 │     ├─ diag.py            # system diagnostics data gathering
-│     ├─ encoder.py         # IRQ-based rotary encoder reader (with debounce)
+│     ├─ encoder.py         # PCNT hardware rotary encoder (zero-CPU quadrature)
+│     ├─ encoder_scope.py   # visual encoder oscilloscope (CLK/DT on TFT)
 │     ├─ flode_rules.py     # Flöde puzzle engine (pure logic)
 │     ├─ gesture.py         # tap/hold/long-press gesture detection
+│     ├─ i2c_diag.py        # live I2C bus diagnostic tool (REPL)
 │     ├─ i18n.py            # internationalisation: t(), set_language(), init()
 │     ├─ lang/
 │     │  ├─ sv.py           # Swedish string table (default)
@@ -102,7 +104,7 @@ bodn-esp32/
 │     ├─ session.py         # play session state machine (pure logic)
 │     ├─ simon_rules.py     # Simon game engine (pure logic)
 │     ├─ storage.py         # JSON settings & session history on flash
-│     ├─ temperature.py     # DS18B20 1-Wire temperature monitoring
+│     ├─ temperature.py     # DS18B20 + SoC temperature monitoring
 │     ├─ tones.py           # procedural tone generation (pure logic)
 │     ├─ wav.py             # WAV header parser + streaming reader (pure logic)
 │     ├─ wifi.py            # WiFi connect (STA / AP) + mDNS + runtime control

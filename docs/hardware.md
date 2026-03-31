@@ -104,7 +104,7 @@ Arcade button LEDs are driven by the PCA9685 PWM driver (see below).
 
 ### Rotary encoders
 
-CLK and DT stay on native GPIOs for IRQ latency. Push buttons (SW) are routed through MCP2 to free GPIOs 17 and 40 for the SD card SPI3 bus.
+CLK and DT stay on native GPIOs, decoded by the ESP32-S3 PCNT (Pulse Counter) hardware peripheral — zero-CPU quadrature decoding with a 1µs glitch filter. Push buttons (SW) are routed through MCP2 to free GPIOs 17 and 40 for the SD card SPI3 bus.
 
 | Encoder | Role | CLK | DT | SW (button) |
 |---------|------|-----|----|-------------|
@@ -292,9 +292,10 @@ MCP2 uses 2 of 16 pins; 14 spare I/O pins available for future expansion.
 
 ### Why not put encoder CLK/DT on the expander?
 
-Rotary encoders generate rapid quadrature pulses that need low-latency IRQ handling.
-The I2C round-trip through the MCP23017 adds too much delay — missed edges cause phantom
-steps. CLK and DT pins must stay on native ESP32 GPIOs with hardware interrupts.
+Rotary encoders generate rapid quadrature pulses that need dedicated GPIO pins. The
+ESP32-S3 PCNT peripheral reads CLK and DT atomically in hardware with a configurable
+glitch filter — impossible through the MCP23017 I2C bus. The I2C round-trip delay
+would cause missed edges and phantom steps.
 Push buttons (SW) have no latency requirement and work fine via MCP2.
 
 ## PCA9685 PWM driver
@@ -438,8 +439,14 @@ GND              ──▶ GND (both sensors)
 
 ### Software — thermal protection
 
-Firmware module: `bodn/temperature.py`. Sensors are auto-discovered by ROM
+Firmware module: `bodn/temperature.py`. DS18B20 sensors are auto-discovered by ROM
 address on the 1-Wire bus. Readings are cached for 30 s.
+
+In addition, the ESP32-S3 on-chip temperature sensor (`esp32.raw_temperature()`)
+provides instant SoC temperature readings (±3 °C accuracy). This sensor is always
+available — even when no external DS18B20 sensors are connected — ensuring thermal
+protection is never fully disabled. The `max_temp()` function returns the highest
+reading across all sources (DS18B20 + SoC).
 
 **Important:** The BL4054B charger IC on the DevKit-Lipo has **no NTC thermistor
 input** and the Olimex battery has **no temperature wire**. This software watchdog

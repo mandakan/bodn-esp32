@@ -1,8 +1,12 @@
-# bodn/temperature.py — DS18B20 1-Wire temperature monitoring
+# bodn/temperature.py — temperature monitoring (DS18B20 + SoC sensor)
 #
 # Two DS18B20 sensors on a single 1-Wire bus (GPIO 20):
 #   - Battery sensor: thermal-taped to the LiPo pouch
 #   - Enclosure sensor: inside the box near electronics
+#
+# Plus the ESP32-S3 on-chip temperature sensor (instant, always available).
+# The SoC sensor provides fast emergency detection even when no external
+# sensors are connected. Accuracy is ±3°C but response is instant.
 #
 # Sensors are identified by their ROM address after first scan.
 # Conversion takes ~750 ms at 12-bit resolution; we poll every 30 s
@@ -13,6 +17,7 @@ from micropython import const
 from machine import Pin
 import onewire
 import ds18x20
+import esp32
 from bodn import config
 
 _CACHE_MS = const(30_000)  # re-read at most every 30 s
@@ -92,10 +97,21 @@ def read():
     return {i: _temps.get(rom) for i, rom in enumerate(_roms)}
 
 
+def soc_temp():
+    """Return the ESP32-S3 on-chip temperature in °C (instant, ±3°C)."""
+    try:
+        return esp32.raw_temperature()
+    except Exception:
+        return None
+
+
 def max_temp():
-    """Return the highest temperature across all sensors, or None."""
+    """Return the highest temperature across all sensors + SoC, or None."""
     temps = read()
     valid = [t for t in temps.values() if t is not None]
+    soc = soc_temp()
+    if soc is not None:
+        valid.append(soc)
     return max(valid) if valid else None
 
 
@@ -120,10 +136,9 @@ def is_emergency():
 def status():
     """Return temperature status string: 'emergency', 'critical', 'warn', or 'ok'.
 
-    Returns 'ok' when no sensors are present (fail-open).
+    Always checks the SoC sensor even when no external DS18B20 sensors
+    are present, so thermal protection is never completely disabled.
     """
-    if sensor_count() == 0:
-        return "ok"
     if is_emergency():
         return "emergency"
     if is_critical():
