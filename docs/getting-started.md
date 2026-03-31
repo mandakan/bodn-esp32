@@ -131,21 +131,22 @@ By default the device starts in AP mode (creates its own "Bodn" network).
 To connect to your home WiFi, open a REPL and use the CLI helpers:
 
 ```python
->>> from bodn.cli import *
->>> wifi("YourNetwork", "YourPassword")
-WiFi configured: mode=sta ssid=YourNetwork
-Reboot to apply: reboot()
->>> reboot()
+from bodn.cli import *
+
+wifi("YourNetwork", "YourPassword")
+# WiFi configured: mode=sta ssid=YourNetwork
+# Reboot to apply: reboot()
+reboot()
 ```
 
 Other useful CLI commands:
 
 ```python
->>> show()                        # print all settings
->>> set("language", "en")         # change language (en/sv)
->>> set("sleep_timeout_s", 600)   # idle sleep timeout
->>> save()                        # persist to flash
->>> ap()                          # switch back to AP mode
+show()                        # print all settings
+set("language", "en")         # change language (en/sv)
+set("sleep_timeout_s", 600)   # idle sleep timeout
+save()                        # persist to flash
+ap()                          # switch back to AP mode
 ```
 
 ## 7. Skip main.py for debugging
@@ -167,8 +168,8 @@ Live-polls the I2C bus and reports devices appearing/disappearing. Also
 reads MCP23017 pin states so you can verify buttons while wiggling wires.
 
 ```python
->>> from bodn.i2c_diag import run
->>> run()     # Ctrl-C to stop
+from bodn.i2c_diag import run
+run()     # Ctrl-C to stop
 ```
 
 Example output:
@@ -186,12 +187,12 @@ trace. Useful for checking quadrature waveforms, spotting noise from long
 wires, or confirming that pull-up resistors are working.
 
 ```python
->>> from bodn.encoder_scope import run
->>> run()             # both encoders (4 traces: CLK1, DT1, CLK2, DT2)
->>> run(enc=1)        # ENC1 (NAV) only — larger traces
->>> run(enc=2)        # ENC2 only
->>> run(sample_ms=1)  # fastest sweep (1ms per pixel)
->>> run(sample_ms=5)  # slower sweep, easier to see individual detents
+from bodn.encoder_scope import run
+run()             # both encoders (4 traces: CLK1, DT1, CLK2, DT2)
+run(enc=1)        # ENC1 (NAV) only — larger traces
+run(enc=2)        # ENC2 only
+run(sample_ms=1)  # fastest sweep (1ms per pixel)
+run(sample_ms=5)  # slower sweep, easier to see individual detents
 ```
 
 Turn the encoder slowly and look for clean square waves with CLK leading
@@ -203,51 +204,51 @@ pull-ups to 3.3V on the CLK and DT lines if you see this.
 ### Check if I2C devices are detected
 
 ```python
->>> from machine import I2C, Pin
->>> i2c = I2C(0, scl=Pin(47), sda=Pin(48))
->>> [hex(a) for a in i2c.scan()]
-['0x21', '0x23', '0x40']    # MCP2 + MCP1 + PCA9685
+from machine import I2C, Pin
+i2c = I2C(0, scl=Pin(47), sda=Pin(48))
+[hex(a) for a in i2c.scan()]
+# ['0x21', '0x23', '0x40']    # MCP2 + MCP1 + PCA9685
 ```
 
 ### Read a button via MCP23017
 
 ```python
->>> from bodn.mcp23017 import MCP23017
->>> from machine import I2C, Pin
->>> i2c = I2C(0, scl=Pin(47), sda=Pin(48))
->>> mcp = MCP23017(i2c, 0x23)
->>> mcp.read_port_a()  # returns byte — bit 0 = GPA0, etc.
+from bodn.mcp23017 import MCP23017
+from machine import I2C, Pin
+i2c = I2C(0, scl=Pin(47), sda=Pin(48))
+mcp = MCP23017(i2c, 0x23)
+mcp.read_port_a()  # returns byte — bit 0 = GPA0, etc.
 ```
 
 ### Test NeoPixels
 
 ```python
->>> import neopixel
->>> from machine import Pin
->>> np = neopixel.NeoPixel(Pin(4, Pin.OUT), 108, timing=1)
->>> np[0] = (10, 0, 0)  # dim red on first LED
->>> np.write()
+import neopixel
+from machine import Pin
+np = neopixel.NeoPixel(Pin(4, Pin.OUT), 108, timing=1)
+np[0] = (10, 0, 0)  # dim red on first LED
+np.write()
 ```
 
 ### Test display
 
 ```python
->>> from machine import Pin, SPI
->>> from bodn import config
->>> from st7735 import ST7735
->>> spi = SPI(2, baudrate=26_000_000, sck=Pin(config.TFT_SCK), mosi=Pin(config.TFT_MOSI))
->>> tft = ST7735(spi, cs=Pin(config.TFT_CS, Pin.OUT), dc=Pin(config.TFT_DC, Pin.OUT),
-...     rst=Pin(config.TFT_RST, Pin.OUT), width=config.TFT_WIDTH, height=config.TFT_HEIGHT,
-...     col_offset=config.TFT_COL_OFFSET, row_offset=config.TFT_ROW_OFFSET, madctl=config.TFT_MADCTL)
->>> tft.fill(ST7735.rgb(0, 0, 255))
->>> tft.show()
+from machine import Pin, SPI
+from bodn import config
+from st7735 import ST7735
+spi = SPI(2, baudrate=26_000_000, sck=Pin(config.TFT_SCK), mosi=Pin(config.TFT_MOSI))
+tft = ST7735(spi, cs=Pin(config.TFT_CS, Pin.OUT), dc=Pin(config.TFT_DC, Pin.OUT),
+    rst=Pin(config.TFT_RST, Pin.OUT), width=config.TFT_WIDTH, height=config.TFT_HEIGHT,
+    col_offset=config.TFT_COL_OFFSET, row_offset=config.TFT_ROW_OFFSET, madctl=config.TFT_MADCTL)
+tft.fill(ST7735.rgb(0, 0, 255))
+tft.show()
 ```
 
 ### Soft reset
 
 ```python
->>> import machine
->>> machine.soft_reset()   # re-runs boot.py + main.py
+import machine
+machine.soft_reset()   # re-runs boot.py + main.py
 ```
 
 ## 9. Troubleshooting

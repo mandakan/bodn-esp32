@@ -265,9 +265,9 @@ forwarding requires the [Wokwi Private Gateway](https://docs.wokwi.com/guides/es
 (Wokwi Club subscription). Without it, use the REPL to test parental controls:
 
 ```python
->>> import boot
->>> boot.settings["max_session_min"] = 1   # 1-minute session for testing
->>> boot.settings["lockdown"] = True        # instant lockdown
+import boot
+boot.settings["max_session_min"] = 1   # 1-minute session for testing
+boot.settings["lockdown"] = True        # instant lockdown
 ```
 
 For quick testing, set **Session length** to 1 minute to see the full
