@@ -13,6 +13,9 @@ dependencies = [
     "ruff>=0.15.6",
 ]
 
+[tool.black]
+target-version = ["py312"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["firmware"]
