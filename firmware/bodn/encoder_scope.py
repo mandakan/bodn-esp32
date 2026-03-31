@@ -160,10 +160,10 @@ def run(enc=0, sample_ms=2):
                     steps[g] -= 1
                 enc_state[g] = new_st
 
-            # Update status bar
+            # Update status bar (show detents, not raw transitions)
             parts = []
             for g, (_, _, label) in enumerate(enc_groups):
-                s = steps[g]
+                s = steps[g] // 2  # KY-040: 2 quadrature transitions per detent
                 if s > 0:
                     arrow = ">"
                 elif s < 0:
@@ -178,7 +178,7 @@ def run(enc=0, sample_ms=2):
                 # Draw each group with colour
                 sx_text = 4
                 for g, (_, _, label) in enumerate(enc_groups):
-                    s = steps[g]
+                    s = steps[g] // 2
                     col = _CW_COL if s > 0 else _CCW_COL if s < 0 else _LABEL_COL
                     txt = "{} {:+d}".format(label, s)
                     tft.text(txt, sx_text, _STATUS_Y + 2, col)
@@ -204,7 +204,7 @@ def run(enc=0, sample_ms=2):
     except KeyboardInterrupt:
         print()
         for g, (_, _, label) in enumerate(enc_groups):
-            print("  {}: {} steps".format(label, steps[g]))
+            print("  {}: {} detents".format(label, steps[g] // 2))
         print("Scope stopped.")
         tft.fill(_BG)
         tft.text("Scope stopped", 100, 116, _LABEL_COL)

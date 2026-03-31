@@ -32,6 +32,7 @@ class Encoder:
             pcnt_id,
             phase_a=self.clk,
             phase_b=self.dt,
+            phases=2,  # x2 mode: 1 count per detent (KY-040 has 2 edges per detent)
             filter_ns=filter_ns,
         )
         if isinstance(sw_pin, int):
