@@ -30,8 +30,8 @@ try:
 except OSError:
     pass
 
-print("boot.py: 1s safe-boot window (Ctrl-C to abort)...")
-time.sleep(1)
+print("boot.py: 5s safe-boot window (Ctrl-C to abort)...")
+time.sleep(5)
 
 settings = None
 ip = "0.0.0.0"

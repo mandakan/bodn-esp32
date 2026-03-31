@@ -6,6 +6,7 @@ except ImportError:
     import asyncio
 
 import time
+import micropython
 import neopixel
 from machine import Pin, SPI, I2C
 from micropython import const
@@ -32,6 +33,9 @@ from bodn.ui.clock import ClockScreen
 from bodn.ui.ambient import StatusStrip
 from bodn.power import IdleTracker, PowerManager
 from bodn import i18n
+
+# Ensure Ctrl-C (0x03) always raises KeyboardInterrupt, even under async load.
+micropython.kbd_intr(3)
 
 N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 

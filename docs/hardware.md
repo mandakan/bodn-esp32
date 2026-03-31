@@ -109,7 +109,7 @@ CLK and DT stay on native GPIOs, decoded by the ESP32-S3 PCNT (Pulse Counter) ha
 | Encoder | Role | CLK | DT | SW (button) |
 |---------|------|-----|----|-------------|
 | 1 (NAV) | Navigation + Parameter B | 21 | 18 | MCP2 GPA0 |
-| 2 (ENC_A) | Parameter A | 16 | 44 | MCP2 GPA1 |
+| 2 (ENC_A) | Parameter A | 16 | 41 | MCP2 GPA1 |
 
 NAV doubles as parameter B in game modes — rotation controls speed/cursor, short tap triggers game actions, long press (1.5s) opens the pause menu.
 

@@ -21,7 +21,7 @@ graph LR
     MAX98357AI2Samplifier["MAX98357A I2S amplifier<br/><sub>GPIO 13 → BCK<br/>GPIO 45 → WS<br/>GPIO 7 → DIN<br/>GPIO 3 → AMP_SD_PIN</sub>"]
     ESP -- I2S --> MAX98357AI2Samplifier
 
-    PushbuttonsmovedtoMCP2tofreeGPIOs17and40forSDcardSPI3["Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 16 → CLK<br/>GPIO 44 → DT</sub>"]
+    PushbuttonsmovedtoMCP2tofreeGPIOs17and40forSDcardSPI3["Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.<br/><sub>GPIO 21 → CLK<br/>GPIO 18 → DT<br/>GPIO 16 → CLK<br/>GPIO 41 → DT</sub>"]
     ESP -- SPI --> PushbuttonsmovedtoMCP2tofreeGPIOs17and40forSDcardSPI3
 
     The144LEDmstriprunsaroundtheinsideofthetranslucentlidperimeter["The 144 LED/m strip runs around the inside of the translucent lid perimeter<br/><sub>GPIO 4 → PIN</sub>"]
@@ -91,7 +91,7 @@ graph LR
 | CLK | 21 | `ENC1_CLK` |
 | DT | 18 | `ENC1_DT` |
 | CLK | 16 | `ENC2_CLK` |
-| DT | 44 | `ENC2_DT` |
+| DT | 41 | `ENC2_DT` |
 
 ### The 144 LED/m strip runs around the inside of the translucent lid perimeter
 
@@ -182,7 +182,7 @@ graph LR
 | 21 | FTP server | FTP_PORT |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | previously reserved for touch CS . | SD_MOSI |
-| 44 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | DT |
+| 41 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | DT |
 | 45 | MAX98357A I2S amplifier | WS |
 | 47 | I2C bus — pUEXT connector | I2C_SCL |
 | 48 | I2C bus — pUEXT connector | I2C_SDA |

@@ -58,7 +58,7 @@ AMP_SD_PIN = const(3)  # amp shutdown — direct GPIO (PCA9685 glitches on boot)
 ENC1_CLK = const(21)  # CLK was 19 (USB OTG D−) → moved to 21
 ENC1_DT = const(18)
 ENC2_CLK = const(16)
-ENC2_DT = const(44)
+ENC2_DT = const(41)  # was 44 — GPIO 44 is UART0 RX, encoder signal blocks serial
 
 # Encoder role indices — two encoders, NAV doubles as parameter B in game modes:
 #   ENC1 = NAV   (left,  menu scroll + back button; rotation = param B in games)
