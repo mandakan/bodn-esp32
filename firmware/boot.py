@@ -18,7 +18,7 @@ Pin(3, Pin.OUT, value=0)  # config.AMP_SD_PIN — LOW = shutdown
 # To skip main.py and drop to REPL on next boot:
 #   uv run mpremote connect auto fs touch :/skip_main
 # The flag file is auto-deleted on boot so it only skips once.
-import os as _os
+import os as _os  # noqa: E402 — must run after time.sleep() boot window above
 
 _skip_main = False
 try:
