@@ -109,10 +109,12 @@ I2C_SDA = const(48)
 MCP23017_ADDR = const(0x23)  # A0=high, A1=high, A2=low
 MCP_INT_PIN = const(46)  # MCP23017 INTA/INTB → GPIO 46 (active-low, open-drain)
 
-# MCP2 — second MCP23017: encoder push buttons (frees GPIOs 17/40 for SD SPI3)
+# MCP2 — second MCP23017: encoder push buttons + extra toggles (frees GPIOs 17/40 for SD SPI3)
 MCP2_ADDR = const(0x21)  # A0=high, A1=low, A2=low
-MCP2_ENC1_SW = const(0)  # GPA0 — ENC1 push button (was GPIO 17)
-MCP2_ENC2_SW = const(1)  # GPA1 — ENC2 push button (was GPIO 40)
+MCP2_ENC1_SW = const(0)  # GPA0 — ENC1 push button (NAV, was GPIO 17)
+MCP2_ENC2_SW = const(1)  # GPA1 — ENC2 push button (ENC_A, was GPIO 40)
+MCP2_SW_LEFT = const(2)  # GPA2 — toggle switch (far left on lid)
+MCP2_SW_RIGHT = const(3)  # GPA3 — toggle switch (far right on lid)
 
 # SD card — dedicated SPI3 bus on ILI9341 display breakout SD slot
 # GPIOs 17 and 40 freed by moving encoder buttons to MCP2.
@@ -130,12 +132,17 @@ MCP_ARC_PINS = [10, 11, 13, 14, 15]  # GPB2,GPB3,GPB5,GPB6,GPB7 — 5 arcade but
 # PCA9685 16-channel 12-bit PWM driver — LED dimming over I2C
 PCA9685_ADDR = const(0x40)  # A0-A5 all low (default)
 PWM_CH_BACKLIGHT = const(0)  # TFT backlight dimming channel
-PWM_CH_ARC1 = const(1)  # Arcade button 1 LED (yellow)
-PWM_CH_ARC2 = const(2)  # Arcade button 2 LED (red)
-PWM_CH_ARC3 = const(3)  # Arcade button 3 LED (blue)
-PWM_CH_ARC4 = const(4)  # Arcade button 4 LED (green)
-PWM_CH_ARC5 = const(5)  # Arcade button 5 LED (white)
+PWM_CH_ARC1 = const(1)  # Arcade idx 0 — yellow (far left)
+PWM_CH_ARC2 = const(2)  # Arcade idx 1 — red
+PWM_CH_ARC3 = const(3)  # Arcade idx 2 — blue (centre)
+PWM_CH_ARC4 = const(4)  # Arcade idx 3 — green
+PWM_CH_ARC5 = const(5)  # Arcade idx 4 — white (far right)
 PWM_CH_AMP_SD = const(6)  # UNUSED — amp SD moved to GPIO 3 (PCA9685 glitches on boot)
+
+# Mini button colors — physical left-to-right matches electrical index 0–7
+BUTTON_COLORS = ["green", "blue", "white", "yellow", "red", "black", "green", "blue"]
+# Arcade button colors — physical left-to-right matches electrical index 0–4
+ARCADE_COLORS = ["yellow", "red", "blue", "green", "white"]
 
 # Encoder sensitivity: detents per logical unit
 # 1=high (every click), 2=medium, 3=low (for young children)

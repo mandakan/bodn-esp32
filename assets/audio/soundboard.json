@@ -64,5 +64,13 @@
       }
     }
   },
-  "arcade": {}
+  "arcade": {
+    "slots": {
+      "green": {"sv": "Hi-hat", "en": "Hi-hat", "source": "soundboard/811628__m0nsterhd__closed-hi-hat.wav"},
+      "blue": {"sv": "Virvel", "en": "Snare", "source": "soundboard/673516__theendofacycle__flat-fat-snare-drum-hit.wav"},
+      "white": {"sv": "Bastrumma", "en": "Bass drum", "source": "soundboard/614398__jannevse__kick_natural2.wav"},
+      "yellow": {"sv": "Tom", "en": "Tom", "source": "soundboard/92810__suicidity__dirty-tonys-tom-16-063.wav"},
+      "red": {"sv": "Crash", "en": "Crash", "source": "soundboard/153404__stomachache__crash_a_ms1.wav"}
+    }
+  }
 }

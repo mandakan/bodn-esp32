@@ -82,17 +82,77 @@ The secondary display shares SCK, MOSI, DC, and RST with the primary. Only CS is
 | SD | GPIO 3 (direct — PCA9685 glitches on boot; add 10kΩ pull-down to GND) |
 | GAIN | floating (9dB default) |
 
-### Buttons (MCP23017)
+### Mini push buttons (MCP23017)
 
-8 × mini momentary push buttons (active low with MCP23017 internal pull-ups):
+8 × 7 mm mini momentary push buttons (active low with MCP23017 internal pull-ups):
 
 MCP23017 pins: GPA0–GPA7 (config: `MCP_BTN_PINS`)
 
+#### Physical layout
+
+The mini buttons sit in an evenly-spaced row ~1 cm above the arcade buttons on the
+lid. Electrical index 0–7 runs left-to-right. Colors repeat due to limited variety:
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                              LID (front)                                    ║
+║                                                                             ║
+║                         ┌─────────────────┐                                 ║
+║                         │  PRIMARY DISPLAY │                                ║
+║                         │   (ILI9341)      │                                ║
+║                         └─────────────────┘                                 ║
+║                                                                             ║
+║  ┌─┐  ┌─────┐   ┌─┐      ┌─┐     ┌─────┐   ┌─┐                           ║
+║  │⇕│  │ NAV │   │⇕│      │⇕│     │ENC_A│   │⇕│                           ║
+║  │L│  │ ENC │   │0│      │1│     │ ENC │   │R│    (toggles + encoders)    ║
+║  └─┘  └─────┘   └─┘      └─┘     └─────┘   └─┘                           ║
+║                                                                             ║
+║  ┌───┐  ┌────┐  ┌───┐  ┌────┐  ┌───┐  ┌───┐  ┌───┐  ┌────┐              ║
+║  │GRN│  │BLU │  │WHT│  │YLW │  │RED│  │BLK│  │GRN│  │BLU │              ║
+║  │ 0 │  │ 1  │  │ 2 │  │ 3  │  │ 4 │  │ 5 │  │ 6 │  │ 7  │  (mini)     ║
+║  └───┘  └────┘  └───┘  └────┘  └───┘  └───┘  └───┘  └────┘              ║
+║                                                                             ║
+║   ┌────────┐  ┌─────┐  ┌──────┐  ┌───────┐  ┌───────┐                     ║
+║   │ YELLOW │  │ RED │  │ BLUE │  │ GREEN │  │ WHITE │  (arcade)           ║
+║   │ idx 0  │  │idx 1│  │ idx 2│  │ idx 3 │  │ idx 4 │                     ║
+║   └────────┘  └─────┘  └──────┘  └───────┘  └───────┘                     ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+Toggle/encoder row (left to right):
+  ⇕L    = SW_L  (MCP2 GPA2)     — extra toggle, far left
+  NAV   = ENC1  (CLK/DT native, SW → MCP2 GPA0)
+  ⇕0    = SW0   (MCP1 GPB0)     — bank select bit 0
+  ⇕1    = SW1   (MCP1 GPB1)     — bank select bit 1
+  ENC_A = ENC2  (CLK/DT native, SW → MCP2 GPA1)
+  ⇕R    = SW_R  (MCP2 GPA3)     — extra toggle, far right
+```
+
+| Index | Color  | MCP1 pin |
+|-------|--------|----------|
+| 0     | Green  | GPA0     |
+| 1     | Blue   | GPA1     |
+| 2     | White  | GPA2     |
+| 3     | Yellow | GPA3     |
+| 4     | Red    | GPA4     |
+| 5     | Black  | GPA5     |
+| 6     | Green  | GPA6     |
+| 7     | Blue   | GPA7     |
+
+The color list is defined in `config.py` as `BUTTON_COLORS`.
+
 ### Toggle switches (MCP23017)
 
-2 × SPST mini toggles (active low with MCP23017 internal pull-ups):
+4 × SPST mini toggles (active low with internal pull-ups), split across both expanders:
 
-MCP23017 pins: GPB0–GPB1 (config: `MCP_SW_PINS`)
+| Switch | Expander | Pin  | Config constant | Position on lid |
+|--------|----------|------|-----------------|-----------------|
+| SW0    | MCP1     | GPB0 | `MCP_SW_PINS[0]` | Centre-left (bank select bit 0) |
+| SW1    | MCP1     | GPB1 | `MCP_SW_PINS[1]` | Centre-right (bank select bit 1) |
+| SW_L   | MCP2     | GPA2 | `MCP2_SW_LEFT`  | Far left |
+| SW_R   | MCP2     | GPA3 | `MCP2_SW_RIGHT` | Far right |
+
+SW0 and SW1 are used for soundboard bank selection. SW_L and SW_R are general-purpose
+toggles available to game modes (e.g. demo, spaceship).
 
 ### Arcade buttons (MCP23017)
 
@@ -101,6 +161,33 @@ MCP23017 pins: GPB0–GPB1 (config: `MCP_SW_PINS`)
 MCP23017 pins: GPB2, GPB3, GPB5, GPB6, GPB7 (config: `MCP_ARC_PINS`)
 
 Arcade button LEDs are driven by the PCA9685 PWM driver (see below).
+
+### Arcade button physical layout
+
+The five arcade buttons are arranged in a row across the lower part of the lid.
+The physical left-to-right order matches the electrical index order (0–4):
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║                          LID (front)                         ║
+║                                                              ║
+║   ┌────────┐  ┌─────┐  ┌──────┐  ┌───────┐  ┌───────┐     ║
+║   │ YELLOW │  │ RED │  │ BLUE │  │ GREEN │  │ WHITE │     ║
+║   │ idx 0  │  │idx 1│  │ idx 2│  │ idx 3 │  │ idx 4 │     ║
+║   └────────┘  └─────┘  └──────┘  └───────┘  └───────┘     ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+| Position (L→R) | Color  | Index | MCP1 pin | PCA9685 channel |
+|-----------------|--------|-------|----------|-----------------|
+| 1 (far left)    | Yellow | 0     | GPB2     | CH1             |
+| 2               | Red    | 1     | GPB3     | CH2             |
+| 3 (centre)      | Blue   | 2     | GPB5     | CH3             |
+| 4               | Green  | 3     | GPB6     | CH4             |
+| 5 (far right)   | White  | 4     | GPB7     | CH5             |
+
+The color list is defined in `config.py` as `ARCADE_COLORS`. Since the physical
+and electrical orders match, no separate spatial mapping is needed.
 
 ### Rotary encoders
 
@@ -285,10 +372,12 @@ All 16 MCP1 pins are allocated.
 |----------|-----------|-------|
 | GPA0 | ENC1 push button (NAV SW) | Active low with internal pull-ups |
 | GPA1 | ENC2 push button (ENC_A SW) | Active low with internal pull-ups |
-| GPA2–GPA7 | Available | Future use |
+| GPA2 | Toggle switch SW_L (far left) | Active low with internal pull-ups |
+| GPA3 | Toggle switch SW_R (far right) | Active low with internal pull-ups |
+| GPA4–GPA7 | Available | Future use |
 | GPB0–GPB7 | Available | Future use |
 
-MCP2 uses 2 of 16 pins; 14 spare I/O pins available for future expansion.
+MCP2 uses 4 of 16 pins; 12 spare I/O pins available for future expansion.
 
 ### Why not put encoder CLK/DT on the expander?
 
@@ -527,7 +616,7 @@ See `docs/assets.md` for the directory structure.
 | UART console (avoid) | GPIO 43 (TX), 44 (RX) |
 | MCP1 (0x23) in use | 16 (8 buttons + 2 toggles + master switch + 5 arcade) |
 | MCP1 spare | 0 |
-| MCP2 (0x21) in use | 2 (encoder push buttons GPA0–GPA1) |
-| MCP2 spare | 14 (GPA2–7, GPB0–7 — future expansion) |
+| MCP2 (0x21) in use | 4 (encoder push buttons GPA0–1, extra toggles GPA2–3) |
+| MCP2 spare | 12 (GPA4–7, GPB0–7 — future expansion) |
 | PCA9685 in use | 7 (backlight + 5 arcade LEDs + amp mute) |
 | PCA9685 spare | 9 (channels 7–15) |

@@ -172,11 +172,15 @@ def process_soundboard(dry_run: bool, force: bool, normalize: bool):
         manifest_banks[bank_key] = manifest_bank
 
     # --- Arcade ---
-    for slot_key, slot_val in sb.get("arcade", {}).items():
-        try:
-            slot_idx = int(slot_key)
-        except (ValueError, TypeError):
-            continue
+    # Slot keys are button colors mapped to hardware indices (config.py PWM_CH_ARC*).
+    arcade_color_to_idx = {"yellow": 0, "red": 1, "blue": 2, "green": 3, "white": 4}
+    for slot_key, slot_val in sb.get("arcade", {}).get("slots", {}).items():
+        slot_idx = arcade_color_to_idx.get(slot_key)
+        if slot_idx is None:
+            try:
+                slot_idx = int(slot_key)
+            except (ValueError, TypeError):
+                continue
 
         src_rel = slot_val.get("source") if isinstance(slot_val, dict) else None
         if src_rel:
