@@ -126,6 +126,44 @@ uv sync
 uv run mpremote connect auto repl
 ```
 
+### Device configuration
+
+Connect to the REPL and use the built-in CLI helpers:
+
+```bash
+# Open a REPL (Ctrl-C to stop main loop first)
+uv run mpremote connect auto repl
+```
+
+```python
+from bodn.cli import *
+
+# Configure WiFi (saves immediately, reboot to apply)
+wifi("MyNetwork", "MyPassword")
+reboot()
+
+# Show all settings
+show()
+
+# Change any setting
+set("language", "en")       # en or sv
+set("sleep_timeout_s", 600) # idle sleep in seconds
+save()                      # persist to flash
+
+# Switch to AP mode (creates its own network)
+ap()
+reboot()
+```
+
+**Skip main.py for debugging** — create a flag file, then reset:
+
+```bash
+uv run mpremote connect auto fs touch :/skip_main
+# Press RST — boots to REPL without starting the UI/encoder IRQs
+# Run I2C diagnostics:  from bodn.i2c_diag import run; run()
+# The flag auto-deletes — next reset boots normally
+```
+
 ### OTA push (no USB needed)
 
 Once the device is running and on WiFi, you can push firmware updates over the air:

@@ -90,6 +90,10 @@ def create_hardware():
     # Shared I2C bus for MCP23017 and PCA9685
     i2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
 
+    # I2C bus scan — show all devices for diagnostics
+    i2c_devs = i2c.scan()
+    print("I2C scan: [{}]".format(", ".join("0x{:02X}".format(a) for a in i2c_devs)))
+
     # MCP1 — MCP23017 GPIO expander for buttons, toggles, and arcade switches
     mcp = None
     pwm = None
@@ -101,28 +105,44 @@ def create_hardware():
         buttons = [mcp.pin(p) for p in config.MCP_BTN_PINS]
         switches = [mcp.pin(p) for p in config.MCP_SW_PINS]
         hw_status["mcp"] = True
+        print(
+            "MCP1 (0x{:02X}) initialised — {} buttons, {} switches".format(
+                config.MCP23017_ADDR, len(buttons), len(switches)
+            )
+        )
     except Exception as e:
-        print("MCP23017 not found, buttons/switches disabled:", e)
+        print(
+            "MCP1 (0x{:02X}) not found, buttons/switches disabled: {}".format(
+                config.MCP23017_ADDR, e
+            )
+        )
 
     # MCP2 — second MCP23017 for encoder push buttons
     mcp2 = None
     try:
         mcp2 = MCP23017(i2c, config.MCP2_ADDR)
-        print(
-            "MCP2 (0x{:02X}) initialised for encoder switches".format(config.MCP2_ADDR)
-        )
+        print("MCP2 (0x{:02X}) initialised — encoder switches".format(config.MCP2_ADDR))
     except Exception as e:
-        print("MCP2 not found, encoder buttons via fallback:", e)
+        print(
+            "MCP2 (0x{:02X}) not found, encoder buttons via fallback: {}".format(
+                config.MCP2_ADDR, e
+            )
+        )
 
     # PCA9685 PWM driver for LED dimming + arcade LEDs + amp mute
     try:
         pwm = PCA9685(i2c, config.PCA9685_ADDR)
         pwm.set_freq(1000)
         hw_status["pca"] = True
-        # Amp SD managed via direct GPIO (config.AMP_SD_PIN), not PCA9685
-        # — PCA9685 glitches on power-up causing static.
+        print(
+            "PCA9685 (0x{:02X}) initialised — PWM @ 1 kHz".format(config.PCA9685_ADDR)
+        )
     except Exception as e:
-        print("PCA9685 not found, PWM dimming disabled:", e)
+        print(
+            "PCA9685 (0x{:02X}) not found, PWM dimming disabled: {}".format(
+                config.PCA9685_ADDR, e
+            )
+        )
 
     # Arcade buttons (switch input via MCP23017 + LED output via PCA9685)
     if mcp:
@@ -385,6 +405,7 @@ def create_ui(
         "settings": _make_settings,
     }
     mode_order = [
+        "demo",
         "mystery",
         "simon",
         "rulefollow",
@@ -393,7 +414,6 @@ def create_ui(
         "flode",
         "garden",
         "soundboard",
-        "demo",
         "clock",
         "settings",
     ]
@@ -799,11 +819,26 @@ async def main():
 
 
 try:
-    asyncio.run(main())
-except KeyboardInterrupt:
-    print("Bodn stopped.")
-except Exception as e:
-    import sys
+    _skip = _skip_main  # set by boot.py if /skip_main flag file existed
+except NameError:
+    _skip = False
 
-    print("FATAL:", e)
-    sys.print_exception(e)
+if not _skip:
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Bodn stopped.")
+    except Exception as e:
+        import sys
+
+        print("FATAL:", e)
+        sys.print_exception(e)
+    finally:
+        # Disable encoder IRQs so Ctrl-C can reach the REPL on next attempt
+        for pin_num in (config.ENC1_CLK, config.ENC2_CLK):
+            try:
+                Pin(pin_num, Pin.IN).irq(handler=None)
+            except Exception:
+                pass
+else:
+    print("main.py: skipped — REPL active. Reset to boot normally.")

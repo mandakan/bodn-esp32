@@ -1,9 +1,28 @@
 #!/usr/bin/env bash
 # Sync firmware to the ESP32 device via mpremote.
-# Usage: ./tools/sync.sh [--clean]
+# Usage: ./tools/sync.sh [--clean] [--minimal]
+#   --clean    Wipe device filesystem before syncing
+#   --minimal  Flash only boot.py, main.py, and bodn/ (skip sounds, etc.)
+#              Useful when encoder IRQs block normal mpremote access —
+#              press RST on the devkit, then immediately run this.
 set -euo pipefail
 
 MPREMOTE="uv run mpremote connect auto"
+
+if [ "${1:-}" = "--minimal" ]; then
+    echo "Deploying core files (boot.py, main.py, st7735.py, bodn/)..."
+    cd firmware
+    uv run mpremote connect auto \
+        fs cp boot.py :boot.py + \
+        fs cp main.py :main.py + \
+        fs cp st7735.py :st7735.py + \
+        fs cp -r bodn :bodn
+    cd ..
+    echo "Rebooting..."
+    $MPREMOTE exec "import machine; machine.reset()" 2>/dev/null || true
+    echo "Done."
+    exit 0
+fi
 
 if [ "${1:-}" = "--clean" ]; then
     echo "Wiping device filesystem..."

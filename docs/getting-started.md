@@ -125,7 +125,48 @@ diagnostic screen. It shows:
 
 Press any encoder button to dismiss and continue to `main.py`.
 
-## 6. Common debug tasks
+## 6. Configure WiFi
+
+By default the device starts in AP mode (creates its own "Bodn" network).
+To connect to your home WiFi, open a REPL and use the CLI helpers:
+
+```python
+>>> from bodn.cli import *
+>>> wifi("YourNetwork", "YourPassword")
+WiFi configured: mode=sta ssid=YourNetwork
+Reboot to apply: reboot()
+>>> reboot()
+```
+
+Other useful CLI commands:
+
+```python
+>>> show()                        # print all settings
+>>> set("language", "en")         # change language (en/sv)
+>>> set("sleep_timeout_s", 600)   # idle sleep timeout
+>>> save()                        # persist to flash
+>>> ap()                          # switch back to AP mode
+```
+
+## 7. Skip main.py for debugging
+
+If the device is stuck (e.g. encoder IRQs blocking Ctrl-C), create a flag
+file to skip main.py on the next boot:
+
+```bash
+uv run mpremote connect auto fs touch :/skip_main
+# Press RST — boots normally but drops to REPL instead of starting main.py
+# The flag auto-deletes so the next reset boots normally
+```
+
+From the REPL you can run I2C diagnostics, upload files, etc:
+
+```python
+>>> from bodn.i2c_diag import run
+>>> run()     # live I2C bus monitor — Ctrl-C to stop
+```
+
+## 8. Common debug tasks
 
 ### Check if I2C devices are detected
 
@@ -133,7 +174,7 @@ Press any encoder button to dismiss and continue to `main.py`.
 >>> from machine import SoftI2C, Pin
 >>> i2c = SoftI2C(scl=Pin(47), sda=Pin(48))
 >>> [hex(a) for a in i2c.scan()]
-['0x20', '0x40']    # MCP23017 + PCA9685
+['0x21', '0x23', '0x40']    # MCP2 + MCP1 + PCA9685
 ```
 
 ### Read a button via MCP23017
@@ -142,7 +183,7 @@ Press any encoder button to dismiss and continue to `main.py`.
 >>> from bodn.mcp23017 import MCP23017
 >>> from machine import SoftI2C, Pin
 >>> i2c = SoftI2C(scl=Pin(47), sda=Pin(48))
->>> mcp = MCP23017(i2c)
+>>> mcp = MCP23017(i2c, 0x23)
 >>> mcp.read_port_a()  # returns byte — bit 0 = GPA0, etc.
 ```
 
@@ -177,7 +218,7 @@ Press any encoder button to dismiss and continue to `main.py`.
 >>> machine.soft_reset()   # re-runs boot.py + main.py
 ```
 
-## 7. Troubleshooting
+## 9. Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
@@ -187,10 +228,12 @@ Press any encoder button to dismiss and continue to `main.py`.
 | `BOOT [NET] fail` | Normal on first boot — WiFi defaults to AP mode. Connect to the "Bodn" network |
 | `BOOT [NTP] warn` | No internet access — harmless, just means clock isn't synced |
 | Display shows nothing | Check SPI wiring (SCK→12, MOSI→11, CS→10, DC→8, RST→9) |
-| MCP23017 not found (`0x20` missing from I2C scan) | Check I2C wiring (SCL→47, SDA→48) and 3.3V power |
-| Encoders skip steps or behave erratically | OTG USB port is plugged in (conflicts with ENC1 on GPIO 19) |
+| MCP23017 not found (missing from I2C scan) | Check I2C wiring (SCL→47, SDA→48), 3.3V power, and RESET tied to VCC. Run `from bodn.i2c_diag import run; run()` |
+| MCP pins fluctuate with no buttons pressed | Long button wires need 4.7kΩ external pull-ups to 3.3V (internal 100kΩ too weak for >10cm wires) |
+| Encoders skip steps or behave erratically | Add 4.7kΩ pull-ups on CLK/DT lines. Check wire length and routing away from power lines |
+| Can't Ctrl-C to REPL (encoder IRQ blocks it) | Create `/skip_main` flag file (see §7), or press RST and run `./tools/sync.sh --minimal` within 1s |
 
-## 8. Next steps
+## 10. Next steps
 
 - **Wokwi simulation**: see the [README](../README.md#wokwi-simulation) for running in the simulator
 - **OTA updates**: once WiFi is working, use `tools/ota-push.py` to push firmware without USB

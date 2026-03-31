@@ -14,6 +14,22 @@ Pin(3, Pin.OUT, value=0)  # config.AMP_SD_PIN — LOW = shutdown
 
 # Safe-boot window: pause briefly so Ctrl-C can interrupt before heavy init.
 # Also lets the ESP32 task watchdog breathe between reset cycles.
+#
+# To skip main.py and drop to REPL on next boot:
+#   uv run mpremote connect auto fs touch :/skip_main
+# The flag file is auto-deleted on boot so it only skips once.
+import os as _os
+
+_skip_main = False
+try:
+    _os.stat("/skip_main")
+    _skip_main = True
+    _os.remove("/skip_main")
+    print("boot.py: /skip_main flag found — will drop to REPL after boot")
+    print("  Tip: from bodn.i2c_diag import run; run()")
+except OSError:
+    pass
+
 print("boot.py: 1s safe-boot window (Ctrl-C to abort)...")
 time.sleep(1)
 

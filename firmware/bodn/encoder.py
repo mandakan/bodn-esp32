@@ -27,7 +27,7 @@ class Encoder:
         self._last_clk = self.clk.value()
         self._last_us = time.ticks_us()
         self.clk.irq(
-            trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING,
+            trigger=Pin.IRQ_FALLING,
             handler=self._on_clk,
         )
 
@@ -43,6 +43,10 @@ class Encoder:
                 self.value -= 1
             self._last_clk = clk_val
             self._last_us = now
+
+    def deinit(self):
+        """Disable the CLK interrupt so Ctrl-C can reach the REPL."""
+        self.clk.irq(handler=None)
 
     def pressed(self):
         """Return True if the encoder button is currently pressed."""
