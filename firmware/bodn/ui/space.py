@@ -5,6 +5,8 @@
 # the ship keeps flying regardless.
 
 
+import os
+
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
@@ -184,6 +186,8 @@ class SpaceScreen(Screen):
         self._prev_sw1 = None
         self._drone_zone = -1  # current throttle zone (0/1/2), -1 = not started
         self._alarm_active = False
+        self._bridge_next = 0  # frame when next bridge ambience can play
+        self._bridge_path = None
         self._btn_wav_paths = None  # resolved at enter(); None = use procedural tones
         self._arc_wav_paths = None
         self._drone_wav_paths = None
@@ -202,10 +206,13 @@ class SpaceScreen(Screen):
         self._prev_sw1 = None
         self._drone_zone = -1
         self._alarm_active = False
+        self._bridge_next = 0
         self._btn_wav_paths = _resolve_sound_paths(_BTN_WAV_NAMES)
         self._arc_wav_paths = _resolve_sound_paths(_ARC_WAV_NAMES)
         self._drone_wav_paths = _resolve_sound_paths(self._DRONE_WAV_NAMES)
         self._alarm_wav_paths = _resolve_sound_paths(self._ALARM_WAV_NAMES)
+        paths = _resolve_sound_paths(["bridge_loop"])
+        self._bridge_path = paths[0] if paths else None
         if self._arcade:
             self._arcade.all_off()
         # Welcome message
@@ -340,6 +347,7 @@ class SpaceScreen(Screen):
             self._leds_dirty = True
 
         self._update_drone(self._engine.throttle)
+        self._maybe_play_bridge(frame)
 
         # Toggle switches: detect edges, play spoken confirmation
         if self._prev_sw0 is None:
@@ -427,6 +435,23 @@ class SpaceScreen(Screen):
                 self._audio.tone(
                     self._DRONE_FREQS[zone], 60000, "square", channel="music"
                 )
+
+    # Bridge ambience: plays the bridge_loop once on an SFX channel at random
+    # intervals during CRUISING.  ~8–20 s between plays at 30 fps.
+    _BRIDGE_MIN = const(240)  # ~8 s
+    _BRIDGE_SPREAD = const(360)  # +0–12 s
+
+    def _maybe_play_bridge(self, frame):
+        """Occasionally play bridge ambience during cruising."""
+        if not self._bridge_path or not self._audio:
+            return
+        if self._engine.state != CRUISING:
+            return
+        if frame < self._bridge_next:
+            return
+        self._audio.play(self._bridge_path, channel="sfx")
+        rand = int.from_bytes(os.urandom(2), "big") % self._BRIDGE_SPREAD
+        self._bridge_next = frame + self._BRIDGE_MIN + rand
 
     def _start_alarm(self, sc):
         """Start the alarm loop for the given scenario type on the music channel."""
