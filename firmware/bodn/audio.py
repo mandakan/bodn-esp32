@@ -291,6 +291,33 @@ class SequenceSource:
         self._current = self._make_tone(0)
 
 
+class MemorySource:
+    """Plays raw 16-bit mono PCM data from a pre-loaded bytearray.
+
+    Zero I/O, zero allocation per frame — ideal for looping sounds
+    pre-loaded into PSRAM at mode enter.
+    """
+
+    __slots__ = ("_data", "_len", "_pos")
+
+    def __init__(self, data):
+        self._data = memoryview(data)
+        self._len = len(data)
+        self._pos = 0
+
+    def read_chunk(self, buf):
+        if self._pos >= self._len:
+            return 0
+        n = min(len(buf), self._len - self._pos)
+        n = (n // 2) * 2  # align to sample boundary
+        buf[:n] = self._data[self._pos : self._pos + n]
+        self._pos += n
+        return n
+
+    def seek_start(self):
+        self._pos = 0
+
+
 class _Voice:
     """Internal voice state with its own read buffer."""
 
@@ -433,6 +460,17 @@ class AudioEngine:
         except Exception as e:
             print("audio.play error:", e)
             v.stop()
+
+    def play_buffer(self, data, loop=False, channel="sfx"):
+        """Play pre-loaded PCM data (bytearray) on the given channel.
+
+        Use with MemorySource for zero-I/O playback of sounds pre-loaded
+        into RAM/PSRAM at mode enter.
+        """
+        v = self._assign_voice(channel)
+        v.source = MemorySource(data)
+        v.loop = loop
+        self._stamp_voice(v)
 
     def tone(self, freq_hz, duration_ms=200, wave="square", channel="sfx"):
         """Play a procedural tone on the given channel."""

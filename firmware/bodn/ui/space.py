@@ -100,6 +100,12 @@ def _resolve_sound_paths(names):
     return resolve_sounds(_SPACE_SND_DIR, names)
 
 
+def _preload(names):
+    from bodn.assets import preload_sounds
+
+    return preload_sounds(_SPACE_SND_DIR, names)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SCENARIO LOOKUP TABLES
 # Indexed by SC_* constant from space_rules.  Add a new entry to all three
@@ -187,11 +193,12 @@ class SpaceScreen(Screen):
         self._drone_zone = -1  # current throttle zone (0/1/2), -1 = not started
         self._alarm_active = False
         self._bridge_next = 0  # frame when next bridge ambience can play
-        self._bridge_path = None
-        self._btn_wav_paths = None  # resolved at enter(); None = use procedural tones
-        self._arc_wav_paths = None
-        self._drone_wav_paths = None
-        self._alarm_wav_paths = None
+        # Pre-loaded PCM buffers (bytearray in PSRAM, None = use procedural tone)
+        self._btn_bufs = None
+        self._arc_bufs = None
+        self._drone_bufs = None
+        self._alarm_bufs = None
+        self._bridge_buf = None
 
     def enter(self, manager):
         self._manager = manager
@@ -207,12 +214,12 @@ class SpaceScreen(Screen):
         self._drone_zone = -1
         self._alarm_active = False
         self._bridge_next = 0
-        self._btn_wav_paths = _resolve_sound_paths(_BTN_WAV_NAMES)
-        self._arc_wav_paths = _resolve_sound_paths(_ARC_WAV_NAMES)
-        self._drone_wav_paths = _resolve_sound_paths(self._DRONE_WAV_NAMES)
-        self._alarm_wav_paths = _resolve_sound_paths(self._ALARM_WAV_NAMES)
-        paths = _resolve_sound_paths(["bridge_loop"])
-        self._bridge_path = paths[0] if paths else None
+        self._btn_bufs = _preload(_BTN_WAV_NAMES)
+        self._arc_bufs = _preload(_ARC_WAV_NAMES)
+        self._drone_bufs = _preload(self._DRONE_WAV_NAMES)
+        self._alarm_bufs = _preload(self._ALARM_WAV_NAMES)
+        bufs = _preload(["bridge_loop"])
+        self._bridge_buf = bufs[0] if bufs else None
         if self._arcade:
             self._arcade.all_off()
         # Welcome message
@@ -227,8 +234,15 @@ class SpaceScreen(Screen):
     def exit(self):
         if self._audio:
             self._audio.stop("music")
+            self._audio.stop("sfx")
         if self._arcade:
             self._arcade.all_off()
+        # Release pre-loaded PCM buffers back to GC
+        self._btn_bufs = None
+        self._arc_bufs = None
+        self._drone_bufs = None
+        self._alarm_bufs = None
+        self._bridge_buf = None
         if self._on_exit:
             self._on_exit()
 
@@ -395,12 +409,12 @@ class SpaceScreen(Screen):
     def _play_btn_tone(self, btn):
         """Play a ship-system sound for each button.
 
-        Uses a pre-cached WAV path if one was found at enter(); otherwise
+        Uses a pre-loaded PCM buffer if one was found at enter(); otherwise
         falls back to the procedural tone defined in _BTN_SFX.
         """
-        path = self._btn_wav_paths[btn] if self._btn_wav_paths else None
-        if path:
-            self._audio.play(path, channel="sfx")
+        buf = self._btn_bufs[btn] if self._btn_bufs else None
+        if buf:
+            self._audio.play_buffer(buf, channel="sfx")
         else:
             freq, dur, wave = self._BTN_SFX[btn % len(self._BTN_SFX)]
             self._audio.tone(freq, dur, wave, channel="sfx")
@@ -428,9 +442,9 @@ class SpaceScreen(Screen):
         zone = 0 if throttle < 85 else (1 if throttle < 170 else 2)
         if zone != self._drone_zone:
             self._drone_zone = zone
-            path = self._drone_wav_paths[zone] if self._drone_wav_paths else None
-            if path:
-                self._audio.play(path, loop=True, channel="music")
+            buf = self._drone_bufs[zone] if self._drone_bufs else None
+            if buf:
+                self._audio.play_buffer(buf, loop=True, channel="music")
             else:
                 self._audio.tone(
                     self._DRONE_FREQS[zone], 60000, "square", channel="music"
@@ -443,13 +457,13 @@ class SpaceScreen(Screen):
 
     def _maybe_play_bridge(self, frame):
         """Occasionally play bridge ambience during cruising."""
-        if not self._bridge_path or not self._audio:
+        if not self._bridge_buf or not self._audio:
             return
         if self._engine.state != CRUISING:
             return
         if frame < self._bridge_next:
             return
-        self._audio.play(self._bridge_path, channel="sfx")
+        self._audio.play_buffer(self._bridge_buf, channel="sfx")
         rand = int.from_bytes(os.urandom(2), "big") % self._BRIDGE_SPREAD
         self._bridge_next = frame + self._BRIDGE_MIN + rand
 
@@ -458,9 +472,9 @@ class SpaceScreen(Screen):
         if not self._audio or sc < 0 or sc >= len(self._SC_DANGER):
             return
         danger = self._SC_DANGER[sc]
-        path = self._alarm_wav_paths[danger] if self._alarm_wav_paths else None
-        if path:
-            self._audio.play(path, loop=True, channel="music")
+        buf = self._alarm_bufs[danger] if self._alarm_bufs else None
+        if buf:
+            self._audio.play_buffer(buf, loop=True, channel="music")
         else:
             self._audio.tone(
                 self._ALARM_FREQS[danger], 60000, "square", channel="music"
@@ -475,12 +489,12 @@ class SpaceScreen(Screen):
     def _play_arc_tone(self, arc):
         """Big satisfying tone for arcade buttons.
 
-        Uses a pre-cached WAV path if one was found at enter(); otherwise
+        Uses a pre-loaded PCM buffer if one was found at enter(); otherwise
         falls back to the procedural tone.
         """
-        path = self._arc_wav_paths[arc] if self._arc_wav_paths else None
-        if path:
-            self._audio.play(path, channel="sfx")
+        buf = self._arc_bufs[arc] if self._arc_bufs else None
+        if buf:
+            self._audio.play_buffer(buf, channel="sfx")
         else:
             freqs = [220, 277, 330, 415, 523]
             freq = freqs[arc % len(freqs)]
@@ -688,11 +702,7 @@ class SpaceScreen(Screen):
         # For SC_COURSE / SC_LANDING: show target arcade button colour swatch
         if sc in (SC_COURSE, SC_LANDING) and eng.target_arc_idx >= 0:
             arc_rgb = ARC_COLORS[eng.target_arc_idx]
-            # Convert RGB888 to RGB565
-            r5 = (arc_rgb[0] >> 3) & 0x1F
-            g6 = (arc_rgb[1] >> 2) & 0x3F
-            b5 = (arc_rgb[2] >> 3) & 0x1F
-            arc_col = (r5 << 11) | (g6 << 5) | b5
+            arc_col = tft.rgb(arc_rgb[0], arc_rgb[1], arc_rgb[2])
             bw = 40
             bx = (w - bw) // 2
             by = h // 2 + 4
