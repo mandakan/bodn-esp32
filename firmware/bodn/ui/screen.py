@@ -115,6 +115,10 @@ class ScreenManager:
         """Push a screen onto the stack."""
         self._stack.append(screen)
         self._dirty = True
+        # Reset gesture detector so leftover button state (e.g. the press
+        # that selected this mode on the home screen) doesn't bleed into
+        # the new screen's first frame.
+        self.inp.gestures.reset()
         screen.enter(self)
 
     def pop(self):

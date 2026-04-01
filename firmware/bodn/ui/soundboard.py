@@ -4,12 +4,13 @@
 # 5 illuminated arcade buttons trigger shared sounds (across banks).
 # 2 toggle switches select the bank (bank 0–3).
 # ENC_A (right) adjusts volume; click toggles mute.
-# NAV (left) click = exit to home.
+# NAV (left) hold = pause menu (hold-to-open, same as other game modes).
 
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_progress_bar
+from bodn.ui.pause import PauseMenu
 from bodn.i18n import t
 from bodn.soundboard_rules import (
     SoundboardState,
@@ -76,12 +77,14 @@ class SoundboardScreen(Screen):
         self._on_exit = on_exit
         self._state = SoundboardState()
         self._manager = None
+        self._pause = PauseMenu(settings=settings)
 
         # Flash state: (slot_type, slot_idx, flash_end_frame)
         # slot_type: 'mini' or 'arc'
         self._flash = None
 
         self._dirty = True
+        self._full_clear = True
         self._leds_dirty = True
         self._prev_bank = -1
         self._prev_volume = -1
@@ -89,8 +92,10 @@ class SoundboardScreen(Screen):
 
     def enter(self, manager):
         self._manager = manager
+        self._pause.set_manager(manager)
         self._state.load()
         self._dirty = True
+        self._full_clear = True
         self._leds_dirty = True
         self._prev_bank = -1
         self._prev_volume = -1
@@ -105,17 +110,22 @@ class SoundboardScreen(Screen):
         self._dirty = True
 
     def needs_redraw(self):
-        return self._dirty
+        return self._dirty or self._pause.needs_render
 
     def update(self, inp, frame):
+        # Pause menu handles hold-to-open and menu navigation
+        result = self._pause.update(inp, frame)
+        if result == "quit" and self._manager:
+            self._manager.pop()
+            return
+        elif result == "resume":
+            self._dirty = True
+            self._full_clear = True
+        if self._pause.is_open or self._pause.is_holding:
+            return
+
         state = self._state
         changed = False
-
-        # --- NAV click → exit ---
-        if inp.enc_btn_pressed[NAV]:
-            if self._manager:
-                self._manager.pop()
-            return
 
         # --- Toggle switches → bank select ---
         new_bank = bank_from_toggles(inp.sw[0], inp.sw[1])
@@ -262,10 +272,26 @@ class SoundboardScreen(Screen):
             pass
 
     def render(self, tft, theme, frame):
+        if self._pause.is_open:
+            if self._dirty:
+                self._dirty = False
+                tft.fill(theme.BLACK)
+                self._full_clear = False
+                self._render_content(tft, theme, frame)
+            self._pause.render(tft, theme, frame)
+            return
+
         if not self._dirty:
+            self._pause.render(tft, theme, frame)
             return
         self._dirty = False
-        tft.fill(theme.BLACK)
+        if self._full_clear:
+            self._full_clear = False
+            tft.fill(theme.BLACK)
+        self._render_content(tft, theme, frame)
+        self._pause.render(tft, theme, frame)
+
+    def _render_content(self, tft, theme, frame):
         landscape = theme.width > theme.height
         if landscape:
             self._render_landscape(tft, theme, frame)

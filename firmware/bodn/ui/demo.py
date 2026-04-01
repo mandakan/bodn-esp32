@@ -141,9 +141,8 @@ class DemoScreen(Screen):
                 self._arc_flash = -1
                 self._dirty = True
 
-        # Encoder A button or NAV tap → cycle pattern
-        nav_tap = inp.gestures.tap[inp.gesture_enc(ENC_B)]
-        if inp.enc_btn_pressed[ENC_A] or nav_tap:
+        # Encoder A button → cycle pattern
+        if inp.enc_btn_pressed[ENC_A]:
             self._active_pattern = (self._active_pattern + 1) % len(PATTERNS)
             self._dirty = True
 

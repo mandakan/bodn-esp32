@@ -39,22 +39,17 @@ class ClockScreen(Screen):
     def needs_redraw(self):
         # Full render only for transitions and pause menu state changes.
         # Normal time ticks are handled via request_show() in update().
-        if self._pause.is_open:
-            return self._pause.needs_render
-        return self._dirty
+        return self._dirty or self._pause.needs_render
 
     def update(self, inp, frame):
-        if self._pause.is_open:
-            result = self._pause.update(inp, frame)
-            if result == "quit" and self._manager:
-                self._manager.pop()
-            elif result == "resume":
-                self._dirty = True
+        # Pause menu handles hold-to-open and menu navigation
+        result = self._pause.update(inp, frame)
+        if result == "quit" and self._manager:
+            self._manager.pop()
             return
-
-        if inp.enc_btn_pressed[NAV]:
-            self._pause.open()
+        elif result == "resume":
             self._dirty = True
+        if self._pause.is_open or self._pause.is_holding:
             return
 
         # Time tick — partial push, no full render cycle

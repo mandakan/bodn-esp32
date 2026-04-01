@@ -149,7 +149,6 @@ class GardenScreen(Screen):
         self._leds_dirty = True
         self._running = False
         self._plant_count = 0
-        self._nav_was_released = False  # wait for NAV release before accepting taps
         self._last_step_ms = time.ticks_ms()
 
     def exit(self):
@@ -236,14 +235,7 @@ class GardenScreen(Screen):
             self._last_plant_ms = now
 
         # NAV button tap: toggle cell at cursor (plant/remove)
-        # Wait for NAV button to be released once before accepting taps,
-        # so the press that entered this screen doesn't plant a cell.
-        if not self._nav_was_released:
-            if not inp.enc_btn_held[config.ENC_NAV]:
-                self._nav_was_released = True
-        nav_tap = (
-            self._nav_was_released and inp.gestures.tap[inp.gesture_enc(config.ENC_NAV)]
-        )
+        nav_tap = inp.gestures.tap[inp.gesture_enc(config.ENC_NAV)]
         if nav_tap:
             cx, cy = self._cursor_xy()
             was_empty = self._grid[cy * GRID_W + cx] == 0

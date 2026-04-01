@@ -76,9 +76,15 @@ class FakeTheme:
     height = 160
 
 
+class _FakeGestures:
+    def reset(self):
+        pass
+
+
 class FakeInput:
     def __init__(self):
         self.scanned = 0
+        self.gestures = _FakeGestures()
 
     def scan(self):
         self.scanned += 1
