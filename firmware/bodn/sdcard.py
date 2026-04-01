@@ -4,14 +4,23 @@
 # Called once during boot; no-ops gracefully if no card is inserted.
 #
 # The ESP-IDF SPI bus acquired by SDCard(slot=3) persists across soft
-# reboots. We keep the SDCard reference and deinit it in unmount() so
-# re-init succeeds after machine.soft_reset().
+# reboots.  If the normal init fails (SPI already held), we check whether
+# the previous VFS mount at /sd is still alive and usable.
 
 import os
 from bodn import config
 
 _mounted = False
 _sd = None  # SDCard object — must stay alive for deinit on unmount/reboot
+
+
+def _verify_sd():
+    """Return True if /sd is mounted and contains a sounds/ directory."""
+    try:
+        entries = os.listdir("/sd")
+        return "sounds" in entries
+    except OSError:
+        return False
 
 
 def mount():
@@ -24,16 +33,6 @@ def mount():
     global _mounted, _sd
     if _mounted:
         return True
-
-    # After a soft reboot the SPI bus and VFS mount from the previous
-    # session may still be alive.  Check if /sd is already accessible.
-    try:
-        os.statvfs("/sd")
-        _mounted = True
-        print("SD card already mounted at /sd (survived soft reboot)")
-        return True
-    except OSError:
-        pass
 
     from machine import SDCard, Pin
 
@@ -52,6 +51,15 @@ def mount():
         free_mb = stat[0] * stat[3] // (1024 * 1024)
         print("SD card mounted at /sd: {}MB total, {}MB free".format(total_mb, free_mb))
         return True
+    except OSError:
+        # SPI bus may still be held from before a soft reboot.
+        # Check if the previous VFS mount is still alive and valid.
+        if _verify_sd():
+            _mounted = True
+            print("SD card at /sd (survived soft reboot)")
+            return True
+        print("SD card not available")
+        return False
     except Exception as e:
         print("SD card not available:", e)
         return False
