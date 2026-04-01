@@ -31,5 +31,5 @@ def say(key, audio, channel="ui"):
         os.stat(resolved)
     except OSError:
         return False
-    audio.play(resolved, channel)
+    audio.play(resolved, channel=channel)
     return True

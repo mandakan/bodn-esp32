@@ -35,13 +35,13 @@ MOOD_COLORS = {
     "calm": (80, 80, 80),
 }
 
-# Arcade button hardware colours (matching config: green, blue, white, yellow, red)
+# Arcade button hardware colours (matching config.ARCADE_COLORS order)
 ARC_COLORS = [
-    (0, 220, 50),  # 0 green
-    (0, 80, 255),  # 1 blue
-    (220, 220, 220),  # 2 white
-    (255, 200, 0),  # 3 yellow
-    (255, 30, 0),  # 4 red
+    (60, 220, 60),  # 0 green (far left)
+    (60, 100, 255),  # 1 blue
+    (255, 255, 255),  # 2 white (centre)
+    (255, 220, 60),  # 3 yellow
+    (255, 60, 60),  # 4 red (far right)
 ]
 
 MAX_CHOICES = const(5)

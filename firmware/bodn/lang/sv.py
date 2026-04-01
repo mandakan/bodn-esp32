@@ -209,6 +209,9 @@ STRINGS = {
     "story_listen": "Lyssna...",
     "story_choose": "Valj!",
     "story_again": "Igen?",
+    "story_end_replay": "Igen!",
+    "story_end_pick": "Annan saga",
+    "story_end_exit": "Sluta",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_sd": "Kollar SD-kort...",

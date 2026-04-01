@@ -29,26 +29,41 @@ layers. Assets can be moved between flash and SD without any code changes.
 
 ```
 /sd/
-└── sounds/
-    ├── bank_0/       # Bank 0 mini-button sounds
-    │   ├── 0.wav     # Button 1 (or any .wav in discovery mode)
-    │   ├── 1.wav
-    │   └── …
-    ├── bank_1/       # Bank 1 sounds
-    ├── bank_2/       # Bank 2 sounds
-    ├── bank_3/       # Bank 3 sounds
-    ├── arcade/       # Shared arcade button sounds (all banks)
-    │   ├── 0.wav … 4.wav
-    ├── music/        # Background music
-    ├── space/        # Space mode button/arcade SFX
-    │   ├── thruster.wav, shields.wav, …
-    └── tts/          # Game-mode + story TTS (bulk)
-        ├── sv/
-        │   ├── simon_watch.wav, …          # i18n TTS (game instructions)
-        │   ├── story_forest_walk_start.wav  # story narration TTS
-        │   └── …
-        └── en/
-            └── …
+├── sounds/
+│   ├── bank_0/       # Bank 0 mini-button sounds
+│   │   ├── 0.wav     # Button 1 (or any .wav in discovery mode)
+│   │   ├── 1.wav
+│   │   └── …
+│   ├── bank_1/       # Bank 1 sounds
+│   ├── bank_2/       # Bank 2 sounds
+│   ├── bank_3/       # Bank 3 sounds
+│   ├── arcade/       # Shared arcade button sounds (all banks)
+│   │   ├── 0.wav … 4.wav
+│   ├── music/        # Background music
+│   ├── space/        # Space mode button/arcade SFX
+│   │   ├── thruster.wav, shields.wav, …
+│   └── tts/          # Game-mode i18n TTS
+│       ├── sv/
+│       │   ├── simon_watch.wav, …
+│       │   └── …
+│       └── en/
+│           └── …
+└── stories/          # Self-contained story packages
+    ├── forest_walk/
+    │   ├── script.py         # story data (nodes, choices, metadata)
+    │   └── tts/
+    │       ├── sv/
+    │       │   ├── start.wav             # scene narration
+    │       │   ├── start_choices.wav     # choice label narration
+    │       │   ├── clearing.wav
+    │       │   └── …
+    │       └── en/
+    │           └── …
+    └── peter_rabbit/
+        ├── script.py
+        └── tts/
+            ├── sv/…
+            └── en/…
 ```
 
 See the soundboard screen documentation for the manifest format.

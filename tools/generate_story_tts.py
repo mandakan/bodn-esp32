@@ -5,8 +5,12 @@ TTS audio generator for Bodn Story Mode.
 Discovers story scripts from assets/stories/*/script.py, extracts narration
 text and choice labels per language, and generates WAV files via Piper TTS.
 
-Scene narration → build/story_tts/{lang}/story_{id}_{node}.wav
-Choice labels   → build/story_tts/{lang}/story_{id}_{node}_choices.wav
+Output (per-story directories, Piper native sample rate):
+  Scene narration → build/story_tts_raw/{story_id}/{lang}/{node_id}.wav
+  Choice labels   → build/story_tts_raw/{story_id}/{lang}/{node_id}_choices.wav
+
+These are converted to 16 kHz PCM by convert_audio.py and assembled into
+self-contained story packages under build/stories/.
 
 Incremental: text hashes cached in build/story_tts_hashes.json.
 
@@ -28,8 +32,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
 STORIES_DIR = REPO_ROOT / "assets" / "stories"
-BUILTIN_STORIES = REPO_ROOT / "firmware" / "bodn" / "stories" / "__init__.py"
-OUTPUT_DIR = REPO_ROOT / "build" / "story_tts"
+OUTPUT_DIR = REPO_ROOT / "build" / "story_tts_raw"
 HASHES_JSON = REPO_ROOT / "build" / "story_tts_hashes.json"
 VOICES_DIR = Path.home() / ".cache" / "piper"
 
@@ -49,7 +52,8 @@ DEFAULT_PAUSE_SILENCE = 0.8
 # Regex matching {pause} or {pause 1.2} markers in story text.
 PAUSE_RE = re.compile(r"\{pause(?:\s+([\d.]+))?\}")
 
-# Arcade button names for narrating choices
+# Arcade button names — must match config.ARCADE_COLORS order:
+# green (idx 0), blue (1), white (2), yellow (3), red (4)
 ARC_BUTTON_NAMES = {
     "sv": ["grön", "blå", "vit", "gul", "röd"],
     "en": ["green", "blue", "white", "yellow", "red"],
@@ -57,18 +61,9 @@ ARC_BUTTON_NAMES = {
 
 
 def discover_stories():
-    """Find all stories (built-in flash + assets/stories/). Returns list of (id, story_dict)."""
+    """Find all stories in assets/stories/. Returns list of (id, story_dict)."""
     stories = []
 
-    # Built-in flash story
-    if BUILTIN_STORIES.exists():
-        ns = {}
-        exec(BUILTIN_STORIES.read_text(), ns)
-        s = ns.get("BUILTIN_STORY")
-        if s:
-            stories.append((s["id"], s))
-
-    # SD card stories
     if STORIES_DIR.exists():
         for entry in sorted(STORIES_DIR.iterdir()):
             script = entry / "script.py"
@@ -267,9 +262,9 @@ def main():
                 if not text:
                     continue
 
-                out_key = f"story_{story_id}_{node_id}"
-                out_path = OUTPUT_DIR / lang / f"{out_key}.wav"
-                hash_key = f"{lang}/{out_key}"
+                # Output: build/story_tts_raw/{story_id}/{lang}/{node_id}.wav
+                out_path = OUTPUT_DIR / story_id / lang / f"{node_id}.wav"
+                hash_key = f"{story_id}/{lang}/{node_id}"
                 h = text_hash(text, prosody)
 
                 if not args.force and hashes.get(hash_key) == h and out_path.exists():
@@ -289,9 +284,10 @@ def main():
                 if narrate_choices:
                     choices_text = build_choices_text(node, lang)
                     if choices_text:
-                        ch_key = f"{out_key}_choices"
-                        ch_path = OUTPUT_DIR / lang / f"{ch_key}.wav"
-                        ch_hash_key = f"{lang}/{ch_key}"
+                        ch_path = (
+                            OUTPUT_DIR / story_id / lang / f"{node_id}_choices.wav"
+                        )
+                        ch_hash_key = f"{story_id}/{lang}/{node_id}_choices"
                         ch_h = text_hash(choices_text, prosody)
 
                         if (

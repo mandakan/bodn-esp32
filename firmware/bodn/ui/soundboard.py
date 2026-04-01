@@ -47,11 +47,11 @@ _SLOT_COLORS_RGB = [
 
 # Arc colors (for the 5 arcade buttons)
 _ARC_COLORS_RGB = [
-    (255, 220, 60),  # yellow
-    (255, 60, 60),  # red
+    (60, 220, 60),  # green (far left)
     (60, 100, 255),  # blue
-    (60, 220, 60),  # green
-    (255, 255, 255),  # white
+    (255, 255, 255),  # white (centre)
+    (255, 220, 60),  # yellow
+    (255, 60, 60),  # red (far right)
 ]
 
 

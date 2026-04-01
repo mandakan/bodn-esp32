@@ -16,7 +16,9 @@ class TestSay:
             with patch("bodn.tts.os.stat"):
                 result = say("simon_watch", audio)
         assert result is True
-        audio.play.assert_called_once_with("/sounds/tts/sv/simon_watch.wav", "ui")
+        audio.play.assert_called_once_with(
+            "/sounds/tts/sv/simon_watch.wav", channel="ui"
+        )
 
     def test_returns_false_when_file_missing(self):
         audio = MagicMock()
@@ -66,7 +68,9 @@ class TestSay:
         with patch("bodn.tts.resolve", return_value="/sounds/tts/sv/bat_low.wav"):
             with patch("bodn.tts.os.stat"):
                 say("bat_low", audio, channel="music")
-        audio.play.assert_called_once_with("/sounds/tts/sv/bat_low.wav", "music")
+        audio.play.assert_called_once_with(
+            "/sounds/tts/sv/bat_low.wav", channel="music"
+        )
 
     def test_resolve_called_for_sd_first_logic(self):
         """resolve() is always called — SD-first logic lives in bodn.assets.resolve."""
@@ -76,4 +80,6 @@ class TestSay:
             with patch("bodn.tts.os.stat"):
                 say("simon_watch", audio)
         mock_resolve.assert_called_once_with("/sounds/tts/sv/simon_watch.wav")
-        audio.play.assert_called_once_with("/sd/sounds/tts/sv/simon_watch.wav", "ui")
+        audio.play.assert_called_once_with(
+            "/sd/sounds/tts/sv/simon_watch.wav", channel="ui"
+        )

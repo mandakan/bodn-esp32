@@ -41,6 +41,7 @@ SD_ASSETS = [
     # (source dir relative to repo, destination dir relative to SD root)
     (BUILD_DIR / "sounds", "sounds"),
     (BUILD_DIR / "tts_converted", "sounds/tts"),
+    (BUILD_DIR / "stories", "stories"),
 ]
 
 

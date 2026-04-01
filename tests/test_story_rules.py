@@ -428,22 +428,33 @@ class TestEngineLEDs:
 
 
 # ---------------------------------------------------------------------------
-# Built-in story validation
+# Forest Walk story validation
 # ---------------------------------------------------------------------------
 
 
-class TestBuiltinStory:
-    def test_builtin_story_valid(self):
-        from bodn.stories import BUILTIN_STORY
+class TestForestWalkStory:
+    @pytest.fixture
+    def story(self):
+        story_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "assets",
+            "stories",
+            "forest_walk",
+            "script.py",
+        )
+        ns = {}
+        with open(story_path) as f:
+            exec(f.read(), ns)
+        return ns["STORY"]
 
-        errors = validate_story(BUILTIN_STORY)
-        assert errors == [], f"Built-in story has errors: {errors}"
+    def test_valid(self, story):
+        errors = validate_story(story)
+        assert errors == [], f"Forest Walk has errors: {errors}"
 
-    def test_builtin_all_endings_reachable(self):
-        from bodn.stories import BUILTIN_STORY
-
-        reached = reachable_nodes(BUILTIN_STORY)
-        endings = find_endings(BUILTIN_STORY)
+    def test_all_endings_reachable(self, story):
+        reached = reachable_nodes(story)
+        endings = find_endings(story)
         assert len(endings) > 0
         for e in endings:
             assert e in reached, f"ending '{e}' not reachable"

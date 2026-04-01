@@ -209,6 +209,9 @@ STRINGS = {
     "story_listen": "Listen...",
     "story_choose": "Choose!",
     "story_again": "Again?",
+    "story_end_replay": "Again!",
+    "story_end_pick": "New story",
+    "story_end_exit": "Done",
     # Boot screen
     "boot_cfg": "Waking up...",
     "boot_sd": "Checking SD card...",

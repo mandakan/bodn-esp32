@@ -112,10 +112,10 @@ lid. Electrical index 0–7 runs left-to-right. Colors repeat due to limited var
 ║  │ 0 │  │ 1  │  │ 2 │  │ 3  │  │ 4 │  │ 5 │  │ 6 │  │ 7  │  (mini)     ║
 ║  └───┘  └────┘  └───┘  └────┘  └───┘  └───┘  └───┘  └────┘              ║
 ║                                                                             ║
-║   ┌────────┐  ┌─────┐  ┌──────┐  ┌───────┐  ┌───────┐                     ║
-║   │ YELLOW │  │ RED │  │ BLUE │  │ GREEN │  │ WHITE │  (arcade)           ║
-║   │ idx 0  │  │idx 1│  │ idx 2│  │ idx 3 │  │ idx 4 │                     ║
-║   └────────┘  └─────┘  └──────┘  └───────┘  └───────┘                     ║
+║   ┌───────┐  ┌──────┐  ┌───────┐  ┌────────┐  ┌─────┐                     ║
+║   │ GREEN │  │ BLUE │  │ WHITE │  │ YELLOW │  │ RED │  (arcade)           ║
+║   │ idx 0 │  │ idx 1│  │ idx 2 │  │ idx 3  │  │idx 4│                     ║
+║   └───────┘  └──────┘  └───────┘  └────────┘  └─────┘                     ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
 Toggle/encoder row (left to right):
@@ -171,20 +171,20 @@ The physical left-to-right order matches the electrical index order (0–4):
 ╔═══════════════════════════════════════════════════════════════╗
 ║                          LID (front)                         ║
 ║                                                              ║
-║   ┌────────┐  ┌─────┐  ┌──────┐  ┌───────┐  ┌───────┐     ║
-║   │ YELLOW │  │ RED │  │ BLUE │  │ GREEN │  │ WHITE │     ║
-║   │ idx 0  │  │idx 1│  │ idx 2│  │ idx 3 │  │ idx 4 │     ║
-║   └────────┘  └─────┘  └──────┘  └───────┘  └───────┘     ║
+║   ┌───────┐  ┌──────┐  ┌───────┐  ┌────────┐  ┌─────┐     ║
+║   │ GREEN │  │ BLUE │  │ WHITE │  │ YELLOW │  │ RED │     ║
+║   │ idx 0 │  │ idx 1│  │ idx 2 │  │ idx 3  │  │idx 4│     ║
+║   └───────┘  └──────┘  └───────┘  └────────┘  └─────┘     ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
 | Position (L→R) | Color  | Index | MCP1 pin | PCA9685 channel |
 |-----------------|--------|-------|----------|-----------------|
-| 1 (far left)    | Yellow | 0     | GPB2     | CH1             |
-| 2               | Red    | 1     | GPB3     | CH2             |
-| 3 (centre)      | Blue   | 2     | GPB5     | CH3             |
-| 4               | Green  | 3     | GPB6     | CH4             |
-| 5 (far right)   | White  | 4     | GPB7     | CH5             |
+| 1 (far left)    | Green  | 0     | GPB2     | CH1             |
+| 2               | Blue   | 1     | GPB3     | CH2             |
+| 3 (centre)      | White  | 2     | GPB5     | CH3             |
+| 4               | Yellow | 3     | GPB6     | CH4             |
+| 5 (far right)   | Red    | 4     | GPB7     | CH5             |
 
 The color list is defined in `config.py` as `ARCADE_COLORS`. Since the physical
 and electrical orders match, no separate spatial mapping is needed.
@@ -420,11 +420,11 @@ The PCA9685 shares the I2C bus on GPIO 47 (SCL) / GPIO 48 (SDA) with the MCP2301
 | Channel | Function | Notes |
 |---------|----------|-------|
 | 0 | TFT backlight | Smooth dimming (replaces binary GPIO on/off) |
-| 1 | Arcade LED 1 (yellow) | 5V via V+ rail, ~10 mA |
-| 2 | Arcade LED 2 (red) | 5V via V+ rail, ~10 mA |
-| 3 | Arcade LED 3 (blue) | 5V via V+ rail, ~10 mA |
-| 4 | Arcade LED 4 (green) | 5V via V+ rail, ~10 mA |
-| 5 | Arcade LED 5 (white) | 5V via V+ rail, ~10 mA |
+| 1 | Arcade LED 1 (green) | 5V via V+ rail, ~10 mA |
+| 2 | Arcade LED 2 (blue) | 5V via V+ rail, ~10 mA |
+| 3 | Arcade LED 3 (white) | 5V via V+ rail, ~10 mA |
+| 4 | Arcade LED 4 (yellow) | 5V via V+ rail, ~10 mA |
+| 5 | Arcade LED 5 (red) | 5V via V+ rail, ~10 mA |
 | 6 | MAX98357A SD (mute) | 0 = shutdown, 4095 = enabled |
 | 7–15 | Available | Future use (servos, indicators, etc.) |
 

@@ -18,7 +18,7 @@ TFT_RST = const(9)
 TFT_BL = const(1)  # GPIO 43 is UART TX — would flicker backlight on every print()
 TFT_WIDTH = const(320)
 TFT_HEIGHT = const(240)
-TFT_MADCTL = const(0xE0)  # MY + MX + MV (landscape, RGB order)
+TFT_MADCTL = const(0xE8)  # MY + MX + MV + BGR (landscape, panel uses BGR subpixels)
 TFT_COL_OFFSET = const(0)
 TFT_ROW_OFFSET = const(0)
 
@@ -132,17 +132,17 @@ MCP_ARC_PINS = [10, 11, 13, 14, 15]  # GPB2,GPB3,GPB5,GPB6,GPB7 — 5 arcade but
 # PCA9685 16-channel 12-bit PWM driver — LED dimming over I2C
 PCA9685_ADDR = const(0x40)  # A0-A5 all low (default)
 PWM_CH_BACKLIGHT = const(0)  # TFT backlight dimming channel
-PWM_CH_ARC1 = const(1)  # Arcade idx 0 — yellow (far left)
-PWM_CH_ARC2 = const(2)  # Arcade idx 1 — red
-PWM_CH_ARC3 = const(3)  # Arcade idx 2 — blue (centre)
-PWM_CH_ARC4 = const(4)  # Arcade idx 3 — green
-PWM_CH_ARC5 = const(5)  # Arcade idx 4 — white (far right)
+PWM_CH_ARC1 = const(1)  # Arcade idx 0 — green (far left)
+PWM_CH_ARC2 = const(2)  # Arcade idx 1 — blue
+PWM_CH_ARC3 = const(3)  # Arcade idx 2 — white (centre)
+PWM_CH_ARC4 = const(4)  # Arcade idx 3 — yellow
+PWM_CH_ARC5 = const(5)  # Arcade idx 4 — red (far right)
 PWM_CH_AMP_SD = const(6)  # UNUSED — amp SD moved to GPIO 3 (PCA9685 glitches on boot)
 
 # Mini button colors — physical left-to-right matches electrical index 0–7
 BUTTON_COLORS = ["green", "blue", "white", "yellow", "red", "black", "green", "blue"]
 # Arcade button colors — physical left-to-right matches electrical index 0–4
-ARCADE_COLORS = ["yellow", "red", "blue", "green", "white"]
+ARCADE_COLORS = ["green", "blue", "white", "yellow", "red"]
 
 # Encoder sensitivity: detents per logical unit
 # 1=high (every click), 2=medium, 3=low (for young children)

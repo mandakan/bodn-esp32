@@ -1,8 +1,8 @@
 # bodn/ui/story.py — Story Mode screen (branching interactive narrative)
 #
-# Data-driven: stories are Python dicts loaded from SD (/sd/stories/*/script.py)
-# or the built-in flash fallback.  The screen handles display, audio, LEDs,
-# and arcade button input; the engine (story_rules.py) handles pure logic.
+# Data-driven: stories are Python dicts loaded from SD (/sd/stories/*/script.py).
+# The screen handles display, audio, LEDs, and arcade button input; the engine
+# (story_rules.py) handles pure logic.
 #
 # Layout (320x240 landscape):
 #   Top ~120px: mood colour wash
@@ -58,6 +58,11 @@ _MOOD_EMOTIONS = {
 # Arcade button 565 colours (index 0-4: green, blue, white, yellow, red)
 _ARC_565 = None
 
+# End menu: arcade button assignments (hardware indices from config.ARCADE_COLORS)
+_END_REPLAY = const(0)  # yellow — replay same story
+_END_EXIT = const(1)  # red — exit story mode
+_END_PICK = const(2)  # blue — pick another story (only when multiple)
+
 
 def _discover_stories():
     """Find story scripts on SD card. Returns list of (story_id, path) tuples."""
@@ -106,7 +111,7 @@ class StoryScreen(Screen):
     """Story Mode — branching interactive narratives.
 
     Arcade buttons (0-4) select choices.  Hold nav encoder to pause.
-    Stories are discovered from SD; falls back to built-in flash story.
+    Stories are discovered from SD (/sd/stories/*/script.py).
     If multiple stories exist, a simple picker is shown first.
     """
 
@@ -135,13 +140,14 @@ class StoryScreen(Screen):
         self._full_clear = True
         self._leds_dirty = True
         # Story selection
-        self._stories = []  # [(id, path_or_None)] — None = builtin
+        self._stories = []  # [(id, path)]
         self._picker_index = 0
         self._picker_mode = False
+        self._end_menu = False  # post-story choice screen
+        self._last_story_index = 0  # for replay
         # TTS state
         self._tts_playing = False
-        self._tts_scene_key = None
-        self._tts_choices_key = None
+        self._tts_has_choices = False
         self._tts_phase = 0  # 0=scene, 1=choices, 2=done
         # Fallback timer: if no TTS file, auto-advance after this many frames
         self._narrate_timer = 0
@@ -161,14 +167,14 @@ class StoryScreen(Screen):
         _MOOD_565 = {mood: rgb(c[0], c[1], c[2]) for mood, c in MOOD_COLORS.items()}
         _ARC_565 = [rgb(c[0], c[1], c[2]) for c in ARC_COLORS]
 
-        # Discover available stories
-        sd_stories = _discover_stories()
-        self._stories = []
-        for sid, path in sd_stories:
-            self._stories.append((sid, path))
+        # Discover available stories from SD
+        self._stories = _discover_stories()
 
-        # Always include built-in story
-        self._stories.append(("forest_walk", None))
+        if not self._stories:
+            # No stories on SD — stay in picker (shows "no stories" message)
+            self._picker_mode = True
+            self._picker_index = 0
+            return
 
         if len(self._stories) == 1:
             # Single story — load directly
@@ -180,14 +186,10 @@ class StoryScreen(Screen):
 
     def _load_story(self, index):
         """Load story at index and start the engine."""
+        self._last_story_index = index
+        self._end_menu = False
         sid, path = self._stories[index]
-        if path is None:
-            # Built-in flash story
-            from bodn.stories import BUILTIN_STORY
-
-            story = BUILTIN_STORY
-        else:
-            story = _load_story_from_file(path)
+        story = _load_story_from_file(path)
         if story is None:
             return
         errors = self._engine.load(story)
@@ -200,6 +202,26 @@ class StoryScreen(Screen):
         self._leds_dirty = True
         self._start_narration()
 
+    def _resolve_story_tts(self, node_id, suffix=""):
+        """Build and resolve a story TTS path.
+
+        Story TTS lives alongside the story script on SD:
+          /stories/{story_id}/tts/{lang}/{node_id}{suffix}.wav
+
+        Returns the resolved filesystem path, or None if the file is missing.
+        """
+        eng = self._engine
+        lang = get_language()
+        path = "/stories/{}/tts/{}/{}{}.wav".format(eng.story_id, lang, node_id, suffix)
+        from bodn.assets import resolve
+
+        resolved = resolve(path)
+        try:
+            os.stat(resolved)
+            return resolved
+        except OSError:
+            return None
+
     def _start_narration(self):
         """Begin TTS for the current node.
 
@@ -210,18 +232,15 @@ class StoryScreen(Screen):
         self._tts_phase = 0
         eng = self._engine
         lang = get_language()
-        # Build TTS key for scene narration
-        key = "story_{}_{}".format(eng.story_id, eng.node_id)
-        self._tts_scene_key = key
-        self._tts_choices_key = (
-            key + "_choices" if eng.narrate_choices and eng.choice_count > 0 else None
-        )
+        # Check if choices TTS should be played after scene narration
+        self._tts_has_choices = eng.narrate_choices and eng.choice_count > 0
         # Try to play scene TTS
         tts_found = False
         if self._audio:
-            from bodn.tts import say
-
-            tts_found = say(self._tts_scene_key, self._audio, channel="ui")
+            scene_path = self._resolve_story_tts(eng.node_id)
+            if scene_path:
+                self._audio.play(scene_path, channel="ui")
+                tts_found = True
         self._tts_playing = tts_found
         if not tts_found:
             # No TTS — use a timer based on text length (~3 frames per word)
@@ -234,7 +253,10 @@ class StoryScreen(Screen):
         """Check if narration has finished (TTS or timer fallback).
 
         Manages the scene → choices → done sequence.
+        Only meaningful during NARRATING or ENDING — skip otherwise.
         """
+        if self._engine.state not in (NARRATING, ENDING):
+            return
         frame = self._manager._frame if self._manager else 0
 
         if self._tts_playing:
@@ -248,11 +270,13 @@ class StoryScreen(Screen):
             # TTS phase finished
             if self._tts_phase == 0:
                 # Scene done — try choices
-                if self._tts_choices_key:
-                    self._tts_phase = 1
-                    from bodn.tts import say
-
-                    if say(self._tts_choices_key, self._audio, channel="ui"):
+                if self._tts_has_choices:
+                    choices_path = self._resolve_story_tts(
+                        self._engine.node_id, "_choices"
+                    )
+                    if choices_path:
+                        self._tts_phase = 1
+                        self._audio.play(choices_path, channel="ui")
                         return  # choices TTS started
                 # No choices TTS or not applicable — done
                 self._tts_phase = 2
@@ -270,6 +294,9 @@ class StoryScreen(Screen):
                 self._engine.narration_done(frame)
 
     def exit(self):
+        # Stop any TTS still playing
+        if self._audio:
+            self._audio.stop("ui")
         # Turn off arcade LEDs
         if self._arcade:
             self._arcade.all_off()
@@ -280,7 +307,16 @@ class StoryScreen(Screen):
         return self._dirty or self._pause.needs_render
 
     def update(self, inp, frame):
-        # Pause menu
+        # Picker and end menu run without pause hold detection
+        # (pause only applies during active story playback)
+        if self._picker_mode:
+            self._update_picker(inp, frame)
+            return
+        if self._end_menu:
+            self._update_end_menu(inp, frame)
+            return
+
+        # Pause menu (only during active story)
         result = self._pause.update(inp, frame)
         if result == "quit" and self._manager:
             self._manager.pop()
@@ -291,19 +327,12 @@ class StoryScreen(Screen):
         if self._pause.is_open or self._pause.is_holding:
             return
 
-        # Picker mode: nav encoder to browse, button/encoder press to select
-        if self._picker_mode:
-            self._update_picker(inp, frame)
-            return
-
         # Engine update
         prev_state = self._engine.state
         self._engine.update(frame)
 
-        # Check TTS completion
-        self._check_tts_done()
-
-        # Handle state transitions
+        # Handle state transitions (before TTS check so _start_narration
+        # resets TTS state before _check_tts_done inspects it)
         state = self._engine.state
         if state != prev_state:
             self._prev_state = prev_state
@@ -318,20 +347,21 @@ class StoryScreen(Screen):
                     emotion = HAPPY
                 self._secondary.set_emotion(emotion)
 
-            # Start narration when entering a new NARRATING state
-            if state == NARRATING and prev_state == TRANSITIONING:
+            # Start narration when entering a new scene (or ending)
+            if prev_state == TRANSITIONING and state in (NARRATING, ENDING):
                 self._start_narration()
 
-            # Return to picker/exit when story ends
+            # Show end menu when story finishes
             if state == IDLE and prev_state == ENDING:
-                if len(self._stories) > 1:
-                    self._picker_mode = True
-                    self._dirty = True
-                    self._full_clear = True
-                else:
-                    # Single story — reload
-                    self._load_story(0)
+                self._end_menu = True
+                self._dirty = True
+                self._full_clear = True
+                self._leds_dirty = True
                 return
+
+        # Check TTS completion (after state transitions so _start_narration
+        # has a chance to reset TTS state for new nodes)
+        self._check_tts_done()
 
         # Handle arcade input during CHOOSING
         if state == CHOOSING:
@@ -362,15 +392,77 @@ class StoryScreen(Screen):
 
     def _update_picker(self, inp, frame):
         """Handle story picker input."""
+        if not self._stories:
+            return
         delta = inp.enc_delta[NAV]
         if delta != 0:
             self._picker_index = (self._picker_index + delta) % len(self._stories)
             self._dirty = True
 
-        if inp.any_btn_pressed() or inp.enc_btn_pressed[NAV]:
+        # Accept nav encoder press, any mini button, or any arcade button
+        arc = inp.first_arc_pressed() if hasattr(inp, "first_arc_pressed") else -1
+        if inp.any_btn_pressed() or inp.enc_btn_pressed[NAV] or arc >= 0:
+            # Play select sound on SFX channel (UI channel is reserved for narration)
+            if self._audio:
+                self._audio.play_sound("select", channel="sfx")
             self._load_story(self._picker_index)
+
+    def _update_end_menu(self, inp, frame):
+        """Handle post-story end menu input."""
+        arc = inp.first_arc_pressed() if hasattr(inp, "first_arc_pressed") else -1
+        if arc < 0:
+            btn = inp.first_btn_pressed()
+            if 0 <= btn <= 2:
+                arc = btn
+
+        if arc == _END_REPLAY:
+            # Replay same story
             if self._audio:
                 self._audio.play_sound("select")
+            self._load_story(self._last_story_index)
+        elif arc == _END_EXIT:
+            # Exit story mode
+            if self._audio:
+                self._audio.play_sound("select")
+            if self._manager:
+                self._manager.pop()
+        elif arc == _END_PICK and len(self._stories) > 1:
+            # Go to story picker
+            if self._audio:
+                self._audio.play_sound("select")
+            self._end_menu = False
+            self._picker_mode = True
+            self._dirty = True
+            self._full_clear = True
+            self._leds_dirty = True
+
+        if not self._end_menu:
+            return
+
+        # LEDs: dim warm glow on sticks, lid off, arcade pulses on options
+        if self._leds_dirty:
+            self._leds_dirty = False
+            brightness = self._brightness.value
+            np = self._np
+            from bodn.patterns import scale as _s, _led_buf, N_STICKS
+
+            c = _s((180, 120, 40), brightness // 4)
+            for i in range(N_STICKS):
+                _led_buf[i] = c
+            zone_clear(ZONE_LID_RING)
+            ses_state = self._overlay.session_mgr.state
+            leds = self._overlay.static_led_override(ses_state, _led_buf, brightness)
+            for i in range(N_LEDS):
+                np[i] = leds[i]
+            np.write()
+
+        if self._arcade:
+            n_options = 3 if len(self._stories) > 1 else 2
+            for i in range(N_ARCADE):
+                if i < n_options:
+                    self._arcade.pulse_led(i, frame, speed=1)
+                else:
+                    self._arcade.set_led(i, 0)
 
     def _update_leds(self, frame):
         """Write NeoPixels and arcade LEDs."""
@@ -433,6 +525,8 @@ class StoryScreen(Screen):
 
             if self._picker_mode:
                 self._render_picker(tft, theme, frame)
+            elif self._end_menu:
+                self._render_end_menu(tft, theme, frame)
             else:
                 self._render_story(tft, theme, frame)
 
@@ -449,30 +543,27 @@ class StoryScreen(Screen):
             draw_centered(tft, t("story_no_stories"), h // 2, theme.MUTED, w)
             return
 
-        # Show current story
+        # Show current story title
         sid, path = self._stories[self._picker_index]
-        # Try to load title without loading full story
         title = sid
-        if path is None:
-            from bodn.stories import BUILTIN_STORY
+        try:
+            story = _load_story_from_file(path)
+            if story:
+                titles = story.get("title", {})
+                title = titles.get(get_language(), titles.get("en", sid))
+        except Exception:
+            pass
 
-            titles = BUILTIN_STORY.get("title", {})
-            title = titles.get(get_language(), titles.get("en", sid))
-        else:
-            try:
-                story = _load_story_from_file(path)
-                if story:
-                    titles = story.get("title", {})
-                    title = titles.get(get_language(), titles.get("en", sid))
-            except Exception:
-                pass
-
-        draw_centered(tft, title, h // 2 - 8, theme.WHITE, w, scale=2)
+        # Clear title + dots region before redrawing
+        title_y = h // 2 - 8
+        tft.fill_rect(0, title_y, w, 16, theme.BLACK)
+        draw_centered(tft, title, title_y, theme.WHITE, w, scale=2)
 
         # Dots
         n = len(self._stories)
         if n > 1:
             dot_y = h // 2 + 30
+            tft.fill_rect(0, dot_y - 3, w, 6, theme.BLACK)
             gap = 12
             total_w = n * gap
             x0 = (w - total_w) // 2
@@ -484,6 +575,30 @@ class StoryScreen(Screen):
                     tft.rect(cx - 3, dot_y - 3, 6, 6, theme.DIM)
 
         draw_centered(tft, t("story_press_start"), h - 30, theme.MUTED, w)
+
+    def _render_end_menu(self, tft, theme, frame):
+        """Render the post-story choice screen."""
+        w = theme.width
+        h = theme.height
+
+        # Title
+        draw_centered(tft, t("story_the_end"), 30, theme.YELLOW, w, scale=3)
+
+        # Options with arcade button colour dots
+        options = [
+            (_END_REPLAY, t("story_end_replay")),
+            (_END_EXIT, t("story_end_exit")),
+        ]
+        if len(self._stories) > 1:
+            options.append((_END_PICK, t("story_end_pick")))
+
+        y0 = h // 2 - len(options) * 12
+        for arc_idx, label in options:
+            y = y0 + arc_idx * 28
+            # Colour dot matching arcade button
+            if _ARC_565 and arc_idx < len(_ARC_565):
+                tft.fill_rect(40, y + 2, 12, 12, _ARC_565[arc_idx])
+            draw_label(tft, label, 60, y, theme.WHITE, scale=2)
 
     def _render_story(self, tft, theme, frame):
         """Render the active story scene."""

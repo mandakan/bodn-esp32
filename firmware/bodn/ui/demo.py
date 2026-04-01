@@ -41,11 +41,11 @@ _BTN_RGB = [
 
 # Physical arcade-button colors → RGB tuples (matches config.ARCADE_COLORS order)
 _ARC_RGB = [
-    (255, 220, 60),  # yellow
-    (255, 60, 60),  # red
+    (60, 220, 60),  # green (far left)
     (60, 100, 255),  # blue
-    (60, 220, 60),  # green
-    (255, 255, 255),  # white
+    (255, 255, 255),  # white (centre)
+    (255, 220, 60),  # yellow
+    (255, 60, 60),  # red (far right)
 ]
 
 # 565 versions are lazily initialised on first render (needs theme.rgb)

@@ -248,26 +248,63 @@ def process_tts_sd(dry_run: bool, force: bool, normalize: bool):
 
 
 def process_story_tts(dry_run: bool, force: bool, normalize: bool):
-    """Convert story TTS from build/story_tts/ → build/tts_converted/.
+    """Convert story TTS and stage story scripts into self-contained packages.
 
-    Story TTS lands in the same tts_converted/{lang}/ directory as i18n TTS
-    so both are found by tts.say() via the same SD path.
+    Converts: build/story_tts_raw/{id}/{lang}/*.wav → build/stories/{id}/tts/{lang}/*.wav
+    Copies:   assets/stories/{id}/script.py          → build/stories/{id}/script.py
+              firmware/bodn/stories/__init__.py       → build/stories/forest_walk/script.py
     """
-    src_dir = BUILD_DIR / "story_tts"
-    if not src_dir.exists():
-        print(f"  build/story_tts/ not found — run tools/generate_story_tts.py first.")
+    raw_dir = BUILD_DIR / "story_tts_raw"
+    stories_dir = BUILD_DIR / "stories"
+
+    # Convert TTS audio
+    if raw_dir.exists():
+        wavs = sorted(raw_dir.rglob("*.wav"))
+        if wavs:
+            for src in wavs:
+                # src: build/story_tts_raw/{story_id}/{lang}/{node}.wav
+                # dst: build/stories/{story_id}/tts/{lang}/{node}.wav
+                rel = src.relative_to(raw_dir)
+                parts = rel.parts  # (story_id, lang, filename)
+                if len(parts) == 3:
+                    dst = stories_dir / parts[0] / "tts" / parts[1] / parts[2]
+                    _convert_file(src, dst, dry_run, force, normalize)
+        else:
+            print(f"  no WAV files in build/story_tts_raw/")
+    else:
+        print(
+            f"  build/story_tts_raw/ not found — run tools/generate_story_tts.py first."
+        )
+
+    # Stage story scripts into build/stories/
+    _stage_story_scripts(dry_run, force)
+
+
+def _stage_story_scripts(dry_run: bool, force: bool):
+    """Copy story script.py files into build/stories/ for SD sync."""
+    stories_dir = BUILD_DIR / "stories"
+    assets_stories = REPO_ROOT / "assets" / "stories"
+
+    if not assets_stories.exists():
         return
 
-    wavs = sorted(src_dir.rglob("*.wav"))
-    if not wavs:
-        print(f"  no WAV files in build/story_tts/")
-        return
-
-    dst_dir = BUILD_DIR / "tts_converted"
-    for src in wavs:
-        rel = src.relative_to(src_dir)
-        dst = dst_dir / rel
-        _convert_file(src, dst, dry_run, force, normalize)
+    for entry in sorted(assets_stories.iterdir()):
+        src = entry / "script.py"
+        if not src.is_file():
+            continue
+        dst = stories_dir / entry.name / "script.py"
+        if not force and dst.exists() and dst.stat().st_mtime >= src.stat().st_mtime:
+            continue
+        if dry_run:
+            print(
+                f"  would copy  {src.relative_to(REPO_ROOT)}  →  {dst.relative_to(REPO_ROOT)}"
+            )
+        else:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            print(
+                f"  copied  {src.relative_to(REPO_ROOT)}  →  {dst.relative_to(REPO_ROOT)}"
+            )
 
 
 def print_summary(dry_run: bool):
@@ -316,7 +353,7 @@ def main():
     print("\n=== TTS (SD staging) ===")
     process_tts_sd(args.dry_run, args.force, normalize)
 
-    print("\n=== Story TTS (→ SD) ===")
+    print("\n=== Story packages (TTS + scripts → SD) ===")
     process_story_tts(args.dry_run, args.force, normalize)
 
     print_summary(args.dry_run)

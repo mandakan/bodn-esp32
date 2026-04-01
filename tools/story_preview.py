@@ -23,7 +23,6 @@ from urllib.parse import parse_qs, urlparse
 
 REPO_ROOT = Path(__file__).parent.parent
 STORIES_DIR = REPO_ROOT / "assets" / "stories"
-BUILTIN_STORIES = REPO_ROOT / "firmware" / "bodn" / "stories" / "__init__.py"
 TTS_DIR = REPO_ROOT / "build" / "story_tts"
 FIRMWARE_SOUNDS = REPO_ROOT / "firmware" / "sounds"
 BUILD_TTS = REPO_ROOT / "build" / "tts"
@@ -39,22 +38,13 @@ MOOD_COLORS = {
     "calm": "#505050",
 }
 
-ARC_COLORS = ["#00dc32", "#1e64fa", "#c8c8c8", "#e6dc00", "#e61e28"]
+ARC_COLORS = ["#3cdc3c", "#3c64ff", "#ffffff", "#ffdc3c", "#ff3c3c"]
 
 
 def discover_stories():
-    """Load all stories. Returns dict {id: story_dict}."""
+    """Load all stories from assets/stories/. Returns dict {id: story_dict}."""
     stories = {}
 
-    # Built-in flash story
-    if BUILTIN_STORIES.exists():
-        ns = {}
-        exec(BUILTIN_STORIES.read_text(), ns)
-        s = ns.get("BUILTIN_STORY")
-        if s:
-            stories[s["id"]] = s
-
-    # SD card stories
     if STORIES_DIR.exists():
         for entry in sorted(STORIES_DIR.iterdir()):
             script = entry / "script.py"
