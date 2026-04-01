@@ -134,14 +134,13 @@ class PauseMenu(Screen):
                 self._manager.request_show(0, 0, theme.width, _HOLD_BAR_H)
                 self._bar_visible = True
         elif was_holding and self._manager:
-            # Just released — clear the bar strip
+            # Just released — mark host screen dirty so it redraws the
+            # area under the bar (the bar overwrote game content directly).
             self._last_hold_step = -1
-            if self._bar_visible:
-                tft = self._manager.tft
-                theme = self._manager.theme
-                tft.fill_rect(0, 0, theme.width, _HOLD_BAR_H, theme.BLACK)
-                self._manager.request_show(0, 0, theme.width, _HOLD_BAR_H)
-                self._bar_visible = False
+            active = self._manager.active
+            if hasattr(active, "_dirty"):
+                active._dirty = True
+            self._bar_visible = False
 
         return None
 
