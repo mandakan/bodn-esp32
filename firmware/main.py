@@ -121,11 +121,18 @@ def create_hardware():
             )
         )
 
-    # MCP2 — second MCP23017 for encoder push buttons
+    # MCP2 — second MCP23017 for encoder push buttons + extra toggles
     mcp2 = None
     try:
         mcp2 = MCP23017(i2c, config.MCP2_ADDR)
-        print("MCP2 (0x{:02X}) initialised — encoder switches".format(config.MCP2_ADDR))
+        # Append extra toggle switches from MCP2 (sw[2] = SW_L, sw[3] = SW_R)
+        switches.append(mcp2.pin(config.MCP2_SW_LEFT))
+        switches.append(mcp2.pin(config.MCP2_SW_RIGHT))
+        print(
+            "MCP2 (0x{:02X}) initialised — encoder switches + 2 toggles".format(
+                config.MCP2_ADDR
+            )
+        )
     except Exception as e:
         print(
             "MCP2 (0x{:02X}) not found, encoder buttons via fallback: {}".format(

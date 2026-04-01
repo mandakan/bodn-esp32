@@ -115,10 +115,14 @@ STRINGS = {
     "overlay_goodnight": "Godnatt!",
     # Demo
     "demo_buttons": "Knappar",
+    "demo_arcade": "Trummor",
     "demo_toggles": "Växlar",
+    "demo_encoders": "Rattar",
     "demo_back": "< tillbaka",
     "demo_bri": "Lju",
     "demo_spd": "Hst",
+    "tog_left": "V",
+    "tog_right": "H",
     # Diagnostics
     "diag_title": "~ Diagnostik ~",
     "diag_dismiss": "Tryck på en knapp",

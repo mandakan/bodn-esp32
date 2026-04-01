@@ -115,10 +115,14 @@ STRINGS = {
     "overlay_goodnight": "Goodnight!",
     # Demo
     "demo_buttons": "Buttons",
+    "demo_arcade": "Drums",
     "demo_toggles": "Toggles",
+    "demo_encoders": "Encoders",
     "demo_back": "< back",
     "demo_bri": "Bri",
     "demo_spd": "Spd",
+    "tog_left": "L",
+    "tog_right": "R",
     # Diagnostics
     "diag_title": "~ Diagnostics ~",
     "diag_dismiss": "Press any button",
