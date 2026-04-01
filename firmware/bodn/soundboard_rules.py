@@ -118,15 +118,20 @@ def load_manifest():
                 "1": "Katt"
               }
             }
+          },
+          "arcade": {
+            "0": {"sv": "Trumma", "en": "Drum"},
+            "1": "Cymbal"
           }
         }
 
     All fields are optional. ``name`` is accepted as a language-neutral fallback.
-    Slot labels can be a plain string (language-neutral) or a ``{lang: str}`` dict.
+    Slot/arcade labels can be a plain string (language-neutral) or a ``{lang: str}`` dict.
 
     Returns a dict with keys:
         "banks": {0: {"name": str, ...per-lang keys..., "color": (r,g,b)}, ...}
         "labels": {(bank, slot): str | dict, ...}
+        "arcade_labels": {slot: str | dict, ...}
     """
     result = {
         "banks": {
@@ -134,6 +139,7 @@ def load_manifest():
             for i in range(NUM_BANKS)
         },
         "labels": {},
+        "arcade_labels": {},
     }
     try:
         with open(MANIFEST_PATH) as f:
@@ -182,6 +188,16 @@ def load_manifest():
                 continue
             if isinstance(label, (str, dict)):
                 result["labels"][(bank_idx, slot_idx)] = label
+
+    # Arcade button labels (shared across banks)
+    arcade_raw = raw.get("arcade", {})
+    for key, label in arcade_raw.items():
+        try:
+            idx = int(key)
+        except (ValueError, TypeError):
+            continue
+        if 0 <= idx < NUM_ARCADE_BUTTONS and isinstance(label, (str, dict)):
+            result["arcade_labels"][idx] = label
 
     return result
 
@@ -281,6 +297,26 @@ class SoundboardState:
                 return label  # plain string — language-neutral
         # Discovery mode: use filename stem as label
         return self._disc_labels[slot]
+
+    def arcade_label(self, slot):
+        """Return the display label for an arcade button in the active language.
+
+        Resolution: manifest label → None (caller uses i18n fallback).
+        """
+        if self.manifest:
+            label = self.manifest["arcade_labels"].get(slot)
+            if label is not None:
+                if isinstance(label, dict):
+                    from bodn.i18n import get_language
+
+                    lang = get_language()
+                    return (
+                        label.get(lang)
+                        or label.get("sv")
+                        or next(iter(label.values()), None)
+                    )
+                return label
+        return None
 
     def adjust_volume(self, delta):
         """Adjust volume by delta detents, clamped to 0–100."""

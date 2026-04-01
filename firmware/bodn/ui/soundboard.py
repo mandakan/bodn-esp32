@@ -442,8 +442,10 @@ class SoundboardScreen(Screen):
         else:
             tft.rect(x, y, w, h, theme.DIM)
 
-        # Label: "A1"–"A5"
-        label = t("sb_extra", idx + 1)
+        # Label: manifest name or fallback "A1"–"A5"
+        label = self._state.arcade_label(idx)
+        if label is None:
+            label = t("sb_extra", idx + 1)
         if len(label) > (w // 8):
             label = label[: w // 8]
         lx = x + (w - len(label) * 8) // 2
