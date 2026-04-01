@@ -211,6 +211,7 @@ STRINGS = {
     "story_again": "Igen?",
     # Boot screen
     "boot_cfg": "Vaknar...",
+    "boot_sd": "Kollar SD-kort...",
     "boot_net": "Söker vänner...",
     "boot_ntp": "Vilken tid är det?",
     "boot_bat": "Kollar batteriet...",

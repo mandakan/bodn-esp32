@@ -39,7 +39,7 @@ graph LR
     I2CbuspUEXTconnector["I2C bus — pUEXT connector<br/><sub>GPIO 47 → I2C_SCL<br/>GPIO 48 → I2C_SDA</sub>"]
     I2CbuspUEXTconnector -.- ESP
 
-    previouslyreservedfortouchCS["previously reserved for touch CS .<br/><sub>GPIO 0 → SD_CS<br/>GPIO 17 → SD_SCK<br/>GPIO 40 → SD_MOSI<br/>GPIO 19 → SD_MISO</sub>"]
+    previouslyreservedfortouchCS["previously reserved for touch CS .<br/><sub>GPIO 0 → SD_CS<br/>GPIO 17 → SD_SCK<br/>GPIO 40 → SD_MOSI<br/>GPIO 38 → SD_MISO</sub>"]
     previouslyreservedfortouchCS -.- ESP
 
     detentsperlogicalunit["detents per logical unit<br/><sub>GPIO 1 → ENCODER SENS OPTIONS 0<br/>GPIO 2 → ENCODER SENS OPTIONS 1<br/>GPIO 3 → ENCODER SENS OPTIONS 2<br/>GPIO 1 → ENCODER_SENS_DEFAULT</sub>"]
@@ -137,7 +137,7 @@ graph LR
 | SD_CS | 0 | `SD_CS` |
 | SD_SCK | 17 | `SD_SCK` |
 | SD_MOSI | 40 | `SD_MOSI` |
-| SD_MISO | 19 | `SD_MISO` |
+| SD_MISO | 38 | `SD_MISO` |
 
 ### detents per logical unit
 
@@ -177,9 +177,9 @@ graph LR
 | 16 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | CLK |
 | 17 | previously reserved for touch CS . | SD_SCK |
 | 18 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | DT |
-| 19 | previously reserved for touch CS . | SD_MISO |
 | 20 | DS18B20 1-Wire temperature sensors | ONEWIRE_PIN |
 | 21 | FTP server | FTP_PORT |
+| 38 | previously reserved for touch CS . | SD_MISO |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | previously reserved for touch CS . | SD_MOSI |
 | 41 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | DT |

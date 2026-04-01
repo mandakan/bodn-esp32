@@ -123,7 +123,7 @@ MCP2_SW_RIGHT = const(3)  # GPA3 — toggle switch (far right on lid)
 SD_CS = const(0)  # SD chip select (strapping pull-up = deasserted at boot)
 SD_SCK = const(17)  # freed from ENC1_SW
 SD_MOSI = const(40)  # freed from ENC2_SW
-SD_MISO = const(19)  # previously reserved for touch CS
+SD_MISO = const(38)  # GPIO 19 is USB D−; GPIO 38 is on-board LED (freed)
 MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
 MCP_SW_PINS = [8, 9]  # GPB0–GPB1 (2 toggle switches; GPB2–3 freed for arcade)
 MCP_MASTER_SW_PIN = const(12)  # GPB4 — red-cover flip switch (active-low: 0 = ON)

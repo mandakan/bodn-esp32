@@ -5,15 +5,17 @@ referenced in code. Read this before adding any new sounds.
 
 ## Overview
 
-There are three categories of audio:
+There are five categories of audio:
 
-| Category | What it is | Triggered by |
-|---|---|---|
-| **Soundboard** | One WAV per button slot | Child pressing a button |
-| **SFX** | Short named clips for game/UI events | Code (`audio.play(WAV["sfx"]["..."])`) |
-| **Music** | Background loops | Code (`audio.play(WAV["music"]["..."], loop=True)`) |
+| Category | What it is | Triggered by | Storage |
+|---|---|---|---|
+| **Soundboard** | One WAV per button slot | Child pressing a button | SD |
+| **SFX** | Short named clips for game/UI events | Code (`audio.play(WAV["sfx"]["..."])`) | Flash |
+| **Music** | Background loops | Code (`audio.play(WAV["music"]["..."], loop=True)`) | SD |
+| **i18n TTS** | Spoken game instructions and system alerts | `tts.say(key, audio)` | Flash (safety) / SD (game) |
+| **Story TTS** | Narration and choice labels for Story Mode | `tts.say(key, audio)` | SD |
 
-There is a fourth category — **procedural tones** — which are synthesised at runtime from note sequences defined in `firmware/bodn/sounds.py` (`SOUNDS` dict). Those do not go through the asset pipeline.
+There is a sixth category — **procedural tones** — which are synthesised at runtime from note sequences defined in `firmware/bodn/sounds.py` (`SOUNDS` dict). Those do not go through the asset pipeline.
 
 ---
 
@@ -34,10 +36,14 @@ firmware/sounds/                     ← flash (this repo, committed)
   tts/{sv,en}/                       ← critical TTS (battery warnings, goodnight)
   manifest.json                      ← generated soundboard labels — never edit by hand
 
-build/sounds/                        ← SD-bound (generated, not committed)
-  bank_0/ … bank_3/                  ← converted soundboard WAVs (0.wav – 7.wav)
-  arcade/                            ← converted arcade WAVs (0.wav – 4.wav)
-  music/                             ← converted music WAVs
+build/                               ← SD-bound (generated, not committed)
+  sounds/
+    bank_0/ … bank_3/                ← converted soundboard WAVs (0.wav – 7.wav)
+    arcade/                          ← converted arcade WAVs (0.wav – 4.wav)
+    music/                           ← converted music WAVs
+  tts/{sv,en}/                       ← i18n TTS staging (from generate_tts.py)
+  story_tts/{sv,en}/                 ← story TTS staging (from generate_story_tts.py)
+  tts_converted/{sv,en}/             ← final converted TTS (i18n + story merged)
 ```
 
 `firmware/sounds/` (flash) is committed so deploying to a fresh device requires no build step — UI SFX and safety TTS are always available. Soundboard, arcade, and music are SD-only; run `tools/sd-sync.py` to build and copy them to the card. Source files in `assets/audio/source/` are **gitignored for CC0 downloads** (they are re-fetchable from `sources.tsv`) — commit your own recordings directly or via git-lfs.
@@ -60,7 +66,17 @@ Running it repeatedly is safe — it deduplicates by URL.
 
 ### `tools/convert_audio.py`
 
-Batch-converts all source files to device format (16 kHz, mono, 16-bit PCM WAV) and regenerates `firmware/sounds/manifest.json` from `soundboard.json`. SFX and flash TTS go to `firmware/sounds/` (flash); soundboard, arcade, and music go to `build/sounds/` (SD). Skips files already up-to-date.
+Batch-converts all source files to device format (16 kHz, mono, 16-bit PCM WAV) and regenerates `firmware/sounds/manifest.json` from `soundboard.json`. Processes six categories:
+
+| Category | Source | Output | Target |
+|---|---|---|---|
+| Soundboard | `assets/audio/source/soundboard/` | `build/sounds/bank_*/` | SD |
+| Arcade | `assets/audio/source/soundboard/` | `build/sounds/arcade/` | SD |
+| SFX | `assets/audio/source/sfx/` | `firmware/sounds/sfx/` | Flash |
+| Music | `assets/audio/source/music/` | `build/sounds/music/` | SD |
+| Flash TTS | `assets/audio/source/tts/` | `firmware/sounds/tts/` | Flash |
+| SD TTS (i18n) | `build/tts/` | `build/tts_converted/` | SD |
+| Story TTS | `build/story_tts/` | `build/tts_converted/` | SD |
 
 ```bash
 uv run python tools/convert_audio.py             # convert everything
@@ -69,6 +85,22 @@ uv run python tools/convert_audio.py --force     # reconvert regardless of mtime
 ```
 
 Requires `ffmpeg` (`brew install ffmpeg`).
+
+### `tools/generate_story_tts.py`
+
+Generates TTS narration for Story Mode. Discovers stories from `assets/stories/*/script.py`
+and the built-in flash story, extracts per-node text and choice labels, and generates WAVs
+via Piper TTS with storytelling prosody (slower pace, sentence pauses).
+
+Output: `build/story_tts/{lang}/story_{id}_{node}.wav` (+ `_choices.wav` variants).
+Converted to `build/tts_converted/` by `convert_audio.py`, then synced to SD card.
+
+```bash
+uv run python tools/generate_story_tts.py                # generate all
+uv run python tools/generate_story_tts.py --dry-run      # preview
+uv run python tools/generate_story_tts.py --story forest_walk  # single story
+uv run python tools/generate_story_tts.py --lang sv       # single language
+```
 
 ---
 

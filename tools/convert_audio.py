@@ -247,6 +247,29 @@ def process_tts_sd(dry_run: bool, force: bool, normalize: bool):
         _convert_file(src, dst, dry_run, force, normalize)
 
 
+def process_story_tts(dry_run: bool, force: bool, normalize: bool):
+    """Convert story TTS from build/story_tts/ → build/tts_converted/.
+
+    Story TTS lands in the same tts_converted/{lang}/ directory as i18n TTS
+    so both are found by tts.say() via the same SD path.
+    """
+    src_dir = BUILD_DIR / "story_tts"
+    if not src_dir.exists():
+        print(f"  build/story_tts/ not found — run tools/generate_story_tts.py first.")
+        return
+
+    wavs = sorted(src_dir.rglob("*.wav"))
+    if not wavs:
+        print(f"  no WAV files in build/story_tts/")
+        return
+
+    dst_dir = BUILD_DIR / "tts_converted"
+    for src in wavs:
+        rel = src.relative_to(src_dir)
+        dst = dst_dir / rel
+        _convert_file(src, dst, dry_run, force, normalize)
+
+
 def print_summary(dry_run: bool):
     label = "Would convert" if dry_run else "Converted"
     print(
@@ -292,6 +315,9 @@ def main():
 
     print("\n=== TTS (SD staging) ===")
     process_tts_sd(args.dry_run, args.force, normalize)
+
+    print("\n=== Story TTS (→ SD) ===")
+    process_story_tts(args.dry_run, args.force, normalize)
 
     print_summary(args.dry_run)
 

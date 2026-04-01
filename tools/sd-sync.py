@@ -72,13 +72,19 @@ def build_sd_assets(force: bool = False) -> bool:
     ok = True
 
     # Step 1: Generate TTS audio from i18n strings
-    print("\n>>> Step 1/2: Generate TTS audio")
+    print("\n>>> Step 1/3: Generate TTS audio")
     if not run_tool("generate_tts.py"):
         print("WARNING: TTS generation had errors (continuing anyway)")
         ok = False
 
-    # Step 2: Convert all audio (includes SD TTS staging → build/tts_converted/)
-    print("\n>>> Step 2/2: Convert audio assets")
+    # Step 2: Generate story TTS audio from story scripts
+    print("\n>>> Step 2/3: Generate story TTS audio")
+    if not run_tool("generate_story_tts.py"):
+        print("WARNING: Story TTS generation had errors (continuing anyway)")
+        ok = False
+
+    # Step 3: Convert all audio (includes SD TTS staging → build/tts_converted/)
+    print("\n>>> Step 3/3: Convert audio assets")
     extra = ["--force"] if force else []
     if not run_tool("convert_audio.py", extra):
         print("WARNING: Audio conversion had errors (continuing anyway)")
