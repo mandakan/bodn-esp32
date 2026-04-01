@@ -25,6 +25,8 @@
 WAV = {
     "sfx": {
         "nav_click": "/sounds/sfx/pop.wav",
+        "error": "/sounds/sfx/error.wav",
+        "reward": "/sounds/sfx/reward.wav",
     },
     "music": {
         # e.g. "ambient": "/sounds/music/ambient.wav",

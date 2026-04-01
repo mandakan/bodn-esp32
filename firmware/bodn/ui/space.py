@@ -4,7 +4,6 @@
 # Ship AI "Stellar" narrates scenarios via TTS.  No win/lose state —
 # the ship keeps flying regardless.
 
-import os
 
 from micropython import const
 from bodn import config
@@ -86,23 +85,9 @@ _SPACE_SND_DIR = "/sounds/space/"
 
 
 def _resolve_sound_paths(names):
-    """Resolve WAV paths for a list of named sound files at mode enter.
+    from bodn.assets import resolve_sounds
 
-    Returns a list with a resolved path string for each file that exists
-    (SD preferred, flash fallback), or None if absent.
-    Called once per mode entry — zero per-press overhead after that.
-    """
-    from bodn.assets import resolve
-
-    paths = []
-    for name in names:
-        resolved = resolve(_SPACE_SND_DIR + name + ".wav")
-        try:
-            os.stat(resolved)
-            paths.append(resolved)
-        except OSError:
-            paths.append(None)
-    return paths
+    return resolve_sounds(_SPACE_SND_DIR, names)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
