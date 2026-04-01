@@ -56,6 +56,14 @@ NAV = const(0)  # config.ENC_NAV
 # Arcade buttons (0–4) — named by role (see space_rules.ARC_* constants):
 #   land.wav  course.wav  engines.wav  repair.wav  distress.wav
 #
+# Engine drone (looped, one per throttle zone — plays on music channel):
+#   low_engine_loop.wav  engine_loop.wav  high_engine_loop.wav
+#
+# Alarm loops (looped, replace engine drone on music channel during scenarios):
+#   soft_alarm_loop.wav    — low danger (course, landing)
+#   medium_alarm_loop.wav  — medium danger (shield, engine)
+#   alarm_loop.wav         — high danger (asteroid)
+#
 # TTS announcements live separately — see assets/audio/tts.json ("storage":"sd").
 # To add a new scenario sound: add its i18n key there and run tools/generate_tts.py.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -175,8 +183,11 @@ class SpaceScreen(Screen):
         self._prev_sw0 = None  # None = not yet initialised
         self._prev_sw1 = None
         self._drone_zone = -1  # current throttle zone (0/1/2), -1 = not started
+        self._alarm_active = False
         self._btn_wav_paths = None  # resolved at enter(); None = use procedural tones
         self._arc_wav_paths = None
+        self._drone_wav_paths = None
+        self._alarm_wav_paths = None
 
     def enter(self, manager):
         self._manager = manager
@@ -190,8 +201,11 @@ class SpaceScreen(Screen):
         self._prev_sw0 = None  # reset so first-frame state is read without TTS
         self._prev_sw1 = None
         self._drone_zone = -1
+        self._alarm_active = False
         self._btn_wav_paths = _resolve_sound_paths(_BTN_WAV_NAMES)
         self._arc_wav_paths = _resolve_sound_paths(_ARC_WAV_NAMES)
+        self._drone_wav_paths = _resolve_sound_paths(self._DRONE_WAV_NAMES)
+        self._alarm_wav_paths = _resolve_sound_paths(self._ALARM_WAV_NAMES)
         if self._arcade:
             self._arcade.all_off()
         # Welcome message
@@ -254,13 +268,13 @@ class SpaceScreen(Screen):
             self._full_clear = True
             self._leds_dirty = True
             sc = self._engine.scenario_type
+            self._start_alarm(sc)
             if self._audio and 0 <= sc < len(_SC_TTS):
                 try:
                     from bodn import tts
 
                     if not tts.say(_SC_TTS[sc], self._audio):
-                        # Fallback: alarm tone
-                        self._audio.tone(440, 300, "square", channel="sfx")
+                        pass
                 except Exception:
                     pass
             if self._secondary:
@@ -270,6 +284,7 @@ class SpaceScreen(Screen):
             self._dirty = True
             self._full_clear = True
             self._leds_dirty = True
+            self._stop_alarm()
             if self._audio:
                 try:
                     from bodn import tts
@@ -298,6 +313,7 @@ class SpaceScreen(Screen):
             self._dirty = True
             self._full_clear = True
             self._leds_dirty = True
+            self._stop_alarm()
             if self._secondary:
                 self._secondary.set_emotion(NEUTRAL)
 
@@ -381,20 +397,55 @@ class SpaceScreen(Screen):
             freq, dur, wave = self._BTN_SFX[btn % len(self._BTN_SFX)]
             self._audio.tone(freq, dur, wave, channel="sfx")
 
-    # Engine drone: three throttle zones → three pitches
-    # Square wave at sub-bass frequencies gives a convincing engine rumble.
-    # 60 000 ms duration means it runs ~2 min before needing a re-trigger;
-    # zone changes re-trigger immediately with the new pitch.
-    _DRONE_FREQS = [55, 82, 110]  # zone 0/1/2 → A1 / E2 / A2
+    # Engine drone: three throttle zones → three WAV loops (or procedural tones).
+    # WAV files are resolved at enter() from /sounds/space/.
+    # Zone changes stop the current loop and start the new one immediately.
+    _DRONE_WAV_NAMES = ["low_engine_loop", "engine_loop", "high_engine_loop"]
+    _DRONE_FREQS = [55, 82, 110]  # procedural fallback: A1 / E2 / A2
+
+    # Alarm loops: played on the music channel during scenarios, replacing the
+    # engine drone.  Indexed by danger level (0=low, 1=medium, 2=high).
+    # The music channel auto-ducks to 25 % when TTS speaks, so announcements
+    # are always audible above the alarm.
+    _ALARM_WAV_NAMES = ["soft_alarm_loop", "medium_alarm_loop", "alarm_loop"]
+    _ALARM_FREQS = [220, 440, 880]  # procedural fallback tones
+
+    # Scenario type → alarm danger level (0=low, 1=medium, 2=high)
+    _SC_DANGER = [2, 0, 1, 1, 0]  # asteroid, course, shield, engine, landing
 
     def _update_drone(self, throttle):
         """Keep the engine drone in sync with the throttle zone."""
-        if not self._audio:
+        if not self._audio or self._alarm_active:
             return
         zone = 0 if throttle < 85 else (1 if throttle < 170 else 2)
         if zone != self._drone_zone:
             self._drone_zone = zone
-            self._audio.tone(self._DRONE_FREQS[zone], 60000, "square", channel="music")
+            path = self._drone_wav_paths[zone] if self._drone_wav_paths else None
+            if path:
+                self._audio.play(path, loop=True, channel="music")
+            else:
+                self._audio.tone(
+                    self._DRONE_FREQS[zone], 60000, "square", channel="music"
+                )
+
+    def _start_alarm(self, sc):
+        """Start the alarm loop for the given scenario type on the music channel."""
+        if not self._audio or sc < 0 or sc >= len(self._SC_DANGER):
+            return
+        danger = self._SC_DANGER[sc]
+        path = self._alarm_wav_paths[danger] if self._alarm_wav_paths else None
+        if path:
+            self._audio.play(path, loop=True, channel="music")
+        else:
+            self._audio.tone(
+                self._ALARM_FREQS[danger], 60000, "square", channel="music"
+            )
+        self._alarm_active = True
+
+    def _stop_alarm(self):
+        """Stop the alarm and resume the engine drone."""
+        self._alarm_active = False
+        self._drone_zone = -1  # force re-trigger on next update
 
     def _play_arc_tone(self, arc):
         """Big satisfying tone for arcade buttons.
