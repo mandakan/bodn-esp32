@@ -24,7 +24,7 @@
 # say() resolves the language-partitioned path automatically via bodn.assets.resolve.
 WAV = {
     "sfx": {
-        # e.g. "click": "/sounds/sfx/click.wav",
+        "nav_click": "/sounds/sfx/pop.wav",
     },
     "music": {
         # e.g. "ambient": "/sounds/music/ambient.wav",
@@ -33,8 +33,6 @@ WAV = {
 }
 
 SOUNDS = {
-    # Navigation — short high-frequency tick, percussive and consistent
-    "nav_click": [(2400, 12, "sine")],
     # Select — rising chirp when entering a mode
     "select": [(660, 60, "sine"), (880, 80, "sine")],
     # Back — descending tone when leaving a screen

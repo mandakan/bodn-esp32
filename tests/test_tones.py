@@ -27,7 +27,7 @@ class TestSineLUT:
 class TestSquareWave:
     def test_output_size(self):
         buf = bytearray(200)
-        n = generate(buf, 1000, sample_rate=16000, wave="square")
+        n, _ = generate(buf, 1000, sample_rate=16000, wave="square")
         assert n == 200  # fills entire buffer
 
     def test_amplitude(self):
@@ -52,14 +52,14 @@ class TestSquareWave:
     def test_odd_buffer_byte_ignored(self):
         """Odd trailing byte should not be written."""
         buf = bytearray(5)
-        n = generate(buf, 440, wave="square")
+        n, _ = generate(buf, 440, wave="square")
         assert n == 4  # only 2 samples = 4 bytes
 
 
 class TestSineWave:
     def test_output_size(self):
         buf = bytearray(200)
-        n = generate(buf, 440, wave="sine")
+        n, _ = generate(buf, 440, wave="sine")
         assert n == 200
 
     def test_amplitude_range(self):
@@ -73,7 +73,7 @@ class TestSineWave:
 class TestSawtoothWave:
     def test_output_size(self):
         buf = bytearray(200)
-        n = generate(buf, 440, wave="sawtooth")
+        n, _ = generate(buf, 440, wave="sawtooth")
         assert n == 200
 
     def test_ramp(self):
@@ -90,15 +90,26 @@ class TestSawtoothWave:
 class TestEdgeCases:
     def test_zero_freq(self):
         buf = bytearray(100)
-        n = generate(buf, 0)
+        n, _ = generate(buf, 0)
         assert n == 0
 
     def test_unknown_wave(self):
         buf = bytearray(100)
-        n = generate(buf, 440, wave="triangle")
+        n, _ = generate(buf, 440, wave="triangle")
         assert n == 0
 
     def test_empty_buffer(self):
         buf = bytearray(0)
-        n = generate(buf, 440)
+        n, _ = generate(buf, 440)
         assert n == 0
+
+    def test_phase_continuity(self):
+        """Two consecutive generate calls should produce continuous waveform."""
+        buf1 = bytearray(64)
+        buf2 = bytearray(64)
+        _, phase = generate(buf1, 1000, sample_rate=16000, wave="square")
+        generate(buf2, 1000, sample_rate=16000, wave="square", phase_offset=phase)
+        # Concatenate and check: should match a single large generate call
+        big = bytearray(128)
+        generate(big, 1000, sample_rate=16000, wave="square")
+        assert buf1 + buf2 == big

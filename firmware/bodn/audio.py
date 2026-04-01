@@ -175,6 +175,45 @@ else:
     _mono_to_stereo_fast = None  # use Python method fallback
 
 
+_FADE_SAMPLES = const(16)  # 16 samples @ 16kHz = 1ms
+
+
+def _apply_fade(buf, n_bytes, fade_in, fade_out):
+    """Apply linear fade-in and/or fade-out to int16 samples in buf.
+
+    Eliminates pops from abrupt onset and cutoff of tones.
+    """
+    n_samples = n_bytes // 2
+    fade = _FADE_SAMPLES
+    if fade_in:
+        fin = min(fade, n_samples)
+        for i in range(fin):
+            off = i * 2
+            lo = buf[off]
+            hi = buf[off + 1]
+            val = lo | (hi << 8)
+            if val >= 0x8000:
+                val -= 0x10000
+            val = val * i // max(1, fin - 1) if fin > 1 else 0
+            val = val & 0xFFFF
+            buf[off] = val & 0xFF
+            buf[off + 1] = (val >> 8) & 0xFF
+    if fade_out:
+        fout = min(fade, n_samples)
+        start = n_samples - fout
+        for i in range(fout):
+            off = (start + i) * 2
+            lo = buf[off]
+            hi = buf[off + 1]
+            val = lo | (hi << 8)
+            if val >= 0x8000:
+                val -= 0x10000
+            val = val * (fout - 1 - i) // max(1, fout - 1)
+            val = val & 0xFFFF
+            buf[off] = val & 0xFF
+            buf[off + 1] = (val >> 8) & 0xFF
+
+
 class ToneSource:
     """Adapter that wraps tones.generate() with the same interface as WavReader."""
 
@@ -184,6 +223,8 @@ class ToneSource:
         self.sample_rate = sample_rate
         self._total_bytes = (sample_rate * duration_ms // 1000) * 2  # 16-bit mono
         self._bytes_left = self._total_bytes
+        self._phase = 0
+        self._first_chunk = True
 
     def read_chunk(self, buf):
         if self._bytes_left <= 0:
@@ -191,13 +232,23 @@ class ToneSource:
         to_fill = min(len(buf), self._bytes_left)
         # Align to sample boundary
         to_fill = (to_fill // 2) * 2
-        n = tones.generate(buf, self.freq_hz, self.sample_rate, self.wave)
+        n, self._phase = tones.generate(
+            buf, self.freq_hz, self.sample_rate, self.wave, self._phase
+        )
         n = min(n, to_fill)
         self._bytes_left -= n
+        # Apply fade-in on first chunk, fade-out on last, to avoid pops
+        is_first = self._first_chunk
+        is_last = self._bytes_left <= 0
+        if is_first or is_last:
+            _apply_fade(buf, n, is_first, is_last)
+            self._first_chunk = False
         return n
 
     def seek_start(self):
         self._bytes_left = self._total_bytes
+        self._phase = 0
+        self._first_chunk = True
 
 
 class SequenceSource:
@@ -382,8 +433,17 @@ class AudioEngine:
         self._stamp_voice(v)
 
     def play_sound(self, name, channel="ui"):
-        """Play a named sound from the sound design system."""
-        from bodn.sounds import SOUNDS
+        """Play a named sound from the sound design system.
+
+        Checks WAV["sfx"] first; falls back to procedural SOUNDS tones.
+        """
+        from bodn.sounds import WAV, SOUNDS
+
+        # Prefer WAV file if available
+        path = WAV.get("sfx", {}).get(name)
+        if path:
+            self.play(path, channel=channel)
+            return
 
         steps = SOUNDS.get(name)
         if not steps:
@@ -529,6 +589,9 @@ class AudioEngine:
                     max_n = n
 
             if max_n == 0:
+                # All voices finished this iteration — write silence to keep
+                # the DMA stream continuous and avoid an underrun pop.
+                i2s.write(silence_short)
                 await sleep_ms(0)
                 continue
 

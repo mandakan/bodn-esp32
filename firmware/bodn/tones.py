@@ -9,23 +9,24 @@ import math
 _SINE_LUT = [int(32767 * math.sin(2 * math.pi * i / 256)) for i in range(256)]
 
 
-def generate(buf, freq_hz, sample_rate=16000, wave="square"):
+def generate(buf, freq_hz, sample_rate=16000, wave="square", phase_offset=0):
     """Fill *buf* with PCM 16-bit LE mono samples at *freq_hz*.
 
     Supported waveforms: 'square', 'sine', 'sawtooth', 'noise'.
     For 'noise', freq_hz controls the decay rate: higher = faster decay.
-    Returns number of bytes written (always even).
+    *phase_offset* is the sample index to start from (for phase continuity
+    across multiple calls). Returns (bytes_written, next_phase_offset).
     """
     if sample_rate <= 0:
-        return 0
+        return 0, phase_offset
 
     n_samples = len(buf) // 2  # 2 bytes per sample
 
     if wave == "noise":
-        return _generate_noise(buf, n_samples, freq_hz, sample_rate)
+        return _generate_noise(buf, n_samples, freq_hz, sample_rate), phase_offset
 
     if freq_hz <= 0:
-        return 0
+        return 0, phase_offset
 
     period = sample_rate // freq_hz if freq_hz <= sample_rate else 1
     if period < 1:
@@ -34,7 +35,7 @@ def generate(buf, freq_hz, sample_rate=16000, wave="square"):
     if wave == "square":
         half = period // 2
         for i in range(n_samples):
-            phase = i % period
+            phase = (i + phase_offset) % period
             val = 32767 if phase < half else -32767
             buf[i * 2] = val & 0xFF
             buf[i * 2 + 1] = (val >> 8) & 0xFF
@@ -42,23 +43,23 @@ def generate(buf, freq_hz, sample_rate=16000, wave="square"):
     elif wave == "sine":
         for i in range(n_samples):
             # Map sample position to 0-255 LUT index
-            idx = (i * 256 // period) % 256
+            idx = ((i + phase_offset) * 256 // period) % 256
             val = _SINE_LUT[idx]
             buf[i * 2] = val & 0xFF
             buf[i * 2 + 1] = (val >> 8) & 0xFF
 
     elif wave == "sawtooth":
         for i in range(n_samples):
-            phase = i % period
+            phase = (i + phase_offset) % period
             # Linear ramp from -32767 to 32767
             val = (phase * 65534 // period) - 32767
             buf[i * 2] = val & 0xFF
             buf[i * 2 + 1] = (val >> 8) & 0xFF
 
     else:
-        return 0
+        return 0, phase_offset
 
-    return n_samples * 2
+    return n_samples * 2, phase_offset + n_samples
 
 
 def _generate_noise(buf, n_samples, decay_rate, sample_rate):
