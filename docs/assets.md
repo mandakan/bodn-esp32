@@ -9,7 +9,7 @@ even without an SD card.
 | Storage | Path | Contents |
 |---------|------|----------|
 | Flash (`/`) | `/sounds/sfx/`, `/sounds/tts/` | UI feedback SFX, critical TTS (battery warnings, goodnight). Device boots and navigates without SD card. |
-| SD card (`/sd/`) | `/sd/sounds/` | Sound banks, arcade sounds, music, game-mode TTS, space SFX. Managed via PC card reader or `sd-sync.py`. |
+| SD card (`/sd/`) | `/sd/sounds/` | Sound banks, arcade sounds, drum kits, music, game-mode TTS, space SFX. Managed via PC card reader or `sd-sync.py`. |
 
 ## Path resolver
 
@@ -40,6 +40,13 @@ layers. Assets can be moved between flash and SD without any code changes.
 │   ├── arcade/       # Shared arcade button sounds (all banks)
 │   │   ├── 0.wav … 4.wav
 │   ├── music/        # Background music
+│   ├── kits/         # Drum kits for the sequencer mode
+│   │   └── basic/    # Starter kit (reuses soundboard arcade sources)
+│   │       ├── kick.wav
+│   │       ├── snare.wav
+│   │       ├── hihat.wav
+│   │       ├── tom.wav
+│   │       └── crash.wav
 │   ├── space/        # Space mode button/arcade SFX
 │   │   ├── thruster.wav, shields.wav, …
 │   └── tts/          # Game-mode i18n TTS

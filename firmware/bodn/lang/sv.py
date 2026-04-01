@@ -130,15 +130,15 @@ STRINGS = {
     "press_any": "Tryck på en knapp",
     # Ambient / status strip
     "plays": "{} spel",
-    # Button color names (short, for grid labels)
-    "btn_red": "Röd",
+    # Button color names (short, matching physical cap colours)
     "btn_green": "Grö",
     "btn_blue": "Blå",
+    "btn_white": "Vit",
     "btn_yellow": "Gul",
-    "btn_cyan": "Cyn",
-    "btn_magenta": "Mag",
-    "btn_orange": "Org",
-    "btn_purple": "Pur",
+    "btn_red": "Röd",
+    "btn_teal": "Tål",
+    "btn_mint": "Mnt",
+    "btn_sky": "Him",
     # Toggle modifier names (short)
     "tog_reverse": "Rev",
     "tog_mirror": "Spe",
@@ -212,6 +212,14 @@ STRINGS = {
     "story_end_replay": "Igen!",
     "story_end_pick": "Annan saga",
     "story_end_exit": "Sluta",
+    # Sequencer mode
+    "mode_sequencer": "sekvens",
+    "seq_bpm": "BPM",
+    "seq_playing": "Spelar",
+    "seq_paused": "Paus",
+    "seq_steps": "{} steg",
+    "seq_press_start": "Tryck!",
+    "seq_cleared": "Rensat!",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_sd": "Kollar SD-kort...",

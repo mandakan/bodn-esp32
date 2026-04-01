@@ -363,6 +363,22 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_sequencer():
+        from bodn.ui.sequencer import SequencerScreen
+        from bodn.ui.sequencer_secondary import SequencerSecondary
+
+        seq_sec = SequencerSecondary()
+        secondary.set_content(seq_sec)
+        return SequencerScreen(
+            np,
+            overlay,
+            audio=audio,
+            arcade=arcade,
+            settings=settings,
+            secondary_screen=seq_sec,
+            on_exit=_reset_secondary,
+        )
+
     def _make_space():
         from bodn.ui.space import SpaceScreen
         from bodn.ui.android import AndroidFaceScreen
@@ -408,6 +424,7 @@ def create_ui(
         "space": _make_space,
         "story": _make_story,
         "soundboard": _make_soundboard,
+        "sequencer": _make_sequencer,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, settings=settings),
@@ -425,6 +442,7 @@ def create_ui(
         "flode",
         "garden",
         "soundboard",
+        "sequencer",
         "clock",
         "settings",
     ]
