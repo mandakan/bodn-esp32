@@ -42,9 +42,11 @@ layers. Assets can be moved between flash and SD without any code changes.
     ├── music/        # Background music
     ├── space/        # Space mode button/arcade SFX
     │   ├── thruster.wav, shields.wav, …
-    └── tts/          # Game-mode TTS (bulk)
+    └── tts/          # Game-mode + story TTS (bulk)
         ├── sv/
-        │   ├── simon_watch.wav, …
+        │   ├── simon_watch.wav, …          # i18n TTS (game instructions)
+        │   ├── story_forest_walk_start.wav  # story narration TTS
+        │   └── …
         └── en/
             └── …
 ```
@@ -63,8 +65,8 @@ Use `tools/convert_audio.py` to batch-convert and normalise source files.
 
 ## Building and syncing SD assets
 
-`tools/sd-sync.py` is a one-command pipeline that generates TTS audio, converts all
-assets to device format, and copies them to a mounted SD card:
+`tools/sd-sync.py` is a one-command pipeline that generates i18n TTS, story TTS,
+converts all audio to device format, and copies them to a mounted SD card:
 
 ```bash
 # Full pipeline: build + sync (auto-detects /Volumes/BODN* on macOS)
