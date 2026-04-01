@@ -312,7 +312,8 @@ class SoundboardScreen(Screen):
         h = theme.height  # 240
         rgb = tft.rgb
 
-        # --- Header ---
+        # --- Header (clear first to avoid text-on-text when bank changes) ---
+        tft.fill_rect(0, 0, w, 20, theme.BLACK)
         bank_name = self._resolve_bank_name(state)
         bank_label = t("sb_bank", state.bank + 1)
         draw_centered(tft, bank_name.upper(), 2, theme.CYAN, w, scale=2)
@@ -348,8 +349,9 @@ class SoundboardScreen(Screen):
                 tft, theme, rgb, state, i, x, y, arc_cell_w, arc_cell_h, frame
             )
 
-        # --- Volume bar ---
+        # --- Volume bar (clear row to avoid text-on-text) ---
         vol_y = h - 14
+        tft.fill_rect(0, vol_y, w, 14, theme.BLACK)
         if state.muted:
             draw_centered(tft, t("sb_muted"), vol_y, theme.RED, w)
         else:
@@ -460,7 +462,8 @@ class SoundboardScreen(Screen):
         h = theme.height  # 160
         rgb = tft.rgb
 
-        # Header
+        # Header (clear first to avoid text-on-text when bank changes)
+        tft.fill_rect(0, 0, w, 20, theme.BLACK)
         bank_name = self._resolve_bank_name(state)
         draw_centered(tft, bank_name[:8].upper(), 2, theme.CYAN, w, scale=2)
 
@@ -484,8 +487,9 @@ class SoundboardScreen(Screen):
                 tft, theme, rgb, state, i, x, arc_top, arc_w - 2, 22, frame
             )
 
-        # Volume
+        # Volume (clear row to avoid text-on-text)
         vol_y = h - 14
+        tft.fill_rect(0, vol_y, w, 14, theme.BLACK)
         if state.muted:
             draw_centered(tft, t("sb_muted"), vol_y, theme.RED, w)
         else:
