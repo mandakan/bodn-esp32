@@ -75,6 +75,7 @@ class SoundboardScreen(Screen):
         self._audio = audio
         self._secondary = secondary_screen
         self._on_exit = on_exit
+        self._settings = settings
         self._state = SoundboardState()
         self._manager = None
         self._pause = PauseMenu(settings=settings)
@@ -101,6 +102,9 @@ class SoundboardScreen(Screen):
             sw[1] if len(sw) > 1 else False,
         )
         self._state.load()
+        # Initialise volume from settings so it matches the housekeeping loop
+        if self._settings:
+            self._state.volume = self._settings.get("volume", 50)
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
@@ -145,7 +149,7 @@ class SoundboardScreen(Screen):
         # --- ENC_A click → mute/unmute ---
         if inp.enc_btn_pressed[ENC_A]:
             state.toggle_mute()
-            self._audio.volume = state.effective_volume()
+            self._sync_volume(state)
             self._audio.play_sound("nav_click", channel="ui")
             changed = True
 
@@ -155,7 +159,7 @@ class SoundboardScreen(Screen):
             prev_vol = state.volume
             state.adjust_volume(delta)
             if state.volume != prev_vol:
-                self._audio.volume = state.effective_volume()
+                self._sync_volume(state)
                 changed = True
 
         # --- Mini button presses ---
@@ -208,6 +212,13 @@ class SoundboardScreen(Screen):
             playing = bool(state.playing_slots or state.playing_arcades)
             bank_name = self._resolve_bank_name(state)
             self._secondary.update(bank_name, state.volume, state.muted, playing)
+
+    def _sync_volume(self, state):
+        """Apply volume to audio engine and write back to settings."""
+        vol = state.effective_volume()
+        self._audio.volume = vol
+        if self._settings is not None:
+            self._settings["volume"] = state.volume
 
     def _resolve_bank_name(self, state):
         """Return display name for current bank (manifest or i18n fallback)."""
