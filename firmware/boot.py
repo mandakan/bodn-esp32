@@ -21,6 +21,7 @@ Pin(3, Pin.OUT, value=0)  # config.AMP_SD_PIN — LOW = shutdown
 import os as _os  # noqa: E402 — must run after time.sleep() boot window above
 
 _skip_main = False
+_fast_boot = False
 try:
     _os.stat("/skip_main")
     _skip_main = True
@@ -30,8 +31,17 @@ try:
 except OSError:
     pass
 
-print("boot.py: 5s safe-boot window (Ctrl-C to abort)...")
-time.sleep(5)
+try:
+    _os.stat("/fast_boot")
+    _fast_boot = True
+    _os.remove("/fast_boot")
+    print("boot.py: /fast_boot flag found — skipping WiFi/NTP for quick sync")
+except OSError:
+    pass
+
+if not _fast_boot:
+    print("boot.py: 5s safe-boot window (Ctrl-C to abort)...")
+    time.sleep(5)
 
 settings = None
 ip = "0.0.0.0"
@@ -341,14 +351,17 @@ _show_progress(2, STEPS[1][1], STEPS[1][2])
 # --- Step 2: Connect WiFi ---
 _show_progress(2, STEPS[2][1], STEPS[2][2])
 
-try:
-    from bodn.wifi import connect
+if _fast_boot:
+    _results[2] = "skip"
+else:
+    try:
+        from bodn.wifi import connect
 
-    ip = connect(settings)
-    _results[2] = "ok"
-except Exception as e:
-    print("WiFi failed:", e)
-    _results[2] = "fail"
+        ip = connect(settings)
+        _results[2] = "ok"
+    except Exception as e:
+        print("WiFi failed:", e)
+        _results[2] = "fail"
 
 print("BOOT [NET]", _results[2], "ip=" + ip)
 
@@ -386,27 +399,39 @@ def _is_eu_dst(year, month, day, hour):
     return not (day > de or (day == de and hour >= 1))
 
 
-try:
-    import ntptime
-    import machine
+if _fast_boot:
+    _results[3] = "skip"
+else:
+    try:
+        import ntptime
+        import machine
 
-    ntptime.settime()
-    # Adjust RTC from UTC to local time (EU DST rules)
-    import time as _t
+        ntptime.settime()
+        # Adjust RTC from UTC to local time (EU DST rules)
+        import time as _t
 
-    _utc = _t.localtime()
-    _base = settings.get("tz_offset", 1)
-    _dst = _is_eu_dst(_utc[0], _utc[1], _utc[2], _utc[3])
-    _off = (_base + (1 if _dst else 0)) * 3600
-    _local = _t.localtime(_t.mktime(_utc) + _off)
-    machine.RTC().datetime(
-        (_local[0], _local[1], _local[2], _local[6], _local[3], _local[4], _local[5], 0)
-    )
-    _results[3] = "ok"
-except Exception:
-    _results[3] = "warn"
-    settings["quiet_start"] = None
-    settings["quiet_end"] = None
+        _utc = _t.localtime()
+        _base = settings.get("tz_offset", 1)
+        _dst = _is_eu_dst(_utc[0], _utc[1], _utc[2], _utc[3])
+        _off = (_base + (1 if _dst else 0)) * 3600
+        _local = _t.localtime(_t.mktime(_utc) + _off)
+        machine.RTC().datetime(
+            (
+                _local[0],
+                _local[1],
+                _local[2],
+                _local[6],
+                _local[3],
+                _local[4],
+                _local[5],
+                0,
+            )
+        )
+        _results[3] = "ok"
+    except Exception:
+        _results[3] = "warn"
+        settings["quiet_start"] = None
+        settings["quiet_end"] = None
 
 print("BOOT [NTP]", _results[3])
 ntp_detail = "NTP OK" if _results[3] == "ok" else "NTP skip"
