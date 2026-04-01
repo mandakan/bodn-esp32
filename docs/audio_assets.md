@@ -29,15 +29,18 @@ assets/audio/                        ← source side (this repo)
     sfx/                             ← source SFX files, renamed to logical names
     music/                           ← source music files, renamed to logical names
 
-firmware/sounds/                     ← device side (this repo, committed)
+firmware/sounds/                     ← flash (this repo, committed)
+  sfx/                               ← UI feedback SFX (click, confirm, error)
+  tts/{sv,en}/                       ← critical TTS (battery warnings, goodnight)
+  manifest.json                      ← generated soundboard labels — never edit by hand
+
+build/sounds/                        ← SD-bound (generated, not committed)
   bank_0/ … bank_3/                  ← converted soundboard WAVs (0.wav – 7.wav)
   arcade/                            ← converted arcade WAVs (0.wav – 4.wav)
-  sfx/                               ← converted SFX WAVs
   music/                             ← converted music WAVs
-  manifest.json                      ← generated — never edit by hand
 ```
 
-`firmware/sounds/` is committed so deploying to a fresh device requires no build step. Source files in `assets/audio/source/` are **gitignored for CC0 downloads** (they are re-fetchable from `sources.tsv`) — commit your own recordings directly or via git-lfs.
+`firmware/sounds/` (flash) is committed so deploying to a fresh device requires no build step — UI SFX and safety TTS are always available. Soundboard, arcade, and music are SD-only; run `tools/sd-sync.py` to build and copy them to the card. Source files in `assets/audio/source/` are **gitignored for CC0 downloads** (they are re-fetchable from `sources.tsv`) — commit your own recordings directly or via git-lfs.
 
 ---
 
@@ -57,7 +60,7 @@ Running it repeatedly is safe — it deduplicates by URL.
 
 ### `tools/convert_audio.py`
 
-Batch-converts all source files to device format (16 kHz, mono, 16-bit PCM WAV) and regenerates `firmware/sounds/manifest.json` from `soundboard.json`. Skips files already up-to-date.
+Batch-converts all source files to device format (16 kHz, mono, 16-bit PCM WAV) and regenerates `firmware/sounds/manifest.json` from `soundboard.json`. SFX and flash TTS go to `firmware/sounds/` (flash); soundboard, arcade, and music go to `build/sounds/` (SD). Skips files already up-to-date.
 
 ```bash
 uv run python tools/convert_audio.py             # convert everything
@@ -142,6 +145,13 @@ Keep keys stable — they are referenced in game and UI code.
 
 ```bash
 uv run python tools/convert_audio.py
+```
+
+### Step 5b — sync to SD card
+
+```bash
+uv run python tools/sd-sync.py              # build + sync to auto-detected SD card
+uv run python tools/sd-sync.py --build-only  # build only (no card needed)
 ```
 
 ### Step 6 — commit
@@ -252,7 +262,7 @@ Soundboard paths are **not** in `WAV` — they are assigned dynamically by
 
 ## Device format
 
-All files in `firmware/sounds/` must be:
+All device-ready WAV files (in `firmware/sounds/` and `build/sounds/`) must be:
 
 | Property | Value |
 |---|---|
