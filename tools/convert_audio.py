@@ -173,6 +173,7 @@ def process_soundboard(dry_run: bool, force: bool, normalize: bool):
     # --- Arcade ---
     # Slot keys are button colors mapped to hardware indices (config.py PWM_CH_ARC*).
     arcade_color_to_idx = {"yellow": 0, "red": 1, "blue": 2, "green": 3, "white": 4}
+    manifest_arcade = {}
     for slot_key, slot_val in sb.get("arcade", {}).get("slots", {}).items():
         slot_idx = arcade_color_to_idx.get(slot_key)
         if slot_idx is None:
@@ -187,8 +188,16 @@ def process_soundboard(dry_run: bool, force: bool, normalize: bool):
             dst = BUILD_SOUNDS / "arcade" / f"{slot_idx}.wav"
             _convert_file(src, dst, dry_run, force, normalize)
 
+        # Collect display labels for the manifest
+        if isinstance(slot_val, dict):
+            label = {k: v for k, v in slot_val.items() if k not in ("source",) and v}
+            if label:
+                manifest_arcade[str(slot_idx)] = label
+
     # --- Write device manifest ---
     manifest = {"banks": manifest_banks}
+    if manifest_arcade:
+        manifest["arcade"] = manifest_arcade
     if dry_run:
         print(f"  would write  firmware/sounds/manifest.json")
     else:

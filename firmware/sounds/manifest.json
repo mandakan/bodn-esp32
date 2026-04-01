@@ -147,5 +147,27 @@
         }
       }
     }
+  },
+  "arcade": {
+    "3": {
+      "sv": "Hi-hat",
+      "en": "Hi-hat"
+    },
+    "2": {
+      "sv": "Virvel",
+      "en": "Snare"
+    },
+    "4": {
+      "sv": "Bastrumma",
+      "en": "Bass drum"
+    },
+    "0": {
+      "sv": "Tom",
+      "en": "Tom"
+    },
+    "1": {
+      "sv": "Crash",
+      "en": "Crash"
+    }
   }
 }
