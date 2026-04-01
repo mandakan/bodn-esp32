@@ -30,8 +30,11 @@ resampling is needed.
 
 ## Flash vs SD card
 
-- **Flash** — UI feedback sounds (boop, click, error). Keep total < 50 KB.
-- **SD card** — longer sounds, music, voice recordings. Use FAT32 format.
+- **Flash** — UI feedback SFX and critical TTS (battery warnings, goodnight). Keep minimal.
+- **SD card** — sound banks, arcade sounds, music, game-mode TTS, space SFX. Use FAT32 format.
+
+All audio paths go through `bodn.assets.resolve()` which checks the SD card first,
+falling back to flash transparently.
 
 ## Converting with ffmpeg
 
@@ -83,12 +86,15 @@ cp -r build/tts_converted/ /Volumes/BODN_SD/sounds/tts/
 
 | Location | Path | What |
 |----------|------|------|
-| Flash (committed) | `firmware/sounds/tts/{lang}/{key}.wav` | Generic UI + safety (~3 keys × 2 langs) |
-| SD card | `/sd/sounds/tts/{lang}/{key}.wav` | Game-mode-specific (bulk) |
+| Flash (committed) | `firmware/sounds/tts/{lang}/{key}.wav` | Safety alerts only: `bat_critical`, `bat_low`, `overlay_goodnight` |
+| SD card | `/sd/sounds/tts/{lang}/{key}.wav` | Game-mode instructions and feedback (bulk) |
 
 Flash TTS source files live in `assets/audio/source/tts/` and are picked up by
 `convert_audio.py` like any other audio category. SD staging files are in `build/tts/`
 (not committed); converted output goes to `build/tts_converted/`.
+
+Sound banks, arcade sounds, and music also live on SD — converted output goes to
+`build/sounds/` and is synced to the card by `tools/sd-sync.py`.
 
 ### Key allowlist
 

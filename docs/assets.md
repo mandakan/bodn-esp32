@@ -8,8 +8,8 @@ even without an SD card.
 
 | Storage | Path | Contents |
 |---------|------|----------|
-| Flash (`/`) | `/sounds/`, etc. | Firmware, procedural tones, core config. Device boots and navigates without SD card. |
-| SD card (`/sd/`) | `/sd/sounds/`, etc. | Sound banks, music, arcade sounds, images, animations, recordings. Managed via PC card reader. |
+| Flash (`/`) | `/sounds/sfx/`, `/sounds/tts/` | UI feedback SFX, critical TTS (battery warnings, goodnight). Device boots and navigates without SD card. |
+| SD card (`/sd/`) | `/sd/sounds/` | Sound banks, arcade sounds, music, game-mode TTS, space SFX. Managed via PC card reader or `sd-sync.py`. |
 
 ## Path resolver
 
@@ -38,12 +38,15 @@ layers. Assets can be moved between flash and SD without any code changes.
     ├── bank_2/       # Bank 2 sounds
     ├── bank_3/       # Bank 3 sounds
     ├── arcade/       # Shared arcade button sounds (all banks)
-    │   ├── 0.wav
-    │   ├── 1.wav
-    │   ├── 2.wav
-    │   ├── 3.wav
-    │   └── 4.wav
-    └── manifest.json # Optional: bank names, colours, slot labels
+    │   ├── 0.wav … 4.wav
+    ├── music/        # Background music
+    ├── space/        # Space mode button/arcade SFX
+    │   ├── thruster.wav, shields.wav, …
+    └── tts/          # Game-mode TTS (bulk)
+        ├── sv/
+        │   ├── simon_watch.wav, …
+        └── en/
+            └── …
 ```
 
 See the soundboard screen documentation for the manifest format.
