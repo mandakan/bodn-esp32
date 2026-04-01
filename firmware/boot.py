@@ -122,6 +122,7 @@ N_LEDS = config.NEOPIXEL_COUNT if tft else 0
 # before that, the raw key is shown (acceptable for a brief moment).
 STEPS = [
     ("CFG", "boot_cfg", (80, 40, 120)),
+    ("SD", "boot_sd", (180, 120, 40)),
     ("NET", "boot_net", (0, 120, 200)),
     ("NTP", "boot_ntp", (200, 120, 0)),
     ("BAT", "boot_bat", (200, 60, 0)),
@@ -320,35 +321,42 @@ if settings is None:
 
 print("BOOT [CFG]", _results[0])
 
-# --- SD card mount (silent — device boots without it) ---
+# --- Step 1: SD card mount ---
+_show_progress(1, STEPS[1][1], STEPS[1][2])
+
 try:
     from bodn.sdcard import mount as _sd_mount
 
-    _sd_mount()
+    if _sd_mount():
+        _results[1] = "ok"
+    else:
+        _results[1] = "skip"
 except Exception as e:
     print("SD card mount skipped:", e)
+    _results[1] = "skip"
 
-_show_progress(1, STEPS[0][1], STEPS[0][2])
+print("BOOT [SD]", _results[1])
+_show_progress(2, STEPS[1][1], STEPS[1][2])
 
-# --- Step 1: Connect WiFi ---
-_show_progress(1, STEPS[1][1], STEPS[1][2])
+# --- Step 2: Connect WiFi ---
+_show_progress(2, STEPS[2][1], STEPS[2][2])
 
 try:
     from bodn.wifi import connect
 
     ip = connect(settings)
-    _results[1] = "ok"
+    _results[2] = "ok"
 except Exception as e:
     print("WiFi failed:", e)
-    _results[1] = "fail"
+    _results[2] = "fail"
 
-print("BOOT [NET]", _results[1], "ip=" + ip)
+print("BOOT [NET]", _results[2], "ip=" + ip)
 
-_show_progress(2, STEPS[1][1], STEPS[1][2], detail="IP: " + ip, detail_col=COL_WHITE)
+_show_progress(3, STEPS[2][1], STEPS[2][2], detail="IP: " + ip, detail_col=COL_WHITE)
 time.sleep(0.5)
 
-# --- Step 2: NTP sync ---
-_show_progress(2, STEPS[2][1], STEPS[2][2])
+# --- Step 3: NTP sync ---
+_show_progress(3, STEPS[3][1], STEPS[3][2])
 
 
 def _last_sunday_of(year, month):
@@ -394,20 +402,20 @@ try:
     machine.RTC().datetime(
         (_local[0], _local[1], _local[2], _local[6], _local[3], _local[4], _local[5], 0)
     )
-    _results[2] = "ok"
+    _results[3] = "ok"
 except Exception:
-    _results[2] = "warn"
+    _results[3] = "warn"
     settings["quiet_start"] = None
     settings["quiet_end"] = None
 
-print("BOOT [NTP]", _results[2])
-ntp_detail = "NTP OK" if _results[2] == "ok" else "NTP skip"
-ntp_col = COL_GREEN if _results[2] == "ok" else COL_AMBER
-_show_progress(3, STEPS[2][1], STEPS[2][2], detail=ntp_detail, detail_col=ntp_col)
+print("BOOT [NTP]", _results[3])
+ntp_detail = "NTP OK" if _results[3] == "ok" else "NTP skip"
+ntp_col = COL_GREEN if _results[3] == "ok" else COL_AMBER
+_show_progress(4, STEPS[3][1], STEPS[3][2], detail=ntp_detail, detail_col=ntp_col)
 time.sleep(0.5)
 
-# --- Step 3: Battery check ---
-_show_progress(3, STEPS[3][1], STEPS[3][2])
+# --- Step 4: Battery check ---
+_show_progress(4, STEPS[4][1], STEPS[4][2])
 
 try:
     from machine import ADC
@@ -418,31 +426,31 @@ try:
     _bat_mv = _bat_adc.read_uv() // 1000 * 2  # voltage divider ×2
     _bat_adc = None
     if _bat_mv > 3000:
-        _results[3] = "ok"
+        _results[4] = "ok"
         _bat_detail = "{}mV".format(_bat_mv)
         _bat_col = COL_GREEN
     elif _bat_mv > 0:
-        _results[3] = "warn"
+        _results[4] = "warn"
         _bat_detail = "LOW {}mV".format(_bat_mv)
         _bat_col = COL_AMBER
     else:
         # No battery — USB powered
-        _results[3] = "ok"
+        _results[4] = "ok"
         _bat_detail = "USB"
         _bat_col = COL_GREEN
 except Exception as e:
     print("Battery check failed:", e)
-    _results[3] = "skip"
+    _results[4] = "skip"
     _bat_detail = "N/A"
     _bat_col = COL_AMBER
 
-print("BOOT [BAT]", _results[3], _bat_detail)
-_show_progress(4, STEPS[3][1], STEPS[3][2], detail=_bat_detail, detail_col=_bat_col)
+print("BOOT [BAT]", _results[4], _bat_detail)
+_show_progress(5, STEPS[4][1], STEPS[4][2], detail=_bat_detail, detail_col=_bat_col)
 time.sleep(0.5)
 
-# --- Step 4: Ready! ---
-_results[4] = "ok"
-_show_progress(5, STEPS[4][1], STEPS[4][2], detail="IP: " + ip, detail_col=COL_WHITE)
+# --- Step 5: Ready! ---
+_results[5] = "ok"
+_show_progress(6, STEPS[5][1], STEPS[5][2], detail="IP: " + ip, detail_col=COL_WHITE)
 
 # --- Diagnostic boot screen (hold NAV encoder button to activate) ---
 if _diag_requested and tft:

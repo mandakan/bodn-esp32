@@ -211,6 +211,7 @@ STRINGS = {
     "story_again": "Again?",
     # Boot screen
     "boot_cfg": "Waking up...",
+    "boot_sd": "Checking SD card...",
     "boot_net": "Finding friends...",
     "boot_ntp": "What time is it?",
     "boot_bat": "Checking battery...",
