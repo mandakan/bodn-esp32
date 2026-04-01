@@ -93,6 +93,13 @@ class SoundboardScreen(Screen):
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
+        # Read toggle switches before loading so we start on the correct
+        # bank instead of defaulting to 0 and then immediately switching.
+        sw = manager.inp.sw
+        self._state.bank = bank_from_toggles(
+            sw[0] if len(sw) > 0 else False,
+            sw[1] if len(sw) > 1 else False,
+        )
         self._state.load()
         self._dirty = True
         self._full_clear = True
