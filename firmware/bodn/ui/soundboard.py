@@ -183,8 +183,8 @@ class SoundboardScreen(Screen):
                 self._leds_dirty = True
 
         # --- Check if audio finished ---
-        if not self._audio.playing:
-            if state.playing_slot >= 0 or state.playing_arcade >= 0:
+        if self._audio.sfx_active == 0:
+            if state.playing_slots or state.playing_arcades:
                 state.on_playback_done()
                 changed = True
                 self._leds_dirty = True
@@ -205,7 +205,7 @@ class SoundboardScreen(Screen):
 
         # --- Update secondary display ---
         if self._secondary:
-            playing = state.playing_slot >= 0 or state.playing_arcade >= 0
+            playing = bool(state.playing_slots or state.playing_arcades)
             bank_name = self._resolve_bank_name(state)
             self._secondary.update(bank_name, state.volume, state.muted, playing)
 
@@ -225,13 +225,13 @@ class SoundboardScreen(Screen):
         bank_color = state.bank_color()
         brightness = config.NEOPIXEL_BRIGHTNESS
         lid_bright = config.NEOPIXEL_LID_BRIGHTNESS
-        playing_any = state.playing_slot >= 0 or state.playing_arcade >= 0
+        playing_any = bool(state.playing_slots or state.playing_arcades)
 
         # Stick A: one LED per mini button (indices 0–7)
         for i in range(8):
             if self._flash and self._flash[0] == "mini" and self._flash[1] == i:
                 leds[i] = led_scale(_SLOT_COLORS_RGB[i], brightness)
-            elif state.playing_slot == i:
+            elif i in state.playing_slots:
                 phase = (frame * 4) & 0xFF
                 v = phase if phase < 128 else 255 - phase
                 v = (v * brightness) >> 8
@@ -269,7 +269,7 @@ class SoundboardScreen(Screen):
             for i in range(NUM_ARCADE_BUTTONS):
                 if self._flash and self._flash[0] == "arc" and self._flash[1] == i:
                     set_led(i, 255)
-                elif state.playing_arcade == i:
+                elif i in state.playing_arcades:
                     pulse_led(i, frame, speed=4)
                 elif state.arcade_present[i]:
                     set_led(i, 60)
@@ -374,7 +374,7 @@ class SoundboardScreen(Screen):
     def _draw_slot(self, tft, theme, rgb, state, idx, x, y, w, h, frame):
         """Draw one mini-button slot square."""
         present = state.slots_present[idx]
-        playing = state.playing_slot == idx
+        playing = idx in state.playing_slots
         flashing = self._flash and self._flash[0] == "mini" and self._flash[1] == idx
 
         slot_rgb = _SLOT_COLORS_RGB[idx]
@@ -424,7 +424,7 @@ class SoundboardScreen(Screen):
     def _draw_arc_slot(self, tft, theme, rgb, state, idx, x, y, w, h, frame):
         """Draw one arcade-button slot square (smaller)."""
         present = state.arcade_present[idx]
-        playing = state.playing_arcade == idx
+        playing = idx in state.playing_arcades
         flashing = self._flash and self._flash[0] == "arc" and self._flash[1] == idx
 
         arc_rgb = _ARC_COLORS_RGB[idx]

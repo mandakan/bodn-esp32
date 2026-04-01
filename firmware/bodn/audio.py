@@ -381,6 +381,15 @@ class AudioEngine:
         """True if any voice is active."""
         return any(v.source is not None for v in self._voices)
 
+    @property
+    def sfx_active(self):
+        """Number of SFX pool voices currently playing."""
+        count = 0
+        for i in range(V_SFX_BASE, V_SFX_END):
+            if self._voices[i].source is not None:
+                count += 1
+        return count
+
     def _allocate_sfx(self):
         """Find a free SFX pool voice, or steal the oldest."""
         # Prefer a free slot

@@ -194,8 +194,8 @@ class SoundboardState:
 
     def __init__(self):
         self.bank = 0  # current bank index 0–3
-        self.playing_slot = -1  # currently-playing mini button (-1 = none)
-        self.playing_arcade = -1  # currently-playing arcade button (-1 = none)
+        self.playing_slots = set()  # currently-playing mini buttons
+        self.playing_arcades = set()  # currently-playing arcade buttons
         self.volume = 50  # 0–100
         self.muted = False
         self.slots_present = [False] * NUM_MINI_BUTTONS
@@ -216,8 +216,8 @@ class SoundboardState:
     def set_bank(self, bank):
         """Switch to a new bank and rescan."""
         self.bank = bank & 0x3
-        self.playing_slot = -1
-        self.playing_arcade = -1
+        self.playing_slots.clear()
+        self.playing_arcades.clear()
         self._rescan()
 
     def _rescan(self):
@@ -295,29 +295,24 @@ class SoundboardState:
 
     def press_slot(self, slot):
         """Handle a mini button press. Returns the WAV path to play, or None for boop."""
-        self.playing_arcade = -1
         if not (0 <= slot < NUM_MINI_BUTTONS):
             return None
         path = self._slot_paths[slot]
         if path:
-            self.playing_slot = slot
+            self.playing_slots.add(slot)
             return path
-        # Empty slot → boop feedback
-        self.playing_slot = -1
         return None
 
     def press_arcade(self, slot):
         """Handle an arcade button press. Returns WAV path or None for boop."""
-        self.playing_slot = -1
         if not (0 <= slot < NUM_ARCADE_BUTTONS):
             return None
         if self.arcade_present[slot]:
-            self.playing_arcade = slot
+            self.playing_arcades.add(slot)
             return arcade_wav_path(slot)
-        self.playing_arcade = -1
         return None
 
     def on_playback_done(self):
-        """Call when AudioEngine reports playback has finished."""
-        self.playing_slot = -1
-        self.playing_arcade = -1
+        """Call when all SFX voices have finished."""
+        self.playing_slots.clear()
+        self.playing_arcades.clear()

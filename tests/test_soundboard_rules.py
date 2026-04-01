@@ -230,8 +230,8 @@ def test_load_manifest_invalid_color_ignored(monkeypatch):
 def test_initial_state():
     state = SoundboardState()
     assert state.bank == 0
-    assert state.playing_slot == -1
-    assert state.playing_arcade == -1
+    assert state.playing_slots == set()
+    assert state.playing_arcades == set()
     assert state.volume == 50
     assert state.muted is False
 
@@ -240,12 +240,12 @@ def test_set_bank_clears_playing(monkeypatch):
     monkeypatch.setattr(sbr, "_file_exists", lambda p: True)
     state = SoundboardState()
     state.slots_present = [True] * NUM_MINI_BUTTONS
-    state.playing_slot = 3
-    state.playing_arcade = 1
+    state.playing_slots.add(3)
+    state.playing_arcades.add(1)
     state.set_bank(2)
     assert state.bank == 2
-    assert state.playing_slot == -1
-    assert state.playing_arcade == -1
+    assert state.playing_slots == set()
+    assert state.playing_arcades == set()
 
 
 def test_set_bank_wraps(monkeypatch):
@@ -301,7 +301,7 @@ def test_press_slot_present(monkeypatch):
     state.load()
     path = state.press_slot(3)
     assert path == wav_path(0, 3)
-    assert state.playing_slot == 3
+    assert 3 in state.playing_slots
 
 
 def test_press_slot_missing_returns_none(monkeypatch):
@@ -310,16 +310,16 @@ def test_press_slot_missing_returns_none(monkeypatch):
     state.load()
     path = state.press_slot(3)
     assert path is None
-    assert state.playing_slot == -1
+    assert state.playing_slots == set()
 
 
-def test_press_slot_clears_arcade(monkeypatch):
-    monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
+def test_press_multiple_slots(monkeypatch):
+    monkeypatch.setattr(sbr, "_file_exists", lambda p: True)
     state = SoundboardState()
     state.load()
-    state.playing_arcade = 2
-    state.press_slot(0)
-    assert state.playing_arcade == -1
+    state.press_slot(1)
+    state.press_slot(5)
+    assert state.playing_slots == {1, 5}
 
 
 def test_press_arcade_present(monkeypatch):
@@ -328,7 +328,7 @@ def test_press_arcade_present(monkeypatch):
     state.arcade_present = [True] * NUM_ARCADE_BUTTONS
     path = state.press_arcade(2)
     assert path == arcade_wav_path(2)
-    assert state.playing_arcade == 2
+    assert 2 in state.playing_arcades
 
 
 def test_press_arcade_missing_returns_none():
@@ -336,24 +336,24 @@ def test_press_arcade_missing_returns_none():
     state.arcade_present = [False] * NUM_ARCADE_BUTTONS
     path = state.press_arcade(0)
     assert path is None
-    assert state.playing_arcade == -1
+    assert state.playing_arcades == set()
 
 
-def test_press_arcade_clears_slot():
+def test_press_multiple_arcades():
     state = SoundboardState()
-    state.playing_slot = 5
-    state.arcade_present = [False] * NUM_ARCADE_BUTTONS
+    state.arcade_present = [True] * NUM_ARCADE_BUTTONS
     state.press_arcade(0)
-    assert state.playing_slot == -1
+    state.press_arcade(3)
+    assert state.playing_arcades == {0, 3}
 
 
 def test_on_playback_done():
     state = SoundboardState()
-    state.playing_slot = 3
-    state.playing_arcade = 1
+    state.playing_slots.add(3)
+    state.playing_arcades.add(1)
     state.on_playback_done()
-    assert state.playing_slot == -1
-    assert state.playing_arcade == -1
+    assert state.playing_slots == set()
+    assert state.playing_arcades == set()
 
 
 def test_bank_color_default():
