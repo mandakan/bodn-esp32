@@ -211,7 +211,7 @@ def create_hardware():
             bits=16,
             format=I2S.STEREO,
             rate=16000,
-            ibuf=16384,
+            ibuf=8192,
         )
         from bodn.audio import AudioEngine
 
@@ -552,7 +552,7 @@ async def primary_task(
             )
 
         frame += 1
-        await asyncio.sleep_ms(30)
+        await asyncio.sleep_ms(5)
 
 
 async def secondary_task(secondary):
