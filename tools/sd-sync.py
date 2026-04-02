@@ -23,6 +23,9 @@ Usage:
 
   # Auto-detect SD card (looks for /Volumes/BODN* on macOS)
   uv run python tools/sd-sync.py
+
+  # Eject SD card automatically after syncing (macOS only)
+  uv run python tools/sd-sync.py --eject
 """
 
 import argparse
@@ -164,6 +167,11 @@ def main():
         action="store_true",
         help="Force rebuild all assets even if up-to-date",
     )
+    parser.add_argument(
+        "--eject",
+        action="store_true",
+        help="Eject the SD card after syncing (macOS only, uses diskutil)",
+    )
     args = parser.parse_args()
 
     if args.build_only and args.no_build:
@@ -219,10 +227,22 @@ def main():
         print(f"\nWould copy {copied} file(s).")
     else:
         print(f"\nCopied {copied} file(s) to {target}")
-        # macOS: remind to eject
-        if platform.system() == "Darwin":
-            print("\nRemember to eject the SD card before removing it:")
-            print(f"  diskutil eject {target}")
+
+    if not args.dry_run and args.eject:
+        if platform.system() != "Darwin":
+            print("\nWARNING: --eject is only supported on macOS (skipped)")
+        else:
+            print(f"\nEjecting {target} …")
+            result = subprocess.run(
+                ["diskutil", "eject", str(target)], capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                print("  SD card ejected safely.")
+            else:
+                print(f"  ERROR: could not eject: {result.stderr.strip()}")
+    elif not args.dry_run and platform.system() == "Darwin" and target:
+        print("\nRemember to eject the SD card before removing it:")
+        print(f"  diskutil eject {target}")
 
 
 if __name__ == "__main__":
