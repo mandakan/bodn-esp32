@@ -49,8 +49,10 @@ CH_MUSIC = V_MUSIC
 CH_SFX = V_SFX_BASE
 CH_UI = V_UI
 
-_MONO_BUF_SIZE = const(2048)  # bytes per mono read buffer (1024 samples at 16-bit)
-_BUF_SIZE = const(4096)  # bytes per stereo output buffer
+_MONO_BUF_SIZE = const(
+    512
+)  # bytes per mono read buffer (256 samples at 16-bit = 16 ms)
+_BUF_SIZE = const(1024)  # bytes per stereo output buffer
 
 # Per-voice gain staging (fixed-point 16.16 multipliers)
 # These keep the mix within int16 range under normal conditions.
@@ -389,7 +391,7 @@ class AudioEngine:
         self._buf = bytearray(_BUF_SIZE)
         self._buf_view = memoryview(self._buf)
         self._silence = bytes(_BUF_SIZE)
-        self._silence_short = bytes(512)
+        self._silence_short = bytes(64)
         self._volume = 10  # 0-100, synced from settings in main.py
         self._vol_mult = 10 * 655  # pre-computed fixed-point multiplier
 
@@ -407,6 +409,15 @@ class AudioEngine:
     def playing(self):
         """True if any voice is active."""
         return any(v.source is not None for v in self._voices)
+
+    def channel_active(self, channel):
+        """True if the given named channel has an active voice."""
+        if channel == "sfx":
+            return self.sfx_active > 0
+        idx = CHANNEL_NAMES.get(channel, -1)
+        if 0 <= idx < _NUM_VOICES:
+            return self._voices[idx].source is not None
+        return False
 
     @property
     def sfx_active(self):
@@ -560,9 +571,15 @@ class AudioEngine:
         apply_vol = _apply_volume_fast
         mix_add = _mix_add_fast
 
-        # Prime the I2S DMA buffer fully with silence (blocking mode)
-        for _ in range(4):
-            i2s.write(silence)
+        # Prime the I2S DMA buffer with a small amount of silence before
+        # enabling the amplifier (avoids startup pop).  Keep it minimal
+        # so the buffer drains quickly — a full buffer adds hundreds of ms
+        # of latency before the first real sound reaches the speaker.
+        # The idle loop writes only tiny silence chunks (64 bytes), so the
+        # large ibuf drains to near-empty within ~350 ms of idle.  This
+        # gives both low first-sound latency AND large headroom during
+        # active playback (tolerates GC pauses and rendering stalls).
+        i2s.write(silence)
 
         if self._amp_enable:
             self._amp_enable()

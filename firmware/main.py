@@ -211,7 +211,7 @@ def create_hardware():
             bits=16,
             format=I2S.STEREO,
             rate=16000,
-            ibuf=16384,
+            ibuf=8192,
         )
         from bodn.audio import AudioEngine
 
@@ -363,10 +363,29 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
-    def _make_space():
-        from bodn.ui.space import SpaceScreen
+    def _make_sequencer(on_progress=None):
+        from bodn.ui.sequencer import SequencerScreen, preload_sequencer_assets
+        from bodn.ui.sequencer_secondary import SequencerSecondary
+
+        drum_bufs = preload_sequencer_assets(on_progress=on_progress)
+        seq_sec = SequencerSecondary()
+        secondary.set_content(seq_sec)
+        return SequencerScreen(
+            np,
+            overlay,
+            audio=audio,
+            arcade=arcade,
+            settings=settings,
+            secondary_screen=seq_sec,
+            on_exit=_reset_secondary,
+            drum_bufs=drum_bufs,
+        )
+
+    def _make_space(on_progress=None):
+        from bodn.ui.space import SpaceScreen, preload_space_assets
         from bodn.ui.android import AndroidFaceScreen
 
+        bufs = preload_space_assets(on_progress=on_progress)
         stellar = AndroidFaceScreen()
         secondary.set_content(stellar)
         return SpaceScreen(
@@ -377,6 +396,7 @@ def create_ui(
             settings=settings,
             secondary_screen=stellar,
             on_exit=_reset_secondary,
+            preloaded_bufs=bufs,
         )
 
     def _make_story():
@@ -408,6 +428,7 @@ def create_ui(
         "space": _make_space,
         "story": _make_story,
         "soundboard": _make_soundboard,
+        "sequencer": _make_sequencer,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, settings=settings),
@@ -425,6 +446,7 @@ def create_ui(
         "flode",
         "garden",
         "soundboard",
+        "sequencer",
         "clock",
         "settings",
     ]
@@ -530,7 +552,7 @@ async def primary_task(
             )
 
         frame += 1
-        await asyncio.sleep_ms(30)
+        await asyncio.sleep_ms(5)
 
 
 async def secondary_task(secondary):

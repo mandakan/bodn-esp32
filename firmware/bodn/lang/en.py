@@ -8,6 +8,7 @@ STRINGS = {
     "home_plays_left": "{} plays left",
     "home_no_modes": "No modes",
     "home_press_clear": "press to clear",
+    "home_loading": "Loading...",
     # Mode names (displayed uppercased on home screen)
     "mode_mystery": "mystery",
     "mode_simon": "simon",
@@ -130,15 +131,15 @@ STRINGS = {
     "press_any": "Press any button",
     # Ambient / status strip
     "plays": "{} plays",
-    # Button color names (short, for grid labels)
-    "btn_red": "Red",
+    # Button color names (short, matching physical cap colours)
     "btn_green": "Grn",
     "btn_blue": "Blu",
+    "btn_white": "Wht",
     "btn_yellow": "Yel",
-    "btn_cyan": "Cyn",
-    "btn_magenta": "Mag",
-    "btn_orange": "Org",
-    "btn_purple": "Pur",
+    "btn_red": "Red",
+    "btn_teal": "Teal",
+    "btn_mint": "Mint",
+    "btn_sky": "Sky",
     # Toggle modifier names (short)
     "tog_reverse": "Rev",
     "tog_mirror": "Mir",
@@ -212,6 +213,14 @@ STRINGS = {
     "story_end_replay": "Again!",
     "story_end_pick": "New story",
     "story_end_exit": "Done",
+    # Sequencer mode
+    "mode_sequencer": "sequencer",
+    "seq_bpm": "BPM",
+    "seq_playing": "Playing",
+    "seq_paused": "Paused",
+    "seq_steps": "{} steps",
+    "seq_press_start": "Press!",
+    "seq_cleared": "Cleared!",
     # Boot screen
     "boot_cfg": "Waking up...",
     "boot_sd": "Checking SD card...",

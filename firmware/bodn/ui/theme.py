@@ -30,28 +30,30 @@ class Theme:
         self.MUTED = rgb_fn(160, 160, 160)  # readable from angles
         self.DIM = rgb_fn(80, 80, 80)  # subtle indicators only
 
-        # One colour per button (RGB565)
-        self.BTN_565 = [
-            self.RED,
-            self.GREEN,
-            self.BLUE,
-            self.YELLOW,
-            self.CYAN,
-            self.MAGENTA,
-            self.ORANGE,
-            self.PURPLE,
-        ]
-        # Same in RGB tuples (for NeoPixel)
+        # One colour per mini button — matches physical cap colours
+        # (config.BUTTON_COLORS: green, blue, white, yellow, red, black, green, blue)
         self.BTN_RGB = [
-            (255, 0, 0),
-            (0, 255, 0),
-            (0, 0, 255),
-            (255, 255, 0),
-            (0, 255, 255),
-            (255, 0, 255),
-            (255, 128, 0),
-            (128, 0, 255),
+            (0, 200, 0),  # 0: green
+            (0, 100, 255),  # 1: blue
+            (255, 255, 255),  # 2: white
+            (255, 220, 0),  # 3: yellow
+            (255, 0, 0),  # 4: red
+            (0, 160, 140),  # 5: black cap → dark teal (visible on dark bg)
+            (0, 220, 120),  # 6: green₂ → teal-green (distinct from 0)
+            (80, 160, 255),  # 7: blue₂ → sky blue (distinct from 1)
         ]
+        self.BTN_565 = [rgb_fn(r, g, b) for r, g, b in self.BTN_RGB]
+
+        # One colour per arcade button — matches physical cap colours
+        # (config.ARCADE_COLORS: green, blue, white, yellow, red)
+        self.ARC_RGB = [
+            (60, 220, 60),  # 0: green
+            (60, 100, 255),  # 1: blue
+            (255, 255, 255),  # 2: white
+            (255, 220, 60),  # 3: yellow
+            (255, 60, 60),  # 4: red
+        ]
+        self.ARC_565 = [rgb_fn(r, g, b) for r, g, b in self.ARC_RGB]
         # Layout metrics
         self.FONT_W = 8
         self.FONT_H = 8
@@ -65,12 +67,12 @@ class Theme:
     def BTN_NAMES(self):
         """Button colour labels — translated on access so language switches take effect."""
         return [
-            t("btn_red"),
             t("btn_green"),
             t("btn_blue"),
+            t("btn_white"),
             t("btn_yellow"),
-            t("btn_cyan"),
-            t("btn_magenta"),
-            t("btn_orange"),
-            t("btn_purple"),
+            t("btn_red"),
+            t("btn_teal"),
+            t("btn_mint"),
+            t("btn_sky"),
         ]

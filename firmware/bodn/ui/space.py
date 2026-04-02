@@ -100,10 +100,46 @@ def _resolve_sound_paths(names):
     return resolve_sounds(_SPACE_SND_DIR, names)
 
 
-def _preload(names):
+def _preload(names, on_progress=None):
     from bodn.assets import preload_sounds
 
-    return preload_sounds(_SPACE_SND_DIR, names)
+    return preload_sounds(_SPACE_SND_DIR, names, on_progress=on_progress)
+
+
+def preload_space_assets(on_progress=None):
+    """Preload all space-mode WAVs into PSRAM.  Call from the mode factory so
+    the home screen can show a loading bar while SD reads happen.
+
+    Returns a dict with keys: btn, arc, drone, alarm, bridge.
+    """
+    # All groups in load order — used to compute a single cumulative total
+    _groups = [
+        _BTN_WAV_NAMES,
+        _ARC_WAV_NAMES,
+        SpaceScreen._DRONE_WAV_NAMES,
+        SpaceScreen._ALARM_WAV_NAMES,
+        ["bridge_loop"],
+    ]
+    total = sum(len(g) for g in _groups)
+    loaded = [0]
+
+    def _sub(n, t):
+        loaded[0] += 1
+        if on_progress:
+            on_progress(loaded[0], total)
+
+    btn = _preload(_BTN_WAV_NAMES, on_progress=_sub)
+    arc = _preload(_ARC_WAV_NAMES, on_progress=_sub)
+    drone = _preload(SpaceScreen._DRONE_WAV_NAMES, on_progress=_sub)
+    alarm = _preload(SpaceScreen._ALARM_WAV_NAMES, on_progress=_sub)
+    bridge_list = _preload(["bridge_loop"], on_progress=_sub)
+    return {
+        "btn": btn,
+        "arc": arc,
+        "drone": drone,
+        "alarm": alarm,
+        "bridge": bridge_list[0] if bridge_list else None,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -170,6 +206,7 @@ class SpaceScreen(Screen):
         settings=None,
         secondary_screen=None,
         on_exit=None,
+        preloaded_bufs=None,
     ):
         self._np = np
         self._overlay = overlay
@@ -194,6 +231,8 @@ class SpaceScreen(Screen):
         self._alarm_active = False
         self._bridge_next = 0  # frame when next bridge ambience can play
         # Pre-loaded PCM buffers (bytearray in PSRAM, None = use procedural tone)
+        # Populated by preload_space_assets() via the factory, or lazily in enter().
+        self._preloaded_bufs = preloaded_bufs
         self._btn_bufs = None
         self._arc_bufs = None
         self._drone_bufs = None
@@ -214,12 +253,21 @@ class SpaceScreen(Screen):
         self._drone_zone = -1
         self._alarm_active = False
         self._bridge_next = 0
-        self._btn_bufs = _preload(_BTN_WAV_NAMES)
-        self._arc_bufs = _preload(_ARC_WAV_NAMES)
-        self._drone_bufs = _preload(self._DRONE_WAV_NAMES)
-        self._alarm_bufs = _preload(self._ALARM_WAV_NAMES)
-        bufs = _preload(["bridge_loop"])
-        self._bridge_buf = bufs[0] if bufs else None
+        if self._preloaded_bufs is not None:
+            pb = self._preloaded_bufs
+            self._btn_bufs = pb.get("btn")
+            self._arc_bufs = pb.get("arc")
+            self._drone_bufs = pb.get("drone")
+            self._alarm_bufs = pb.get("alarm")
+            self._bridge_buf = pb.get("bridge")
+            self._preloaded_bufs = None  # hand off ownership, clear the reference
+        else:
+            self._btn_bufs = _preload(_BTN_WAV_NAMES)
+            self._arc_bufs = _preload(_ARC_WAV_NAMES)
+            self._drone_bufs = _preload(self._DRONE_WAV_NAMES)
+            self._alarm_bufs = _preload(self._ALARM_WAV_NAMES)
+            bufs = _preload(["bridge_loop"])
+            self._bridge_buf = bufs[0] if bufs else None
         if self._arcade:
             self._arcade.all_off()
         # Welcome message

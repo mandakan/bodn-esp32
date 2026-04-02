@@ -14,6 +14,14 @@ NAV = const(0)  # config.ENC_NAV
 _ANIM_STEPS = const(8)
 _ANIM_FRAC = (8, 7, 5, 4, 3, 2, 1, 0)  # multiplied by width//8
 
+# Loading bar: lives in the free zone between the carousel dots (y≈147) and
+# the "plays left" footer (y≈220).  Values tuned for 320×240 landscape.
+_LOAD_Y = const(154)  # top of loading zone
+_LOAD_H = const(34)  # height of loading zone
+_LOAD_BAR_Y = const(172)  # top of the progress bar inside the zone
+_LOAD_BAR_H = const(8)  # bar height
+_LOAD_BAR_MX = const(40)  # horizontal margin on each side
+
 # Accumulator settings
 _DPU = const(1)  # raw detents per unit (1 per physical click)
 _FAST_THRESH = const(400)  # velocity threshold for fast multiplier
@@ -130,7 +138,14 @@ class HomeScreen(Screen):
             name = self._names[self._index]
             factory = self._mode_screens[name]
             try:
-                screen = factory()
+                # Show loading indicator immediately so the child sees feedback.
+                # Draw into the free zone and push it to the display before the
+                # (potentially slow) factory call begins.
+                self._draw_loading_bar(0, 1)
+                try:
+                    screen = factory(on_progress=self._draw_loading_bar)
+                except TypeError:
+                    screen = factory()
                 if name != "settings":
                     self._session_mgr.try_wake(name)
                 if self._audio:
@@ -159,8 +174,43 @@ class HomeScreen(Screen):
             self._anim_dir = 1 if units > 0 else -1
             self._dirty = True
             self._full_clear = True
-            if self._audio:
+            if self._audio and not self._audio.channel_active("ui"):
                 self._audio.play_sound("nav_click")
+
+    def _draw_loading_bar(self, loaded, total):
+        """Draw a progress bar in the free zone below the carousel dots.
+
+        Called once before the factory (loaded=0, total=1) to show "Loading..."
+        immediately, then called again by the factory's on_progress callback
+        after each asset is preloaded.  Pushes only the loading zone to the
+        display via show_rect so the surrounding home screen content stays intact.
+        """
+        tft = self._manager.tft
+        theme = self._manager.theme
+        w = theme.width
+
+        bar_x = _LOAD_BAR_MX
+        bar_w = w - _LOAD_BAR_MX * 2
+
+        # Clear the loading zone
+        tft.fill_rect(0, _LOAD_Y, w, _LOAD_H, theme.BLACK)
+
+        # "Loading..." label (centred)
+        label = t("home_loading")
+        lx = (w - len(label) * 8) // 2
+        tft.text(label, lx, _LOAD_Y + 4, theme.MUTED)
+
+        # Bar outline
+        tft.rect(bar_x, _LOAD_BAR_Y, bar_w, _LOAD_BAR_H, theme.DIM)
+
+        # Bar fill — avoid division by zero; show a minimal sliver at 0
+        if total > 0:
+            fill_w = bar_w * loaded // total
+            if fill_w > 0:
+                tft.fill_rect(bar_x, _LOAD_BAR_Y, fill_w, _LOAD_BAR_H, theme.CYAN)
+
+        # Push just this zone immediately (no full-screen redraw needed)
+        tft.show_rect(0, _LOAD_Y, w, _LOAD_H)
 
     def _anim_x(self, width):
         """Return the current x-offset for the slide animation."""

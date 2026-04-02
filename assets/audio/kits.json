@@ -1,0 +1,16 @@
+{
+  "_comment": "Drum kit manifest. Source paths relative to assets/audio/source/. Run 'uv run python tools/convert_audio.py' to convert to device format (build/sounds/kits/). Use tools/sd-sync.py to copy to SD card.",
+  "kits": {
+    "basic": {
+      "name_sv": "Grund",
+      "name_en": "Basic",
+      "drums": {
+        "hihat": {"sv": "Hi-hat", "en": "Hi-hat", "source": "soundboard/811628__m0nsterhd__closed-hi-hat.wav"},
+        "snare": {"sv": "Virvel", "en": "Snare", "source": "soundboard/673516__theendofacycle__flat-fat-snare-drum-hit.wav"},
+        "kick":  {"sv": "Bastrumma", "en": "Kick", "source": "soundboard/614398__jannevse__kick_natural2.wav"},
+        "tom":   {"sv": "Tom", "en": "Tom", "source": "soundboard/92810__suicidity__dirty-tonys-tom-16-063.wav"},
+        "crash": {"sv": "Crash", "en": "Crash", "source": "soundboard/153404__stomachache__crash_a_ms1.wav"}
+      }
+    }
+  }
+}
