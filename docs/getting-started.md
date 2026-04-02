@@ -17,7 +17,7 @@ The Olimex board has **two USB-C ports**:
 | Port | Chip | Use for |
 |------|------|---------|
 | **UART** (top, near antenna) | CH340X | Programming, serial console, REPL |
-| **USB OTG** (bottom) | Native USB | Not used — **avoid plugging this one** during development (GPIO 19/20 conflict with ENC1) |
+| **USB OTG** (bottom) | Native USB | Not used — **avoid plugging this one** during development (GPIO 19 = SD_MISO, GPIO 20 = 1-Wire; OTG will conflict) |
 
 Always plug into the **UART port**.
 
@@ -112,7 +112,7 @@ Meanwhile, the primary display shows a progress bar with status dots
 
 ## 5. Diagnostic screen
 
-Hold the **NAV encoder button** (ENC1, GPIO 17) while powering on to enter the
+Hold the **NAV encoder button** (ENC1, MCP2 GPA0) while powering on to enter the
 diagnostic screen. It shows:
 
 - MicroPython version and platform

@@ -70,7 +70,7 @@ The secondary display shares SCK, MOSI, DC, and RST with the primary. Only CS is
 |--------|------|
 | SCK | 14 |
 | WS | 15 |
-| SD | 38 |
+| SD | 2 |
 
 ### MAX98357A Amplifier (I2S OUT)
 
@@ -232,7 +232,7 @@ Both share SPI bus 2. The driver deasserts CS after each `show()`, so they can c
 ## Wiring notes
 
 - Both displays on SPI bus 2 with separate CS pins. Touch controller (XPT2046) not used.
-- SD card on dedicated SPI3 bus (GPIOs 0/17/40/19) — independent of display SPI2.
+- SD card on dedicated SPI3 bus (GPIOs 0/17/40/38) — independent of display SPI2.
 - INMP441 and MAX98357A on I2S (separate IN/OUT peripherals on ESP32-S3).
 - Buttons, toggles, arcade switches on MCP1 (0x23). Encoder push buttons on MCP2 (0x21). Both share the I2C bus with internal pull-ups and software debouncing. RESET pins must be tied to VCC (no on-board pull-up on the CJMCU-2317 modules).
 - NeoPixel chain on a single GPIO — data line through 108 LEDs (2 sticks + lid ring).
@@ -314,16 +314,16 @@ Other GPIOs with board-level functions — see [`docs/schematics/`](schematics/)
 | 5 | PWR_SENS | `PWR_SENS_PIN` (battery module) | Active low when USB power present; **do not drive** |
 | 6 | BAT_SENS | `BAT_SENS_PIN` (battery module) | R8/R9 divider; ADC only |
 | 17 | — | SD_SCK | Freed from ENC1_SW (moved to MCP2) |
-| 19 | USB_D− | SD_MISO | Previously reserved for touch CS (touch dropped) |
+| 19 | USB_D− | — (reserved) | USB OTG D−; do not use |
 | 20 | USB_D+ | ONEWIRE_PIN (DS18B20) | 1-Wire bus; conflicts with OTG port (not used) |
-| 38 | LED1 (green) | — (freed) | On-board LED; previously conflicted with I2S mic |
+| 38 | LED1 (green) | SD_MISO | On-board LED freed; GPIO 19 (USB D−) avoided |
 | 40 | — | SD_MOSI | Freed from ENC2_SW (moved to MCP2) |
 | 43 | U0TXD | — (freed) | UART TX; previously conflicted with TFT backlight |
 | 44 | U0RXD | — | UART RX; avoid driving |
 | 46 | — | MCP_INT | Strapping pin; safe as input after boot |
 
-Note: GPIO 19 was previously set aside for USB OTG D−. The OTG port is not used in
-this project; GPIO 19 is now SD_MISO.
+Note: GPIO 19 (USB OTG D−) is avoided to prevent USB enumeration issues. SD_MISO was
+moved to GPIO 38 (the on-board LED pin, which is freed since LED control is not needed).
 
 ## MCP23017 GPIO expanders
 
@@ -589,7 +589,7 @@ on ESP32, giving zero contention with the display SPI2 bus.
 | SD_CS | SD_CS / SD_SS | 0 |
 | SD_SCK | SD_CLK / SD_SCK | 17 |
 | SD_MOSI | SD_DI / SD_MOSI | 40 |
-| SD_MISO | SD_DO / SD_MISO | 19 |
+| SD_MISO | SD_DO / SD_MISO | 38 |
 
 All 3.3V logic — no level shifter needed. Keep wires under 15 cm.
 
