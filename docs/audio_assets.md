@@ -5,17 +5,18 @@ referenced in code. Read this before adding any new sounds.
 
 ## Overview
 
-There are five categories of audio:
+There are six categories of audio:
 
 | Category | What it is | Triggered by | Storage |
 |---|---|---|---|
 | **Soundboard** | One WAV per button slot | Child pressing a button | SD |
 | **SFX** | Short named clips for game/UI events | Code (`audio.play(WAV["sfx"]["..."])`) | Flash |
 | **Music** | Background loops | Code (`audio.play(WAV["music"]["..."], loop=True)`) | SD |
+| **Drum kits** | Named percussion samples for the Sequencer mode | Sequencer engine step trigger / arcade button press | SD |
 | **i18n TTS** | Spoken game instructions and system alerts | `tts.say(key, audio)` | Flash (safety) / SD (game) |
 | **Story TTS** | Narration and choice labels for Story Mode | `tts.say(key, audio)` | SD |
 
-There is a sixth category — **procedural tones** — which are synthesised at runtime from note sequences defined in `firmware/bodn/sounds.py` (`SOUNDS` dict). Those do not go through the asset pipeline.
+There is a seventh category not in the table — **procedural tones** — which are synthesised at runtime from note sequences defined in `firmware/bodn/sounds.py` (`SOUNDS` dict). Those do not go through the asset pipeline.
 
 ---
 
@@ -24,6 +25,7 @@ There is a sixth category — **procedural tones** — which are synthesised at 
 ```
 assets/audio/                        ← source side (this repo)
   soundboard.json                    ← single source of truth (see below)
+  kits.json                          ← drum kit manifest for Sequencer mode (see below)
   sources.tsv                        ← attribution / license log
   source/
     soundboard/                      ← original downloaded files, any format
@@ -40,6 +42,8 @@ build/                               ← SD-bound (generated, not committed)
   sounds/
     bank_0/ … bank_3/                ← converted soundboard WAVs (0.wav – 7.wav)
     arcade/                          ← converted arcade WAVs (0.wav – 4.wav)
+    kits/                            ← converted drum kit WAVs (one subdirectory per kit)
+      basic/                         ← starter kit (kick, snare, hihat, tom, crash)
     music/                           ← converted music WAVs
   tts/{sv,en}/                       ← i18n TTS staging (from generate_tts.py)
   story_tts/{sv,en}/                 ← story TTS staging (from generate_story_tts.py)
@@ -72,6 +76,7 @@ Batch-converts all source files to device format (16 kHz, mono, 16-bit PCM WAV) 
 |---|---|---|---|
 | Soundboard | `assets/audio/source/soundboard/` | `build/sounds/bank_*/` | SD |
 | Arcade | `assets/audio/source/soundboard/` | `build/sounds/arcade/` | SD |
+| **Drum kits** | `assets/audio/source/` (paths from `kits.json`) | `build/sounds/kits/{kit_name}/` | SD |
 | SFX | `assets/audio/source/sfx/` | `firmware/sounds/sfx/` | Flash |
 | Music | `assets/audio/source/music/` | `build/sounds/music/` | SD |
 | Flash TTS | `assets/audio/source/tts/` | `firmware/sounds/tts/` | Flash |
@@ -209,6 +214,132 @@ Fetch each URL, place the file in `assets/audio/source/soundboard/` (or `sfx/`/`
 for renamed files — the notes column in `sources.tsv` is a good place to record the
 logical name), then run `convert_audio.py`. The slot ordering is reproduced exactly
 because `soundboard.json` is committed.
+
+---
+
+## Drum kits (Sequencer mode)
+
+The Sequencer mode uses named percussion samples stored in `build/sounds/kits/{kit_name}/`
+on the SD card. Each kit is a flat directory of WAV files, one per drum voice. The kit
+manifest lives at `assets/audio/kits.json` — that is the only file you edit to manage kits.
+
+### How it works at runtime
+
+On entering Sequencer mode the device preloads all five samples for the active kit into
+PSRAM once (`preload_sounds("/sounds/kits/basic/", [...])` in `bodn/assets.py`). Playback
+is then zero-latency from RAM — no SD reads during play. The mapping is:
+
+| Arcade button | Drum voice | File |
+|---|---|---|
+| 0 (green) | Hi-hat | `hihat.wav` |
+| 1 (blue)  | Snare  | `snare.wav` |
+| 2 (white) | Kick   | `kick.wav`  |
+| 3 (yellow)| Tom    | `tom.wav`   |
+| 4 (red)   | Crash  | `crash.wav` |
+
+The filenames are fixed. Adding a new kit means adding a new directory — not changing filenames.
+
+### Pipeline: source → SD card
+
+```
+assets/audio/kits.json          ← you edit this (source paths + labels)
+    │
+    ▼  uv run python tools/convert_audio.py
+build/sounds/kits/basic/        ← 16 kHz mono PCM WAVs (generated, not committed)
+    │
+    ▼  uv run python tools/sd-sync.py
+/sd/sounds/kits/basic/          ← on the SD card, ready for the device
+```
+
+Or in one step:
+```bash
+uv run python tools/sd-sync.py              # build + auto-detect SD card (macOS: BODN*)
+uv run python tools/sd-sync.py --build-only  # build only, no card needed
+```
+
+### Adding or replacing a sample
+
+1. Drop the source file into `assets/audio/source/` (any location — typically `soundboard/`
+   if it already lives there, or a new `kits/` subdirectory for kit-specific files).
+
+2. Edit `assets/audio/kits.json` — update the `"source"` path for the drum you want to replace:
+
+   ```json
+   "kick": {"sv": "Bastrumma", "en": "Kick", "source": "kits/my_kick.wav"}
+   ```
+
+3. Convert and sync:
+
+   ```bash
+   uv run python tools/convert_audio.py
+   uv run python tools/sd-sync.py
+   ```
+
+4. Commit `kits.json` and any new source files you own (CC0 downloads are gitignored —
+   add them to `sources.tsv` for provenance).
+
+### Adding a new kit
+
+1. Add a new top-level key under `"kits"` in `assets/audio/kits.json`:
+
+   ```json
+   "rock": {
+     "name_sv": "Rock",
+     "name_en": "Rock",
+     "drums": {
+       "hihat": {"sv": "Hi-hat", "en": "Hi-hat", "source": "kits/rock_hihat.wav"},
+       "snare": {"sv": "Virvel",  "en": "Snare",  "source": "kits/rock_snare.wav"},
+       "kick":  {"sv": "Bastrumma", "en": "Kick", "source": "kits/rock_kick.wav"},
+       "tom":   {"sv": "Tom",     "en": "Tom",    "source": "kits/rock_tom.wav"},
+       "crash": {"sv": "Crash",   "en": "Crash",  "source": "kits/rock_crash.wav"}
+     }
+   }
+   ```
+
+   Use exactly the same five drum key names (`hihat`, `snare`, `kick`, `tom`, `crash`) —
+   the Sequencer screen references them by name. Order does not matter.
+
+2. Run `convert_audio.py` — it outputs `build/sounds/kits/rock/`.
+
+3. Run `sd-sync.py` — it syncs `build/sounds/kits/rock/` to `/sd/sounds/kits/rock/`.
+
+4. In `firmware/bodn/ui/sequencer.py`, update the kit path in `enter()`:
+
+   ```python
+   self._drum_bufs = preload_sounds("/sounds/kits/rock/", _DRUM_NAMES)
+   ```
+
+   (Kit selection UI is planned for a future release — for now the kit is hardcoded.)
+
+### `kits.json` reference
+
+```json
+{
+  "_comment": "Drum kit manifest. Source paths relative to assets/audio/source/.",
+  "kits": {
+    "<kit_name>": {
+      "name_sv": "<Swedish display name>",
+      "name_en": "<English display name>",
+      "drums": {
+        "<drum_key>": {
+          "sv":     "<Swedish label>",
+          "en":     "<English label>",
+          "source": "<path relative to assets/audio/source/>"
+        }
+      }
+    }
+  }
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `name_sv` / `name_en` | yes | Display name for future kit-picker UI |
+| `drums.<key>.source` | yes | Source file path, relative to `assets/audio/source/` |
+| `drums.<key>.sv` / `.en` | recommended | Label shown in future kit editor; used in `kits.json` display only |
+
+The five drum keys the Sequencer expects: `hihat`, `snare`, `kick`, `tom`, `crash`.
+Extra keys are ignored. Missing keys produce silence for that voice (no error).
 
 ---
 
