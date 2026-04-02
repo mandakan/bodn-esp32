@@ -8,6 +8,7 @@ STRINGS = {
     "home_plays_left": "{} spel kvar",
     "home_no_modes": "Inga lägen",
     "home_press_clear": "tryck för att rensa",
+    "home_loading": "Laddar...",
     # Mode names (displayed uppercased on home screen)
     "mode_mystery": "mysterium",
     "mode_simon": "härmapa",

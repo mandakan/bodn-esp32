@@ -363,10 +363,11 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
-    def _make_sequencer():
-        from bodn.ui.sequencer import SequencerScreen
+    def _make_sequencer(on_progress=None):
+        from bodn.ui.sequencer import SequencerScreen, preload_sequencer_assets
         from bodn.ui.sequencer_secondary import SequencerSecondary
 
+        drum_bufs = preload_sequencer_assets(on_progress=on_progress)
         seq_sec = SequencerSecondary()
         secondary.set_content(seq_sec)
         return SequencerScreen(
@@ -377,12 +378,14 @@ def create_ui(
             settings=settings,
             secondary_screen=seq_sec,
             on_exit=_reset_secondary,
+            drum_bufs=drum_bufs,
         )
 
-    def _make_space():
-        from bodn.ui.space import SpaceScreen
+    def _make_space(on_progress=None):
+        from bodn.ui.space import SpaceScreen, preload_space_assets
         from bodn.ui.android import AndroidFaceScreen
 
+        bufs = preload_space_assets(on_progress=on_progress)
         stellar = AndroidFaceScreen()
         secondary.set_content(stellar)
         return SpaceScreen(
@@ -393,6 +396,7 @@ def create_ui(
             settings=settings,
             secondary_screen=stellar,
             on_exit=_reset_secondary,
+            preloaded_bufs=bufs,
         )
 
     def _make_story():

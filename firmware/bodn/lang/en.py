@@ -8,6 +8,7 @@ STRINGS = {
     "home_plays_left": "{} plays left",
     "home_no_modes": "No modes",
     "home_press_clear": "press to clear",
+    "home_loading": "Loading...",
     # Mode names (displayed uppercased on home screen)
     "mode_mystery": "mystery",
     "mode_simon": "simon",

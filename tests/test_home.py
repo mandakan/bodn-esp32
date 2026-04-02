@@ -38,6 +38,9 @@ class FakeTft:
     def show(self):
         pass
 
+    def show_rect(self, x, y, w, h):
+        pass
+
 
 class FakeTheme:
     width = 320
@@ -81,6 +84,8 @@ class FakeInp:
 class FakeManager:
     def __init__(self):
         self.inp = FakeInp()
+        self.tft = FakeTft()
+        self.theme = FakeTheme()
         self.pushed = []
 
     def push(self, screen):

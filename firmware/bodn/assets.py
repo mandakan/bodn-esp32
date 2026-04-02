@@ -100,14 +100,21 @@ def preload_wav(path):
             f.read(chunk_size)
 
 
-def preload_sounds(directory, names):
+def preload_sounds(directory, names, on_progress=None):
     """Preload a list of named WAV files into RAM bytearrays.
 
     Like :func:`resolve_sounds` but reads the entire PCM payload into
     memory.  Returns a list parallel to *names* — bytearray or None.
+
+    on_progress: optional callable(loaded, total) called after each file,
+    where loaded is 1-based and total is len(names).  Used to drive a
+    loading indicator in the calling UI.
     """
     buffers = []
-    for name in names:
+    total = len(names)
+    for i, name in enumerate(names):
         buf = preload_wav(directory + name + ".wav")
         buffers.append(buf)
+        if on_progress:
+            on_progress(i + 1, total)
     return buffers

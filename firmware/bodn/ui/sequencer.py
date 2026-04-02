@@ -30,6 +30,15 @@ ENC_A = const(1)  # config.ENC_A — BPM control
 # Drum sample names on SD — index matches arcade button hardware index
 _DRUM_NAMES = ["hihat", "snare", "kick", "tom", "crash"]
 
+
+def preload_sequencer_assets(on_progress=None):
+    """Preload drum kit WAVs into PSRAM.  Call from the mode factory so the
+    home screen can show a loading bar while the SD reads happen."""
+    from bodn.assets import preload_sounds
+
+    return preload_sounds("/sounds/kits/basic/", _DRUM_NAMES, on_progress=on_progress)
+
+
 # Grid layout constants (computed once in enter)
 _HEADER_H = const(22)
 _FOOTER_H = const(26)
@@ -51,6 +60,7 @@ class SequencerScreen(Screen):
         settings=None,
         secondary_screen=None,
         on_exit=None,
+        drum_bufs=None,
     ):
         self._np = np
         self._overlay = overlay
@@ -63,7 +73,7 @@ class SequencerScreen(Screen):
         self._pause = PauseMenu(settings=settings)
 
         self._engine = SequencerEngine()
-        self._drum_bufs = None  # PSRAM preloaded percussion WAVs
+        self._drum_bufs = drum_bufs  # PSRAM preloaded percussion WAVs (or None)
         self._prev_step = -1
         self._prev_sw0 = None
         self._prev_sw1 = None
@@ -100,14 +110,13 @@ class SequencerScreen(Screen):
         self._prev_sw0 = sw[0] if len(sw) > 0 else False
         self._prev_sw1 = sw[1] if len(sw) > 1 else False
 
-        # Preload drum samples into PSRAM
-        try:
-            from bodn.assets import preload_sounds
-
-            self._drum_bufs = preload_sounds("/sounds/kits/basic/", _DRUM_NAMES)
-        except Exception as e:
-            print("seq: drum preload error:", e)
-            self._drum_bufs = [None] * NUM_PERC_TRACKS
+        # Preload drum samples into PSRAM (skip if already loaded by factory)
+        if self._drum_bufs is None:
+            try:
+                self._drum_bufs = preload_sequencer_assets()
+            except Exception as e:
+                print("seq: drum preload error:", e)
+                self._drum_bufs = [None] * NUM_PERC_TRACKS
 
         self._last_ms = time.ticks_ms()
 
