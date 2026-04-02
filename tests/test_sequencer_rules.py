@@ -152,10 +152,9 @@ def test_set_steps_8_to_16():
     assert eng.perc[0][4] == 1
     assert eng.melody[2] == 4
 
-    # Second half is duplicate of first
-    assert eng.perc[0][8] == 1
-    assert eng.perc[0][12] == 1
-    assert eng.melody[10] == 4
+    # Second half is silence — notes keep their position in time
+    assert all(eng.perc[0][s] == 0 for s in range(8, 16))
+    assert all(eng.melody[s] == 0 for s in range(8, 16))
 
 
 def test_set_steps_16_to_8():
@@ -247,16 +246,17 @@ def test_melody_freqs_length():
 
 
 def test_timing_formula():
+    # Each step is always one 8th note (half a beat), independent of step count.
     eng = SequencerEngine(n_steps=8)
     eng.set_bpm(90)
-    # 60000 * 4 / (90 * 8) = 333ms
+    # 60000 / (90 * 2) = 333ms
     assert eng._ms_per_step == 333
 
     eng.set_bpm(120)
-    # 60000 * 4 / (120 * 8) = 250ms
+    # 60000 / (120 * 2) = 250ms
     assert eng._ms_per_step == 250
 
+    # 16-step mode has the same step duration — the loop is just twice as long
     eng16 = SequencerEngine(n_steps=16)
     eng16.set_bpm(90)
-    # 60000 * 4 / (90 * 16) = 166ms
-    assert eng16._ms_per_step == 166
+    assert eng16._ms_per_step == 333

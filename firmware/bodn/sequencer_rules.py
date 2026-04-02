@@ -56,12 +56,14 @@ class SequencerEngine:
     # ------------------------------------------------------------------
 
     def _recompute_timing(self):
-        """Recompute ms_per_step from bpm and n_steps.
+        """Recompute ms_per_step from bpm.
 
-        A bar is always 4 beats regardless of step count.
-        8 steps → 2 steps per beat, 16 steps → 4 steps per beat.
+        Each step is always one 8th note (half a beat), regardless of step count.
+        8 steps → one 4/4 bar (2.67 s at 90 BPM).
+        16 steps → two 4/4 bars (5.33 s at 90 BPM).
+        Flipping the switch extends or trims the loop length; it never changes speed.
         """
-        self._ms_per_step = 60_000 * 4 // (self.bpm * self.n_steps)
+        self._ms_per_step = 60_000 // (self.bpm * 2)
 
     def advance(self, delta_ms):
         """Accumulate time and advance the playhead.
@@ -142,23 +144,21 @@ class SequencerEngine:
     def set_steps(self, n):
         """Resize grid to n steps (8 or 16).
 
-        8→16: duplicate the pattern into the second half.
-        16→8: keep only the first 8 steps.
+        8→16: extend the loop with silence — existing notes keep their position in time.
+        16→8: truncate to the first 8 steps.
         """
         if n == self.n_steps:
             return
         old_n = self.n_steps
         self.n_steps = n
         if n > old_n:
-            # Expand: duplicate pattern
+            # Expand: keep existing notes, fill new steps with silence
             for t in range(NUM_PERC_TRACKS):
                 new_track = bytearray(n)
                 new_track[:old_n] = self.perc[t]
-                new_track[old_n:n] = self.perc[t][: n - old_n]
                 self.perc[t] = new_track
             new_mel = bytearray(n)
             new_mel[:old_n] = self.melody
-            new_mel[old_n:n] = self.melody[: n - old_n]
             self.melody = new_mel
         else:
             # Shrink: truncate
