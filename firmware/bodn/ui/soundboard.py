@@ -68,10 +68,18 @@ class SoundboardScreen(Screen):
     """
 
     def __init__(
-        self, np, overlay, audio, settings=None, secondary_screen=None, on_exit=None
+        self,
+        np,
+        overlay,
+        audio,
+        arcade=None,
+        settings=None,
+        secondary_screen=None,
+        on_exit=None,
     ):
         self._np = np
         self._overlay = overlay
+        self._arcade = arcade
         self._audio = audio
         self._secondary = secondary_screen
         self._on_exit = on_exit
@@ -114,6 +122,8 @@ class SoundboardScreen(Screen):
         self._flash = None
 
     def exit(self):
+        if self._arcade:
+            self._arcade.all_off()
         if self._on_exit:
             self._on_exit()
 
@@ -274,20 +284,17 @@ class SoundboardScreen(Screen):
         np.write()
 
         # Arcade button LEDs via PCA9685
-        try:
-            from bodn.arcade import set_led, pulse_led
-
+        arc = self._arcade
+        if arc:
             for i in range(NUM_ARCADE_BUTTONS):
                 if self._flash and self._flash[0] == "arc" and self._flash[1] == i:
-                    set_led(i, 255)
+                    arc.on(i)
                 elif i in state.playing_arcades:
-                    pulse_led(i, frame, speed=4)
+                    arc.pulse(i, frame, speed=4)
                 elif state.arcade_present[i]:
-                    set_led(i, 60)
+                    arc.glow(i)
                 else:
-                    set_led(i, 10)
-        except Exception:
-            pass
+                    arc.off(i)
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:

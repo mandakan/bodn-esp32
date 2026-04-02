@@ -460,9 +460,9 @@ class StoryScreen(Screen):
             n_options = 3 if len(self._stories) > 1 else 2
             for i in range(N_ARCADE):
                 if i < n_options:
-                    self._arcade.pulse_led(i, frame, speed=1)
+                    self._arcade.pulse(i, frame, speed=1)
                 else:
-                    self._arcade.set_led(i, 0)
+                    self._arcade.off(i)
 
     def _update_leds(self, frame):
         """Write NeoPixels and arcade LEDs."""
@@ -497,14 +497,14 @@ class StoryScreen(Screen):
             np[i] = leds[i]
         np.write()
 
-        # Arcade LEDs: light up available choices during CHOOSING
+        # Arcade LEDs: pulse available choices, off otherwise
         if self._arcade:
             if state == CHOOSING:
                 for i in range(N_ARCADE):
                     if i < self._engine.choice_count:
-                        self._arcade.pulse_led(i, frame, speed=1)
+                        self._arcade.pulse(i, frame, speed=1)
                     else:
-                        self._arcade.set_led(i, 0)
+                        self._arcade.off(i)
             else:
                 self._arcade.all_off()
 

@@ -358,6 +358,7 @@ def create_ui(
             np,
             overlay,
             audio=audio,
+            arcade=arcade,
             settings=settings,
             secondary_screen=sb_sec,
             on_exit=_reset_secondary,
@@ -431,7 +432,7 @@ def create_ui(
         "sequencer": _make_sequencer,
         "demo": lambda: (
             _reset_secondary(),
-            DemoScreen(np, overlay, settings=settings),
+            DemoScreen(np, overlay, arcade=arcade, settings=settings),
         )[1],
         "clock": lambda: (_reset_secondary(), ClockScreen(settings=settings))[1],
         "settings": _make_settings,
