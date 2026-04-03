@@ -574,7 +574,11 @@ class SpaceScreen(Screen):
             return
 
         if state == SUCCESS:
-            arc.all_on()
+            # Celebratory burst that decays
+            if not any(arc._flash_ttl):
+                for i in range(5):
+                    arc.flash(i, duration=15)
+            arc.tick_flash()
 
         elif state in (ACTIVE, HINT):
             sc = self._engine.scenario_type
@@ -586,13 +590,13 @@ class SpaceScreen(Screen):
                     else:
                         arc.glow(i)
             else:
-                arc.all_pulse(frame, speed=1)
+                arc.wave(frame, speed=2)
 
         elif state == ANNOUNCE:
             arc.all_blink(frame, speed=4)
 
         elif state == CRUISING:
-            arc.all_pulse(frame, speed=1)
+            arc.wave(frame, speed=1)
 
         else:
             arc.all_off()

@@ -499,7 +499,7 @@ class StoryScreen(Screen):
             np[i] = leds[i]
         np.write()
 
-        # Arcade LEDs: pulse available choices, off otherwise
+        # Arcade LEDs
         if self._arcade:
             if state == CHOOSING:
                 for i in range(N_ARCADE):
@@ -507,6 +507,10 @@ class StoryScreen(Screen):
                         self._arcade.pulse(i, frame, speed=1)
                     else:
                         self._arcade.off(i)
+            elif state == NARRATING:
+                self._arcade.wave(frame, speed=1)
+            elif state == ENDING:
+                self._arcade.wave(frame, speed=2)
             else:
                 self._arcade.all_off()
             self._arcade.flush()
