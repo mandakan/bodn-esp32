@@ -106,6 +106,12 @@ class FlodeScreen(Screen):
         self._usable_y0 = 0
         self._usable_h = 0
 
+        # Incremental render state
+        self._flow_scene_drawn = False  # True after static parts drawn for FLOWING
+        self._flow_last_head_x = 0  # last flow head pixel position
+        self._cel_text_drawn = False  # True after celebrate text drawn once
+        self._cel_last_bar_w = []  # last drawn bar width per bar
+
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
@@ -235,7 +241,8 @@ class FlodeScreen(Screen):
 
         # Celebration state
         if eng.state == CELEBRATE:
-            if eng.update_celebration():
+            skip = self._any_input(inp)
+            if skip or eng.update_celebration():
                 # Celebration done — advance or restart
                 if eng.has_next_level():
                     eng.start_level(eng.level + 1)
@@ -259,9 +266,12 @@ class FlodeScreen(Screen):
 
         # Flow animation — shows the solution working
         if eng.state == FLOWING:
-            if eng.update_flowing():
+            skip = self._any_input(inp)
+            if skip or eng.update_flowing():
                 eng.start_celebration()
                 self._full_clear = True
+                self._cel_text_drawn = False
+                self._cel_last_bar_w = []
                 if self._secondary:
                     self._secondary.set_emotion(HAPPY)
             self._dirty = True
@@ -273,6 +283,8 @@ class FlodeScreen(Screen):
             eng.start_flowing()
             self._dirty = True
             self._full_clear = True
+            self._flow_scene_drawn = False
+            self._flow_last_head_x = 0
             self._leds_dirty = True
             return
 
@@ -323,6 +335,23 @@ class FlodeScreen(Screen):
         if self._leds_dirty:
             self._leds_dirty = False
             self._update_leds(frame)
+
+    @staticmethod
+    def _any_input(inp):
+        """Return True if any button or encoder was just pressed/turned."""
+        for v in inp.btn_just_pressed:
+            if v:
+                return True
+        for v in inp.arc_just_pressed:
+            if v:
+                return True
+        for v in inp.enc_btn_pressed:
+            if v:
+                return True
+        for v in inp.enc_delta:
+            if v:
+                return True
+        return False
 
     def _update_leds(self, frame):
         """Write LED state based on game state."""
@@ -405,6 +434,19 @@ class FlodeScreen(Screen):
 
         w = theme.width
         rgb = theme.rgb
+        is_flowing = eng.state == FLOWING
+
+        # During FLOWING, static scene (margins, indicators, segments) only
+        # needs to be drawn once — segments don't move.
+        if is_flowing and self._flow_scene_drawn:
+            # Incremental: only extend the flow line
+            flow_frac = eng._flow_frame
+            total_frames = (eng.num_segments + 1) * 12  # FLOW_FRAMES_PER_SEG
+            self._render_animated_flow(tft, theme, flow_frac, total_frames)
+            return
+
+        if is_flowing:
+            self._flow_scene_drawn = True
 
         wall_c = rgb(*_WALL_COLOR)
         wall_sel_c = rgb(*_WALL_SELECTED)
@@ -414,7 +456,6 @@ class FlodeScreen(Screen):
         seg_w = self._seg_w
         gap_h = self._gap_h
         flow_y = self._flow_y
-        is_flowing = eng.state == FLOWING
 
         # Clear margins and flow line area
         tft.fill_rect(0, self._usable_y0, _MARGIN_LEFT, self._usable_h, theme.BLACK)
@@ -519,68 +560,83 @@ class FlodeScreen(Screen):
                 )
 
     def _render_animated_flow(self, tft, theme, flow_frame, total_frames):
-        """Draw flow animating left to right through all segments."""
+        """Incrementally extend flow line from last position to current."""
         eng = self._engine
         w = theme.width
         flow_c = theme.rgb(*_FLOW_COLOR)
         glow_c = theme.rgb(100, 255, 200)  # bright leading edge
         flow_h = max(4, self._gap_h // 3)
         fy = self._flow_y - flow_h // 2
-        n = eng.num_segments
 
-        # Calculate how far the flow has reached as a pixel x position
-        # Source → seg0 → gap → seg1 → ... → segN → target
         source_x = _MARGIN_LEFT - 2
         target_x = w - _MARGIN_RIGHT + 2
+        total_dist = target_x - source_x
 
-        # Build waypoints: [source, seg0_start, seg0_end, seg1_start, ..., target]
-        waypoints = [source_x]
-        for i in range(n):
-            waypoints.append(self._seg_x[i])
-            waypoints.append(self._seg_x[i] + self._seg_w)
-        waypoints.append(target_x)
-
-        # Total pixel distance
-        total_dist = waypoints[-1] - waypoints[0]
-        # Current flow head position
         progress = min(flow_frame * 256 // total_frames, 256)
         head_x = source_x + total_dist * progress // 256
+        prev_x = self._flow_last_head_x
 
-        # Draw the filled flow from source to head
-        if head_x > source_x:
-            tft.fill_rect(source_x, fy, head_x - source_x, flow_h, flow_c)
+        if head_x > prev_x:
+            # Overwrite old glow with normal flow color
+            if prev_x > source_x:
+                old_edge = min(8, prev_x - source_x)
+                if old_edge > 0:
+                    tft.fill_rect(prev_x - old_edge, fy, old_edge, flow_h, flow_c)
+            # Draw new portion
+            tft.fill_rect(prev_x, fy, head_x - prev_x, flow_h, flow_c)
 
         # Bright leading edge
         edge_w = min(8, head_x - source_x)
         if edge_w > 0:
             tft.fill_rect(head_x - edge_w, fy, edge_w, flow_h, glow_c)
 
+        self._flow_last_head_x = head_x
+
     def _render_celebrate(self, tft, theme, frame):
-        """Celebration screen — big star burst effect."""
+        """Celebration screen — incremental bar expansion + one-shot text."""
         eng = self._engine
         w = theme.width
         h = theme.height
         progress = eng.celebrate_progress
 
-        # Expanding colored bars
+        # Expanding colored bars — only draw new pixels
         flow_c = theme.rgb(*_FLOW_COLOR)
         n_bars = 6
+        if not self._cel_last_bar_w:
+            self._cel_last_bar_w = [0] * n_bars
         for i in range(n_bars):
             bar_h = h // n_bars
             bar_y = i * bar_h
             bar_w = w * min(progress + i * 10, 100) // 100
-            bar_x = (w - bar_w) // 2
-            tft.fill_rect(bar_x, bar_y, bar_w, bar_h - 2, flow_c)
+            prev_w = self._cel_last_bar_w[i]
+            if bar_w > prev_w:
+                # Extend left side
+                new_x = (w - bar_w) // 2
+                old_x = (w - prev_w) // 2
+                strip_w = old_x - new_x
+                if strip_w > 0:
+                    tft.fill_rect(new_x, bar_y, strip_w, bar_h - 2, flow_c)
+                # Extend right side
+                old_right = (w + prev_w) // 2
+                new_right = (w + bar_w) // 2
+                strip_w = new_right - old_right
+                if strip_w > 0:
+                    tft.fill_rect(old_right, bar_y, strip_w, bar_h - 2, flow_c)
+                self._cel_last_bar_w[i] = bar_w
 
-        # Level complete text
-        draw_centered(tft, t("flode_complete"), h // 2 - 20, theme.YELLOW, w, scale=2)
-        if eng.has_next_level():
+        # Text drawn once
+        if not self._cel_text_drawn:
+            self._cel_text_drawn = True
             draw_centered(
-                tft,
-                t("flode_next", eng.level + 1),
-                h // 2 + 16,
-                theme.WHITE,
-                w,
+                tft, t("flode_complete"), h // 2 - 20, theme.YELLOW, w, scale=2
             )
-        else:
-            draw_centered(tft, t("flode_all_done"), h // 2 + 16, theme.YELLOW, w)
+            if eng.has_next_level():
+                draw_centered(
+                    tft,
+                    t("flode_next", eng.level + 1),
+                    h // 2 + 16,
+                    theme.WHITE,
+                    w,
+                )
+            else:
+                draw_centered(tft, t("flode_all_done"), h // 2 + 16, theme.YELLOW, w)
