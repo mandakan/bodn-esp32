@@ -561,7 +561,6 @@ class FlodeScreen(Screen):
 
     def _render_animated_flow(self, tft, theme, flow_frame, total_frames):
         """Incrementally extend flow line from last position to current."""
-        eng = self._engine
         w = theme.width
         flow_c = theme.rgb(*_FLOW_COLOR)
         glow_c = theme.rgb(100, 255, 200)  # bright leading edge
