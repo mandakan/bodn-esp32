@@ -40,9 +40,18 @@ class SimonScreen(Screen):
     Hold nav encoder button to open the pause menu.
     """
 
-    def __init__(self, np, overlay, settings=None, secondary_screen=None, on_exit=None):
+    def __init__(
+        self,
+        np,
+        overlay,
+        arcade=None,
+        settings=None,
+        secondary_screen=None,
+        on_exit=None,
+    ):
         self._np = np
         self._overlay = overlay
+        self._arcade = arcade
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = SimonEngine()
@@ -64,6 +73,9 @@ class SimonScreen(Screen):
         self._full_clear = True
 
     def exit(self):
+        if self._arcade:
+            self._arcade.all_off()
+            self._arcade.flush()
         if self._on_exit:
             self._on_exit()
 
@@ -152,6 +164,27 @@ class SimonScreen(Screen):
             for i in range(n):
                 np[i] = leds[i]
             np.write()
+
+        # Arcade LEDs: animated per-state (runs every frame)
+        arc = self._arcade
+        if arc:
+            state = self._engine.state
+            if state == WIN:
+                if not any(arc._flash_ttl):
+                    for i in range(5):
+                        arc.flash(i, duration=15)
+                arc.tick_flash()
+            elif state == SHOWING:
+                arc.all_pulse(frame, speed=2)
+            elif state in (READY, GAME_OVER):
+                arc.wave(frame, speed=1)
+            elif state == WAITING:
+                arc.wave(frame, speed=2)
+            elif state == FAIL:
+                arc.all_glow()
+            else:
+                arc.all_off()
+            arc.flush()
 
     def _push_dot_row(self):
         """Partial push of just the sequence dot row during SHOWING.

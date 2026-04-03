@@ -82,9 +82,18 @@ class GardenScreen(Screen):
     Hold nav encoder button to open the pause menu.
     """
 
-    def __init__(self, np, overlay, settings=None, secondary_screen=None, on_exit=None):
+    def __init__(
+        self,
+        np,
+        overlay,
+        arcade=None,
+        settings=None,
+        secondary_screen=None,
+        on_exit=None,
+    ):
         self._np = np
         self._overlay = overlay
+        self._arcade = arcade
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._settings = settings or {}
@@ -150,8 +159,16 @@ class GardenScreen(Screen):
         self._running = False
         self._plant_count = 0
         self._last_step_ms = time.ticks_ms()
+        arc = self._arcade
+        if arc:
+            arc.wave(0, speed=1)
+            arc.flush()
 
     def exit(self):
+        arc = self._arcade
+        if arc:
+            arc.all_off()
+            arc.flush()
         if self._on_exit:
             self._on_exit()
 
@@ -339,6 +356,20 @@ class GardenScreen(Screen):
         for i in range(N_LEDS):
             np[i] = leds[i]
         np.write()
+
+        # Arcade LEDs — reflect garden state
+        arc = self._arcade
+        if arc:
+            if self._running and pop > 0:
+                # Evolving: synchronized pulse at evolution speed
+                arc.all_pulse(frame, speed=2)
+            elif pop > 0:
+                # Paused with cells: gentle glow
+                arc.all_glow()
+            else:
+                # Empty garden: inviting wave
+                arc.wave(frame, speed=1)
+            arc.flush()
 
     def _dominant_grid_color(self):
         """Find the most common cell color in the grid."""

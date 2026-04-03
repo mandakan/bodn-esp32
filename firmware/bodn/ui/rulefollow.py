@@ -62,6 +62,7 @@ class RuleFollowScreen(Screen):
         self,
         np,
         overlay,
+        arcade=None,
         audio=None,
         settings=None,
         secondary_screen=None,
@@ -69,6 +70,7 @@ class RuleFollowScreen(Screen):
     ):
         self._np = np
         self._overlay = overlay
+        self._arcade = arcade
         self._audio = audio
         self._secondary = secondary_screen
         self._on_exit = on_exit
@@ -90,6 +92,9 @@ class RuleFollowScreen(Screen):
         self._full_clear = True
 
     def exit(self):
+        if self._arcade:
+            self._arcade.all_off()
+            self._arcade.flush()
         if self._on_exit:
             self._on_exit()
 
@@ -179,6 +184,29 @@ class RuleFollowScreen(Screen):
             for i in range(n):
                 np[i] = leds[i]
             np.write()
+
+        # Arcade LEDs: animated per-state (runs every frame)
+        arc = self._arcade
+        if arc:
+            state = self._engine.state
+            if state == CORRECT:
+                if not any(arc._flash_ttl):
+                    for i in range(5):
+                        arc.flash(i, duration=15)
+                arc.tick_flash()
+            elif state == STIMULUS:
+                arc.all_blink(frame, speed=3)
+            elif state == SHOW_RULE:
+                arc.all_pulse(frame, speed=1)
+            elif state == RULE_SWITCH:
+                arc.wave(frame, speed=3)
+            elif state in (READY, GAME_OVER):
+                arc.wave(frame, speed=1)
+            elif state == WRONG:
+                arc.all_glow()
+            else:
+                arc.all_off()
+            arc.flush()
 
     def _play_audio(self, prev_state, new_state):
         """Play tone feedback on state transitions."""
