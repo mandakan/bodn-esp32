@@ -41,6 +41,7 @@ def test_btn_just_pressed_fires_on_transition():
     # Button 0 not pressed
     t[0] = 0
     inp.scan()
+    inp.consume()
     assert not inp.btn_just_pressed[0]
 
     # Press button 0 — register the change
@@ -49,15 +50,17 @@ def test_btn_just_pressed_fires_on_transition():
     inp.scan()
     assert not inp.btn_held[0]  # not yet stable
 
-    # Wait for debounce to settle (30ms after change)
+    # Wait for debounce to settle (15ms after change)
     t[0] = 50
     inp.scan()
+    inp.consume()
     assert inp.btn_just_pressed[0]
     assert inp.btn_held[0]
 
     # Still held — should NOT be just_pressed again
     t[0] = 100
     inp.scan()
+    inp.consume()
     assert not inp.btn_just_pressed[0]
     assert inp.btn_held[0]
 
@@ -70,6 +73,7 @@ def test_btn_just_released():
     inp.scan()
     t[0] = 50
     inp.scan()
+    inp.consume()
     assert inp.btn_held[0]
 
     # Release (register + settle)
@@ -78,6 +82,7 @@ def test_btn_just_released():
     inp.scan()
     t[0] = 100
     inp.scan()
+    inp.consume()
     assert inp.btn_just_released[0]
     assert not inp.btn_held[0]
 
@@ -110,17 +115,20 @@ def test_enc_delta():
     inp, _, _, encs, t = make_input()
     t[0] = 0
     inp.scan()
+    inp.consume()
     assert inp.enc_delta[0] == 0
 
     encs[0].value = 5
     t[0] = 30
     inp.scan()
+    inp.consume()
     assert inp.enc_delta[0] == 5
     assert inp.enc_pos[0] == 5
 
     # No change
     t[0] = 60
     inp.scan()
+    inp.consume()
     assert inp.enc_delta[0] == 0
 
 
@@ -128,19 +136,22 @@ def test_enc_btn_pressed_edge_only():
     inp, _, _, encs, t = make_input()
     t[0] = 0
     inp.scan()
+    inp.consume()
     assert not inp.enc_btn_pressed[1]
 
-    # Press encoder 1 button (register + settle past 50ms debounce)
+    # Press encoder 1 button (register + settle past 15ms debounce)
     encs[1].sw._val = 0
     t[0] = 10
     inp.scan()
     t[0] = 70
     inp.scan()
+    inp.consume()
     assert inp.enc_btn_pressed[1]
 
     # Still held — no edge
     t[0] = 120
     inp.scan()
+    inp.consume()
     assert not inp.enc_btn_pressed[1]
 
 
@@ -148,6 +159,7 @@ def test_any_btn_pressed():
     inp, btns, _, _, t = make_input()
     t[0] = 0
     inp.scan()
+    inp.consume()
     assert not inp.any_btn_pressed()
 
     # Press button 3 (register + settle)
@@ -156,6 +168,7 @@ def test_any_btn_pressed():
     inp.scan()
     t[0] = 50
     inp.scan()
+    inp.consume()
     assert inp.any_btn_pressed()
     assert inp.first_btn_pressed() == 3
 
@@ -172,11 +185,13 @@ def test_enc_btn_held():
     inp.scan()
     t[0] = 70
     inp.scan()
+    inp.consume()  # consume the press edge
     assert inp.enc_btn_held[0]
 
     # Still held
     t[0] = 200
     inp.scan()
+    inp.consume()
     assert inp.enc_btn_held[0]
     assert not inp.enc_btn_pressed[0]  # no edge
 

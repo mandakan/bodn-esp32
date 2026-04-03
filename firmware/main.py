@@ -476,19 +476,33 @@ def create_ui(
 # ---------------------------------------------------------------------------
 
 
-async def primary_task(
-    manager, settings, inp, encoders, mcp, mcp2, idle_tracker, power_mgr
-):
-    """Input scanning + primary display: ~30 ms tick."""
-    print("primary_task started, debug_input={}".format(settings.get("debug_input")))
-    frame = 0
-    errors = 0
+async def input_scan_task(mcp, mcp2, inp):
+    """Fast input scanning at ~200 Hz.
+
+    Reads MCP23017 port caches and runs debounce/edge detection.
+    Edges are latched until the display task calls inp.consume().
+    """
     while True:
         try:
             if mcp:
                 mcp.refresh()
             if mcp2:
                 mcp2.refresh()
+            inp.scan()
+        except Exception:
+            pass  # I2C glitches — next scan will recover
+        await asyncio.sleep_ms(5)
+
+
+async def primary_task(
+    manager, settings, inp, encoders, mcp, mcp2, idle_tracker, power_mgr
+):
+    """Display update + power management."""
+    print("primary_task started, debug_input={}".format(settings.get("debug_input")))
+    frame = 0
+    errors = 0
+    while True:
+        try:
             manager.tick()
         except KeyboardInterrupt:
             raise
@@ -838,6 +852,7 @@ async def main():
     #         audio.play_sound("start")
 
     tasks = [
+        input_scan_task(mcp, mcp2, inp),
         primary_task(
             manager, settings, inp, encoders, mcp, mcp2, idle_tracker, power_mgr
         ),
