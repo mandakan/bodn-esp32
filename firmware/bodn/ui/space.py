@@ -270,6 +270,7 @@ class SpaceScreen(Screen):
             self._bridge_buf = bufs[0] if bufs else None
         if self._arcade:
             self._arcade.all_off()
+            self._arcade.flush()
         # Welcome message
         if self._audio:
             try:
@@ -285,6 +286,7 @@ class SpaceScreen(Screen):
             self._audio.stop("sfx")
         if self._arcade:
             self._arcade.all_off()
+            self._arcade.flush()
         # Release pre-loaded PCM buffers back to GC
         self._btn_bufs = None
         self._arc_bufs = None
@@ -594,6 +596,8 @@ class SpaceScreen(Screen):
 
         else:
             arc.all_off()
+
+        arc.flush()
 
     def _write_leds(self, state, frame):
         """Update NeoPixel sticks and lid ring."""

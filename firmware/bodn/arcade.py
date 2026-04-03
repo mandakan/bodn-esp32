@@ -17,9 +17,8 @@ from micropython import const
 _N_BUTTONS = const(5)
 _MAX_DUTY = const(4095)
 
-# Brightness presets (0–255)
-_GLOW = const(12)
-_ON = const(255)
+# Brightness presets (pre-computed as 12-bit duty)
+_GLOW_DUTY = const(192)  # 12/255 * 4095 ≈ 192
 
 
 class ArcadeButtons:
@@ -27,6 +26,11 @@ class ArcadeButtons:
 
     Switch inputs come from MCPPin objects (active-low with pull-ups).
     LED outputs go through PCA9685 PWM channels.
+
+    LED writes are deferred: semantic methods update a target buffer,
+    and flush() writes only the changed channels to I2C in a single
+    batch transaction. Call flush() once per frame after all LED
+    updates are done.
 
     Args:
         mcp: MCP23017 instance.
@@ -39,9 +43,16 @@ class ArcadeButtons:
         self._pins = [mcp.pin(p) for p in mcp_pins]
         self._pwm = pwm
         self._channels = pwm_channels or []
+        # Current duty on hardware (last flushed)
         self._duty = [0] * _N_BUTTONS
+        # Desired duty (set by semantic methods, flushed by flush())
+        self._target = [0] * _N_BUTTONS
         # Flash state per button: frames remaining (0 = inactive)
         self._flash_ttl = [0] * _N_BUTTONS
+        # Per-button pulse start frame (-1 = not pulsing)
+        self._pulse_start = [-1] * _N_BUTTONS
+        # First arcade channel (for batch writes)
+        self._ch_start = self._channels[0] if self._channels else 0
 
     @property
     def count(self):
@@ -56,85 +67,168 @@ class ArcadeButtons:
         """Return all MCPPin objects as a list (for InputState)."""
         return self._pins
 
+    # --- Flush (call once per frame after all LED updates) ---
+
+    def flush(self):
+        """Write changed LED duties to PCA9685 in a single I2C batch.
+
+        Compares target buffer to current hardware state. Only channels
+        that actually changed are written, and contiguous dirty channels
+        are batched into one I2C transaction.
+        """
+        if not self._pwm:
+            return
+        duty = self._duty
+        target = self._target
+        channels = self._channels
+        n_ch = len(channels)
+        # Check if anything changed
+        dirty = False
+        for i in range(_N_BUTTONS):
+            if target[i] != duty[i]:
+                dirty = True
+                break
+        if not dirty:
+            return
+        # All same value? Use batch write for all 5 in one transaction
+        t0 = target[0]
+        uniform = True
+        for i in range(1, _N_BUTTONS):
+            if target[i] != t0:
+                uniform = False
+                break
+        if uniform and n_ch == _N_BUTTONS:
+            self._pwm.set_duty_batch(self._ch_start, target)
+        else:
+            # Write only changed channels individually
+            for i in range(_N_BUTTONS):
+                if target[i] != duty[i] and i < n_ch:
+                    self._pwm.set_duty(channels[i], target[i])
+        # Sync current state
+        for i in range(_N_BUTTONS):
+            duty[i] = target[i]
+
     # --- Raw LED control (low-level) ---
 
     def set_led(self, index, brightness):
-        """Set LED brightness for one arcade button (0–255)."""
-        duty = (brightness * _MAX_DUTY) // 255 if brightness > 0 else 0
-        self._duty[index] = duty
-        if self._pwm and index < len(self._channels):
-            self._pwm.set_duty(self._channels[index], duty)
+        """Set target LED brightness for one arcade button (0–255).
+
+        Does not write to I2C — call flush() after all updates.
+        """
+        self._target[index] = (brightness * _MAX_DUTY) // 255 if brightness > 0 else 0
 
     def set_all_leds(self, brightness):
-        """Set all 5 arcade LEDs to the same brightness (0–255)."""
+        """Set all 5 arcade LEDs to the same target brightness (0–255)."""
+        duty = (brightness * _MAX_DUTY) // 255 if brightness > 0 else 0
+        target = self._target
         for i in range(_N_BUTTONS):
-            self.set_led(i, brightness)
+            target[i] = duty
 
     def set_led_duty(self, index, duty):
-        """Set raw 12-bit PWM duty for one arcade LED (0–4095)."""
-        self._duty[index] = duty
-        if self._pwm and index < len(self._channels):
-            self._pwm.set_duty(self._channels[index], duty)
+        """Set target raw 12-bit PWM duty for one arcade LED (0–4095)."""
+        self._target[index] = duty
 
     def get_led_duty(self, index):
-        """Return the last-set duty for an arcade LED."""
-        return self._duty[index]
+        """Return the target duty for an arcade LED."""
+        return self._target[index]
 
     # --- Semantic LED states ---
     # Game modes should prefer these over raw set_led calls.
-    # Animated states (pulse, blink, flash) must be called every frame.
+    # All methods update the target buffer; call flush() once per frame.
 
     def off(self, index):
         """LED dark — button not relevant in current context."""
-        self.set_led(index, 0)
+        self._target[index] = 0
+        self._pulse_start[index] = -1
 
     def all_off(self):
         """Turn off all arcade LEDs."""
-        self.set_all_leds(0)
+        target = self._target
+        ps = self._pulse_start
+        for i in range(_N_BUTTONS):
+            target[i] = 0
+            ps[i] = -1
 
     def glow(self, index):
         """Dim standby — button available but not actively needed."""
-        self.set_led(index, _GLOW)
+        self._target[index] = _GLOW_DUTY
+        self._pulse_start[index] = -1
 
     def all_glow(self):
         """All LEDs to dim standby."""
-        self.set_all_leds(_GLOW)
+        target = self._target
+        ps = self._pulse_start
+        for i in range(_N_BUTTONS):
+            target[i] = _GLOW_DUTY
+            ps[i] = -1
 
     def on(self, index):
         """Bright solid — active / pressed / selected."""
-        self.set_led(index, _ON)
+        self._target[index] = _MAX_DUTY
+        self._pulse_start[index] = -1
 
     def all_on(self):
         """All LEDs bright solid."""
-        self.set_all_leds(_ON)
+        target = self._target
+        ps = self._pulse_start
+        for i in range(_N_BUTTONS):
+            target[i] = _MAX_DUTY
+            ps[i] = -1
 
     def pulse(self, index, frame, speed=2):
         """Smooth triangle-wave breathing — "press me" / awaiting input.
 
-        Call every frame for animation. Speed 1=slow, 4=fast, 8=urgent.
+        Each button starts its breath cycle from zero when it first
+        enters pulse mode. Call every frame for animation.
+        Speed 1=slow, 4=fast, 8=urgent.
         """
-        phase = (frame * speed) & 0xFF
+        ps = self._pulse_start
+        if ps[index] < 0:
+            ps[index] = frame
+        phase = ((frame - ps[index]) * speed) & 0xFF
         v = phase if phase < 128 else 255 - phase
-        self.set_led(index, v)
+        self._target[index] = (v * _MAX_DUTY) // 255
 
     def all_pulse(self, frame, speed=2):
-        """Pulse all LEDs in unison."""
+        """Pulse all LEDs in unison (synchronized, no per-button offset)."""
         phase = (frame * speed) & 0xFF
         v = phase if phase < 128 else 0xFF - phase
-        self.set_all_leds(v)
+        duty = (v * _MAX_DUTY) // 255
+        target = self._target
+        ps = self._pulse_start
+        for i in range(_N_BUTTONS):
+            target[i] = duty
+            ps[i] = -1
 
     def blink(self, index, frame, speed=4):
         """Fast on/off flash — alert / urgent attention.
 
         Call every frame. Speed controls blink rate (higher = faster).
         """
-        on = ((frame * speed) >> 5) & 1
-        self.set_led(index, _ON if on else 0)
+        self._target[index] = _MAX_DUTY if ((frame * speed) >> 5) & 1 else 0
+        self._pulse_start[index] = -1
+
+    def wave(self, frame, speed=2, spacing=32):
+        """Staggered pulse across all buttons — ripple/wave effect.
+
+        Each button is offset by `spacing` phase steps from its neighbour,
+        creating a left-to-right wave. Speed and spacing control the look:
+        small spacing = tight wave, large spacing = loose cascade.
+        """
+        target = self._target
+        for i in range(_N_BUTTONS):
+            phase = ((frame * speed) - i * spacing) & 0xFF
+            v = phase if phase < 128 else 255 - phase
+            target[i] = (v * _MAX_DUTY) // 255
 
     def all_blink(self, frame, speed=4):
         """Blink all LEDs in unison."""
-        on = ((frame * speed) >> 5) & 1
-        self.set_all_leds(_ON if on else 0)
+        duty = _MAX_DUTY if ((frame * speed) >> 5) & 1 else 0
+        target = self._target
+        ps = self._pulse_start
+        for i in range(_N_BUTTONS):
+            target[i] = duty
+            ps[i] = -1
 
     def flash(self, index, duration=9):
         """Start a single bright burst that decays over `duration` frames.
@@ -142,7 +236,8 @@ class ArcadeButtons:
         Call tick_flash() every frame to animate the decay.
         """
         self._flash_ttl[index] = duration
-        self.set_led(index, _ON)
+        self._target[index] = _MAX_DUTY
+        self._pulse_start[index] = -1
 
     def tick_flash(self):
         """Advance flash decay for all buttons. Call once per frame.
@@ -150,16 +245,17 @@ class ArcadeButtons:
         Returns True if any flash is still active.
         """
         active = False
+        target = self._target
         for i in range(_N_BUTTONS):
             ttl = self._flash_ttl[i]
             if ttl > 0:
                 ttl -= 1
                 self._flash_ttl[i] = ttl
                 if ttl > 0:
-                    self.set_led(i, (ttl * _ON) // 9)
+                    target[i] = (ttl * _MAX_DUTY) // 9
                     active = True
                 else:
-                    self.set_led(i, 0)
+                    target[i] = 0
         return active
 
     # Legacy alias

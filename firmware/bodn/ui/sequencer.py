@@ -143,6 +143,7 @@ class SequencerScreen(Screen):
             self._audio.stop("music")
         if self._arcade:
             self._arcade.all_off()
+            self._arcade.flush()
         if self._on_exit:
             self._on_exit()
 
@@ -260,6 +261,7 @@ class SequencerScreen(Screen):
                     arc.glow(i)
                 else:
                     arc.off(i)
+            arc.flush()
 
         # Clear dirty_steps each frame (consumed above)
         eng.dirty_steps.clear()

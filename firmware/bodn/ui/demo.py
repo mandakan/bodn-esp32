@@ -105,6 +105,7 @@ class DemoScreen(Screen):
     def exit(self):
         if self._arcade:
             self._arcade.all_off()
+            self._arcade.flush()
 
     def needs_redraw(self):
         return self._dirty or self._pause.needs_render
@@ -275,15 +276,20 @@ class DemoScreen(Screen):
             np[i] = leds[i]
         np.write()
 
-        # Arcade button LEDs: bright when held, dim idle glow
+        # Arcade button LEDs: bright when held, wave or glow when idle
         arc = self._arcade
         if arc:
+            sw = inp.sw
+            use_wave = len(sw) > 3 and sw[3]  # SW_R: wave mode
+            if use_wave:
+                arc.wave(frame, speed=self._speed)
             n_arc = len(inp.arc_held)
             for i in range(min(n_arc, arc.count)):
                 if inp.arc_held[i]:
                     arc.on(i)
-                else:
+                elif not use_wave:
                     arc.glow(i)
+            arc.flush()
 
     def render(self, tft, theme, frame):
         _init_565(theme.rgb)

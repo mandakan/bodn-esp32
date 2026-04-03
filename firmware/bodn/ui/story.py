@@ -300,6 +300,7 @@ class StoryScreen(Screen):
         # Turn off arcade LEDs
         if self._arcade:
             self._arcade.all_off()
+            self._arcade.flush()
         if self._on_exit:
             self._on_exit()
 
@@ -463,6 +464,7 @@ class StoryScreen(Screen):
                     self._arcade.pulse(i, frame, speed=1)
                 else:
                     self._arcade.off(i)
+            self._arcade.flush()
 
     def _update_leds(self, frame):
         """Write NeoPixels and arcade LEDs."""
@@ -507,6 +509,7 @@ class StoryScreen(Screen):
                         self._arcade.off(i)
             else:
                 self._arcade.all_off()
+            self._arcade.flush()
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:
