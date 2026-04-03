@@ -89,6 +89,9 @@ class FakeInput:
     def scan(self):
         self.scanned += 1
 
+    def consume(self):
+        self.scanned += 1
+
 
 class SpyScreen(Screen):
     def __init__(self, name="spy"):

@@ -149,6 +149,7 @@ class TestInputStateArcade:
         i2c.regs[0x13] = 0xFF  # GPIOB
         mcp.refresh()
         inp.scan()
+        inp.consume()
         assert not any(inp.arc_held)
         assert not any(inp.arc_just_pressed)
 
@@ -157,10 +158,11 @@ class TestInputStateArcade:
         i2c.regs[0x13] = 0xFF & ~(1 << 2)  # GPIOB
         mcp.refresh()
         inp.scan()
-        # Advance past debounce delay (30ms)
+        # Advance past debounce delay (15ms)
         ms[0] = 100
         mcp.refresh()
         inp.scan()
+        inp.consume()
         assert inp.arc_held[0]
         assert inp.arc_just_pressed[0]
         assert not inp.arc_held[1]
@@ -189,6 +191,7 @@ class TestInputStateArcade:
         i2c.regs[0x13] = 0xFF  # GPIOB
         mcp.refresh()
         inp.scan()
+        inp.consume()
 
         assert inp.first_arc_pressed() == -1
 
@@ -197,10 +200,11 @@ class TestInputStateArcade:
         i2c.regs[0x13] = 0xFF & ~(1 << 5)  # GPIOB
         mcp.refresh()
         inp.scan()
-        # Advance past debounce delay (30ms)
+        # Advance past debounce delay (15ms)
         ms[0] = 100
         mcp.refresh()
         inp.scan()
+        inp.consume()
         assert inp.first_arc_pressed() == 2
 
     def test_arcade_activity_detected(self):
@@ -227,6 +231,7 @@ class TestInputStateArcade:
         i2c.regs[0x13] = 0xFF  # GPIOB
         mcp.refresh()
         inp.scan()
+        inp.consume()
         assert not inp.has_activity()
 
         # Press arcade button
@@ -234,8 +239,9 @@ class TestInputStateArcade:
         i2c.regs[0x13] = 0xFF & ~(1 << 3)  # GPIOB, MCP pin 11 = bit 3
         mcp.refresh()
         inp.scan()
-        # Advance past debounce delay (30ms)
+        # Advance past debounce delay (15ms)
         ms[0] = 100
         mcp.refresh()
         inp.scan()
+        inp.consume()
         assert inp.has_activity()

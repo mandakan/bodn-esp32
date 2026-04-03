@@ -151,9 +151,9 @@ class ScreenManager:
         self._overlay = overlay
 
     def tick(self):
-        """One frame: scan → update → render-if-needed → show-if-needed."""
+        """One frame: consume → update → render-if-needed → show-if-needed."""
         self._frame += 1
-        self.inp.scan()
+        self.inp.consume()
 
         active = self.active
         if active:

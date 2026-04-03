@@ -124,15 +124,15 @@ class InputState:
         self._time_ms = time_ms_fn
         self._arcade_pins = arcade_pins or []
 
-        self._btn_deb = [Debouncer(delay_ms=30) for _ in range(len(buttons))]
-        self._enc_btn_deb = [Debouncer(delay_ms=30) for _ in range(len(encoders))]
-        self._arc_deb = [Debouncer(delay_ms=30) for _ in range(len(self._arcade_pins))]
+        self._btn_deb = [Debouncer(delay_ms=15) for _ in range(len(buttons))]
+        self._enc_btn_deb = [Debouncer(delay_ms=15) for _ in range(len(encoders))]
+        self._arc_deb = [Debouncer(delay_ms=15) for _ in range(len(self._arcade_pins))]
 
         n_btn = len(buttons)
         n_enc = len(encoders)
         n_arc = len(self._arcade_pins)
 
-        # Public state (updated by scan)
+        # Public state (copied from pending by consume())
         self.btn_held = [False] * n_btn
         self.btn_just_pressed = [False] * n_btn
         self.btn_just_released = [False] * n_btn
@@ -146,6 +146,15 @@ class InputState:
         self.enc_btn_held = [False] * n_enc
         self.enc_btn_pressed = [False] * n_enc
         self.enc_btn_just_released = [False] * n_enc
+
+        # Pending edge-latched state (accumulated by scan, consumed by consume)
+        self._pend_btn_press = [False] * n_btn
+        self._pend_btn_release = [False] * n_btn
+        self._pend_arc_press = [False] * n_arc
+        self._pend_arc_release = [False] * n_arc
+        self._pend_enc_btn_press = [False] * n_enc
+        self._pend_enc_btn_release = [False] * n_enc
+        self._pend_enc_delta = [0] * n_enc
 
         self._prev_btn = [False] * n_btn
         self._prev_arc = [False] * n_arc
@@ -161,24 +170,31 @@ class InputState:
         self._g_released = [False] * n_total
 
     def scan(self):
-        """Read all inputs. Call once per frame."""
+        """Read all inputs and latch edges into pending state.
+
+        Call at a fast rate (~5 ms) from the input task. Edge events
+        (press/release) are OR-latched: once set, they stay True until
+        consume() copies them to the public arrays and clears them.
+        """
         now = self._time_ms()
 
         # Cache self.* as locals to avoid repeated dict lookups
         buttons = self._buttons
         btn_deb = self._btn_deb
         btn_held = self.btn_held
-        btn_just_pressed = self.btn_just_pressed
-        btn_just_released = self.btn_just_released
         prev_btn = self._prev_btn
+        pend_bp = self._pend_btn_press
+        pend_br = self._pend_btn_release
 
         # Buttons
         for i, btn in enumerate(buttons):
             prev = prev_btn[i]
             cur = btn_deb[i].update(btn.value(), now)
             btn_held[i] = cur
-            btn_just_pressed[i] = cur and not prev
-            btn_just_released[i] = not cur and prev
+            if cur and not prev:
+                pend_bp[i] = True
+            if not cur and prev:
+                pend_br[i] = True
             prev_btn[i] = cur
 
         # Toggle switches (no debounce — physical latching)
@@ -190,44 +206,43 @@ class InputState:
         arc_pins = self._arcade_pins
         arc_deb = self._arc_deb
         arc_held = self.arc_held
-        arc_just_pressed = self.arc_just_pressed
-        arc_just_released = self.arc_just_released
         prev_arc = self._prev_arc
+        pend_ap = self._pend_arc_press
+        pend_ar = self._pend_arc_release
 
         for i, pin in enumerate(arc_pins):
             prev = prev_arc[i]
             cur = arc_deb[i].update(pin.value(), now)
             arc_held[i] = cur
-            arc_just_pressed[i] = cur and not prev
-            arc_just_released[i] = not cur and prev
+            if cur and not prev:
+                pend_ap[i] = True
+            if not cur and prev:
+                pend_ar[i] = True
             prev_arc[i] = cur
 
         # Encoders
         encoders = self._encoders
         enc_pos = self.enc_pos
-        enc_delta = self.enc_delta
         enc_velocity = self.enc_velocity
         prev_enc_pos = self._prev_enc_pos
         enc_btn_held = self.enc_btn_held
-        enc_btn_pressed = self.enc_btn_pressed
-        enc_btn_just_released = self.enc_btn_just_released
         prev_enc_btn = self._prev_enc_btn
-        n_btn = len(buttons)
-        n_enc = len(encoders)
         enc_btn_deb = self._enc_btn_deb
         enc_last_step = self._enc_last_step_ms
+        pend_ed = self._pend_enc_delta
+        pend_ep = self._pend_enc_btn_press
+        pend_er = self._pend_enc_btn_release
 
         for i, enc in enumerate(encoders):
             pos = enc.value
             enc_pos[i] = pos
             d = pos - prev_enc_pos[i]
-            enc_delta[i] = d
+            pend_ed[i] += d
             prev_enc_pos[i] = pos
 
             if d != 0:
                 elapsed = now - enc_last_step[i]
                 if elapsed > 0:
-                    # steps/second: abs(delta) * 1000 / elapsed
                     enc_velocity[i] = abs(d) * 1000 // elapsed
                 enc_last_step[i] = now
             elif now - enc_last_step[i] > _VELOCITY_TIMEOUT_MS:
@@ -236,29 +251,82 @@ class InputState:
             p_btn = prev_enc_btn[i]
             cur_btn = enc_btn_deb[i].update(enc.sw.value(), now)
             enc_btn_held[i] = cur_btn
-            enc_btn_pressed[i] = cur_btn and not p_btn
-            enc_btn_just_released[i] = not cur_btn and p_btn
+            if cur_btn and not p_btn:
+                pend_ep[i] = True
+            if not cur_btn and p_btn:
+                pend_er[i] = True
             prev_enc_btn[i] = cur_btn
 
-        # Update gesture detector with combined button + arcade + encoder state
+    def consume(self):
+        """Copy latched edges to public state and clear pending.
+
+        Call once per display frame from ScreenManager.tick(). This ensures
+        that fast scans (200 Hz) feed into the slower display loop (~30 Hz)
+        without losing short button presses.
+        """
+        now = self._time_ms()
+        n_btn = len(self._buttons)
+        n_arc = len(self._arcade_pins)
+        n_enc = len(self._encoders)
+
+        # Buttons: copy latched edges, clear pending
+        pend_bp = self._pend_btn_press
+        pend_br = self._pend_btn_release
+        bjp = self.btn_just_pressed
+        bjr = self.btn_just_released
+        for i in range(n_btn):
+            bjp[i] = pend_bp[i]
+            bjr[i] = pend_br[i]
+            pend_bp[i] = False
+            pend_br[i] = False
+
+        # Arcade buttons
+        pend_ap = self._pend_arc_press
+        pend_ar = self._pend_arc_release
+        ajp = self.arc_just_pressed
+        ajr = self.arc_just_released
+        for i in range(n_arc):
+            ajp[i] = pend_ap[i]
+            ajr[i] = pend_ar[i]
+            pend_ap[i] = False
+            pend_ar[i] = False
+
+        # Encoder deltas (sum across scans) and buttons
+        pend_ed = self._pend_enc_delta
+        pend_ep = self._pend_enc_btn_press
+        pend_er = self._pend_enc_btn_release
+        ed = self.enc_delta
+        ebp = self.enc_btn_pressed
+        ebjr = self.enc_btn_just_released
+        for i in range(n_enc):
+            ed[i] = pend_ed[i]
+            pend_ed[i] = 0
+            ebp[i] = pend_ep[i]
+            ebjr[i] = pend_er[i]
+            pend_ep[i] = False
+            pend_er[i] = False
+
+        # Update gesture detector with consumed state
         gh = self._g_held
         gp = self._g_pressed
         gr = self._g_released
-        n_arc = len(arc_pins)
+        bh = self.btn_held
+        ah = self.arc_held
+        ebh = self.enc_btn_held
         for i in range(n_btn):
-            gh[i] = btn_held[i]
-            gp[i] = btn_just_pressed[i]
-            gr[i] = btn_just_released[i]
+            gh[i] = bh[i]
+            gp[i] = bjp[i]
+            gr[i] = bjr[i]
         off = n_btn
         for i in range(n_arc):
-            gh[off + i] = arc_held[i]
-            gp[off + i] = arc_just_pressed[i]
-            gr[off + i] = arc_just_released[i]
+            gh[off + i] = ah[i]
+            gp[off + i] = ajp[i]
+            gr[off + i] = ajr[i]
         off += n_arc
         for i in range(n_enc):
-            gh[off + i] = enc_btn_held[i]
-            gp[off + i] = enc_btn_pressed[i]
-            gr[off + i] = enc_btn_just_released[i]
+            gh[off + i] = ebh[i]
+            gp[off + i] = ebp[i]
+            gr[off + i] = ebjr[i]
         self.gestures.update(gh, gp, gr, now)
 
     def has_activity(self):
