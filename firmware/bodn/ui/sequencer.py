@@ -143,6 +143,7 @@ class SequencerScreen(Screen):
             self._audio.stop("music")
         if self._arcade:
             self._arcade.all_off()
+            self._arcade.flush()
         if self._on_exit:
             self._on_exit()
 
@@ -248,6 +249,19 @@ class SequencerScreen(Screen):
         # --- Update secondary display ---
         if self._secondary:
             self._secondary.update_state(eng.bpm, eng.state == PLAYING, eng.n_steps)
+
+        # Arcade LEDs: flash on step hit, glow if track has notes, off otherwise
+        arc = self._arcade
+        if arc:
+            step = eng.step
+            for i in range(NUM_PERC_TRACKS):
+                if eng.state == PLAYING and eng.step_advanced and eng.perc[i][step]:
+                    arc.on(i)
+                elif any(eng.perc[i]):
+                    arc.glow(i)
+                else:
+                    arc.off(i)
+            arc.flush()
 
         # Clear dirty_steps each frame (consumed above)
         eng.dirty_steps.clear()

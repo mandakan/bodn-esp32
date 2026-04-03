@@ -23,9 +23,18 @@ class MysteryScreen(Screen):
     Hold nav encoder button to open the pause menu (resume / back to menu).
     """
 
-    def __init__(self, np, overlay, settings=None, secondary_screen=None, on_exit=None):
+    def __init__(
+        self,
+        np,
+        overlay,
+        arcade=None,
+        settings=None,
+        secondary_screen=None,
+        on_exit=None,
+    ):
         self._np = np
         self._overlay = overlay
+        self._arcade = arcade
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = MysteryEngine()
@@ -49,8 +58,16 @@ class MysteryScreen(Screen):
         self._hue = 0
         self._dirty = True
         self._full_clear = True
+        arc = self._arcade
+        if arc:
+            arc.wave(0, speed=1)
+            arc.flush()
 
     def exit(self):
+        arc = self._arcade
+        if arc:
+            arc.all_off()
+            arc.flush()
         if self._on_exit:
             self._on_exit()
 
@@ -149,6 +166,22 @@ class MysteryScreen(Screen):
             for i in range(n):
                 np[i] = leds[i]
             np.write()
+
+        # Arcade LEDs — ambient effects matching game state
+        arc = self._arcade
+        if arc:
+            out_type = self._engine.output_type
+            if out_type == OUT_MAGIC:
+                arc.tick_flash()
+                # Re-flash if decayed (sparkle effect)
+                if not any(arc._flash_ttl[i] for i in range(arc.count)):
+                    for i in range(arc.count):
+                        arc.flash(i, duration=15)
+            elif out_type == OUT_MIX:
+                arc.all_pulse(frame, speed=2)
+            else:
+                arc.wave(frame, speed=1)
+            arc.flush()
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:

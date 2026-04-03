@@ -55,6 +55,7 @@ class FlodeScreen(Screen):
         self,
         np,
         overlay,
+        arcade=None,
         audio=None,
         settings=None,
         secondary_screen=None,
@@ -62,6 +63,7 @@ class FlodeScreen(Screen):
     ):
         self._np = np
         self._overlay = overlay
+        self._arcade = arcade
         self._audio = audio
         self._secondary = secondary_screen
         self._on_exit = on_exit
@@ -120,6 +122,10 @@ class FlodeScreen(Screen):
         self._leds_dirty = True
         if self._secondary:
             self._secondary.set_emotion(CURIOUS)
+        arc = self._arcade
+        if arc:
+            arc.wave(0, speed=1)
+            arc.flush()
 
     def exit(self):
         # Clear LEDs
@@ -127,6 +133,10 @@ class FlodeScreen(Screen):
         for i in range(N_LEDS):
             np[i] = (0, 0, 0)
         np.write()
+        arc = self._arcade
+        if arc:
+            arc.all_off()
+            arc.flush()
         if self._on_exit:
             self._on_exit()
 
@@ -348,6 +358,23 @@ class FlodeScreen(Screen):
         for i in range(N_LEDS):
             np[i] = leds[i]
         np.write()
+
+        # Arcade LEDs
+        arc = self._arcade
+        if arc:
+            state = eng.state
+            if state == CELEBRATE:
+                arc.tick_flash()
+                if not any(arc._flash_ttl[i] for i in range(arc.count)):
+                    for i in range(arc.count):
+                        arc.flash(i, duration=15)
+            elif state == FLOWING:
+                arc.all_pulse(frame, speed=3)
+            elif state == PLAYING:
+                arc.wave(frame, speed=1)
+            else:
+                arc.all_glow()
+            arc.flush()
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:

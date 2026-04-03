@@ -270,6 +270,7 @@ class SpaceScreen(Screen):
             self._bridge_buf = bufs[0] if bufs else None
         if self._arcade:
             self._arcade.all_off()
+            self._arcade.flush()
         # Welcome message
         if self._audio:
             try:
@@ -285,6 +286,7 @@ class SpaceScreen(Screen):
             self._audio.stop("sfx")
         if self._arcade:
             self._arcade.all_off()
+            self._arcade.flush()
         # Release pre-loaded PCM buffers back to GC
         self._btn_bufs = None
         self._arc_bufs = None
@@ -572,8 +574,11 @@ class SpaceScreen(Screen):
             return
 
         if state == SUCCESS:
-            # All buttons lit solid briefly
-            arc.set_all_leds(220)
+            # Celebratory burst that decays
+            if not any(arc._flash_ttl):
+                for i in range(5):
+                    arc.flash(i, duration=15)
+            arc.tick_flash()
 
         elif state in (ACTIVE, HINT):
             sc = self._engine.scenario_type
@@ -581,26 +586,22 @@ class SpaceScreen(Screen):
                 tgt = self._engine.target_arc_idx
                 for i in range(5):
                     if i == tgt:
-                        arc.pulse_led(i, frame, speed=5)  # fast bright pulse
+                        arc.blink(i, frame, speed=5)
                     else:
-                        arc.set_led(i, 18)  # dim background
+                        arc.glow(i)
             else:
-                # Slow uniform heartbeat — buttons are "on standby"
-                for i in range(5):
-                    arc.pulse_led(i, frame, speed=1)
+                arc.wave(frame, speed=2)
 
         elif state == ANNOUNCE:
-            # Fast unified flash — alert!
-            for i in range(5):
-                arc.pulse_led(i, frame, speed=4)
+            arc.all_blink(frame, speed=4)
 
         elif state == CRUISING:
-            # Gentle slow heartbeat — ship is alive
-            for i in range(5):
-                arc.pulse_led(i, frame, speed=1)
+            arc.wave(frame, speed=1)
 
         else:
-            arc.set_all_leds(0)
+            arc.all_off()
+
+        arc.flush()
 
     def _write_leds(self, state, frame):
         """Update NeoPixel sticks and lid ring."""

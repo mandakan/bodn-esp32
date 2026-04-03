@@ -74,9 +74,10 @@ class DemoScreen(Screen):
     Toggle modifiers: SW0=reverse, SW1=mirror, SW_L=color shift, SW_R=strobe.
     """
 
-    def __init__(self, np, overlay, settings=None):
+    def __init__(self, np, overlay, arcade=None, settings=None):
         self._np = np
         self._overlay = overlay
+        self._arcade = arcade
         self._brightness = BrightnessControl(settings=settings)
         self._active_pattern = 0
         self._speed = 5  # 1-20, controlled by NAV/ENC_B rotation
@@ -100,6 +101,11 @@ class DemoScreen(Screen):
         self._brightness.reset()
         self._dirty = True
         self._full_clear = True
+
+    def exit(self):
+        if self._arcade:
+            self._arcade.all_off()
+            self._arcade.flush()
 
     def needs_redraw(self):
         return self._dirty or self._pause.needs_render
@@ -269,6 +275,21 @@ class DemoScreen(Screen):
         for i in range(n):
             np[i] = leds[i]
         np.write()
+
+        # Arcade button LEDs: bright when held, wave or glow when idle
+        arc = self._arcade
+        if arc:
+            sw = inp.sw
+            use_wave = len(sw) > 3 and sw[3]  # SW_R: wave mode
+            if use_wave:
+                arc.wave(frame, speed=self._speed)
+            n_arc = len(inp.arc_held)
+            for i in range(min(n_arc, arc.count)):
+                if inp.arc_held[i]:
+                    arc.on(i)
+                elif not use_wave:
+                    arc.glow(i)
+            arc.flush()
 
     def render(self, tft, theme, frame):
         _init_565(theme.rgb)

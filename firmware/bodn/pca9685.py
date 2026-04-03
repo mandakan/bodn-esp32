@@ -109,6 +109,39 @@ class PCA9685:
         else:
             self.set_pwm(channel, 0, duty)
 
+    def set_duty_batch(self, start_channel, duties):
+        """Write multiple contiguous channels in a single I2C transaction.
+
+        Uses PCA9685 auto-increment: one writeto_mem starting at the
+        first channel's register, 4 bytes per channel.
+
+        Args:
+            start_channel: first PWM channel number (0–15).
+            duties: list/tuple of 12-bit duty values, one per channel.
+        """
+        n = len(duties)
+        buf = bytearray(n * 4)
+        for i in range(n):
+            d = duties[i]
+            off = i * 4
+            if d <= 0:
+                buf[off] = 0
+                buf[off + 1] = 0
+                buf[off + 2] = 0
+                buf[off + 3] = 0x10
+            elif d >= 4095:
+                buf[off] = 0
+                buf[off + 1] = 0x10
+                buf[off + 2] = 0
+                buf[off + 3] = 0
+            else:
+                buf[off] = 0
+                buf[off + 1] = 0
+                buf[off + 2] = d & 0xFF
+                buf[off + 3] = d >> 8
+        reg = _LED0_ON_L + 4 * start_channel
+        self._i2c.writeto_mem(self._addr, reg, buf)
+
     def set_all_duty(self, duty):
         """Set the same duty cycle on all 16 channels at once.
 
