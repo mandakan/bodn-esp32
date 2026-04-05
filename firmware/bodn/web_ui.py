@@ -185,6 +185,8 @@ th{color:#aaa}
 <div id="debug" class="panel">
 <div class="toggle"><input type="checkbox" id="dbg-serial" onchange="toggleDebug()"><label>Log inputs to serial (~2x/sec)</label></div>
 <p style="font-size:0.75em;color:#666;margin-top:8px">Prints button, switch, and encoder state to the serial console.</p>
+<h3 style="margin:16px 0 6px;color:#e94560;font-size:0.9em">Last boot</h3>
+<div id="boot-log"><p style="font-size:0.8em;color:#666">Open this tab to load.</p></div>
 </div>
 
 <div id="wifi" class="panel">
@@ -204,6 +206,7 @@ document.getElementById(id).classList.add('active');
 el.classList.add('active');
 if(id==='history')loadHistory();
 if(id==='stats')loadStats();
+if(id==='debug')loadBootLog();
 }
 function updRv(el,id,suf){document.getElementById(id).textContent=el.value+suf}
 function badgeClass(s){
@@ -432,6 +435,28 @@ try{
 var r=await fetch('/api/settings');var d=await r.json();
 document.getElementById('dbg-serial').checked=!!d.debug_input;
 }catch(e){}
+}
+async function loadBootLog(){
+var el=document.getElementById('boot-log');
+try{
+var r=await fetch('/api/boot-log');var d=await r.json();
+if(d.error){el.innerHTML='<p style="font-size:0.8em;color:#666">'+d.error+'</p>';return;}
+var col={'ok':'#27ae60','warn':'#f39c12','fail':'#e94560','skip':'#555'};
+var html='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">';
+(d.steps||[]).forEach(function(s){
+var c=col[s.result]||'#555';
+html+='<span style="padding:3px 8px;border-radius:10px;font-size:0.78em;font-weight:bold;background:'+c+'33;color:'+c+';border:1px solid '+c+'">'+s.key+' '+s.result+'</span>';
+});
+html+='</div><table style="width:100%;border-collapse:collapse;font-size:0.8em;margin-top:4px"><tbody>';
+if(d.ts){var dt=new Date(d.ts*1000);html+='<tr><td style="color:#aaa;padding:3px 6px;width:80px">Time</td><td style="padding:3px 6px">'+dt.toLocaleString()+'</td></tr>';}
+if(d.ip)html+='<tr><td style="color:#aaa;padding:3px 6px">IP</td><td style="padding:3px 6px">'+d.ip+'</td></tr>';
+if(d.bat)html+='<tr><td style="color:#aaa;padding:3px 6px">Battery</td><td style="padding:3px 6px">'+d.bat+'</td></tr>';
+if(d.free_kb!=null)html+='<tr><td style="color:#aaa;padding:3px 6px">Free RAM</td><td style="padding:3px 6px">'+d.free_kb+' KB</td></tr>';
+if(d.i2c&&d.i2c.length)html+='<tr><td style="color:#aaa;padding:3px 6px">I2C</td><td style="padding:3px 6px">'+d.i2c.join(', ')+'</td></tr>';
+if(d.hw){var hws=[];for(var k in d.hw){hws.push('<span style="color:'+(d.hw[k]?'#27ae60':'#e94560')+'">'+k+':'+(d.hw[k]?'\u2713':'\u2717')+'</span>')}html+='<tr><td style="color:#aaa;padding:3px 6px">Hardware</td><td style="padding:3px 6px">'+hws.join('&nbsp;&nbsp;')+'</td></tr>';}
+html+='</tbody></table>';
+el.innerHTML=html;
+}catch(e){el.innerHTML='<p style="font-size:0.8em;color:#e94560">Failed to load boot log.</p>';}
 }
 var hnEl=document.getElementById('hostname');
 if(hnEl)hnEl.addEventListener('input',function(){document.getElementById('hostname-preview').textContent=this.value.trim()||'bodn'});

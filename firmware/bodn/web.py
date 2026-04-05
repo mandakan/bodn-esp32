@@ -468,6 +468,14 @@ async def _handle_request(reader, writer, session_mgr, settings):
             settings["debug_input"] = not cur
             await _send_json(writer, {"debug_input": settings["debug_input"]})
 
+        elif method == "GET" and path == "/api/boot-log":
+            try:
+                with open("/data/boot_log.json") as f:
+                    raw = f.read()
+                await _send(writer, 200, "application/json", raw)
+            except OSError:
+                await _send_json(writer, {"error": "no boot log yet"})
+
         elif method == "GET" and path == "/api/files":
             # List files for dev UI
             file_list = []
