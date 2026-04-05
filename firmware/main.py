@@ -97,6 +97,7 @@ def create_hardware():
     # I2C bus scan — show all devices for diagnostics
     i2c_devs = i2c.scan()
     print("I2C scan: [{}]".format(", ".join("0x{:02X}".format(a) for a in i2c_devs)))
+    hw_status["i2c"] = ["0x{:02X}".format(a) for a in i2c_devs]
 
     # MCP1 — MCP23017 GPIO expander for buttons, toggles, and arcade switches
     mcp = None
@@ -825,6 +826,24 @@ async def main():
     from bodn.diag import set_hw_status
 
     set_hw_status(hw_status)
+
+    # Update boot log with hardware initialisation results
+    try:
+        import json as _json
+
+        try:
+            with open("/data/boot_log.json") as _f:
+                _boot_log = _json.load(_f)
+        except Exception:
+            _boot_log = {}
+        _boot_log["i2c"] = hw_status.get("i2c", [])
+        _boot_log["hw"] = {k: v for k, v in hw_status.items() if k != "i2c"}
+        with open("/data/boot_log.json", "w") as _f:
+            _json.dump(_boot_log, _f)
+        del _boot_log, _json
+    except Exception as _e:
+        print("boot log hw update:", _e)
+
     manager, secondary, inp = create_ui(
         session_mgr,
         settings,

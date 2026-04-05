@@ -543,3 +543,23 @@ spi = None
 np = None
 gc.collect()
 print("BOOT done, free={}".format(gc.mem_free()))
+
+# --- Persist boot log for web UI inspection ---
+try:
+    import json as _json
+
+    _boot_log = {
+        "ts": time.time(),
+        "steps": [
+            {"key": STEPS[i][0], "result": _results[i] or "skip"}
+            for i in range(len(STEPS))
+        ],
+        "ip": ip,
+        "bat": _bat_detail,
+        "free_kb": gc.mem_free() // 1024,
+    }
+    with open("/data/boot_log.json", "w") as _f:
+        _json.dump(_boot_log, _f)
+    del _json, _boot_log
+except Exception as _e:
+    print("boot log:", _e)
