@@ -162,7 +162,7 @@ class TestScenarioAnnounce:
         eng = SpaceEngine()
         # Force short countdown
         eng._cruise_countdown = 10
-        f = _advance_to_announce(eng)
+        _advance_to_announce(eng)
         assert eng.state == ANNOUNCE
         assert eng.scenario_type in (
             SC_ASTEROID,
@@ -289,7 +289,6 @@ class TestShieldScenario:
     def test_shield_already_on_at_start_does_not_immediately_resolve(self):
         # SC_SHIELD should not be picked when sw0 is already True
         eng = SpaceEngine()
-        events = []
         sw_on = True
         for f in range(2000):
             ev = _tick(eng, f, sw0=sw_on)

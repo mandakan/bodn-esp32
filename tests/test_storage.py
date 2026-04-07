@@ -1,6 +1,4 @@
-import json
 import os
-import tempfile
 
 import pytest
 
@@ -12,8 +10,6 @@ from bodn.storage import (
     save_session,
     sessions_today,
     compute_stats,
-    SETTINGS_PATH,
-    SESSIONS_PATH,
 )
 import bodn.storage as storage_mod
 

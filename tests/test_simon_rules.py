@@ -19,7 +19,6 @@ from bodn.simon_rules import (
     FAIL_FRAMES,
     MAX_FAILS,
     NUM_BUTTONS,
-    BTN_COLORS,
 )
 
 
