@@ -40,6 +40,9 @@ from bodn.ui.android import NEUTRAL, CURIOUS, HAPPY, SURPRISED
 
 NAV = const(0)  # config.ENC_NAV
 
+# Arcade button tone fallback frequencies (when no WAV file loaded)
+_ARC_TONE_FREQS = (220, 277, 330, 415, 523)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # AUDIO — WAV override system
 # ─────────────────────────────────────────────────────────────────────────────
@@ -546,8 +549,7 @@ class SpaceScreen(Screen):
         if buf:
             self._audio.play_buffer(buf, channel="sfx")
         else:
-            freqs = [220, 277, 330, 415, 523]
-            freq = freqs[arc % len(freqs)]
+            freq = _ARC_TONE_FREQS[arc % len(_ARC_TONE_FREQS)]
             self._audio.tone(freq, 250, "square", channel="sfx")
 
     def _speak_toggle(self, tts_key, state_on):

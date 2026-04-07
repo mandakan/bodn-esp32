@@ -15,7 +15,7 @@ _MODE1_SLEEP = const(0x10)  # bit 4: oscillator off
 _MODE1_AI = const(0x20)  # bit 5: auto-increment
 _MODE1_RESTART = const(0x80)  # bit 7: restart
 
-_OSC_CLOCK = 25_000_000  # 25 MHz internal oscillator
+_OSC_CLOCK = const(25_000_000)  # 25 MHz internal oscillator
 
 
 def _prescale(freq_hz):

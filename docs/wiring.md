@@ -42,7 +42,7 @@ graph LR
     previouslyreservedfortouchCS["previously reserved for touch CS .<br/><sub>GPIO 0 → SD_CS<br/>GPIO 17 → SD_SCK<br/>GPIO 40 → SD_MOSI<br/>GPIO 38 → SD_MISO</sub>"]
     previouslyreservedfortouchCS -.- ESP
 
-    detentsperlogicalunit["detents per logical unit<br/><sub>GPIO 1 → ENCODER SENS OPTIONS 0<br/>GPIO 2 → ENCODER SENS OPTIONS 1<br/>GPIO 3 → ENCODER SENS OPTIONS 2<br/>GPIO 1 → ENCODER_SENS_DEFAULT</sub>"]
+    detentsperlogicalunit["detents per logical unit<br/><sub>GPIO 1 → ENCODER_SENS_DEFAULT</sub>"]
     detentsperlogicalunit -.- ESP
 
     FTPserver["FTP server<br/><sub>GPIO 21 → FTP_PORT</sub>"]
@@ -143,9 +143,6 @@ graph LR
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
-| ENCODER SENS OPTIONS 0 | 1 | `ENCODER_SENS_OPTIONS[0]` |
-| ENCODER SENS OPTIONS 1 | 2 | `ENCODER_SENS_OPTIONS[1]` |
-| ENCODER SENS OPTIONS 2 | 3 | `ENCODER_SENS_OPTIONS[2]` |
 | ENCODER_SENS_DEFAULT | 1 | `ENCODER_SENS_DEFAULT` |
 
 ### FTP server
@@ -160,8 +157,8 @@ graph LR
 |------|-----------|--------|
 | 0 | previously reserved for touch CS . | SD_CS |
 | 1 | detents per logical unit | ENCODER_SENS_DEFAULT |
-| 2 | detents per logical unit | ENCODER SENS OPTIONS 1 |
-| 3 | detents per logical unit | ENCODER SENS OPTIONS 2 |
+| 2 | INMP441 I2S microphone | SD |
+| 3 | MAX98357A I2S amplifier | AMP_SD_PIN |
 | 4 | The 144 LED/m strip runs around the inside of the translucent lid perimeter | PIN |
 | 5 | DevKit-Lipo on-board power monitoring | PWR_SENS_PIN |
 | 6 | DevKit-Lipo on-board power monitoring | BAT_SENS_PIN |
@@ -194,10 +191,7 @@ graph LR
 
 > **Pin conflicts detected:**
 > - **GPIO 40**: DS18B20 1-Wire temperature sensors: TEMP_WARN_C / previously reserved for touch CS .: SD_MOSI
-> - **GPIO 1**: ILI9341 TFT: BL / detents per logical unit: ENCODER SENS OPTIONS 0
-> - **GPIO 2**: INMP441 I2S microphone: SD / detents per logical unit: ENCODER SENS OPTIONS 1
-> - **GPIO 3**: MAX98357A I2S amplifier: AMP_SD_PIN / detents per logical unit: ENCODER SENS OPTIONS 2
-> - **GPIO 1**: detents per logical unit: ENCODER SENS OPTIONS 0 / detents per logical unit: ENCODER_SENS_DEFAULT
+> - **GPIO 1**: ILI9341 TFT: BL / detents per logical unit: ENCODER_SENS_DEFAULT
 > - **GPIO 21**: Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.: CLK / FTP server: FTP_PORT
 <!-- pinout:end -->
 

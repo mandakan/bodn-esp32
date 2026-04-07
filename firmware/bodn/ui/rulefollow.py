@@ -82,6 +82,9 @@ class RuleFollowScreen(Screen):
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
+        # Cached RGB565 values — populated in enter()
+        self._rule_565 = None
+        self._btn_565 = None
 
     def enter(self, manager):
         self._manager = manager
@@ -90,6 +93,10 @@ class RuleFollowScreen(Screen):
         self._brightness.reset()
         self._dirty = True
         self._full_clear = True
+        # Pre-cache RGB565 conversions (avoids theme.rgb() calls per render)
+        rgb = manager.theme.rgb
+        self._rule_565 = {r: rgb(*RULE_COLORS[r]) for r in RULE_COLORS}
+        self._btn_565 = [rgb(*BTN_COLORS[i]) for i in range(NUM_BUTTONS)]
 
     def exit(self):
         if self._arcade:
@@ -285,7 +292,7 @@ class RuleFollowScreen(Screen):
             return
 
         # --- Active game states ---
-        rule_565 = theme.rgb(*RULE_COLORS[eng.current_rule])
+        rule_565 = self._rule_565[eng.current_rule]
 
         if eng.state == SHOW_RULE:
             rule_name = (
@@ -316,7 +323,7 @@ class RuleFollowScreen(Screen):
             draw_centered(tft, rule_label, 4, rule_565, w)
 
             # Big stimulus color block
-            stim_color = theme.rgb(*BTN_COLORS[eng.stimulus_button])
+            stim_color = self._btn_565[eng.stimulus_button]
             block_size = min(w // 3, h // 2 - 20)
             bx = (w - block_size) // 2
             by = 24
@@ -354,7 +361,7 @@ class RuleFollowScreen(Screen):
         if eng.state == CORRECT:
             draw_centered(tft, t("rf_yes"), 30, theme.GREEN, w, scale=2)
             # Show what the correct answer was
-            stim_color = theme.rgb(*BTN_COLORS[eng.stimulus_button])
+            stim_color = self._btn_565[eng.stimulus_button]
             block = min(40, h // 4)
             tft.fill_rect(
                 (w - block) // 2, h // 2 - block // 2, block, block, stim_color
@@ -372,7 +379,7 @@ class RuleFollowScreen(Screen):
             draw_centered(tft, t("rf_try_again"), 30, theme.RED, w, scale=2)
             # Show what the correct color was
             if eng.correct_button >= 0:
-                correct_color = theme.rgb(*BTN_COLORS[eng.correct_button])
+                correct_color = self._btn_565[eng.correct_button]
                 block = min(40, h // 4)
                 tft.fill_rect(
                     (w - block) // 2, h // 2 - block // 2, block, block, correct_color
@@ -421,7 +428,7 @@ class RuleFollowScreen(Screen):
             draw_centered(tft, t("rf_press_again_short"), h - 16, theme.MUTED, w)
             return
 
-        rule_565 = theme.rgb(*RULE_COLORS[eng.current_rule])
+        rule_565 = self._rule_565[eng.current_rule]
 
         if eng.state == SHOW_RULE:
             rule_name = (
@@ -450,7 +457,7 @@ class RuleFollowScreen(Screen):
             )
             draw_centered(tft, rule_label, 2, rule_565, w)
 
-            stim_color = theme.rgb(*BTN_COLORS[eng.stimulus_button])
+            stim_color = self._btn_565[eng.stimulus_button]
             block_size = min(w - 20, h // 3)
             bx = (w - block_size) // 2
             by = 18
@@ -485,7 +492,7 @@ class RuleFollowScreen(Screen):
         if eng.state == WRONG:
             draw_centered(tft, t("rf_try_again"), 20, theme.RED, w)
             if eng.correct_button >= 0:
-                correct_color = theme.rgb(*BTN_COLORS[eng.correct_button])
+                correct_color = self._btn_565[eng.correct_button]
                 block = min(30, w // 3)
                 tft.fill_rect(
                     (w - block) // 2, h // 2 - block // 2, block, block, correct_color

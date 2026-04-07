@@ -1,7 +1,18 @@
 """Stubs for MicroPython hardware modules so tests can run on the host."""
 
 import sys
+import time
 import types
+
+# Patch time module with MicroPython tick functions if missing
+if not hasattr(time, "ticks_ms"):
+    time.ticks_ms = lambda: int(time.time() * 1000) & 0x3FFFFFFF
+if not hasattr(time, "ticks_diff"):
+    time.ticks_diff = lambda a, b: (a - b + 0x20000000) % 0x40000000 - 0x20000000
+if not hasattr(time, "ticks_add"):
+    time.ticks_add = lambda a, b: (a + b) & 0x3FFFFFFF
+if not hasattr(time, "sleep_ms"):
+    time.sleep_ms = lambda ms: time.sleep(ms / 1000)
 
 # Build a fake 'machine' module with Pin, SPI, I2S, PWM stubs.
 machine = types.ModuleType("machine")
@@ -100,11 +111,66 @@ class FakePWM:
         pass
 
 
+class FakeADC:
+    ATTN_0DB = 0
+    ATTN_2_5DB = 1
+    ATTN_6DB = 2
+    ATTN_11DB = 3
+    WIDTH_9BIT = 9
+    WIDTH_10BIT = 10
+    WIDTH_11BIT = 11
+    WIDTH_12BIT = 12
+
+    def __init__(self, pin=None):
+        self._raw = 2000
+
+    def atten(self, a):
+        pass
+
+    def width(self, w):
+        pass
+
+    def read(self):
+        return self._raw
+
+    def read_uv(self):
+        return self._raw * 305  # rough uV approximation
+
+
+class FakeI2C:
+    def __init__(self, bus_id=0, scl=None, sda=None, freq=400_000):
+        self._devices = {}
+
+    def scan(self):
+        return list(self._devices.keys())
+
+    def writeto_mem(self, addr, reg, data):
+        pass
+
+    def readfrom_mem_into(self, addr, reg, buf):
+        pass
+
+
+class FakeRTC:
+    def __init__(self):
+        self._datetime = (2026, 1, 1, 0, 0, 0, 0, 0)
+
+    def datetime(self, dt=None):
+        if dt is not None:
+            self._datetime = dt
+        return self._datetime
+
+
 machine.Pin = FakePin
 machine.SPI = FakeSPI
 machine.I2S = FakeI2S
+machine.I2C = FakeI2C
 machine.PWM = FakePWM
+machine.ADC = FakeADC
+machine.RTC = FakeRTC
 machine.Encoder = FakeHWEncoder
+machine.lightsleep = lambda ms=0: None
+machine.deepsleep = lambda ms=0: None
 
 sys.modules["machine"] = machine
 

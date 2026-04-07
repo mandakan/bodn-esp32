@@ -370,6 +370,21 @@ class AudioEngine:
         audio.boop()                    # quick UI feedback tone
     """
 
+    __slots__ = (
+        "_i2s",
+        "_amp_enable",
+        "_voices",
+        "_seq_counter",
+        "_mix_buf",
+        "_zero",
+        "_buf",
+        "_buf_view",
+        "_silence",
+        "_silence_short",
+        "_volume",
+        "_vol_mult",
+    )
+
     def __init__(self, i2s, amp_enable=None):
         self._i2s = i2s
         self._amp_enable = amp_enable

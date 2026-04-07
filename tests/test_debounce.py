@@ -71,7 +71,7 @@ class TestConfig:
     def test_config_imports(self):
         from bodn import config
 
-        assert isinstance(config.MCP_BTN_PINS, list)
+        assert isinstance(config.MCP_BTN_PINS, (list, tuple))
         assert len(config.MCP_BTN_PINS) == 8
 
     def test_pin_numbers_are_ints(self):
