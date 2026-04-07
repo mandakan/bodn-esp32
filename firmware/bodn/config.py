@@ -24,8 +24,8 @@ TFT_ROW_OFFSET = const(0)
 
 # Secondary display: 1.8" ST7735 TFT (shares SPI bus, separate CS)
 TFT2_CS = const(39)
-TFT2_PANEL_W = 128  # physical panel short side (not a GPIO — no const)
-TFT2_PANEL_H = 160  # physical panel long side (not a GPIO — no const)
+TFT2_PANEL_W = const(128)  # physical panel short side
+TFT2_PANEL_H = const(160)  # physical panel long side
 TFT2_LANDSCAPE = False  # set True when display is mounted sideways
 
 # Effective dimensions after rotation
@@ -124,10 +124,10 @@ SD_CS = const(0)  # SD chip select (strapping pull-up = deasserted at boot)
 SD_SCK = const(17)  # freed from ENC1_SW
 SD_MOSI = const(40)  # freed from ENC2_SW
 SD_MISO = const(38)  # GPIO 19 is USB D−; GPIO 38 is on-board LED (freed)
-MCP_BTN_PINS = [0, 1, 2, 3, 4, 5, 6, 7]
-MCP_SW_PINS = [8, 9]  # GPB0–GPB1 (2 toggle switches; GPB2–3 freed for arcade)
+MCP_BTN_PINS = (0, 1, 2, 3, 4, 5, 6, 7)
+MCP_SW_PINS = (8, 9)  # GPB0–GPB1 (2 toggle switches; GPB2–3 freed for arcade)
 MCP_MASTER_SW_PIN = const(12)  # GPB4 — red-cover flip switch (active-low: 0 = ON)
-MCP_ARC_PINS = [10, 11, 13, 14, 15]  # GPB2,GPB3,GPB5,GPB6,GPB7 — 5 arcade buttons
+MCP_ARC_PINS = (10, 11, 13, 14, 15)  # GPB2,GPB3,GPB5,GPB6,GPB7 — 5 arcade buttons
 
 # PCA9685 16-channel 12-bit PWM driver — LED dimming over I2C
 PCA9685_ADDR = const(0x40)  # A0-A5 all low (default)
@@ -140,15 +140,15 @@ PWM_CH_ARC5 = const(5)  # Arcade idx 4 — red (far right)
 PWM_CH_AMP_SD = const(6)  # UNUSED — amp SD moved to GPIO 3 (PCA9685 glitches on boot)
 
 # Mini button colors — physical left-to-right matches electrical index 0–7
-BUTTON_COLORS = ["green", "blue", "white", "yellow", "red", "black", "green", "blue"]
+BUTTON_COLORS = ("green", "blue", "white", "yellow", "red", "black", "green", "blue")
 # Arcade button colors — physical left-to-right matches electrical index 0–4
-ARCADE_COLORS = ["green", "blue", "white", "yellow", "red"]
+ARCADE_COLORS = ("green", "blue", "white", "yellow", "red")
 
 # Encoder sensitivity: detents per logical unit
 # 1=high (every click), 2=medium, 3=low (for young children)
-ENCODER_SENS_OPTIONS = [1, 2, 3]
+ENCODER_SENS_OPTIONS = (1, 2, 3)
 ENCODER_SENS_DEFAULT = 1
-ENCODER_SENS_LABELS = ["high", "medium", "low"]
+ENCODER_SENS_LABELS = ("high", "medium", "low")
 
 
 def encoder_dpu(settings):

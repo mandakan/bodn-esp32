@@ -2,14 +2,10 @@
 
 import struct
 
-import pytest
 
 from bodn.audio import (
     AudioEngine,
     ToneSource,
-    CH_UI,
-    CH_SFX,
-    CH_MUSIC,
     V_MUSIC,
     V_SFX_BASE,
     V_SFX_END,

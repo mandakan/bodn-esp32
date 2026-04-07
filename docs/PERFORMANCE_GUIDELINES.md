@@ -73,9 +73,15 @@ that alone takes ~47 ms, exceeding a 30 ms frame budget.
 - **Never call `tft.show()` or `tft.show_rect()` directly** from screens or UI components.
   Always route through `manager.request_show()` or `manager.request_show(x, y, w, h)`.
   Only `ScreenManager.tick()` and `SecondaryDisplay.tick()` issue the actual SPI push.
+- **Extended glyph cost**: non-ASCII characters (å, ä, ö) in `st7735.py` are
+  drawn pixel-by-pixel (up to 64 `pixel()` calls per glyph), each expanding
+  the dirty rect. This is acceptable for static labels but avoid rendering
+  extended characters in per-frame animation paths.
 - Pre-compute and cache:
   - Fonts, color constants, simple icon bitmaps.
   - Layout positions (e.g. button hint coordinates) as constants, not recomputed every loop.
+  - RGB565 colour values — call `theme.rgb()` once in `enter()` and cache the
+    result rather than calling it per-frame in `render()`.
 - Use **integer math** for coordinates and layout; avoid floats.
 - Keep your "frame rate" low but responsive:
   - UI update loop around **10-20 Hz** (50-100 ms between updates) is fine for a kid's toy.
@@ -111,6 +117,32 @@ The compiler inlines the value at each use site, avoiding a global dictionary
 lookup every time the name appears. Use for any numeric constant accessed in
 loops or frequently called functions.
 
+### Tuples over lists for immutable data
+
+Pin assignments, color tables, option lists, and similar **fixed data** should
+be tuples, not lists. Tuples are smaller in RAM (no over-allocation for
+growth), signal immutability, and can be stored in ROM on frozen builds.
+
+```python
+MCP_BTN_PINS = (0, 1, 2, 3, 4, 5, 6, 7)   # tuple — good
+BUTTON_COLORS = ("green", "blue", "white")  # tuple — good
+# NOT: MCP_BTN_PINS = [0, 1, 2, 3, ...]    # list — wastes RAM
+```
+
+### `__slots__` on classes
+
+Classes without `__slots__` allocate a `__dict__` per instance (~40–60 bytes
+overhead). For classes instantiated at startup (drivers, engines, screens),
+declare `__slots__` to save RAM:
+
+```python
+class _Voice:
+    __slots__ = ("source", "loop", "file_obj", "mono_buf", "gain_mult")
+```
+
+This also catches typo bugs — assigning to an undeclared attribute raises
+`AttributeError`.
+
 ### Cache attribute lookups in locals
 
 Each dot access (`self._buf`, `asyncio.sleep_ms`) is a dictionary lookup in
@@ -135,7 +167,26 @@ async def run(self):
 ### Use `readinto()` over `read()`
 
 `file.read(n)` allocates a new `bytes` object each call. Where the API
-supports it, use `file.readinto(buf)` with a pre-allocated buffer.
+supports it, use `file.readinto(buf)` with a pre-allocated buffer. This is
+especially important for I2S audio streaming and SPI transfers — the canonical
+pattern is `readinto()` + `memoryview` slicing:
+
+```python
+buf = bytearray(1024)
+view = memoryview(buf)
+while True:
+    n = f.readinto(buf)
+    if n == 0:
+        break
+    i2s.write(view[:n])   # zero-copy slice
+```
+
+### Avoid `import` inside hot loops
+
+Deferred imports are fine for one-shot operations (screen enter, mode switch)
+but must not appear inside `update()`, `render()`, or any per-frame path.
+Python's import machinery does module-dict lookups and can trigger GC. Move
+imports to module level or cache the result in `enter()` / `__init__`.
 
 ### Escalation: `@micropython.native` and `@micropython.viper`
 

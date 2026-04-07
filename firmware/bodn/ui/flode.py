@@ -73,6 +73,9 @@ class FlodeScreen(Screen):
         self._dirty = True
         self._full_clear = True  # only clear on state transitions, not every frame
         self._leds_dirty = True
+        self._led_buf = [
+            (0, 0, 0)
+        ] * N_LEDS  # reusable LED buffer (avoids per-frame alloc)
 
         # Game engine — use a simple RNG based on frame counter
         self._seed = 0
@@ -381,9 +384,13 @@ class FlodeScreen(Screen):
             zone_clear(ZONE_LID_RING)
 
         ses_state = self._overlay.session_mgr.state
-        leds = [(np[i][0], np[i][1], np[i][2]) for i in range(16)]
-        leds = list(leds) + [(0, 0, 0)] * (N_LEDS - 16)
-        leds = self._overlay.static_led_override(ses_state, leds, brightness)
+        led_buf = self._led_buf
+        for i in range(16):
+            led_buf[i] = (np[i][0], np[i][1], np[i][2])
+        _z = (0, 0, 0)
+        for i in range(16, N_LEDS):
+            led_buf[i] = _z
+        leds = self._overlay.static_led_override(ses_state, led_buf, brightness)
         for i in range(N_LEDS):
             np[i] = leds[i]
         np.write()

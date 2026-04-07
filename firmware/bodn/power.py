@@ -164,10 +164,6 @@ class PowerManager:
         self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
         self._bl_pin.value(1)
 
-        # Restore backlight
-        self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
-        self._bl_pin.value(1)
-
     def master_switch_off(self):
         """Return True if the master switch is in the OFF position.
 

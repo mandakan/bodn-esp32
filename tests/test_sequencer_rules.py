@@ -7,7 +7,6 @@ from bodn.sequencer_rules import (
     DEFAULT_BPM,
     MIN_BPM,
     MAX_BPM,
-    BPM_STEP,
     NUM_PERC_TRACKS,
     MELODY_FREQS,
 )

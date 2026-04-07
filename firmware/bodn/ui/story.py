@@ -84,11 +84,27 @@ def _load_story_from_file(path):
     """Load a STORY dict from a script.py file. Returns dict or None."""
     ns = {}
     try:
-        exec(open(path).read(), ns)
+        with open(path) as f:
+            exec(f.read(), ns)
         return ns.get("STORY")
     except Exception as e:
         print("story load error {}: {}".format(path, e))
         return None
+
+
+def _load_story_title(path, story_id):
+    """Extract just the title from a story script without loading the full dict.
+
+    Falls back to story_id if loading fails.
+    """
+    try:
+        story = _load_story_from_file(path)
+        if story:
+            titles = story.get("title", {})
+            return titles  # {lang: title} dict
+    except Exception:
+        pass
+    return {"en": story_id}
 
 
 def _word_wrap(text, max_chars):
@@ -167,8 +183,11 @@ class StoryScreen(Screen):
         _MOOD_565 = {mood: rgb(c[0], c[1], c[2]) for mood, c in MOOD_COLORS.items()}
         _ARC_565 = [rgb(c[0], c[1], c[2]) for c in ARC_COLORS]
 
-        # Discover available stories from SD
+        # Discover available stories from SD and pre-load titles
         self._stories = _discover_stories()
+        self._story_titles = {}
+        for sid, path in self._stories:
+            self._story_titles[sid] = _load_story_title(path, sid)
 
         if not self._stories:
             # No stories on SD — stay in picker (shows "no stories" message)
@@ -550,16 +569,10 @@ class StoryScreen(Screen):
             draw_centered(tft, t("story_no_stories"), h // 2, theme.MUTED, w)
             return
 
-        # Show current story title
+        # Show current story title (from cache — loaded during enter())
         sid, path = self._stories[self._picker_index]
-        title = sid
-        try:
-            story = _load_story_from_file(path)
-            if story:
-                titles = story.get("title", {})
-                title = titles.get(get_language(), titles.get("en", sid))
-        except Exception:
-            pass
+        titles = self._story_titles.get(sid, {})
+        title = titles.get(get_language(), titles.get("en", sid))
 
         # Clear title + dots region before redrawing
         title_y = h // 2 - 8

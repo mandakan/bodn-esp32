@@ -26,6 +26,20 @@ class SessionManager:
     Optional on_session_end callback receives a session record dict.
     """
 
+    __slots__ = (
+        "settings",
+        "_get_time",
+        "_get_date",
+        "_on_session_end",
+        "state",
+        "_session_start",
+        "_sleep_start",
+        "_sessions_today",
+        "_today",
+        "_mode",
+        "_end_reason",
+    )
+
     def __init__(self, settings, get_time, get_date, on_session_end=None):
         self.settings = settings
         self._get_time = get_time

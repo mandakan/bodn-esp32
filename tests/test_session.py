@@ -1,5 +1,3 @@
-import pytest
-
 from bodn.session import (
     SessionManager,
     IDLE,

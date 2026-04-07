@@ -125,6 +125,13 @@ class GardenScreen(Screen):
         self._dirty_cells = set()  # cells that changed since last render
         self._full_redraw = True
         self._leds_dirty = True
+        # HUD text cache — avoid per-frame string formatting
+        self._hud_gen = ""
+        self._hud_pop = ""
+        self._hud_speed = ""
+        self._hud_gen_val = -1
+        self._hud_pop_val = -1
+        self._hud_speed_val = -1
         self._empty_since_ms = 0
         self._prompt_visible = False  # tracks if center text prompt is on screen
         self._grow_prompt_visible = False  # "press to grow" prompt
@@ -449,14 +456,20 @@ class GardenScreen(Screen):
         self._draw_cursor(tft, theme, frame)
         self._prev_cursor_pos = self._cursor_pos
 
-        # HUD: generation counter, population, speed
+        # HUD: generation counter, population, speed (cached to avoid per-frame alloc)
         hud_y = h - 14
         tft.fill_rect(0, hud_y, w, 14, theme.BLACK)
-        gen_text = "G:{}".format(self._generation)
-        pop_text = "P:{}".format(self._population)
-        speed_text = "{:.1f}s".format(self._speed_ms / 1000)
-        tft.text(gen_text, 4, hud_y + 2, theme.MUTED)
-        tft.text(pop_text, 80, hud_y + 2, theme.MUTED)
+        if self._generation != self._hud_gen_val:
+            self._hud_gen_val = self._generation
+            self._hud_gen = "G:{}".format(self._generation)
+        if self._population != self._hud_pop_val:
+            self._hud_pop_val = self._population
+            self._hud_pop = "P:{}".format(self._population)
+        if self._speed_ms != self._hud_speed_val:
+            self._hud_speed_val = self._speed_ms
+            self._hud_speed = "{:.1f}s".format(self._speed_ms / 1000)
+        tft.text(self._hud_gen, 4, hud_y + 2, theme.MUTED)
+        tft.text(self._hud_pop, 80, hud_y + 2, theme.MUTED)
 
         # Running/paused indicator
         if self._running:
@@ -464,7 +477,9 @@ class GardenScreen(Screen):
         elif self._population > 0:
             tft.text("||", 160, hud_y + 2, theme.YELLOW)
 
-        tft.text(speed_text, w - len(speed_text) * 8 - 4, hud_y + 2, theme.MUTED)
+        tft.text(
+            self._hud_speed, w - len(self._hud_speed) * 8 - 4, hud_y + 2, theme.MUTED
+        )
 
         # Modifier dots
         mods = [

@@ -22,7 +22,6 @@ from bodn.rulefollow_rules import (
     WRONG_FRAMES,
     RULE_SWITCH_FRAMES,
     NUM_BUTTONS,
-    BTN_COLORS,
     RULE_COLORS,
 )
 

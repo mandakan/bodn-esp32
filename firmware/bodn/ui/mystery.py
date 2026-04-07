@@ -49,6 +49,10 @@ class MysteryScreen(Screen):
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
+        # HUD cache — avoids per-frame string formatting
+        self._hud_counter = ""
+        self._hud_found = -1
+        self._hud_total = -1
 
     def enter(self, manager):
         self._manager = manager
@@ -276,7 +280,11 @@ class MysteryScreen(Screen):
         tft.fill_rect(0, h - 18, w, 18, theme.BLACK)
         found = self._engine.discovery_count
         total = self._engine.total_discoverable
-        tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)
+        if found != self._hud_found or total != self._hud_total:
+            self._hud_found = found
+            self._hud_total = total
+            self._hud_counter = "{}/{}".format(found, total)
+        tft.text(self._hud_counter, 8, h - 14, theme.MUTED)
         self._draw_mod_dots(tft, theme, w - 60, h - 12)
 
     def _render_portrait(self, tft, theme, frame):
@@ -343,7 +351,11 @@ class MysteryScreen(Screen):
         tft.fill_rect(0, h - 18, w, 18, theme.BLACK)
         found = self._engine.discovery_count
         total = self._engine.total_discoverable
-        tft.text("{}/{}".format(found, total), 8, h - 14, theme.MUTED)
+        if found != self._hud_found or total != self._hud_total:
+            self._hud_found = found
+            self._hud_total = total
+            self._hud_counter = "{}/{}".format(found, total)
+        tft.text(self._hud_counter, 8, h - 14, theme.MUTED)
         self._draw_mod_dots(tft, theme, w - 50, h - 12)
 
     def _draw_mod_dots(self, tft, theme, x, y):
