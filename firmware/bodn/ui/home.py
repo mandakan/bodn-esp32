@@ -173,7 +173,6 @@ class HomeScreen(Screen):
             self._anim_step = 0
             self._anim_dir = 1 if units > 0 else -1
             self._dirty = True
-            self._full_clear = True
             if self._audio and not self._audio.channel_active("ui"):
                 self._audio.play_sound("nav_click")
 

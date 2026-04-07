@@ -602,6 +602,13 @@ class AudioEngine:
 
         silence_short = self._silence_short
 
+        # Burst-write multiple chunks per yield to keep the DMA buffer
+        # full enough to survive display SPI gaps (~80 ms).  Each chunk
+        # is 1024 stereo bytes = 16 ms of audio; 6 chunks = 96 ms of
+        # headroom.  With viper mixing at ~5 ms per chunk the burst
+        # holds the CPU for ~30 ms — acceptable for a 10–15 fps UI.
+        _BURST = const(6)
+
         while True:
             # Collect active voices
             has_active = False
@@ -615,76 +622,78 @@ class AudioEngine:
                 await sleep_ms(5)
                 continue
 
-            # Determine if non-music voices are active (for ducking)
-            non_music_active = False
-            for v in voices:
-                if v.source is not None and not v.is_music:
-                    non_music_active = True
-                    break
+            # --- Burst loop: mix + write several chunks before yielding ---
+            for _burst in range(_BURST):
+                # Determine if non-music voices are active (for ducking)
+                non_music_active = False
+                for v in voices:
+                    if v.source is not None and not v.is_music:
+                        non_music_active = True
+                        break
 
-            # Read all active voices and mix
-            max_n = 0
-            mix_buf[:] = zero
+                # Read all active voices and mix
+                max_n = 0
+                mix_buf[:] = zero
 
-            for v in voices:
-                if v.source is None:
-                    continue
+                for v in voices:
+                    if v.source is None:
+                        continue
 
-                n = 0
-                try:
-                    n = v.source.read_chunk(v.mono_buf)
-                except Exception as e:
-                    print("audio read error:", e)
-                    v.stop()
-                    continue
-
-                if n == 0:
-                    if v.loop:
-                        v.source.seek_start()
-                        try:
-                            n = v.source.read_chunk(v.mono_buf)
-                        except Exception as e:
-                            print("audio read error:", e)
-                            v.stop()
-                            continue
-                        if n == 0:
-                            v.stop()
-                            continue
-                    else:
+                    n = 0
+                    try:
+                        n = v.source.read_chunk(v.mono_buf)
+                    except Exception as e:
+                        print("audio read error:", e)
                         v.stop()
                         continue
 
-                # Apply per-voice gain
-                if v.is_music and non_music_active:
-                    gain = _GAIN_MUSIC_DUCKED
+                    if n == 0:
+                        if v.loop:
+                            v.source.seek_start()
+                            try:
+                                n = v.source.read_chunk(v.mono_buf)
+                            except Exception as e:
+                                print("audio read error:", e)
+                                v.stop()
+                                continue
+                            if n == 0:
+                                v.stop()
+                                continue
+                        else:
+                            v.stop()
+                            continue
+
+                    # Apply per-voice gain
+                    if v.is_music and non_music_active:
+                        gain = _GAIN_MUSIC_DUCKED
+                    else:
+                        gain = v.gain_mult
+                    apply_vol(v.mono_buf, n, gain)
+
+                    # Accumulate into mix buffer
+                    mix_add(mix_buf, v.mono_buf, n)
+
+                    if n > max_n:
+                        max_n = n
+
+                if max_n == 0:
+                    # All voices finished — write silence to keep the DMA
+                    # stream continuous and avoid an underrun pop.
+                    i2s.write(silence_short)
+                    break
+
+                # Master volume
+                self._apply_volume(mix_buf, max_n)
+
+                # Mono to stereo expansion
+                if m2s_viper:
+                    m2s_viper(mix_buf, buf, max_n)
                 else:
-                    gain = v.gain_mult
-                apply_vol(v.mono_buf, n, gain)
+                    mono_to_stereo_py(mix_buf, buf, max_n)
+                stereo_n = max_n * 2
 
-                # Accumulate into mix buffer
-                mix_add(mix_buf, v.mono_buf, n)
+                # Blocking write — if DMA buffer has space this returns
+                # immediately; if full it waits for drain (backpressure).
+                i2s.write(buf_view[:stereo_n])
 
-                if n > max_n:
-                    max_n = n
-
-            if max_n == 0:
-                # All voices finished this iteration — write silence to keep
-                # the DMA stream continuous and avoid an underrun pop.
-                i2s.write(silence_short)
-                await sleep_ms(0)
-                continue
-
-            # Master volume
-            self._apply_volume(mix_buf, max_n)
-
-            # Mono to stereo expansion
-            if m2s_viper:
-                m2s_viper(mix_buf, buf, max_n)
-            else:
-                mono_to_stereo_py(mix_buf, buf, max_n)
-            stereo_n = max_n * 2
-
-            # Blocking write — guarantees frame-aligned, complete transfer.
-            # With viper DSP (~5ms), the blocking time (~64ms max) is acceptable.
-            i2s.write(buf_view[:stereo_n])
             await sleep_ms(0)
