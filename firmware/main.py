@@ -59,44 +59,96 @@ def create_hardware():
     """
     hw_status = {"mcp": False, "pca": False, "temp": False, "audio": False}
 
-    spi = SPI(
-        1,
-        baudrate=26_000_000,
-        sck=Pin(config.TFT_SCK),
-        mosi=Pin(config.TFT_MOSI),
-    )
-
-    # Shared DC and RST pins
-    dc = Pin(config.TFT_DC, Pin.OUT)
+    # Shared RST pin (needed for both paths)
     rst = Pin(config.TFT_RST, Pin.OUT)
 
-    # Primary display (ILI9341 240×320)
-    tft = ST7735(
-        spi,
-        cs=Pin(config.TFT_CS, Pin.OUT),
-        dc=dc,
-        rst=rst,
-        width=config.TFT_WIDTH,
-        height=config.TFT_HEIGHT,
-        col_offset=config.TFT_COL_OFFSET,
-        row_offset=config.TFT_ROW_OFFSET,
-        madctl=config.TFT_MADCTL,
-    )
+    # Try DMA SPI path first, fall back to blocking machine.SPI
+    try:
+        import _spidma
 
-    # Secondary display (ST7735 128×160, shared bus)
-    # skip_reset=True — shares RST pin with primary, don't reset both
-    tft2 = ST7735(
-        spi,
-        cs=Pin(config.TFT2_CS, Pin.OUT),
-        dc=dc,
-        rst=rst,
-        width=config.TFT2_WIDTH,
-        height=config.TFT2_HEIGHT,
-        col_offset=config.TFT2_COL_OFFSET,
-        row_offset=config.TFT2_ROW_OFFSET,
-        madctl=config.TFT2_MADCTL,
-        skip_reset=True,
-    )
+        _spidma.init(
+            sck=config.TFT_SCK,
+            mosi=config.TFT_MOSI,
+            baudrate=26_000_000,
+        )
+        _spidma.add_display(
+            slot=0,
+            cs=config.TFT_CS,
+            dc=config.TFT_DC,
+            width=config.TFT_WIDTH,
+            height=config.TFT_HEIGHT,
+            col_off=config.TFT_COL_OFFSET,
+            row_off=config.TFT_ROW_OFFSET,
+        )
+        _spidma.add_display(
+            slot=1,
+            cs=config.TFT2_CS,
+            dc=config.TFT_DC,
+            width=config.TFT2_WIDTH,
+            height=config.TFT2_HEIGHT,
+            col_off=config.TFT2_COL_OFFSET,
+            row_off=config.TFT2_ROW_OFFSET,
+        )
+
+        # Primary display (ILI9341 240×320, DMA slot 0)
+        tft = ST7735(
+            0,
+            rst=rst,
+            width=config.TFT_WIDTH,
+            height=config.TFT_HEIGHT,
+            col_offset=config.TFT_COL_OFFSET,
+            row_offset=config.TFT_ROW_OFFSET,
+            madctl=config.TFT_MADCTL,
+        )
+
+        # Secondary display (ST7735 128×160, DMA slot 1)
+        tft2 = ST7735(
+            1,
+            rst=rst,
+            width=config.TFT2_WIDTH,
+            height=config.TFT2_HEIGHT,
+            col_offset=config.TFT2_COL_OFFSET,
+            row_offset=config.TFT2_ROW_OFFSET,
+            madctl=config.TFT2_MADCTL,
+            skip_reset=True,
+        )
+        print("SPI: DMA")
+    except Exception as e:
+        print("SPI DMA failed:", e, "— blocking fallback")
+        dc = Pin(config.TFT_DC, Pin.OUT)
+        spi = SPI(
+            1,
+            baudrate=26_000_000,
+            sck=Pin(config.TFT_SCK),
+            mosi=Pin(config.TFT_MOSI),
+        )
+
+        # Primary display (ILI9341 240×320)
+        tft = ST7735(
+            spi,
+            cs=Pin(config.TFT_CS, Pin.OUT),
+            dc=dc,
+            rst=rst,
+            width=config.TFT_WIDTH,
+            height=config.TFT_HEIGHT,
+            col_offset=config.TFT_COL_OFFSET,
+            row_offset=config.TFT_ROW_OFFSET,
+            madctl=config.TFT_MADCTL,
+        )
+
+        # Secondary display (ST7735 128×160, shared bus)
+        tft2 = ST7735(
+            spi,
+            cs=Pin(config.TFT2_CS, Pin.OUT),
+            dc=dc,
+            rst=rst,
+            width=config.TFT2_WIDTH,
+            height=config.TFT2_HEIGHT,
+            col_offset=config.TFT2_COL_OFFSET,
+            row_offset=config.TFT2_ROW_OFFSET,
+            madctl=config.TFT2_MADCTL,
+            skip_reset=True,
+        )
 
     # Shared I2C bus for MCP23017 and PCA9685
     i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
@@ -540,6 +592,11 @@ async def primary_task(
     ticks_ms = time.ticks_ms
     ticks_diff = time.ticks_diff
     prev_render_ms = 0
+    tft = manager.tft
+    _dma = getattr(tft, "_native", False)
+    # vsync=True (default): skip frame if DMA busy (tear-free)
+    # vsync=False: draw over buffer during DMA (may tear, higher FPS)
+    _vsync = settings.get("vsync", True) if _dma else False
 
     while True:
         t0 = ticks_ms()
@@ -559,15 +616,17 @@ async def primary_task(
             else:
                 print("primary_task update error #{}: {}".format(errors, e))
 
-        # ── Graphics — opportunistic with predictive budget ───
-        # Use the previous frame's render cost to predict whether
-        # we can afford to render this frame.  After a heavy SPI
-        # push the next frame is skipped, giving the audio task a
-        # guaranteed scheduling gap.
-        elapsed = ticks_diff(ticks_ms(), t0)
-        predicted = elapsed + prev_render_ms
+        # ── Graphics — DMA-aware or predictive budget ─────────
+        if _dma:
+            # DMA mode: skip render if previous push still in flight (vsync)
+            can_render = needs_render and (not _vsync or not tft.busy())
+        else:
+            # Blocking mode: predictive budget from previous frame cost
+            elapsed = ticks_diff(ticks_ms(), t0)
+            predicted = elapsed + prev_render_ms
+            can_render = needs_render and predicted < _FRAME_BUDGET_MS
 
-        if needs_render and predicted < _FRAME_BUDGET_MS:
+        if can_render:
             try:
                 t_render = ticks_ms()
                 manager.render_and_show()
@@ -642,11 +701,14 @@ async def primary_task(
 
 
 async def secondary_task(secondary):
-    """Secondary display: ~200 ms tick.
+    """Secondary display tick.
 
-    Fast enough for game content updates (emotion changes), cheap when
-    idle thanks to per-zone dirty tracking in SecondaryDisplay.
+    DMA mode: 50 ms (20 fps) — SPI no longer blocks Python.
+    Blocking mode: 200 ms (5 fps) — conservative to avoid stalls.
+    Per-zone dirty tracking keeps redraws cheap when idle.
     """
+    _dma = getattr(secondary.tft, "_native", False)
+    _interval = 50 if _dma else 200
     errors = 0
     while True:
         try:
@@ -656,7 +718,7 @@ async def secondary_task(secondary):
         except Exception as e:
             errors += 1
             print("secondary_task error #{}: {}".format(errors, e))
-        await asyncio.sleep_ms(200)
+        await asyncio.sleep_ms(_interval)
 
 
 async def housekeeping_task(session_mgr, np, settings, audio=None):

@@ -1,17 +1,26 @@
 # st7735.py — minimal framebuf-based ST7735 driver for MicroPython
 #
-# Usage:
-#   from machine import Pin, SPI
-#   from st7735 import ST7735
+# Supports two backends:
+#   - machine.SPI (blocking) — pass SPI object as first arg
+#   - _spidma DMA (non-blocking) — pass slot ID (int) as first arg
 #
+# Usage (blocking):
 #   spi = SPI(1, baudrate=26_000_000, sck=Pin(12), mosi=Pin(11))
 #   tft = ST7735(spi, cs=Pin(10, Pin.OUT), dc=Pin(8, Pin.OUT), rst=Pin(9, Pin.OUT))
-#   tft.fill(0x0000)
-#   tft.text("Hello", 10, 10, 0xFFFF)
-#   tft.show()
+#
+# Usage (DMA):
+#   import _spidma
+#   _spidma.init(sck=12, mosi=11, baudrate=26_000_000)
+#   _spidma.add_display(slot=0, cs=10, dc=8, width=320, height=240)
+#   tft = ST7735(0, rst=Pin(9, Pin.OUT), width=320, height=240, ...)
 
 import framebuf
 import time
+
+try:
+    import _spidma
+except ImportError:
+    _spidma = None
 
 try:
     from bodn.ui.font_ext import GLYPHS as _EXT_GLYPHS
@@ -36,10 +45,10 @@ class ST7735(framebuf.FrameBuffer):
 
     def __init__(
         self,
-        spi,
-        cs,
-        dc,
-        rst,
+        spi_or_slot,
+        cs=None,
+        dc=None,
+        rst=None,
         width=128,
         height=160,
         col_offset=0,
@@ -47,9 +56,20 @@ class ST7735(framebuf.FrameBuffer):
         madctl=0x00,
         skip_reset=False,
     ):
-        self.spi = spi
-        self.cs = cs
-        self.dc = dc
+        if _spidma is not None and isinstance(spi_or_slot, int):
+            # Native DMA mode — slot ID from _spidma.add_display()
+            self._slot = spi_or_slot
+            self._native = True
+            self.spi = None
+            self.cs = None
+            self.dc = None
+        else:
+            # Legacy blocking mode — machine.SPI object
+            self._slot = -1
+            self._native = False
+            self.spi = spi_or_slot
+            self.cs = cs
+            self.dc = dc
         self.rst = rst
         self.width = width
         self.height = height
@@ -64,6 +84,9 @@ class ST7735(framebuf.FrameBuffer):
         self._init_display(skip_reset=skip_reset)
 
     def _cmd(self, cmd, data=None):
+        if self._native:
+            _spidma.cmd(self._slot, cmd, data or b"")
+            return
         self.cs.value(0)
         self.dc.value(0)
         self.spi.write(bytes([cmd]))
@@ -221,8 +244,22 @@ class ST7735(framebuf.FrameBuffer):
         if ascii_buf:
             super().text("".join(ascii_buf), ascii_start, y, color)
 
+    def busy(self):
+        """True if a DMA transfer is in progress (native mode only)."""
+        if self._native:
+            return _spidma.busy(self._slot)
+        return False
+
+    def wait(self):
+        """Block until any in-progress DMA transfer completes."""
+        if self._native:
+            _spidma.wait(self._slot)
+
     def show(self):
         """Push the framebuffer to the display."""
+        if self._native:
+            _spidma.push(self._slot, self._buf)
+            return
         x0 = self._col_offset
         x1 = x0 + self.width - 1
         y0 = self._row_offset
@@ -258,6 +295,9 @@ class ST7735(framebuf.FrameBuffer):
         # Fallback for large regions
         if w * h > self.width * self.height // 2:
             self.show()
+            return
+        if self._native:
+            _spidma.push_rect(self._slot, self._buf, x, y, w, h)
             return
         # Set address window
         x0 = self._col_offset + x

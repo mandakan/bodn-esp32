@@ -77,7 +77,7 @@ bodn-esp32/
 ├─ firmware/
 │  ├─ boot.py              # WiFi setup, NTP sync, battery check, boot screen
 │  ├─ main.py              # async entry point (uasyncio)
-│  ├─ st7735.py            # framebuf-based ST7735/ILI9341 driver + dirty rect tracking
+│  ├─ st7735.py            # framebuf-based ST7735/ILI9341 driver (DMA or blocking SPI)
 │  └─ bodn/
 │     ├─ __init__.py
 │     ├─ arcade.py          # arcade button input + LED output via MCP/PCA
@@ -157,12 +157,15 @@ bodn-esp32/
 │  └─ sd-sync.py            # build + sync SD card assets (TTS, sounds, etc.)
 ├─ cmodules/                  # native C extensions (compiled into firmware)
 │  ├─ micropython.cmake       # top-level cmake: includes sub-modules
-│  └─ audiomix/               # native audio mixer (_audiomix module, core 0)
+│  ├─ audiomix/               # native audio mixer (_audiomix module, core 0)
+│  │  ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
+│  │  ├─ audiomix.c/h         # Python bindings + shared types (16 uniform voices)
+│  │  ├─ mixer.c/h            # FreeRTOS task: mix loop + I2S + step clock on core 0
+│  │  ├─ ringbuf.c/h          # lock-free SPSC ring buffer
+│  │  └─ tonegen.c/h          # sine/square/sawtooth/noise generators
+│  └─ spidma/                 # DMA SPI display driver (_spidma module, ISR-driven)
 │     ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
-│     ├─ audiomix.c/h         # Python bindings + shared types (16 uniform voices)
-│     ├─ mixer.c/h            # FreeRTOS task: mix loop + I2S + step clock on core 0
-│     ├─ ringbuf.c/h          # lock-free SPSC ring buffer
-│     └─ tonegen.c/h          # sine/square/sawtooth/noise generators
+│     └─ spidma.c/h           # Python bindings + ESP-IDF spi_master DMA
 ├─ boards/
 │  └─ BODN_S3/                # custom board definition (external to MicroPython tree)
 │     ├─ mpconfigboard.cmake  # sdkconfig layering (spiram_oct, I2S IRAM-safe)
@@ -244,8 +247,9 @@ source ~/esp-idf/export.sh                        # once per terminal session
 ./tools/build-firmware.sh                          # build firmware
 ./tools/build-firmware.sh flash                    # build + flash
 ./tools/build-firmware.sh clean                    # clean build directory
-# The custom firmware is stock MicroPython + _audiomix C module.
+# The custom firmware is stock MicroPython + _audiomix + _spidma C modules.
 # If _audiomix is not available, AudioEngine falls back to the viper/IRQ path.
+# If _spidma is not available, display writes fall back to blocking machine.SPI.
 
 # SD card asset sync (build + copy in one step — runs all 3 steps above)
 uv run python tools/sd-sync.py                    # auto-detect BODN* SD card on macOS
