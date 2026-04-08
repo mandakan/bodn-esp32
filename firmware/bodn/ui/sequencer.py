@@ -345,6 +345,11 @@ class SequencerScreen(Screen):
     # Audio helpers
     # ------------------------------------------------------------------
 
+    # Preview voice for button feedback — separate from clock voices
+    # to avoid cross-core race conditions.  Clock uses voices 0-5,
+    # preview uses voice 6.
+    _PREVIEW_VOICE = const(6)
+
     def _play_drum(self, track):
         """Play a percussion sample immediately (button feedback)."""
         if not self._audio or not self._drum_bufs:
@@ -352,17 +357,18 @@ class SequencerScreen(Screen):
         buf = self._drum_bufs[track] if track < len(self._drum_bufs) else None
         if not buf:
             return
-        # Use direct voice index matching the clock's perc_voice mapping
-        # (default: track 0→voice 0, track 1→voice 1, etc.)
-        self._audio.play_buffer(buf, voice=track)
+        if _has_clock:
+            _audiomix.clock_preview(track)  # suppress clock trigger for this track
+        self._audio.play_buffer(buf, voice=self._PREVIEW_VOICE)
 
     def _play_melody_note(self, btn_idx):
         """Play a melody tone immediately (button feedback)."""
         if not self._audio or btn_idx >= len(MELODY_FREQS):
             return
         freq = MELODY_FREQS[btn_idx]
-        # Use direct voice index matching the clock's melody_voice (default: 5)
-        self._audio.tone(freq, 150, "sine", voice=5)
+        if _has_clock:
+            _audiomix.clock_preview(5)  # suppress clock trigger for melody
+        self._audio.tone(freq, 150, "sine", voice=self._PREVIEW_VOICE)
 
     def _trigger_step_sounds(self, step):
         """Trigger all active sounds at a grid step (called on step tick)."""

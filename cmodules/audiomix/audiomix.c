@@ -118,9 +118,8 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     uint32_t wave     = mp_obj_get_int(args[3]);
 
     audiomix_voice_t *v = &audiomix_state->voices[idx];
-    // Deactivate first so the mixer doesn't read partial state
+    v->writing = 1;
     v->source_type = SRC_NONE;
-    // Write payload fields
     v->tone_freq = freq;
     v->tone_samples_left = (audiomix_state->sample_rate * dur_ms) / 1000;
     v->tone_phase = 0;
@@ -130,11 +129,8 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     v->stop_req = 0;
     audiomix_state->seq_counter++;
     v->start_seq = audiomix_state->seq_counter;
-    // Mark manual trigger for anti-double logic
-    audiomix_state->clock.manual_trigger_sample[idx] =
-        audiomix_state->clock.total_samples;
-    // Commit — mixer picks it up on next cycle
     v->source_type = SRC_TONE;
+    v->writing = 0;
 
     return mp_const_none;
 }
@@ -163,6 +159,7 @@ static mp_obj_t audiomix_voice_sequence(mp_obj_t idx_obj, mp_obj_t data_obj) {
     }
 
     audiomix_voice_t *v = &audiomix_state->voices[idx];
+    v->writing = 1;
     v->source_type = SRC_NONE;
     uint32_t copy_len = n_steps * AUDIOMIX_SEQ_STEP_SIZE;
     memcpy(v->seq_buf, bufinfo.buf, copy_len);
@@ -176,6 +173,7 @@ static mp_obj_t audiomix_voice_sequence(mp_obj_t idx_obj, mp_obj_t data_obj) {
     audiomix_state->seq_counter++;
     v->start_seq = audiomix_state->seq_counter;
     v->source_type = SRC_SEQUENCE;
+    v->writing = 0;
 
     return mp_const_none;
 }
@@ -279,6 +277,7 @@ static mp_obj_t audiomix_voice_play_buffer(size_t n_args, const mp_obj_t *args) 
     bool loop = mp_obj_is_true(args[3]);
 
     audiomix_voice_t *v = &audiomix_state->voices[idx];
+    v->writing = 1;
     v->source_type = SRC_NONE;
     v->buf_ptr = bufinfo.buf;
     v->buf_len = n_bytes;
@@ -286,12 +285,10 @@ static mp_obj_t audiomix_voice_play_buffer(size_t n_args, const mp_obj_t *args) 
     v->loop = loop ? 1 : 0;
     v->fade_in = 1;
     v->stop_req = 0;
-    audiomix_state->clock.manual_trigger_sample[idx] =
-        audiomix_state->clock.total_samples;
     audiomix_state->seq_counter++;
     v->start_seq = audiomix_state->seq_counter;
-    // Commit
     v->source_type = SRC_BUFFER;
+    v->writing = 0;
 
     return mp_const_none;
 }
@@ -368,6 +365,27 @@ static mp_obj_t audiomix_ringbuf_space(mp_obj_t idx_obj) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_ringbuf_space_obj,
                                   audiomix_ringbuf_space);
+
+// ---------------------------------------------------------------------------
+// _audiomix.clock_preview(track_idx)
+// Mark a track as just previewed (anti-double for button feedback)
+// track_idx: 0-4 = perc tracks, 5 = melody
+// ---------------------------------------------------------------------------
+
+static mp_obj_t audiomix_clock_preview(mp_obj_t track_obj) {
+    if (audiomix_state == NULL) {
+        return mp_const_none;
+    }
+    int track = mp_obj_get_int(track_obj);
+    if (track < 0 || track > SEQ_MAX_PERC_TRACKS) {
+        return mp_const_none;
+    }
+    audiomix_state->clock.manual_trigger_sample[track] =
+        audiomix_state->clock.total_samples;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_clock_preview_obj,
+                                  audiomix_clock_preview);
 
 // ---------------------------------------------------------------------------
 // Step clock API
@@ -626,6 +644,7 @@ static const mp_rom_map_elem_t audiomix_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_clock_set_perc_buffer), MP_ROM_PTR(&audiomix_clock_set_perc_buffer_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_set_melody_config), MP_ROM_PTR(&audiomix_clock_set_melody_config_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_clear_grid),   MP_ROM_PTR(&audiomix_clock_clear_grid_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_preview),     MP_ROM_PTR(&audiomix_clock_preview_obj) },
     // Constants
     { MP_ROM_QSTR(MP_QSTR_NUM_VOICES),           MP_ROM_INT(AUDIOMIX_NUM_VOICES) },
     // Waveform type constants

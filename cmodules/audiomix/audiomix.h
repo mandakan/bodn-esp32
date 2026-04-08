@@ -66,8 +66,9 @@ typedef struct {
     volatile audiomix_source_t source_type;
     volatile uint32_t gain;             // fixed-point 16.16 multiplier
     volatile uint8_t  loop;             // 1 = loop, 0 = one-shot
-    volatile uint8_t  stop_req;         // Python sets 1; core 1 clears + stops
+    volatile uint8_t  stop_req;         // Python sets 1; core 0 clears + stops
     volatile uint8_t  fade_in;          // apply fade-in on first chunk
+    volatile uint8_t  writing;          // 1 = Python is writing fields, clock must skip
 
     // SRC_RINGBUF fields
     audiomix_ringbuf_t ringbuf;
@@ -139,8 +140,10 @@ typedef struct {
     uint16_t melody_duration_ms;        // tone duration for melody notes (default 150)
     uint8_t  melody_wave;               // waveform type (default SINE)
 
-    // Anti-double-trigger: sample count when each voice was last manually triggered
-    uint32_t manual_trigger_sample[AUDIOMIX_NUM_VOICES];
+    // Anti-double-trigger: sample count when each track/melody was last
+    // manually triggered (by button preview).  Indexed by perc track (0-4)
+    // + melody (index 5).
+    uint32_t manual_trigger_sample[SEQ_MAX_PERC_TRACKS + 1];
     uint32_t total_samples;             // monotonic sample counter for anti-repeat
 
     // BPM for Python query

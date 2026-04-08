@@ -275,8 +275,9 @@ static void mix_task(void *arg) {
                     if (!(st->perc_mask & (1 << t))) continue;
                     int vi = clk->perc_voice[t];
                     if (vi >= AUDIOMIX_NUM_VOICES) continue;
-                    // Anti-double: skip if manually triggered recently
-                    uint32_t since = clk->total_samples - clk->manual_trigger_sample[vi];
+                    if (state->voices[vi].writing) continue;
+                    // Anti-double: check per-track preview marker
+                    uint32_t since = clk->total_samples - clk->manual_trigger_sample[t];
                     if (since < threshold) continue;
 
                     seq_perc_track_t *pt = &clk->perc_tracks[t];
@@ -296,8 +297,9 @@ static void mix_task(void *arg) {
                 // Melody
                 if (st->melody_freq > 0) {
                     int vi = clk->melody_voice;
-                    if (vi < AUDIOMIX_NUM_VOICES) {
-                        uint32_t since = clk->total_samples - clk->manual_trigger_sample[vi];
+                    if (vi < AUDIOMIX_NUM_VOICES && !state->voices[vi].writing) {
+                        // Anti-double: check melody preview marker (index 5)
+                        uint32_t since = clk->total_samples - clk->manual_trigger_sample[SEQ_MAX_PERC_TRACKS];
                         if (since >= threshold) {
                             audiomix_voice_t *v = &state->voices[vi];
                             v->source_type = SRC_NONE;
