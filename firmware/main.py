@@ -208,29 +208,44 @@ def create_hardware():
     # I2S audio output (MAX98357A)
     audio = None
     try:
-        from machine import I2S
-
-        i2s = I2S(
-            0,
-            sck=Pin(config.I2S_SPK_BCK),
-            ws=Pin(config.I2S_SPK_WS),
-            sd=Pin(config.I2S_SPK_DIN),
-            mode=I2S.TX,
-            bits=16,
-            format=I2S.STEREO,
-            rate=16000,
-            ibuf=16384,
-        )
         from bodn.audio import AudioEngine
 
-        _amp_sd = Pin(config.AMP_SD_PIN, Pin.OUT, value=0)
+        try:
+            import _audiomix  # noqa: F401 — presence check
 
-        def _enable_amp():
-            _amp_sd.value(1)
+            # Native backend: C mixer on core 1 owns I2S + amp
+            audio = AudioEngine(
+                native=True,
+                bck=config.I2S_SPK_BCK,
+                ws=config.I2S_SPK_WS,
+                din=config.I2S_SPK_DIN,
+                amp=config.AMP_SD_PIN,
+            )
+            hw_status["audio"] = True
+            print("AudioEngine initialised (native, core 1)")
+        except ImportError:
+            # Fallback: Python-driven I2S on core 0
+            from machine import I2S
 
-        audio = AudioEngine(i2s, amp_enable=_enable_amp)
-        hw_status["audio"] = True
-        print("AudioEngine initialised (I2S TX)")
+            i2s = I2S(
+                0,
+                sck=Pin(config.I2S_SPK_BCK),
+                ws=Pin(config.I2S_SPK_WS),
+                sd=Pin(config.I2S_SPK_DIN),
+                mode=I2S.TX,
+                bits=16,
+                format=I2S.STEREO,
+                rate=16000,
+                ibuf=16384,
+            )
+            _amp_sd = Pin(config.AMP_SD_PIN, Pin.OUT, value=0)
+
+            def _enable_amp():
+                _amp_sd.value(1)
+
+            audio = AudioEngine(i2s, amp_enable=_enable_amp)
+            hw_status["audio"] = True
+            print("AudioEngine initialised (fallback, I2S TX)")
     except Exception as e:
         print("Audio init failed:", e)
 

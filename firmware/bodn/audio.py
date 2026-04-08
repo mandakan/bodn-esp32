@@ -1,15 +1,16 @@
 # bodn/audio.py — AudioEngine for Bodn ESP32
 #
-# DMA-driven audio: the I2S peripheral fires an IRQ callback via
-# micropython.schedule() whenever it needs more data.  The callback
-# mixes one chunk from active voices and feeds it back — a self-
-# sustaining chain driven by hardware timing, not software scheduling.
+# Two backends:
 #
-# This decouples audio from the uasyncio event loop: even while the
-# main thread blocks on a 47 ms SPI display write, the DMA keeps
-# playing buffered audio.  The callback fires at the next VM opcode
-# boundary after the SPI write returns, immediately refilling the buffer.
+# 1. Native (_audiomix C module): mixing runs on core 1 in a FreeRTOS task,
+#    completely independent of the Python VM.  WAV data is fed through
+#    per-voice ring buffers; tones and pre-loaded buffers are handled
+#    entirely in C.
 #
+# 2. Fallback (viper/pure-Python): DMA-driven via micropython.schedule()
+#    IRQ callbacks on core 0.  Used on stock firmware or host tests.
+#
+# The public API is identical regardless of backend.
 # Mixes up to 6 simultaneous voices: 1 music + 4 SFX pool + 1 UI.
 
 try:
@@ -37,6 +38,15 @@ except ImportError:
     def const(x):
         return x
 
+
+# Try to import the native C mixer
+try:
+    import _audiomix
+
+    _has_native = True
+except ImportError:
+    _audiomix = None
+    _has_native = False
 
 from bodn import tones
 from bodn.wav import WavReader
@@ -67,6 +77,14 @@ _GAIN_MUSIC = const(45875)  # 70% — solo music
 _GAIN_MUSIC_DUCKED = const(16384)  # 25% — music when other voices active
 _GAIN_SFX = const(45875)  # 70%
 _GAIN_UI = const(52428)  # 80%
+
+# Wave name → C enum mapping for native backend
+_WAVE_MAP = {"square": 0, "sine": 1, "sawtooth": 2, "noise": 3}
+
+
+# ---------------------------------------------------------------------------
+# Pure-Python / viper DSP helpers (fallback backend only)
+# ---------------------------------------------------------------------------
 
 
 def _apply_volume_py(buf, n_bytes, mult):
@@ -214,6 +232,11 @@ def _apply_fade(buf, n_bytes, fade_in, fade_out):
             buf[off + 1] = (val >> 8) & 0xFF
 
 
+# ---------------------------------------------------------------------------
+# Source classes (used by fallback backend; WAV streaming also used by native)
+# ---------------------------------------------------------------------------
+
+
 class ToneSource:
     """Adapter that wraps tones.generate() with the same interface as WavReader."""
 
@@ -306,6 +329,11 @@ class MemorySource:
         self._pos = 0
 
 
+# ---------------------------------------------------------------------------
+# Fallback backend: _Voice + IRQ callback (core 0, viper/pure-Python)
+# ---------------------------------------------------------------------------
+
+
 class _Voice:
     """Internal voice state with its own read buffer."""
 
@@ -340,13 +368,7 @@ class _Voice:
 
 
 def _make_irq_callback(engine):
-    """Build a closure-based IRQ callback with cached locals.
-
-    Closure locals are the fastest variable access in MicroPython —
-    no dict lookups, no attribute access in the hot path.
-    """
-    # Cache everything the callback needs as closure variables.
-    # These are captured once and reused for every DMA callback.
+    """Build a closure-based IRQ callback with cached locals."""
     mix_buf = engine._mix_buf
     zero = engine._zero
     buf = engine._buf
@@ -360,7 +382,6 @@ def _make_irq_callback(engine):
 
     def callback(i2s_obj):
         """Mix one chunk and write to I2S.  Fired by DMA via micropython.schedule()."""
-        # Check for active voices — determine ducking
         non_music_active = False
         has_active = False
         for v in voices:
@@ -373,7 +394,6 @@ def _make_irq_callback(engine):
             i2s_obj.write(silence_short)
             return
 
-        # Mix all active voices into mix_buf
         max_n = 0
         mix_buf[:] = zero
 
@@ -403,7 +423,6 @@ def _make_irq_callback(engine):
                     v.stop()
                     continue
 
-            # Per-voice gain
             if v.is_music and non_music_active:
                 gain = _GAIN_MUSIC_DUCKED
             else:
@@ -419,34 +438,64 @@ def _make_irq_callback(engine):
             i2s_obj.write(silence_short)
             return
 
-        # Master volume
         vol = engine._volume
         if vol < 100:
             _apply_volume_fast(mix_buf, max_n, engine._vol_mult)
 
-        # Mono to stereo expansion
         if m2s_viper:
             m2s_viper(mix_buf, buf, max_n)
         else:
             mono_to_stereo_py(mix_buf, buf, max_n)
 
-        # Non-blocking write — returns immediately, DMA handles the rest
         i2s_obj.write(buf_view[: max_n * 2])
 
     return callback
 
 
-class AudioEngine:
-    """DMA-driven audio engine with multi-voice mixing.
+# ---------------------------------------------------------------------------
+# Native backend: streaming voice state (Python-side bookkeeping)
+# ---------------------------------------------------------------------------
 
-    The I2S peripheral fires an IRQ callback whenever it needs data.
-    The callback mixes one chunk from active voices and feeds it back,
-    creating a self-sustaining chain driven by hardware timing.
+
+class _StreamingVoice:
+    """Tracks a WAV file being streamed into a native ring buffer."""
+
+    __slots__ = ("idx", "wav_reader", "file_obj", "feed_buf", "loop")
+
+    def __init__(self, idx, wav_reader, file_obj, feed_buf, loop):
+        self.idx = idx
+        self.wav_reader = wav_reader
+        self.file_obj = file_obj
+        self.feed_buf = feed_buf
+        self.loop = loop
+
+    def close(self):
+        if self.file_obj:
+            try:
+                self.file_obj.close()
+            except Exception:
+                pass
+            self.file_obj = None
+        self.wav_reader = None
+
+
+# ---------------------------------------------------------------------------
+# AudioEngine — unified public API
+# ---------------------------------------------------------------------------
+
+
+class AudioEngine:
+    """Multi-voice audio engine with native (core 1) and fallback backends.
 
     Usage::
 
-        audio = AudioEngine(i2s_out)
-        # in asyncio.gather:
+        # Native backend (custom firmware with _audiomix):
+        audio = AudioEngine(native=True, bck=13, ws=45, din=7, amp=3)
+
+        # Fallback backend (stock firmware):
+        audio = AudioEngine(i2s=i2s_obj, amp_enable=callback)
+
+        # In asyncio.gather:
         await audio.start()
 
         audio.tone(440, 500)
@@ -454,50 +503,64 @@ class AudioEngine:
         audio.boop()
     """
 
-    __slots__ = (
-        "_i2s",
-        "_amp_enable",
-        "_voices",
-        "_seq_counter",
-        "_mix_buf",
-        "_zero",
-        "_buf",
-        "_buf_view",
-        "_silence",
-        "_silence_short",
-        "_volume",
-        "_vol_mult",
-        "_burst_max",
-        "_irq_cb",
-    )
+    def __init__(self, i2s=None, amp_enable=None, native=False, **kwargs):
+        self._native = native and _has_native
 
-    def __init__(self, i2s, amp_enable=None):
-        self._i2s = i2s
-        self._amp_enable = amp_enable
+        if self._native:
+            # Native backend — C module handles I2S + mixing on core 1
+            bck = kwargs.get("bck", 13)
+            ws = kwargs.get("ws", 45)
+            din = kwargs.get("din", 7)
+            amp = kwargs.get("amp", 3)
+            rate = kwargs.get("rate", 16000)
+            ibuf = kwargs.get("ibuf", 16384)
+            _audiomix.init(bck=bck, ws=ws, din=din, amp=amp, rate=rate, ibuf=ibuf)
+            self._streaming = []  # active _StreamingVoice instances
+            self._buf_refs = {}  # voice_idx → bytearray ref (prevent GC)
+            self._feed_buf = bytearray(_MONO_BUF_SIZE)
+            # Fallback fields not used in native mode
+            self._i2s = None
+            self._amp_enable = None
+            self._voices = None
+            self._mix_buf = None
+            self._zero = None
+            self._buf = None
+            self._buf_view = None
+            self._silence = None
+            self._silence_short = None
+            self._irq_cb = None
+        else:
+            # Fallback backend — viper/pure-Python on core 0
+            self._i2s = i2s
+            self._amp_enable = amp_enable
+            self._voices = [
+                _Voice(_GAIN_MUSIC, is_music=True),
+                _Voice(_GAIN_SFX),
+                _Voice(_GAIN_SFX),
+                _Voice(_GAIN_SFX),
+                _Voice(_GAIN_SFX),
+                _Voice(_GAIN_UI),
+            ]
+            self._mix_buf = bytearray(_MONO_BUF_SIZE)
+            self._zero = bytes(_MONO_BUF_SIZE)
+            self._buf = bytearray(_BUF_SIZE)
+            self._buf_view = memoryview(self._buf)
+            self._silence = bytes(_BUF_SIZE)
+            self._silence_short = bytes(64)
+            self._irq_cb = None
+            self._streaming = None
+            self._buf_refs = None
+            self._feed_buf = None
 
-        self._voices = [
-            _Voice(_GAIN_MUSIC, is_music=True),
-            _Voice(_GAIN_SFX),
-            _Voice(_GAIN_SFX),
-            _Voice(_GAIN_SFX),
-            _Voice(_GAIN_SFX),
-            _Voice(_GAIN_UI),
-        ]
         self._seq_counter = 0
-
-        self._mix_buf = bytearray(_MONO_BUF_SIZE)
-        self._zero = bytes(_MONO_BUF_SIZE)
-        self._buf = bytearray(_BUF_SIZE)
-        self._buf_view = memoryview(self._buf)
-        self._silence = bytes(_BUF_SIZE)
-        self._silence_short = bytes(64)
         self._volume = 10
         self._vol_mult = 10 * 655
         self._burst_max = 0
-        self._irq_cb = None
 
     @property
     def volume(self):
+        if self._native:
+            return _audiomix.get_volume()
         return self._volume
 
     @volume.setter
@@ -505,6 +568,8 @@ class AudioEngine:
         val = max(0, min(100, val))
         self._volume = val
         self._vol_mult = val * 655
+        if self._native:
+            _audiomix.set_volume(val)
 
     @property
     def burst(self):
@@ -518,6 +583,11 @@ class AudioEngine:
     @property
     def playing(self):
         """True if any voice is active."""
+        if self._native:
+            for i in range(_NUM_VOICES):
+                if _audiomix.voice_active(i):
+                    return True
+            return False
         return any(v.source is not None for v in self._voices)
 
     def channel_active(self, channel):
@@ -526,6 +596,8 @@ class AudioEngine:
             return self.sfx_active > 0
         idx = CHANNEL_NAMES.get(channel, -1)
         if 0 <= idx < _NUM_VOICES:
+            if self._native:
+                return _audiomix.voice_active(idx)
             return self._voices[idx].source is not None
         return False
 
@@ -534,12 +606,31 @@ class AudioEngine:
         """Number of SFX pool voices currently playing."""
         count = 0
         for i in range(V_SFX_BASE, V_SFX_END):
-            if self._voices[i].source is not None:
+            if self._native:
+                if _audiomix.voice_active(i):
+                    count += 1
+            elif self._voices[i].source is not None:
                 count += 1
         return count
 
+    # -----------------------------------------------------------------------
+    # Voice allocation (shared logic)
+    # -----------------------------------------------------------------------
+
+    def _allocate_sfx_idx(self):
+        """Find a free SFX pool voice index, or steal the oldest."""
+        if self._native:
+            for i in range(V_SFX_BASE, V_SFX_END):
+                if not _audiomix.voice_active(i):
+                    return i
+            # All busy — stop the first (simple steal for native)
+            _audiomix.voice_stop(V_SFX_BASE)
+            return V_SFX_BASE
+        # Fallback: delegate to _Voice-based allocation
+        return None
+
     def _allocate_sfx(self):
-        """Find a free SFX pool voice, or steal the oldest."""
+        """Find a free SFX pool voice, or steal the oldest (fallback only)."""
         for i in range(V_SFX_BASE, V_SFX_END):
             if self._voices[i].source is None:
                 return self._voices[i]
@@ -550,8 +641,18 @@ class AudioEngine:
         oldest.stop()
         return oldest
 
+    def _assign_voice_idx(self, channel):
+        """Get voice index for a channel (native backend)."""
+        if channel == "sfx":
+            return self._allocate_sfx_idx()
+        idx = CHANNEL_NAMES.get(channel, V_SFX_BASE)
+        if idx == V_SFX_BASE and channel != "sfx":
+            return self._allocate_sfx_idx()
+        _audiomix.voice_stop(idx)
+        return idx
+
     def _assign_voice(self, channel):
-        """Get the voice slot for a channel name, stopping any existing source."""
+        """Get the voice slot for a channel name (fallback backend)."""
         if channel == "sfx":
             return self._allocate_sfx()
         idx = CHANNEL_NAMES.get(channel, V_SFX_BASE)
@@ -566,8 +667,33 @@ class AudioEngine:
         self._seq_counter += 1
         voice._start_seq = self._seq_counter
 
+    def _stop_streaming(self, idx):
+        """Remove any active streaming voice for the given index."""
+        self._streaming = [s for s in self._streaming if s.idx != idx]
+        self._buf_refs.pop(idx, None)
+
+    # -----------------------------------------------------------------------
+    # Public API: play, tone, stop, etc.
+    # -----------------------------------------------------------------------
+
     def play(self, path, loop=False, channel="sfx"):
         """Play a WAV file on the given channel."""
+        if self._native:
+            idx = self._assign_voice_idx(channel)
+            self._stop_streaming(idx)
+            try:
+                f = open(path, "rb")
+                wav = WavReader(f)
+                _audiomix.voice_start_stream(idx, loop)
+                sv = _StreamingVoice(idx, wav, f, self._feed_buf, loop)
+                # Initial fill
+                self._fill_ringbuf(sv)
+                self._streaming.append(sv)
+            except Exception as e:
+                print("audio.play error:", e)
+                _audiomix.voice_stop(idx)
+            return
+
         v = self._assign_voice(channel)
         try:
             f = open(path, "rb")
@@ -581,6 +707,13 @@ class AudioEngine:
 
     def play_buffer(self, data, loop=False, channel="sfx"):
         """Play pre-loaded PCM data (bytearray) on the given channel."""
+        if self._native:
+            idx = self._assign_voice_idx(channel)
+            self._stop_streaming(idx)
+            self._buf_refs[idx] = data  # prevent GC
+            _audiomix.voice_play_buffer(idx, data, len(data), loop)
+            return
+
         v = self._assign_voice(channel)
         v.source = MemorySource(data)
         v.loop = loop
@@ -588,6 +721,13 @@ class AudioEngine:
 
     def tone(self, freq_hz, duration_ms=200, wave="square", channel="sfx"):
         """Play a procedural tone on the given channel."""
+        if self._native:
+            idx = self._assign_voice_idx(channel)
+            self._stop_streaming(idx)
+            wave_id = _WAVE_MAP.get(wave, 0)
+            _audiomix.voice_tone(idx, freq_hz, duration_ms, wave_id)
+            return
+
         v = self._assign_voice(channel)
         v.source = ToneSource(freq_hz, duration_ms, wave)
         v.loop = False
@@ -605,6 +745,23 @@ class AudioEngine:
         steps = SOUNDS.get(name)
         if not steps:
             return
+
+        if self._native:
+            idx = self._assign_voice_idx(channel)
+            self._stop_streaming(idx)
+            # Pack steps into bytes: (freq_u16_le, dur_u16_le, wave_u8) × N
+            packed = bytearray(len(steps) * 5)
+            for i, (freq, dur, wave) in enumerate(steps):
+                off = i * 5
+                f = max(0, freq)
+                packed[off] = f & 0xFF
+                packed[off + 1] = (f >> 8) & 0xFF
+                packed[off + 2] = dur & 0xFF
+                packed[off + 3] = (dur >> 8) & 0xFF
+                packed[off + 4] = _WAVE_MAP.get(wave, 0)
+            _audiomix.voice_sequence(idx, packed)
+            return
+
         v = self._assign_voice(channel)
         v.source = SequenceSource(steps)
         v.loop = False
@@ -616,6 +773,25 @@ class AudioEngine:
 
     def stop(self, channel=None):
         """Stop playback on a channel, or all voices if None."""
+        if self._native:
+            if channel is None:
+                for i in range(_NUM_VOICES):
+                    _audiomix.voice_stop(i)
+                for sv in self._streaming:
+                    sv.close()
+                self._streaming.clear()
+                self._buf_refs.clear()
+            elif channel == "sfx":
+                for i in range(V_SFX_BASE, V_SFX_END):
+                    _audiomix.voice_stop(i)
+                    self._stop_streaming(i)
+            else:
+                idx = CHANNEL_NAMES.get(channel, -1)
+                if 0 <= idx < _NUM_VOICES:
+                    _audiomix.voice_stop(idx)
+                    self._stop_streaming(idx)
+            return
+
         if channel is None:
             for v in self._voices:
                 v.stop()
@@ -648,36 +824,74 @@ class AudioEngine:
             i -= 2
             j -= 4
 
-    async def start(self):
-        """Start the DMA-driven audio callback chain.
+    # -----------------------------------------------------------------------
+    # Ring buffer feeder (native backend)
+    # -----------------------------------------------------------------------
 
-        The I2S IRQ callback handles all mixing and writing.  This
-        coroutine just primes the chain and then idles, running
-        periodic GC to keep the heap clean.
+    def _fill_ringbuf(self, sv):
+        """Fill a streaming voice's ring buffer as much as possible."""
+        while True:
+            space = _audiomix.ringbuf_space(sv.idx)
+            if space < _MONO_BUF_SIZE:
+                break
+            n = sv.wav_reader.read_chunk(sv.feed_buf)
+            if n > 0:
+                _audiomix.voice_feed(sv.idx, sv.feed_buf, n)
+            else:
+                if sv.loop:
+                    sv.wav_reader.seek_start()
+                    _audiomix.voice_eof(sv.idx)
+                else:
+                    _audiomix.voice_eof(sv.idx)
+                break
+
+    # -----------------------------------------------------------------------
+    # start() — main async loop
+    # -----------------------------------------------------------------------
+
+    async def start(self):
+        """Start the audio engine.
+
+        Native: runs a feeder loop that tops up ring buffers for streaming
+        voices.  The C task on core 1 handles all mixing independently.
+
+        Fallback: primes the I2S DMA chain and registers the IRQ callback.
         """
         import gc
 
-        # Prime DMA + enable amp
+        if self._native:
+            print("AudioEngine started (native, core 1)")
+            gc_collect = gc.collect
+            sleep_ms = asyncio.sleep_ms
+            while True:
+                # Feed streaming voices
+                dead = []
+                for sv in self._streaming:
+                    if not _audiomix.voice_active(sv.idx):
+                        dead.append(sv)
+                        continue
+                    self._fill_ringbuf(sv)
+                # Clean up finished streams
+                for sv in dead:
+                    sv.close()
+                    self._streaming.remove(sv)
+                    self._buf_refs.pop(sv.idx, None)
+                gc_collect()
+                await sleep_ms(8)
+            return
+
+        # Fallback: IRQ callback chain
         self._i2s.write(self._silence)
         if self._amp_enable:
             self._amp_enable()
         print("Amplifier enabled, viper:", _has_viper)
 
-        # Build closure-based callback (fastest access pattern)
         self._irq_cb = _make_irq_callback(self)
-
-        # Register callback — switches I2S to non-blocking mode.
-        # Every i2s.write() now returns immediately; the callback
-        # fires when the DMA has consumed data and needs more.
         self._i2s.irq(self._irq_cb)
-
-        # Kick off the chain — first write triggers first callback
         self._i2s.write(self._silence_short)
 
         print("Audio IRQ callback chain started")
 
-        # Idle loop: the callback chain is self-sustaining.
-        # We just do periodic GC here.
         gc_collect = gc.collect
         sleep_ms = asyncio.sleep_ms
         while True:
