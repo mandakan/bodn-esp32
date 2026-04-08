@@ -128,12 +128,10 @@ class SoundboardScreen(Screen):
         self._prev_muted = None
         self._flash = None
         self._prev_flash = None
-        # Sounds are preloaded into PSRAM (no file I/O), but keep burst
-        # moderate for responsive button handling.
-        self._audio.burst = 2
+        pass  # burst auto-scales — no override needed
 
     def exit(self):
-        self._audio.burst = 0  # restore auto-scaling
+        pass
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()

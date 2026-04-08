@@ -541,6 +541,7 @@ if _diag_requested and tft:
 tft = None
 spi = None
 np = None
+gc.threshold(gc.mem_free() // 4)
 gc.collect()
 print("BOOT done, free={}".format(gc.mem_free()))
 

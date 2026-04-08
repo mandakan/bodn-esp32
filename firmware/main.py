@@ -39,6 +39,13 @@ micropython.kbd_intr(3)
 
 N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 
+# Frame budget for the priority-ordered main loop.
+# Graphics are opportunistic: render only when time remains after
+# input + audio servicing.  This caps the frame rate at ~30 fps and
+# ensures audio never starves.
+_FRAME_BUDGET_MS = const(33)
+_MIN_RENDER_MS = const(5)  # don't start a render with less than this
+
 
 def create_hardware():
     """Initialise all hardware peripherals.
@@ -212,7 +219,7 @@ def create_hardware():
             bits=16,
             format=I2S.STEREO,
             rate=16000,
-            ibuf=8192,
+            ibuf=16384,
         )
         from bodn.audio import AudioEngine
 
@@ -505,25 +512,66 @@ async def input_scan_task(mcp, mcp2, inp):
 async def primary_task(
     manager, settings, inp, encoders, mcp, mcp2, idle_tracker, power_mgr
 ):
-    """Display update + power management."""
+    """Display update + power management with frame-skip budgeting.
+
+    update() always runs (game logic, timing accumulators).
+    render+show is skipped when the frame budget is exhausted,
+    keeping input and audio responsive under heavy graphics load.
+    """
     print("primary_task started, debug_input={}".format(settings.get("debug_input")))
     frame = 0
     errors = 0
+    ticks_ms = time.ticks_ms
+    ticks_diff = time.ticks_diff
+    prev_render_ms = 0
+
     while True:
+        t0 = ticks_ms()
+
+        # ── Input + game logic (always runs) ──────────────────
         try:
-            manager.tick()
+            needs_render = manager.consume_and_update()
         except KeyboardInterrupt:
             raise
         except Exception as e:
+            needs_render = False
             errors += 1
             if errors <= 3:
                 import sys
 
                 sys.print_exception(e)
             else:
-                print("primary_task error #{}: {}".format(errors, e))
+                print("primary_task update error #{}: {}".format(errors, e))
 
-        # Power management
+        # ── Graphics — opportunistic with predictive budget ───
+        # Use the previous frame's render cost to predict whether
+        # we can afford to render this frame.  After a heavy SPI
+        # push the next frame is skipped, giving the audio task a
+        # guaranteed scheduling gap.
+        elapsed = ticks_diff(ticks_ms(), t0)
+        predicted = elapsed + prev_render_ms
+
+        if needs_render and predicted < _FRAME_BUDGET_MS:
+            try:
+                t_render = ticks_ms()
+                manager.render_and_show()
+                prev_render_ms = ticks_diff(ticks_ms(), t_render)
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                prev_render_ms = 0
+                errors += 1
+                if errors <= 3:
+                    import sys
+
+                    sys.print_exception(e)
+                else:
+                    print("primary_task render error #{}: {}".format(errors, e))
+        elif needs_render:
+            manager.skip_render()
+            prev_render_ms = 0  # reset predictor after a skip
+
+        # ── Power management ──────────────────────────────────
         if inp.has_activity():
             idle_tracker.poke()
 
@@ -574,7 +622,7 @@ async def primary_task(
             )
 
         frame += 1
-        await asyncio.sleep_ms(5)
+        await asyncio.sleep_ms(2)
 
 
 async def secondary_task(secondary):
@@ -761,7 +809,7 @@ async def housekeeping_task(session_mgr, np, settings, audio=None):
             errors += 1
             print("bat_monitor error #{}: {}".format(errors, e))
 
-        # Sync audio volume from settings
+        # Sync audio volume from settings + health check
         if audio:
             if settings.get("audio_enabled", True):
                 target = settings.get("volume", 30)
@@ -880,7 +928,14 @@ async def main():
     tasks = [
         input_scan_task(mcp, mcp2, inp),
         primary_task(
-            manager, settings, inp, encoders, mcp, mcp2, idle_tracker, power_mgr
+            manager,
+            settings,
+            inp,
+            encoders,
+            mcp,
+            mcp2,
+            idle_tracker,
+            power_mgr,
         ),
         secondary_task(secondary),
         housekeeping_task(session_mgr, np, settings, audio=audio),

@@ -121,11 +121,6 @@ class SequencerScreen(Screen):
 
         self._last_ms = time.ticks_ms()
 
-        # Low burst for responsive timing — sequencer uses memory/tone
-        # sources (no file I/O) so DMA headroom needs are modest.
-        if self._audio:
-            self._audio.burst = 2
-
         # Compute grid geometry
         w = manager.tft.width if hasattr(manager.tft, "width") else 320
         h = manager.tft.height if hasattr(manager.tft, "height") else 240
@@ -149,7 +144,6 @@ class SequencerScreen(Screen):
         if self._audio:
             self._audio.stop("sfx")
             self._audio.stop("music")
-            self._audio.burst = 0  # restore auto-scaling
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()

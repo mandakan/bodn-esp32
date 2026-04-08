@@ -1,5 +1,7 @@
 # bodn/ui/screen.py — Screen base class and ScreenManager
 
+import gc
+
 
 class Screen:
     """Base class for all UI screens.
@@ -65,10 +67,12 @@ class ScreenManager:
         self._dirty = True  # full clear needed on first frame / transitions
         self._show_needed = False  # framebuffer changed, just push SPI (no re-render)
         self._dirty_rect = None  # (x, y, w, h) bounding box for partial push
+        self._frames_skipped = 0  # consecutive render skips (for diagnostics)
         # Perf counters (enabled via debug_perf setting)
         self.debug_perf = False
         self._perf_total = 0
         self._perf_drawn = 0
+        self._perf_skipped = 0
         self._perf_time_ms = None  # set to time_ms function when enabled
 
     @property
@@ -113,6 +117,7 @@ class ScreenManager:
 
     def push(self, screen):
         """Push a screen onto the stack."""
+        gc.collect()
         self._stack.append(screen)
         self._dirty = True
         # Reset gesture detector so leftover button state (e.g. the press
@@ -127,6 +132,7 @@ class ScreenManager:
             return None
         screen = self._stack.pop()
         screen.exit()
+        gc.collect()
         self._dirty = True
         # Notify the newly-revealed screen so it can reset partial-draw state
         if self._stack:
@@ -143,12 +149,122 @@ class ScreenManager:
             self._stack[-1] = screen
         else:
             self._stack.append(screen)
+        gc.collect()
         self._dirty = True
         screen.enter(self)
 
     def set_overlay(self, overlay):
         """Set a single overlay drawn after the main screen."""
         self._overlay = overlay
+
+    # ------------------------------------------------------------------
+    # Split-phase API (used by priority-ordered main loop)
+    # ------------------------------------------------------------------
+
+    def consume_and_update(self):
+        """Phase 1: consume input + run game logic.  Always call this.
+
+        Returns True if a render is needed (dirty screen, overlay, or
+        pending show-only push).
+        """
+        self._frame += 1
+        self.inp.consume()
+
+        active = self.active
+        if active:
+            active.update(self.inp, self._frame)
+
+        # Re-read: update() may have pushed or popped screens
+        active = self.active
+
+        if self._overlay:
+            self._overlay.update(self.inp, self._frame)
+
+        return self._needs_render(active)
+
+    def _needs_render(self, active=None):
+        """Check whether any visual update is needed this frame."""
+        if self._dirty or self._show_needed:
+            return True
+        if active is None:
+            active = self.active
+        if active and active.needs_redraw():
+            return True
+        if self._overlay:
+            nr = getattr(self._overlay, "needs_redraw", None)
+            if nr and nr():
+                return True
+        return False
+
+    def render_and_show(self):
+        """Phase 2: render + SPI push.  Only call when budget allows.
+
+        Handles both full render paths and show-only partial pushes.
+        """
+        active = self.active
+
+        # Check if anything needs drawing
+        screen_dirty = self._dirty
+        if not screen_dirty and active:
+            screen_dirty = active.needs_redraw()
+        overlay_dirty = False
+        if self._overlay:
+            nr = getattr(self._overlay, "needs_redraw", None)
+            overlay_dirty = nr() if nr else True
+
+        if not screen_dirty and not overlay_dirty:
+            # No re-render needed — handle show-only push
+            if self._show_needed:
+                self._show_needed = False
+                dirty_rect = self._dirty_rect
+                self._dirty_rect = None
+                if dirty_rect is not None:
+                    self.tft.show_rect(*dirty_rect)
+                else:
+                    self.tft.show()
+            self._frames_skipped = 0
+            if self.debug_perf:
+                self._perf_total += 1
+                self._perf_drawn += 1
+                self._perf_report()
+            return
+
+        # Full render path
+        self._show_needed = False
+        self._dirty_rect = None
+
+        # Clear on screen transitions
+        if self._dirty:
+            self.tft.fill(self.theme.BLACK)
+            self._dirty = False
+
+        takes_over = self._overlay and getattr(self._overlay, "takes_over", False)
+        if active and not takes_over:
+            active.render(self.tft, self.theme, self._frame)
+
+        if self._overlay:
+            self._overlay.render(self.tft, self.theme, self._frame)
+
+        # Push only the dirty region to the display (auto-tracked by ST7735)
+        self.tft.show_dirty()
+
+        self._frames_skipped = 0
+        if self.debug_perf:
+            self._perf_total += 1
+            self._perf_drawn += 1
+            self._perf_report()
+
+    def skip_render(self):
+        """Record a skipped frame (called by main loop when budget exhausted)."""
+        self._frames_skipped += 1
+        if self.debug_perf:
+            self._perf_total += 1
+            self._perf_skipped += 1
+            self._perf_report()
+
+    # ------------------------------------------------------------------
+    # Legacy single-call API (used by secondary display and tests)
+    # ------------------------------------------------------------------
 
     def tick(self):
         """One frame: consume → update → render-if-needed → show-if-needed."""
@@ -224,13 +340,15 @@ class ScreenManager:
             return
         total = self._perf_total
         drawn = self._perf_drawn
+        skipped = self._perf_skipped
         pct = drawn * 100 // max(1, total)
         active = self.active
         name = active.__class__.__name__ if active else "none"
         print(
-            "PERF f={} drawn={}/{}({}%) screen={}".format(
-                self._frame, drawn, total, pct, name
+            "PERF f={} drawn={}/{}({}%) skip={} screen={}".format(
+                self._frame, drawn, total, pct, skipped, name
             )
         )
         self._perf_total = 0
         self._perf_drawn = 0
+        self._perf_skipped = 0

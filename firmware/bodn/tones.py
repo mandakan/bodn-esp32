@@ -2,11 +2,132 @@
 #
 # Fills a pre-allocated bytearray with PCM 16-bit LE mono samples.
 # All integer math in the sample loop for ESP32 performance.
+# Viper-accelerated inner loops when available (~10-20x speedup).
 
 import math
 
+try:
+    import micropython
+
+    try:
+
+        @micropython.viper
+        def _viper_probe():
+            pass
+
+        _has_viper = True
+    except (AttributeError, NotImplementedError):
+        _has_viper = False
+except ImportError:
+    micropython = None
+    _has_viper = False
+
 # 256-entry sine lookup table (int16 range)
 _SINE_LUT = [int(32767 * math.sin(2 * math.pi * i / 256)) for i in range(256)]
+
+# Packed LUT as bytearray for viper (512 bytes: 256 × 2-byte LE int16).
+# Viper can't index Python lists, so we pre-pack the LUT into a flat
+# byte buffer and read it with ptr8.
+_SINE_LUT_BUF = bytearray(512)
+for _i, _v in enumerate(_SINE_LUT):
+    _uv = _v & 0xFFFF
+    _SINE_LUT_BUF[_i * 2] = _uv & 0xFF
+    _SINE_LUT_BUF[_i * 2 + 1] = (_uv >> 8) & 0xFF
+del _i, _uv
+
+
+# ---------------------------------------------------------------------------
+# Pure-Python fallback implementations
+# ---------------------------------------------------------------------------
+
+
+def _generate_square_py(buf, n_samples, period, half, phase_offset):
+    for i in range(n_samples):
+        phase = (i + phase_offset) % period
+        val = 32767 if phase < half else -32767
+        buf[i * 2] = val & 0xFF
+        buf[i * 2 + 1] = (val >> 8) & 0xFF
+
+
+def _generate_sine_py(buf, n_samples, period, phase_offset):
+    lut = _SINE_LUT
+    for i in range(n_samples):
+        idx = ((i + phase_offset) * 256 // period) % 256
+        val = lut[idx]
+        buf[i * 2] = val & 0xFF
+        buf[i * 2 + 1] = (val >> 8) & 0xFF
+
+
+def _generate_sawtooth_py(buf, n_samples, period, phase_offset):
+    for i in range(n_samples):
+        phase = (i + phase_offset) % period
+        val = (phase * 65534 // period) - 32767
+        buf[i * 2] = val & 0xFF
+        buf[i * 2 + 1] = (val >> 8) & 0xFF
+
+
+# ---------------------------------------------------------------------------
+# Viper-accelerated implementations (~10-20x faster)
+# ---------------------------------------------------------------------------
+
+if _has_viper:
+
+    @micropython.viper
+    def _generate_square_viper(
+        buf_ptr, n_samples: int, period: int, half: int, phase_offset: int
+    ):
+        p = ptr8(buf_ptr)  # noqa: F821
+        i = 0
+        while i < n_samples:
+            phase = int((i + phase_offset) % period)
+            if phase < half:
+                val = 32767
+            else:
+                val = -32767
+            off = i * 2
+            p[off] = val & 0xFF
+            p[off + 1] = (val >> 8) & 0xFF
+            i += 1
+
+    @micropython.viper
+    def _generate_sine_viper(
+        buf_ptr, n_samples: int, period: int, phase_offset: int, lut_ptr
+    ):
+        p = ptr8(buf_ptr)  # noqa: F821
+        lut = ptr8(lut_ptr)  # noqa: F821
+        i = 0
+        while i < n_samples:
+            idx = int(((i + phase_offset) * 256 // period) % 256)
+            # Read LE int16 from packed LUT
+            lut_off = idx * 2
+            lo = int(lut[lut_off])
+            hi = int(lut[lut_off + 1])
+            off = i * 2
+            p[off] = lo
+            p[off + 1] = hi
+            i += 1
+
+    @micropython.viper
+    def _generate_sawtooth_viper(
+        buf_ptr, n_samples: int, period: int, phase_offset: int
+    ):
+        p = ptr8(buf_ptr)  # noqa: F821
+        i = 0
+        while i < n_samples:
+            phase = int((i + phase_offset) % period)
+            val = int((phase * 65534 // period) - 32767)
+            off = i * 2
+            p[off] = val & 0xFF
+            p[off + 1] = (val >> 8) & 0xFF
+            i += 1
+
+    _gen_square = _generate_square_viper
+    _gen_sine = _generate_sine_viper
+    _gen_sawtooth = _generate_sawtooth_viper
+else:
+    _gen_square = _generate_square_py
+    _gen_sine = _generate_sine_py
+    _gen_sawtooth = _generate_sawtooth_py
 
 
 def generate(buf, freq_hz, sample_rate=16000, wave="square", phase_offset=0):
@@ -34,27 +155,16 @@ def generate(buf, freq_hz, sample_rate=16000, wave="square", phase_offset=0):
 
     if wave == "square":
         half = period // 2
-        for i in range(n_samples):
-            phase = (i + phase_offset) % period
-            val = 32767 if phase < half else -32767
-            buf[i * 2] = val & 0xFF
-            buf[i * 2 + 1] = (val >> 8) & 0xFF
+        _gen_square(buf, n_samples, period, half, phase_offset)
 
     elif wave == "sine":
-        for i in range(n_samples):
-            # Map sample position to 0-255 LUT index
-            idx = ((i + phase_offset) * 256 // period) % 256
-            val = _SINE_LUT[idx]
-            buf[i * 2] = val & 0xFF
-            buf[i * 2 + 1] = (val >> 8) & 0xFF
+        if _has_viper:
+            _gen_sine(buf, n_samples, period, phase_offset, _SINE_LUT_BUF)
+        else:
+            _gen_sine(buf, n_samples, period, phase_offset)
 
     elif wave == "sawtooth":
-        for i in range(n_samples):
-            phase = (i + phase_offset) % period
-            # Linear ramp from -32767 to 32767
-            val = (phase * 65534 // period) - 32767
-            buf[i * 2] = val & 0xFF
-            buf[i * 2 + 1] = (val >> 8) & 0xFF
+        _gen_sawtooth(buf, n_samples, period, phase_offset)
 
     else:
         return 0, phase_offset
