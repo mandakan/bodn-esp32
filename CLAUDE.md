@@ -81,7 +81,7 @@ bodn-esp32/
 │  └─ bodn/
 │     ├─ __init__.py
 │     ├─ arcade.py          # arcade button input + LED output via MCP/PCA
-│     ├─ audio.py           # async AudioEngine (3-channel priority playback)
+│     ├─ audio.py           # AudioEngine (native core-1 or fallback viper backend)
 │     ├─ chord.py           # multi-button chord/combo detection
 │     ├─ cli.py             # serial REPL helpers (wifi, settings, reboot)
 │     ├─ config.py          # pin assignments, constants, encoder sensitivity
@@ -151,9 +151,24 @@ bodn-esp32/
 │  ├─ wokwi-sync.py         # deploy firmware to Wokwi simulator (raw TCP)
 │  ├─ ota-push.py           # push firmware over WiFi via HTTP (no USB needed)
 │  ├─ ftp-sync.py           # push firmware over WiFi via FTP (faster, STA mode only)
+│  ├─ build-firmware.sh      # build custom MicroPython firmware with C modules
 │  ├─ generate_story_tts.py  # generate story narration TTS from story scripts
 │  ├─ story_preview.py      # preview story scripts in terminal
 │  └─ sd-sync.py            # build + sync SD card assets (TTS, sounds, etc.)
+├─ cmodules/                  # native C extensions (compiled into firmware)
+│  ├─ micropython.cmake       # top-level cmake: includes sub-modules
+│  └─ audiomix/               # core-1 audio mixer (_audiomix module)
+│     ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
+│     ├─ audiomix.c/h         # Python bindings + shared types
+│     ├─ mixer.c/h            # FreeRTOS task: mix loop + I2S on core 1
+│     ├─ ringbuf.c/h          # lock-free SPSC ring buffer
+│     └─ tonegen.c/h          # sine/square/sawtooth/noise generators
+├─ boards/
+│  └─ BODN_S3/                # custom board definition (external to MicroPython tree)
+│     ├─ mpconfigboard.cmake  # sdkconfig layering (spiram_oct, I2S IRAM-safe)
+│     ├─ mpconfigboard.h      # board name + MCU name
+│     └─ sdkconfig.board      # dual-core, I2S ISR safety
+├─ micropython/                # git submodule → micropython/micropython @ v1.27.0
 ├─ tests/
 │  ├─ conftest.py           # MicroPython hardware stubs
 │  └─ test_*.py             # host-side unit tests
@@ -218,6 +233,19 @@ uv run python tools/generate_story_tts.py          # generate story narration TT
 uv run python tools/generate_story_tts.py --dry-run  # preview
 uv run python tools/generate_story_tts.py --story peter_rabbit  # single story
 uv run python tools/convert_audio.py              # convert all audio to device format
+
+# Custom firmware build (optional — enables native C audio mixer on core 1)
+# One-time setup:
+#   git submodule add https://github.com/micropython/micropython.git micropython
+#   cd micropython && git checkout v1.27.0 && cd ..
+#   git clone -b v5.5.1 --recursive https://github.com/espressif/esp-idf.git ~/esp-idf
+#   ~/esp-idf/install.sh esp32s3
+source ~/esp-idf/export.sh                        # once per terminal session
+./tools/build-firmware.sh                          # build firmware
+./tools/build-firmware.sh flash                    # build + flash
+./tools/build-firmware.sh clean                    # clean build directory
+# The custom firmware is stock MicroPython + _audiomix C module.
+# If _audiomix is not available, AudioEngine falls back to the viper/IRQ path.
 
 # SD card asset sync (build + copy in one step — runs all 3 steps above)
 uv run python tools/sd-sync.py                    # auto-detect BODN* SD card on macOS

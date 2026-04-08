@@ -43,6 +43,33 @@ esptool.py --chip esp32s3 --port /dev/cu.usbserial-XXXX \
 
 Use the **ESP32_GENERIC_S3-SPIRAM_OCT** build (octal SPIRAM matches the N8R8 module).
 
+### Custom firmware (optional)
+
+A custom firmware build adds the `_audiomix` native C module, which moves audio
+mixing to a dedicated FreeRTOS task on core 1. This eliminates audio glitches
+caused by SPI display writes blocking the Python VM. The device works fine with
+stock firmware — `AudioEngine` falls back to the viper/IRQ path automatically.
+
+```bash
+# One-time: install ESP-IDF v5.5.1
+git clone -b v5.5.1 --recursive https://github.com/espressif/esp-idf.git ~/esp-idf
+~/esp-idf/install.sh esp32s3
+
+# One-time: init MicroPython submodule (if not already)
+git submodule update --init --recursive
+
+# Build
+source ~/esp-idf/export.sh
+./tools/build-firmware.sh
+
+# Flash
+esptool.py --chip esp32s3 --port /dev/cu.usbserial-XXXX erase_flash
+esptool.py --chip esp32s3 --port /dev/cu.usbserial-XXXX \
+    write_flash -z 0 build/firmware-bodn.bin
+```
+
+Verify on the REPL: `import _audiomix` should succeed without errors.
+
 ## 2. Deploy firmware
 
 ```bash
