@@ -104,7 +104,55 @@ typedef struct {
 } audiomix_voice_t;
 
 // ---------------------------------------------------------------------------
-// Global mixer state
+// Step sequencer clock (sample-accurate grid triggering)
+// ---------------------------------------------------------------------------
+
+#define SEQ_MAX_STEPS       16
+#define SEQ_MAX_PERC_TRACKS 5
+#define SEQ_ANTI_REPEAT_MS  50   // suppress grid trigger if voice played within this window
+
+// Per-step trigger: what to play when the playhead crosses this step
+typedef struct {
+    // Percussion: which tracks are active (bitmask, bits 0-4)
+    uint8_t perc_mask;
+    // Melody: frequency in Hz (0 = off)
+    uint16_t melody_freq;
+} seq_step_t;
+
+// Percussion track config: pointer to pre-loaded PCM buffer
+typedef struct {
+    const uint8_t *buf_ptr;
+    uint32_t buf_len;
+} seq_perc_track_t;
+
+typedef struct {
+    // Clock state
+    volatile uint8_t  playing;          // 1 = clock running
+    volatile uint8_t  n_steps;          // 8 or 16
+    volatile uint8_t  current_step;     // 0..n_steps-1 (core 0 writes, Python reads)
+    uint32_t samples_per_step;          // computed from BPM + sample_rate
+    uint32_t sample_count;              // accumulator within current step
+
+    // Grid data (Python writes, core 0 reads)
+    seq_step_t steps[SEQ_MAX_STEPS];
+
+    // Percussion track buffers (set once by Python)
+    seq_perc_track_t perc_tracks[SEQ_MAX_PERC_TRACKS];
+
+    // Melody config
+    uint16_t melody_duration_ms;        // tone duration for melody notes (default 150)
+    uint8_t  melody_wave;               // waveform type (default SINE)
+
+    // Anti-double-trigger: sample count when each voice was last manually triggered
+    uint32_t manual_trigger_sample[AUDIOMIX_NUM_VOICES];
+    uint32_t total_samples;             // monotonic sample counter for anti-repeat
+
+    // BPM for Python query
+    volatile uint16_t bpm;
+} seq_clock_t;
+
+// ---------------------------------------------------------------------------
+// Global state
 // ---------------------------------------------------------------------------
 
 typedef struct {
@@ -115,7 +163,10 @@ typedef struct {
     uint32_t sample_rate;
     uint32_t seq_counter;               // monotonic counter for voice age
 
-    // Diagnostics (written by core 1, read by Python)
+    // Step sequencer clock
+    seq_clock_t clock;
+
+    // Diagnostics (written by core 0, read by Python)
     volatile uint32_t underruns;        // ring buffer underrun count
     volatile uint32_t mix_calls;        // total mix loop iterations
     volatile uint32_t mix_us_last;      // last mix cycle duration (µs)

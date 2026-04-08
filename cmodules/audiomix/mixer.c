@@ -257,8 +257,68 @@ static void mix_task(void *arg) {
             }
         }
 
+        // --- Step sequencer clock ---
+        seq_clock_t *clk = &state->clock;
+        if (clk->playing && clk->samples_per_step > 0) {
+            clk->sample_count += max_samples;
+            clk->total_samples += max_samples;
+
+            while (clk->sample_count >= clk->samples_per_step) {
+                clk->sample_count -= clk->samples_per_step;
+                uint8_t next = (clk->current_step + 1) % clk->n_steps;
+                clk->current_step = next;
+
+                // Trigger voices for this step
+                seq_step_t *st = &clk->steps[next];
+
+                // Percussion tracks → SFX voices (1..4)
+                for (int t = 0; t < SEQ_MAX_PERC_TRACKS && t < 4; t++) {
+                    if (!(st->perc_mask & (1 << t))) continue;
+                    // Anti-double: skip if this voice was manually triggered recently
+                    int vi = AUDIOMIX_V_SFX_BASE + t;
+                    uint32_t since = clk->total_samples - clk->manual_trigger_sample[vi];
+                    uint32_t threshold = (state->sample_rate * SEQ_ANTI_REPEAT_MS) / 1000;
+                    if (since < threshold) continue;
+
+                    // Trigger percussion buffer on this SFX voice
+                    seq_perc_track_t *pt = &clk->perc_tracks[t];
+                    if (pt->buf_ptr && pt->buf_len > 0) {
+                        audiomix_voice_t *v = &state->voices[vi];
+                        v->buf_ptr = pt->buf_ptr;
+                        v->buf_len = pt->buf_len;
+                        v->buf_pos = 0;
+                        v->loop = 0;
+                        v->fade_in = 0;
+                        v->stop_req = 0;
+                        v->source_type = SRC_BUFFER;
+                    }
+                }
+
+                // Melody → music voice (0)
+                if (st->melody_freq > 0) {
+                    int vi = AUDIOMIX_V_MUSIC;
+                    uint32_t since = clk->total_samples - clk->manual_trigger_sample[vi];
+                    uint32_t threshold = (state->sample_rate * SEQ_ANTI_REPEAT_MS) / 1000;
+                    if (since >= threshold) {
+                        audiomix_voice_t *v = &state->voices[vi];
+                        uint32_t dur_samples = (state->sample_rate * clk->melody_duration_ms) / 1000;
+                        v->tone_freq = st->melody_freq;
+                        v->tone_samples_left = dur_samples;
+                        v->tone_phase = 0;
+                        v->tone_wave = clk->melody_wave;
+                        v->loop = 0;
+                        v->fade_in = 1;
+                        v->stop_req = 0;
+                        v->source_type = SRC_TONE;
+                    }
+                }
+            }
+            // Clock is active — always process even if no voices were triggered
+            has_active = true;
+        }
+
         if (!has_active) {
-            // No active voices — write silence, yield
+            // No active voices and no clock — write silence, yield
             size_t written;
             i2s_channel_write(s_i2s_handle, silence, sizeof(silence),
                              &written, portMAX_DELAY);
@@ -353,6 +413,12 @@ const char *mixer_init(const mixer_config_t *cfg, audiomix_state_t **state_out) 
     state->master_volume = 10;  // match Python default
     state->vol_mult = 10 * 655;
     state->running = 1;
+
+    // Initialise step clock defaults
+    state->clock.playing = 0;
+    state->clock.n_steps = 8;
+    state->clock.melody_duration_ms = 150;
+    state->clock.melody_wave = AUDIOMIX_WAVE_SINE;
 
     // Initialise per-voice state
     for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {

@@ -128,7 +128,10 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     v->stop_req = 0;
     audiomix_state->seq_counter++;
     v->start_seq = audiomix_state->seq_counter;
-    // Commit — core 1 picks it up
+    // Mark manual trigger for anti-double logic
+    audiomix_state->clock.manual_trigger_sample[idx] =
+        audiomix_state->clock.total_samples;
+    // Commit
     v->source_type = SRC_TONE;
 
     return mp_const_none;
@@ -281,6 +284,9 @@ static mp_obj_t audiomix_voice_play_buffer(size_t n_args, const mp_obj_t *args) 
     v->loop = loop ? 1 : 0;
     v->fade_in = 1;
     v->stop_req = 0;
+    // Mark manual trigger for anti-double logic
+    audiomix_state->clock.manual_trigger_sample[idx] =
+        audiomix_state->clock.total_samples;
     audiomix_state->seq_counter++;
     v->start_seq = audiomix_state->seq_counter;
     // Commit
@@ -361,6 +367,157 @@ static mp_obj_t audiomix_ringbuf_space(mp_obj_t idx_obj) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_ringbuf_space_obj,
                                   audiomix_ringbuf_space);
+
+// ---------------------------------------------------------------------------
+// Step clock API
+// ---------------------------------------------------------------------------
+
+// _audiomix.clock_start(bpm, n_steps)
+static mp_obj_t audiomix_clock_start(mp_obj_t bpm_obj, mp_obj_t steps_obj) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    seq_clock_t *clk = &audiomix_state->clock;
+    int bpm = mp_obj_get_int(bpm_obj);
+    int n = mp_obj_get_int(steps_obj);
+    if (bpm < 1) bpm = 1;
+    if (n < 1) n = 1;
+    if (n > SEQ_MAX_STEPS) n = SEQ_MAX_STEPS;
+
+    clk->bpm = bpm;
+    clk->n_steps = n;
+    // Each step = one 8th note = 60/(bpm*2) seconds
+    clk->samples_per_step = audiomix_state->sample_rate * 60 / (bpm * 2);
+    clk->sample_count = 0;
+    clk->current_step = n - 1;  // will advance to 0 on first tick
+    clk->playing = 1;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(audiomix_clock_start_obj, audiomix_clock_start);
+
+// _audiomix.clock_stop()
+static mp_obj_t audiomix_clock_stop(void) {
+    if (audiomix_state != NULL) {
+        audiomix_state->clock.playing = 0;
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(audiomix_clock_stop_obj, audiomix_clock_stop);
+
+// _audiomix.clock_set_bpm(bpm)
+static mp_obj_t audiomix_clock_set_bpm(mp_obj_t bpm_obj) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    seq_clock_t *clk = &audiomix_state->clock;
+    int bpm = mp_obj_get_int(bpm_obj);
+    if (bpm < 1) bpm = 1;
+    clk->bpm = bpm;
+    clk->samples_per_step = audiomix_state->sample_rate * 60 / (bpm * 2);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_clock_set_bpm_obj, audiomix_clock_set_bpm);
+
+// _audiomix.clock_set_steps(n_steps)
+static mp_obj_t audiomix_clock_set_steps(mp_obj_t steps_obj) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int n = mp_obj_get_int(steps_obj);
+    if (n < 1) n = 1;
+    if (n > SEQ_MAX_STEPS) n = SEQ_MAX_STEPS;
+    audiomix_state->clock.n_steps = n;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_clock_set_steps_obj, audiomix_clock_set_steps);
+
+// _audiomix.clock_get_step() -> int
+static mp_obj_t audiomix_clock_get_step(void) {
+    if (audiomix_state == NULL) return mp_obj_new_int(0);
+    return mp_obj_new_int(audiomix_state->clock.current_step);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(audiomix_clock_get_step_obj, audiomix_clock_get_step);
+
+// _audiomix.clock_set_perc(step, perc_mask)
+// perc_mask: bits 0-4 = tracks 0-4
+static mp_obj_t audiomix_clock_set_perc(mp_obj_t step_obj, mp_obj_t mask_obj) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int step = mp_obj_get_int(step_obj);
+    if (step < 0 || step >= SEQ_MAX_STEPS) {
+        mp_raise_ValueError(MP_ERROR_TEXT("bad step"));
+    }
+    audiomix_state->clock.steps[step].perc_mask = mp_obj_get_int(mask_obj) & 0x1F;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(audiomix_clock_set_perc_obj, audiomix_clock_set_perc);
+
+// _audiomix.clock_set_melody(step, freq_hz)
+// freq_hz: 0 = off, >0 = note frequency
+static mp_obj_t audiomix_clock_set_melody(mp_obj_t step_obj, mp_obj_t freq_obj) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int step = mp_obj_get_int(step_obj);
+    if (step < 0 || step >= SEQ_MAX_STEPS) {
+        mp_raise_ValueError(MP_ERROR_TEXT("bad step"));
+    }
+    audiomix_state->clock.steps[step].melody_freq = mp_obj_get_int(freq_obj);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(audiomix_clock_set_melody_obj, audiomix_clock_set_melody);
+
+// _audiomix.clock_set_perc_buffer(track, buf, n_bytes)
+// Register a pre-loaded PCM buffer for a percussion track
+static mp_obj_t audiomix_clock_set_perc_buffer(mp_obj_t track_obj,
+                                                mp_obj_t buf_obj,
+                                                mp_obj_t n_obj) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int track = mp_obj_get_int(track_obj);
+    if (track < 0 || track >= SEQ_MAX_PERC_TRACKS) {
+        mp_raise_ValueError(MP_ERROR_TEXT("bad track"));
+    }
+    mp_buffer_info_t bufinfo;
+    mp_get_buffer_raise(buf_obj, &bufinfo, MP_BUFFER_READ);
+    uint32_t n = mp_obj_get_int(n_obj);
+    if (n > bufinfo.len) n = bufinfo.len;
+
+    seq_perc_track_t *pt = &audiomix_state->clock.perc_tracks[track];
+    pt->buf_ptr = bufinfo.buf;
+    pt->buf_len = n;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(audiomix_clock_set_perc_buffer_obj,
+                                  audiomix_clock_set_perc_buffer);
+
+// _audiomix.clock_set_melody_config(duration_ms, wave)
+static mp_obj_t audiomix_clock_set_melody_config(mp_obj_t dur_obj, mp_obj_t wave_obj) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    audiomix_state->clock.melody_duration_ms = mp_obj_get_int(dur_obj);
+    audiomix_state->clock.melody_wave = mp_obj_get_int(wave_obj);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(audiomix_clock_set_melody_config_obj,
+                                  audiomix_clock_set_melody_config);
+
+// _audiomix.clock_clear_grid()
+static mp_obj_t audiomix_clock_clear_grid(void) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    seq_clock_t *clk = &audiomix_state->clock;
+    for (int i = 0; i < SEQ_MAX_STEPS; i++) {
+        clk->steps[i].perc_mask = 0;
+        clk->steps[i].melody_freq = 0;
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(audiomix_clock_clear_grid_obj, audiomix_clock_clear_grid);
 
 // ---------------------------------------------------------------------------
 // _audiomix.stats() -> dict
@@ -457,6 +614,17 @@ static const mp_rom_map_elem_t audiomix_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_ringbuf_space),       MP_ROM_PTR(&audiomix_ringbuf_space_obj) },
     { MP_ROM_QSTR(MP_QSTR_stats),              MP_ROM_PTR(&audiomix_stats_obj) },
     { MP_ROM_QSTR(MP_QSTR_reset_stats),        MP_ROM_PTR(&audiomix_reset_stats_obj) },
+    // Step clock
+    { MP_ROM_QSTR(MP_QSTR_clock_start),        MP_ROM_PTR(&audiomix_clock_start_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_stop),         MP_ROM_PTR(&audiomix_clock_stop_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_set_bpm),      MP_ROM_PTR(&audiomix_clock_set_bpm_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_set_steps),    MP_ROM_PTR(&audiomix_clock_set_steps_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_get_step),     MP_ROM_PTR(&audiomix_clock_get_step_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_set_perc),     MP_ROM_PTR(&audiomix_clock_set_perc_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_set_melody),   MP_ROM_PTR(&audiomix_clock_set_melody_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_set_perc_buffer), MP_ROM_PTR(&audiomix_clock_set_perc_buffer_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_set_melody_config), MP_ROM_PTR(&audiomix_clock_set_melody_config_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_clear_grid),   MP_ROM_PTR(&audiomix_clock_clear_grid_obj) },
     // Constants for voice indices
     { MP_ROM_QSTR(MP_QSTR_V_MUSIC),             MP_ROM_INT(AUDIOMIX_V_MUSIC) },
     { MP_ROM_QSTR(MP_QSTR_V_SFX_BASE),          MP_ROM_INT(AUDIOMIX_V_SFX_BASE) },
