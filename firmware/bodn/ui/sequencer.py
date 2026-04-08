@@ -35,6 +35,9 @@ except ImportError:
 
 ENC_A = const(1)  # config.ENC_A — BPM control
 
+# Preview voice for button feedback — separate from clock voices (0-5)
+_PREVIEW_VOICE = const(6)
+
 # Drum sample names on SD — index matches arcade button hardware index
 _DRUM_NAMES = ["hihat", "snare", "kick", "tom", "crash"]
 
@@ -345,11 +348,6 @@ class SequencerScreen(Screen):
     # Audio helpers
     # ------------------------------------------------------------------
 
-    # Preview voice for button feedback — separate from clock voices
-    # to avoid cross-core race conditions.  Clock uses voices 0-5,
-    # preview uses voice 6.
-    _PREVIEW_VOICE = const(6)
-
     def _play_drum(self, track):
         """Play a percussion sample immediately (button feedback)."""
         if not self._audio or not self._drum_bufs:
@@ -359,7 +357,7 @@ class SequencerScreen(Screen):
             return
         if _has_clock:
             _audiomix.clock_preview(track)  # suppress clock trigger for this track
-        self._audio.play_buffer(buf, voice=self._PREVIEW_VOICE)
+        self._audio.play_buffer(buf, voice=_PREVIEW_VOICE)
 
     def _play_melody_note(self, btn_idx):
         """Play a melody tone immediately (button feedback)."""
@@ -368,7 +366,7 @@ class SequencerScreen(Screen):
         freq = MELODY_FREQS[btn_idx]
         if _has_clock:
             _audiomix.clock_preview(5)  # suppress clock trigger for melody
-        self._audio.tone(freq, 150, "sine", voice=self._PREVIEW_VOICE)
+        self._audio.tone(freq, 150, "sine", voice=_PREVIEW_VOICE)
 
     def _trigger_step_sounds(self, step):
         """Trigger all active sounds at a grid step (called on step tick)."""
