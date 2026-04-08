@@ -46,3 +46,6 @@ docs/science/report.synctex.gz
 # OS
 .DS_Store
 build/
+
+# MicroPython build artefacts (submodule build outputs)
+micropython/ports/esp32/build-*/
