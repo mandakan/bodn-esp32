@@ -81,7 +81,7 @@ bodn-esp32/
 │  └─ bodn/
 │     ├─ __init__.py
 │     ├─ arcade.py          # arcade button input + LED output via MCP/PCA
-│     ├─ audio.py           # AudioEngine (native core-1 or fallback viper backend)
+│     ├─ audio.py           # AudioEngine (native core-0 C mixer or fallback viper)
 │     ├─ chord.py           # multi-button chord/combo detection
 │     ├─ cli.py             # serial REPL helpers (wifi, settings, reboot)
 │     ├─ config.py          # pin assignments, constants, encoder sensitivity
@@ -157,10 +157,10 @@ bodn-esp32/
 │  └─ sd-sync.py            # build + sync SD card assets (TTS, sounds, etc.)
 ├─ cmodules/                  # native C extensions (compiled into firmware)
 │  ├─ micropython.cmake       # top-level cmake: includes sub-modules
-│  └─ audiomix/               # core-1 audio mixer (_audiomix module)
+│  └─ audiomix/               # native audio mixer (_audiomix module, core 0)
 │     ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
-│     ├─ audiomix.c/h         # Python bindings + shared types
-│     ├─ mixer.c/h            # FreeRTOS task: mix loop + I2S on core 1
+│     ├─ audiomix.c/h         # Python bindings + shared types (16 uniform voices)
+│     ├─ mixer.c/h            # FreeRTOS task: mix loop + I2S + step clock on core 0
 │     ├─ ringbuf.c/h          # lock-free SPSC ring buffer
 │     └─ tonegen.c/h          # sine/square/sawtooth/noise generators
 ├─ boards/

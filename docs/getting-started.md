@@ -46,9 +46,11 @@ Use the **ESP32_GENERIC_S3-SPIRAM_OCT** build (octal SPIRAM matches the N8R8 mod
 ### Custom firmware (optional)
 
 A custom firmware build adds the `_audiomix` native C module, which moves audio
-mixing to a dedicated FreeRTOS task on core 1. This eliminates audio glitches
-caused by SPI display writes blocking the Python VM. The device works fine with
-stock firmware — `AudioEngine` falls back to the viper/IRQ path automatically.
+mixing to a dedicated FreeRTOS task on core 0 (Python runs on core 1). This
+eliminates audio glitches caused by SPI display writes blocking the Python VM.
+It provides 16 uniform voices and a sample-accurate step clock for the sequencer.
+The device works fine with stock firmware — `AudioEngine` falls back to the
+viper/IRQ path automatically.
 
 ```bash
 # One-time: install ESP-IDF v5.5.1
