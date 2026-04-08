@@ -383,6 +383,7 @@ class AudioEngine:
         "_silence_short",
         "_volume",
         "_vol_mult",
+        "_burst_max",
     )
 
     def __init__(self, i2s, amp_enable=None):
@@ -409,6 +410,7 @@ class AudioEngine:
         self._silence_short = bytes(64)
         self._volume = 10  # 0-100, synced from settings in main.py
         self._vol_mult = 10 * 655  # pre-computed fixed-point multiplier
+        self._burst_max = 0  # 0 = auto (game modes can override)
 
     @property
     def volume(self):
@@ -419,6 +421,15 @@ class AudioEngine:
         val = max(0, min(100, val))
         self._volume = val
         self._vol_mult = val * 655
+
+    @property
+    def burst(self):
+        """Max chunks written per yield (1–6).  0 = auto-scale by voice count."""
+        return self._burst_max
+
+    @burst.setter
+    def burst(self, val):
+        self._burst_max = max(0, min(6, val))
 
     @property
     def playing(self):
@@ -572,6 +583,8 @@ class AudioEngine:
 
     async def start(self):
         """Background audio loop — add to asyncio.gather()."""
+        import gc
+
         # Cache as locals
         mix_buf = self._mix_buf
         zero = self._zero
@@ -585,6 +598,7 @@ class AudioEngine:
         mono_to_stereo_py = self._mono_to_stereo
         apply_vol = _apply_volume_fast
         mix_add = _mix_add_fast
+        gc_collect = gc.collect
 
         # Prime the I2S DMA buffer with a small amount of silence before
         # enabling the amplifier (avoids startup pop).  Keep it minimal
@@ -603,27 +617,63 @@ class AudioEngine:
         silence_short = self._silence_short
 
         # Burst-write multiple chunks per yield to keep the DMA buffer
-        # full enough to survive display SPI gaps (~80 ms).  Each chunk
-        # is 1024 stereo bytes = 16 ms of audio; 6 chunks = 96 ms of
-        # headroom.  With viper mixing at ~5 ms per chunk the burst
-        # holds the CPU for ~30 ms — acceptable for a 10–15 fps UI.
-        _BURST = const(6)
+        # full enough to survive display SPI gaps.  Each chunk is
+        # 1024 stereo bytes = 16 ms of audio; 4 chunks = 64 ms of
+        # headroom (enough for partial-update SPI gaps of ~22 ms).
+        #
+        # When multiple voices are doing file I/O the per-chunk cost
+        # rises (SD card SPI reads multiply with voice count), so the
+        # burst count is scaled down to keep total blocking time in
+        # check and avoid starving the event loop / tripping the TWDT.
+        #
+        # Game modes can override via ``audio.burst = N`` (1–6) to
+        # trade DMA headroom for event-loop responsiveness.  Set to 0
+        # to restore auto-scaling (the default).
+        _BURST_AUTO_MAX = const(4)
+        _BURST_AUTO_FEW = const(2)  # ≥ 3 file-reading voices
+
+        # GC tuning: raise the auto-trigger threshold so the collector
+        # doesn't fire mid-burst, and run a manual collect only every
+        # _GC_INTERVAL active cycles (~1-2 s).  gc.collect() scans the
+        # entire PSRAM heap — costly with large preloaded sound buffers.
+        _GC_INTERVAL = const(50)
+        _gc_counter = 0
+        gc.threshold(gc.mem_free() // 4)  # auto-GC at 25% free, not default
 
         while True:
-            # Collect active voices
+            # Collect active voices and count file-reading ones
+            active_file_voices = 0
             has_active = False
             for v in voices:
                 if v.source is not None:
                     has_active = True
-                    break
+                    if v.file_obj is not None:
+                        active_file_voices += 1
 
             if not has_active:
                 i2s.write(silence_short)
+                gc_collect()
                 await sleep_ms(5)
                 continue
 
+            # Determine burst count: explicit override or auto-scale
+            override = self._burst_max
+            if override:
+                burst = override
+            elif active_file_voices >= 3:
+                burst = _BURST_AUTO_FEW
+            else:
+                burst = _BURST_AUTO_MAX
+
+            # Periodic GC between bursts — keeps the heap tidy without
+            # stalling the time-critical mix+write loop.
+            _gc_counter += 1
+            if _gc_counter >= _GC_INTERVAL:
+                _gc_counter = 0
+                gc_collect()
+
             # --- Burst loop: mix + write several chunks before yielding ---
-            for _burst in range(_BURST):
+            for _burst in range(burst):
                 # Determine if non-music voices are active (for ducking)
                 non_music_active = False
                 for v in voices:

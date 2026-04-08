@@ -354,7 +354,7 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
-    def _make_soundboard():
+    def _make_soundboard(on_progress=None):
         from bodn.ui.soundboard import SoundboardScreen
         from bodn.ui.soundboard_secondary import SoundboardSecondary
 
@@ -368,6 +368,7 @@ def create_ui(
             settings=settings,
             secondary_screen=sb_sec,
             on_exit=_reset_secondary,
+            on_progress=on_progress,
         )
 
     def _make_sequencer(on_progress=None):

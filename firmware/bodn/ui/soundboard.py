@@ -76,6 +76,7 @@ class SoundboardScreen(Screen):
         settings=None,
         secondary_screen=None,
         on_exit=None,
+        on_progress=None,
     ):
         self._np = np
         self._overlay = overlay
@@ -84,6 +85,7 @@ class SoundboardScreen(Screen):
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._settings = settings
+        self._on_progress = on_progress
         self._state = SoundboardState()
         self._manager = None
         self._pause = PauseMenu(settings=settings)
@@ -91,9 +93,12 @@ class SoundboardScreen(Screen):
         # Flash state: (slot_type, slot_idx, flash_end_frame)
         # slot_type: 'mini' or 'arc'
         self._flash = None
+        self._prev_flash = None  # previous flash for partial clear
 
         self._dirty = True
         self._full_clear = True
+        self._slots_dirty = False  # only affected slots need redraw
+        self._vol_dirty = False  # only volume bar needs redraw
         self._leds_dirty = True
         self._prev_bank = -1
         self._prev_volume = -1
@@ -109,19 +114,26 @@ class SoundboardScreen(Screen):
             sw[0] if len(sw) > 0 else False,
             sw[1] if len(sw) > 1 else False,
         )
-        self._state.load()
+        self._state.load(on_progress=self._on_progress)
         # Initialise volume from settings so it matches the housekeeping loop
         if self._settings:
             self._state.volume = self._settings.get("volume", 50)
         self._dirty = True
         self._full_clear = True
+        self._slots_dirty = False
+        self._vol_dirty = False
         self._leds_dirty = True
         self._prev_bank = -1
         self._prev_volume = -1
         self._prev_muted = None
         self._flash = None
+        self._prev_flash = None
+        # Sounds are preloaded into PSRAM (no file I/O), but keep burst
+        # moderate for responsive button handling.
+        self._audio.burst = 2
 
     def exit(self):
+        self._audio.burst = 0  # restore auto-scaling
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
@@ -132,7 +144,12 @@ class SoundboardScreen(Screen):
         self._dirty = True
 
     def needs_redraw(self):
-        return self._dirty or self._pause.needs_render
+        return (
+            self._dirty
+            or self._slots_dirty
+            or self._vol_dirty
+            or self._pause.needs_render
+        )
 
     def update(self, inp, frame):
         # Pause menu handles hold-to-open and menu navigation
@@ -147,14 +164,14 @@ class SoundboardScreen(Screen):
             return
 
         state = self._state
-        changed = False
 
         # --- Toggle switches → bank select ---
         new_bank = bank_from_toggles(inp.sw[0], inp.sw[1])
         if new_bank != state.bank:
             state.set_bank(new_bank)
             self._audio.play_sound("select", channel="ui")
-            changed = True
+            self._dirty = True
+            self._full_clear = True
             self._leds_dirty = True
 
         # --- ENC_A click → mute/unmute ---
@@ -162,7 +179,7 @@ class SoundboardScreen(Screen):
             state.toggle_mute()
             self._sync_volume(state)
             self._audio.play_sound("nav_click", channel="ui")
-            changed = True
+            self._vol_dirty = True
 
         # --- ENC_A turn → volume ---
         delta = inp.enc_delta[ENC_A]
@@ -171,47 +188,51 @@ class SoundboardScreen(Screen):
             state.adjust_volume(delta)
             if state.volume != prev_vol:
                 self._sync_volume(state)
-                changed = True
+                self._vol_dirty = True
 
         # --- Mini button presses ---
         for i in range(NUM_MINI_BUTTONS):
             if inp.btn_just_pressed[i]:
-                path = state.press_slot(i)
-                if path:
+                buf, path = state.press_slot(i)
+                if buf:
+                    self._audio.play_buffer(buf, channel="sfx")
+                elif path:
                     self._audio.play(path, channel="sfx")
                 else:
                     self._audio.play_sound("boop", channel="ui")
+                self._prev_flash = self._flash
                 self._flash = ("mini", i, frame + _FLASH_FRAMES)
-                changed = True
+                self._slots_dirty = True
                 self._leds_dirty = True
 
         # --- Arcade button presses ---
         for i in range(NUM_ARCADE_BUTTONS):
             if inp.arc_just_pressed[i]:
-                path = state.press_arcade(i)
-                if path:
+                buf, path = state.press_arcade(i)
+                if buf:
+                    self._audio.play_buffer(buf, channel="sfx")
+                elif path:
                     self._audio.play(path, channel="sfx")
                 else:
                     self._audio.play_sound("boop", channel="ui")
+                self._prev_flash = self._flash
                 self._flash = ("arc", i, frame + _FLASH_FRAMES)
-                changed = True
+                self._slots_dirty = True
                 self._leds_dirty = True
 
         # --- Check if audio finished ---
         if self._audio.sfx_active == 0:
             if state.playing_slots or state.playing_arcades:
                 state.on_playback_done()
-                changed = True
+                self._slots_dirty = True
                 self._leds_dirty = True
 
         # --- Expire flash ---
         if self._flash and frame >= self._flash[2]:
+            self._prev_flash = self._flash
             self._flash = None
-            changed = True
+            self._slots_dirty = True
             self._leds_dirty = True
-
-        if changed:
-            self._dirty = True
 
         # --- Update LEDs ---
         if self._leds_dirty:
@@ -302,21 +323,130 @@ class SoundboardScreen(Screen):
         if self._pause.is_open:
             if self._dirty:
                 self._dirty = False
+                self._slots_dirty = False
+                self._vol_dirty = False
                 tft.fill(theme.BLACK)
                 self._full_clear = False
                 self._render_content(tft, theme, frame)
             self._pause.render(tft, theme, frame)
             return
 
-        if not self._dirty:
-            self._pause.render(tft, theme, frame)
-            return
-        self._dirty = False
-        if self._full_clear:
-            self._full_clear = False
-            tft.fill(theme.BLACK)
-        self._render_content(tft, theme, frame)
+        if self._dirty:
+            # Full redraw (bank change, initial draw, resume)
+            self._dirty = False
+            self._slots_dirty = False
+            self._vol_dirty = False
+            if self._full_clear:
+                self._full_clear = False
+                tft.fill(theme.BLACK)
+            self._render_content(tft, theme, frame)
+        else:
+            # Partial updates — much cheaper
+            if self._slots_dirty:
+                self._slots_dirty = False
+                self._render_changed_slots(tft, theme, frame)
+            if self._vol_dirty:
+                self._vol_dirty = False
+                self._render_volume_bar(tft, theme)
+
         self._pause.render(tft, theme, frame)
+
+    def _grid_geometry(self, theme):
+        """Compute grid layout constants (cached values would be better but
+        this is cheap and keeps the code simple)."""
+        w = theme.width
+        h = theme.height
+        cols = 4
+        rows = 2
+        margin = 4
+        grid_top = 24
+        cell_w = (w - margin * (cols + 1)) // cols
+        cell_h = (h - grid_top - 60) // rows
+        arc_top = grid_top + rows * (cell_h + margin) + 4
+        arc_cell_w = (w - margin * (NUM_ARCADE_BUTTONS + 1)) // NUM_ARCADE_BUTTONS
+        arc_cell_h = h - arc_top - 20
+        return margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h
+
+    def _slot_xy(self, idx, margin, grid_top, cell_w, cell_h):
+        """Return (x, y) for mini-button slot idx."""
+        col = idx % 4
+        row = idx // 4
+        return margin + col * (cell_w + margin), grid_top + row * (cell_h + margin)
+
+    def _render_changed_slots(self, tft, theme, frame):
+        """Redraw only the slots that changed (flash on/off, playback done)."""
+        state = self._state
+        rgb = tft.rgb
+        margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h = (
+            self._grid_geometry(theme)
+        )
+
+        # Determine which slots need redraw from flash transitions
+        to_redraw_mini = set()
+        to_redraw_arc = set()
+
+        # Previous flash slot needs clearing
+        pf = self._prev_flash
+        if pf:
+            if pf[0] == "mini":
+                to_redraw_mini.add(pf[1])
+            else:
+                to_redraw_arc.add(pf[1])
+            self._prev_flash = None
+
+        # Current flash slot needs drawing
+        cf = self._flash
+        if cf:
+            if cf[0] == "mini":
+                to_redraw_mini.add(cf[1])
+            else:
+                to_redraw_arc.add(cf[1])
+
+        # If playback just finished, redraw all previously-playing slots
+        if not state.playing_slots and not state.playing_arcades:
+            # All slots might need un-highlighting — redraw all present
+            for i in range(NUM_MINI_BUTTONS):
+                if state.slots_present[i]:
+                    to_redraw_mini.add(i)
+            for i in range(NUM_ARCADE_BUTTONS):
+                if state.arcade_present[i]:
+                    to_redraw_arc.add(i)
+
+        for i in to_redraw_mini:
+            x, y = self._slot_xy(i, margin, grid_top, cell_w, cell_h)
+            self._draw_slot(tft, theme, rgb, state, i, x, y, cell_w, cell_h, frame)
+
+        for i in to_redraw_arc:
+            x = margin + i * (arc_cell_w + margin)
+            self._draw_arc_slot(
+                tft, theme, rgb, state, i, x, arc_top, arc_cell_w, arc_cell_h, frame
+            )
+
+    def _render_volume_bar(self, tft, theme):
+        """Redraw only the volume bar strip at the bottom."""
+        state = self._state
+        w = theme.width
+        h = theme.height
+        vol_y = h - 14
+        tft.fill_rect(0, vol_y, w, 14, theme.BLACK)
+        if state.muted:
+            draw_centered(tft, t("sb_muted"), vol_y, theme.RED, w)
+        else:
+            vol_label = t("sb_volume", state.volume)
+            tft.text(vol_label, 4, vol_y, theme.MUTED)
+            bar_x = len(vol_label) * 8 + 8
+            draw_progress_bar(
+                tft,
+                bar_x,
+                vol_y + 1,
+                w - bar_x - 4,
+                6,
+                state.volume,
+                100,
+                theme.CYAN,
+                theme.DIM,
+                border=theme.DIM,
+            )
 
     def _render_content(self, tft, theme, frame):
         landscape = theme.width > theme.height

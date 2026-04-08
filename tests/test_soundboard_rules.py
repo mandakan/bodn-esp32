@@ -295,26 +295,54 @@ def test_effective_volume_unmuted():
     assert state.effective_volume() == 80
 
 
-def test_press_slot_present(monkeypatch):
+def _stub_preload(monkeypatch):
+    """Stub both _file_exists and preload_wav so sounds appear present."""
+    import bodn.assets as assets_mod
+
     monkeypatch.setattr(sbr, "_file_exists", lambda p: True)
+    monkeypatch.setattr(assets_mod, "preload_wav", lambda p: bytearray(4))
+
+
+def test_press_slot_present(monkeypatch):
+    _stub_preload(monkeypatch)
     state = SoundboardState()
     state.load()
-    path = state.press_slot(3)
-    assert path == wav_path(0, 3)
+    buf, path = state.press_slot(3)
+    assert buf is not None
+    assert isinstance(buf, bytearray)
+    assert path is None  # preloaded — no file fallback
     assert 3 in state.playing_slots
 
 
 def test_press_slot_missing_returns_none(monkeypatch):
+    import bodn.assets as assets_mod
+
     monkeypatch.setattr(sbr, "_file_exists", lambda p: False)
+    monkeypatch.setattr(assets_mod, "preload_wav", lambda p: None)
     state = SoundboardState()
     state.load()
-    path = state.press_slot(3)
+    buf, path = state.press_slot(3)
+    assert buf is None
     assert path is None
     assert state.playing_slots == set()
 
 
-def test_press_multiple_slots(monkeypatch):
+def test_press_slot_fallback_to_path(monkeypatch):
+    """When preload fails but file exists, press_slot returns the path."""
+    import bodn.assets as assets_mod
+
     monkeypatch.setattr(sbr, "_file_exists", lambda p: True)
+    monkeypatch.setattr(assets_mod, "preload_wav", lambda p: None)
+    state = SoundboardState()
+    state.load()
+    buf, path = state.press_slot(3)
+    assert buf is None
+    assert path == wav_path(0, 3)
+    assert 3 in state.playing_slots
+
+
+def test_press_multiple_slots(monkeypatch):
+    _stub_preload(monkeypatch)
     state = SoundboardState()
     state.load()
     state.press_slot(1)
@@ -323,25 +351,32 @@ def test_press_multiple_slots(monkeypatch):
 
 
 def test_press_arcade_present(monkeypatch):
-    monkeypatch.setattr(sbr, "_file_exists", lambda p: True)
+    _stub_preload(monkeypatch)
     state = SoundboardState()
-    state.arcade_present = [True] * NUM_ARCADE_BUTTONS
-    path = state.press_arcade(2)
-    assert path == arcade_wav_path(2)
+    state.load()
+    buf, path = state.press_arcade(2)
+    assert buf is not None
+    assert isinstance(buf, bytearray)
+    assert path is None
     assert 2 in state.playing_arcades
 
 
-def test_press_arcade_missing_returns_none():
+def test_press_arcade_missing_returns_none(monkeypatch):
+    import bodn.assets as assets_mod
+
+    monkeypatch.setattr(assets_mod, "preload_wav", lambda p: None)
     state = SoundboardState()
     state.arcade_present = [False] * NUM_ARCADE_BUTTONS
-    path = state.press_arcade(0)
+    buf, path = state.press_arcade(0)
+    assert buf is None
     assert path is None
     assert state.playing_arcades == set()
 
 
-def test_press_multiple_arcades():
+def test_press_multiple_arcades(monkeypatch):
+    _stub_preload(monkeypatch)
     state = SoundboardState()
-    state.arcade_present = [True] * NUM_ARCADE_BUTTONS
+    state.load()
     state.press_arcade(0)
     state.press_arcade(3)
     assert state.playing_arcades == {0, 3}

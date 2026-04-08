@@ -218,16 +218,18 @@ class SoundboardState:
         self._slot_paths = [
             None
         ] * NUM_MINI_BUTTONS  # path per slot (numbered or discovered)
+        self._slot_bufs = [None] * NUM_MINI_BUTTONS  # PSRAM preloaded PCM data
         self._disc_labels = [
             None
         ] * NUM_MINI_BUTTONS  # filename-stem labels from discovery
         self.arcade_present = [False] * NUM_ARCADE_BUTTONS
+        self._arcade_bufs = [None] * NUM_ARCADE_BUTTONS  # PSRAM preloaded
         self.manifest = None  # loaded lazily
 
-    def load(self):
+    def load(self, on_progress=None):
         """Scan filesystem and load manifest. Call once on mode entry."""
         self.manifest = load_manifest()
-        self._rescan()
+        self._rescan(on_progress=on_progress)
 
     def set_bank(self, bank):
         """Switch to a new bank and rescan."""
@@ -236,7 +238,10 @@ class SoundboardState:
         self.playing_arcades.clear()
         self._rescan()
 
-    def _rescan(self):
+    def _rescan(self, on_progress=None):
+        import gc
+        from bodn.assets import preload_wav
+
         numbered = scan_bank(self.bank)
         if any(numbered):
             # Numbered mode: use 0.wav–7.wav
@@ -257,6 +262,38 @@ class SoundboardState:
                 found[i][1] if i < len(found) else None for i in range(NUM_MINI_BUTTONS)
             ]
         self.arcade_present = scan_arcade()
+
+        # Free old buffers before allocating new ones (avoids PSRAM
+        # fragmentation when switching banks).
+        self._slot_bufs = [None] * NUM_MINI_BUTTONS
+        self._arcade_bufs = [None] * NUM_ARCADE_BUTTONS
+        gc.collect()
+
+        # Preload sounds into PSRAM one at a time — skip files that
+        # fail (MemoryError, corrupt WAV, missing file).  Slots that
+        # fail to preload fall back to streaming file I/O on press.
+        total = sum(1 for p in self._slot_paths if p) + sum(
+            1 for i in range(NUM_ARCADE_BUTTONS) if self.arcade_present[i]
+        )
+        loaded = 0
+        for i, p in enumerate(self._slot_paths):
+            if p:
+                try:
+                    self._slot_bufs[i] = preload_wav(p)
+                except Exception as e:
+                    print("sb: preload slot", i, "error:", e)
+                loaded += 1
+                if on_progress:
+                    on_progress(loaded, total)
+        for i in range(NUM_ARCADE_BUTTONS):
+            if self.arcade_present[i]:
+                try:
+                    self._arcade_bufs[i] = preload_wav(arcade_wav_path(i))
+                except Exception as e:
+                    print("sb: preload arcade", i, "error:", e)
+                loaded += 1
+                if on_progress:
+                    on_progress(loaded, total)
 
     def bank_name(self):
         """Return the display name for the current bank in the active language."""
@@ -330,23 +367,39 @@ class SoundboardState:
         return 0 if self.muted else self.volume
 
     def press_slot(self, slot):
-        """Handle a mini button press. Returns the WAV path to play, or None for boop."""
+        """Handle a mini button press.
+
+        Returns (buf, None) if preloaded, (None, path) for file fallback,
+        or (None, None) for boop.
+        """
         if not (0 <= slot < NUM_MINI_BUTTONS):
-            return None
+            return None, None
+        buf = self._slot_bufs[slot]
+        if buf:
+            self.playing_slots.add(slot)
+            return buf, None
         path = self._slot_paths[slot]
         if path:
             self.playing_slots.add(slot)
-            return path
-        return None
+            return None, path
+        return None, None
 
     def press_arcade(self, slot):
-        """Handle an arcade button press. Returns WAV path or None for boop."""
+        """Handle an arcade button press.
+
+        Returns (buf, None) if preloaded, (None, path) for file fallback,
+        or (None, None) for boop.
+        """
         if not (0 <= slot < NUM_ARCADE_BUTTONS):
-            return None
+            return None, None
+        buf = self._arcade_bufs[slot]
+        if buf:
+            self.playing_arcades.add(slot)
+            return buf, None
         if self.arcade_present[slot]:
             self.playing_arcades.add(slot)
-            return arcade_wav_path(slot)
-        return None
+            return None, arcade_wav_path(slot)
+        return None, None
 
     def on_playback_done(self):
         """Call when all SFX voices have finished."""
