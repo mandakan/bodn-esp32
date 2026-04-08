@@ -143,9 +143,6 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
         }
 
         // Fade in/out at start/end of tone
-        int is_first = (v->tone_samples_left ==
-                        ((state->sample_rate * v->tone_freq) ?
-                         v->tone_samples_left : v->tone_samples_left));
         int is_last = (v->tone_samples_left <= n);
         if (v->fade_in || is_last) {
             tonegen_fade(voice_buf, n, v->fade_in, is_last,
