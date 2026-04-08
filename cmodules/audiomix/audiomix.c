@@ -625,11 +625,8 @@ static const mp_rom_map_elem_t audiomix_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_clock_set_perc_buffer), MP_ROM_PTR(&audiomix_clock_set_perc_buffer_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_set_melody_config), MP_ROM_PTR(&audiomix_clock_set_melody_config_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_clear_grid),   MP_ROM_PTR(&audiomix_clock_clear_grid_obj) },
-    // Constants for voice indices
-    { MP_ROM_QSTR(MP_QSTR_V_MUSIC),             MP_ROM_INT(AUDIOMIX_V_MUSIC) },
-    { MP_ROM_QSTR(MP_QSTR_V_SFX_BASE),          MP_ROM_INT(AUDIOMIX_V_SFX_BASE) },
-    { MP_ROM_QSTR(MP_QSTR_V_SFX_END),           MP_ROM_INT(AUDIOMIX_V_SFX_END) },
-    { MP_ROM_QSTR(MP_QSTR_V_UI),                MP_ROM_INT(AUDIOMIX_V_UI) },
+    // Constants
+    { MP_ROM_QSTR(MP_QSTR_NUM_VOICES),           MP_ROM_INT(AUDIOMIX_NUM_VOICES) },
     // Waveform type constants
     { MP_ROM_QSTR(MP_QSTR_WAVE_SQUARE),          MP_ROM_INT(AUDIOMIX_WAVE_SQUARE) },
     { MP_ROM_QSTR(MP_QSTR_WAVE_SINE),            MP_ROM_INT(AUDIOMIX_WAVE_SINE) },

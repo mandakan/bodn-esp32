@@ -2,16 +2,17 @@
 #
 # Two backends:
 #
-# 1. Native (_audiomix C module): mixing runs on core 1 in a FreeRTOS task,
-#    completely independent of the Python VM.  WAV data is fed through
-#    per-voice ring buffers; tones and pre-loaded buffers are handled
-#    entirely in C.
+# 1. Native (_audiomix C module): mixing runs on core 0 in a FreeRTOS task,
+#    completely independent of the Python VM on core 1.  16 uniform voices.
 #
 # 2. Fallback (viper/pure-Python): DMA-driven via micropython.schedule()
-#    IRQ callbacks on core 0.  Used on stock firmware or host tests.
+#    IRQ callbacks on core 1.  Used on stock firmware or host tests.
 #
 # The public API is identical regardless of backend.
-# Mixes up to 6 simultaneous voices: 1 music + 4 SFX pool + 1 UI.
+# 16 uniform voices, allocated by convention into pools:
+#   voices 0-9:   "sfx" pool (round-robin, steal-oldest)
+#   voices 10-13: "music" pool
+#   voice  14-15: "ui" (reserved for TTS/feedback)
 
 try:
     import uasyncio as asyncio
@@ -51,32 +52,57 @@ except ImportError:
 from bodn import tones
 from bodn.wav import WavReader
 
-# Voice routing tags (used as indices into _voices)
+# ---------------------------------------------------------------------------
+# Voice layout (conventions — not enforced by C module)
+# ---------------------------------------------------------------------------
+
+_NUM_VOICES = const(16) if _has_native else const(6)
+
+# Pool ranges (inclusive start, exclusive end)
+_SFX_START = const(0)
+_SFX_END = const(10)
+_MUSIC_START = const(10)
+_MUSIC_END = const(14)
+_UI_START = const(14)
+_UI_END = const(16)
+
+# Fallback layout (6 voices)
+_FB_SFX_START = const(1)
+_FB_SFX_END = const(5)
+_FB_MUSIC = const(0)
+_FB_UI = const(5)
+
+# Channel name → pool range
+_POOLS = {
+    "sfx": (_SFX_START, _SFX_END),
+    "music": (_MUSIC_START, _MUSIC_END),
+    "ui": (_UI_START, _UI_END),
+}
+
+# Legacy aliases — match fallback layout for test compatibility
 V_MUSIC = const(0)
-V_SFX_BASE = const(1)  # SFX pool: indices 1..4
-V_SFX_END = const(5)  # exclusive
+V_SFX_BASE = const(1)
+V_SFX_END = const(5)
 V_UI = const(5)
-_NUM_VOICES = const(6)
-
-# Channel name → routing tag (for API compatibility)
-CHANNEL_NAMES = {"music": V_MUSIC, "sfx": V_SFX_BASE, "ui": V_UI}
-
-# Legacy aliases for tests and callers that reference CH_* constants
 CH_MUSIC = V_MUSIC
 CH_SFX = V_SFX_BASE
 CH_UI = V_UI
+CHANNEL_NAMES = {"music": V_MUSIC, "sfx": V_SFX_BASE, "ui": V_UI}
 
 _MONO_BUF_SIZE = const(
     512
 )  # bytes per mono read buffer (256 samples at 16-bit = 16 ms)
 _BUF_SIZE = const(1024)  # bytes per stereo output buffer
 
-# Per-voice gain staging (fixed-point 16.16 multipliers)
-# These keep the mix within int16 range under normal conditions.
-_GAIN_MUSIC = const(45875)  # 70% — solo music
-_GAIN_MUSIC_DUCKED = const(16384)  # 25% — music when other voices active
-_GAIN_SFX = const(45875)  # 70%
-_GAIN_UI = const(52428)  # 80%
+# Default gain (fixed-point 16.16) — ~70%
+_GAIN_DEFAULT = const(45875)
+
+# Legacy gain constants (for test compatibility)
+_GAIN_MUSIC = _GAIN_DEFAULT
+_GAIN_MUSIC_DUCKED = const(16384)
+_GAIN_SFX = _GAIN_DEFAULT
+_GAIN_UI = _GAIN_DEFAULT
+_NUM_VOICES_LEGACY = const(6)
 
 # Wave name → C enum mapping for native backend
 _WAVE_MAP = {"square": 0, "sine": 1, "sawtooth": 2, "noise": 3}
@@ -330,7 +356,7 @@ class MemorySource:
 
 
 # ---------------------------------------------------------------------------
-# Fallback backend: _Voice + IRQ callback (core 0, viper/pure-Python)
+# Fallback backend: _Voice + IRQ callback (core 1, viper/pure-Python)
 # ---------------------------------------------------------------------------
 
 
@@ -343,17 +369,15 @@ class _Voice:
         "file_obj",
         "mono_buf",
         "gain_mult",
-        "is_music",
         "_start_seq",
     )
 
-    def __init__(self, gain_mult, is_music=False):
+    def __init__(self, gain_mult=_GAIN_DEFAULT):
         self.source = None
         self.loop = False
         self.file_obj = None
         self.mono_buf = bytearray(_MONO_BUF_SIZE)
         self.gain_mult = gain_mult
-        self.is_music = is_music
         self._start_seq = 0
 
     def stop(self):
@@ -382,13 +406,11 @@ def _make_irq_callback(engine):
 
     def callback(i2s_obj):
         """Mix one chunk and write to I2S.  Fired by DMA via micropython.schedule()."""
-        non_music_active = False
         has_active = False
         for v in voices:
             if v.source is not None:
                 has_active = True
-                if not v.is_music:
-                    non_music_active = True
+                break
 
         if not has_active:
             i2s_obj.write(silence_short)
@@ -423,12 +445,7 @@ def _make_irq_callback(engine):
                     v.stop()
                     continue
 
-            if v.is_music and non_music_active:
-                gain = _GAIN_MUSIC_DUCKED
-            else:
-                gain = v.gain_mult
-            apply_vol(v.mono_buf, n, gain)
-
+            apply_vol(v.mono_buf, n, v.gain_mult)
             mix_add(mix_buf, v.mono_buf, n)
 
             if n > max_n:
@@ -485,29 +502,21 @@ class _StreamingVoice:
 
 
 class AudioEngine:
-    """Multi-voice audio engine with native (core 1) and fallback backends.
+    """Multi-voice audio engine with native (core 0) and fallback backends.
 
-    Usage::
+    16 uniform voices (native) or 6 (fallback).  Voices are allocated from
+    named pools by convention:
+      "sfx"   — voices 0-9   (general sound effects, round-robin)
+      "music" — voices 10-13 (background music, loops)
+      "ui"    — voices 14-15 (TTS, UI feedback)
 
-        # Native backend (custom firmware with _audiomix):
-        audio = AudioEngine(native=True, bck=13, ws=45, din=7, amp=3)
-
-        # Fallback backend (stock firmware):
-        audio = AudioEngine(i2s=i2s_obj, amp_enable=callback)
-
-        # In asyncio.gather:
-        await audio.start()
-
-        audio.tone(440, 500)
-        audio.play("/sounds/boop.wav")
-        audio.boop()
+    Use voice=N for direct voice access (e.g. sequencer clock integration).
     """
 
     def __init__(self, i2s=None, amp_enable=None, native=False, **kwargs):
         self._native = native and _has_native
 
         if self._native:
-            # Native backend — C module handles I2S + mixing on core 1
             bck = kwargs.get("bck", 13)
             ws = kwargs.get("ws", 45)
             din = kwargs.get("din", 7)
@@ -515,10 +524,11 @@ class AudioEngine:
             rate = kwargs.get("rate", 16000)
             ibuf = kwargs.get("ibuf", 16384)
             _audiomix.init(bck=bck, ws=ws, din=din, amp=amp, rate=rate, ibuf=ibuf)
-            self._streaming = []  # active _StreamingVoice instances
-            self._buf_refs = {}  # voice_idx → bytearray ref (prevent GC)
+            self._streaming = []
+            self._buf_refs = {}
             self._feed_buf = bytearray(_MONO_BUF_SIZE)
-            # Fallback fields not used in native mode
+            self._num_voices = _audiomix.NUM_VOICES
+            # Fallback fields not used
             self._i2s = None
             self._amp_enable = None
             self._voices = None
@@ -530,17 +540,10 @@ class AudioEngine:
             self._silence_short = None
             self._irq_cb = None
         else:
-            # Fallback backend — viper/pure-Python on core 0
             self._i2s = i2s
             self._amp_enable = amp_enable
-            self._voices = [
-                _Voice(_GAIN_MUSIC, is_music=True),
-                _Voice(_GAIN_SFX),
-                _Voice(_GAIN_SFX),
-                _Voice(_GAIN_SFX),
-                _Voice(_GAIN_SFX),
-                _Voice(_GAIN_UI),
-            ]
+            self._num_voices = 6
+            self._voices = [_Voice() for _ in range(self._num_voices)]
             self._mix_buf = bytearray(_MONO_BUF_SIZE)
             self._zero = bytes(_MONO_BUF_SIZE)
             self._buf = bytearray(_BUF_SIZE)
@@ -556,6 +559,9 @@ class AudioEngine:
         self._volume = 10
         self._vol_mult = 10 * 655
         self._burst_max = 0
+
+        # Per-pool round-robin counters
+        self._pool_rr = {}
 
     @property
     def volume(self):
@@ -573,7 +579,6 @@ class AudioEngine:
 
     @property
     def burst(self):
-        """Max chunks written per yield (1–6).  0 = auto-scale by voice count."""
         return self._burst_max
 
     @burst.setter
@@ -584,109 +589,106 @@ class AudioEngine:
     def playing(self):
         """True if any voice is active."""
         if self._native:
-            for i in range(_NUM_VOICES):
+            for i in range(self._num_voices):
                 if _audiomix.voice_active(i):
                     return True
             return False
         return any(v.source is not None for v in self._voices)
 
     def channel_active(self, channel):
-        """True if the given named channel has an active voice."""
-        if channel == "sfx":
-            return self.sfx_active > 0
-        idx = CHANNEL_NAMES.get(channel, -1)
-        if 0 <= idx < _NUM_VOICES:
-            if self._native:
-                return _audiomix.voice_active(idx)
-            return self._voices[idx].source is not None
+        """True if any voice in the given channel pool is active."""
+        start, end = self._pool_range(channel)
+        for i in range(start, end):
+            if self._voice_active(i):
+                return True
         return False
 
     @property
     def sfx_active(self):
         """Number of SFX pool voices currently playing."""
+        start, end = self._pool_range("sfx")
         count = 0
-        for i in range(V_SFX_BASE, V_SFX_END):
-            if self._native:
-                if _audiomix.voice_active(i):
-                    count += 1
-            elif self._voices[i].source is not None:
+        for i in range(start, end):
+            if self._voice_active(i):
                 count += 1
         return count
 
-    # -----------------------------------------------------------------------
-    # Voice allocation (shared logic)
-    # -----------------------------------------------------------------------
-
-    def _allocate_sfx_idx(self):
-        """Find a free SFX pool voice index, or steal the oldest."""
+    def _voice_active(self, idx):
         if self._native:
-            for i in range(V_SFX_BASE, V_SFX_END):
-                if not _audiomix.voice_active(i):
-                    return i
-            # All busy — stop the first (simple steal for native)
-            _audiomix.voice_stop(V_SFX_BASE)
-            return V_SFX_BASE
-        # Fallback: delegate to _Voice-based allocation
-        return None
+            return _audiomix.voice_active(idx)
+        return (
+            self._voices[idx].source is not None if idx < len(self._voices) else False
+        )
 
-    def _allocate_sfx(self):
-        """Find a free SFX pool voice, or steal the oldest (fallback only)."""
-        for i in range(V_SFX_BASE, V_SFX_END):
-            if self._voices[i].source is None:
-                return self._voices[i]
-        oldest = self._voices[V_SFX_BASE]
-        for i in range(V_SFX_BASE + 1, V_SFX_END):
-            if self._voices[i]._start_seq < oldest._start_seq:
-                oldest = self._voices[i]
-        oldest.stop()
-        return oldest
+    # -----------------------------------------------------------------------
+    # Voice allocation
+    # -----------------------------------------------------------------------
 
-    def _assign_voice_idx(self, channel):
-        """Get voice index for a channel (native backend)."""
-        if channel == "sfx":
-            return self._allocate_sfx_idx()
-        idx = CHANNEL_NAMES.get(channel, V_SFX_BASE)
-        if idx == V_SFX_BASE and channel != "sfx":
-            return self._allocate_sfx_idx()
-        _audiomix.voice_stop(idx)
+    def _pool_range(self, channel):
+        """Return (start, end) voice indices for a channel pool."""
+        if self._native:
+            return _POOLS.get(channel, (_SFX_START, _SFX_END))
+        # Fallback: smaller pools
+        if channel == "music":
+            return (_FB_MUSIC, _FB_MUSIC + 1)
+        if channel == "ui":
+            return (_FB_UI, _FB_UI + 1)
+        return (_FB_SFX_START, _FB_SFX_END)
+
+    def _allocate_voice(self, channel):
+        """Allocate a voice from a pool. Returns voice index."""
+        start, end = self._pool_range(channel)
+        pool_size = end - start
+
+        # Find a free voice
+        for i in range(start, end):
+            if not self._voice_active(i):
+                return i
+
+        # All busy — round-robin steal oldest
+        rr = self._pool_rr.get(channel, start)
+        idx = rr
+        # Advance round-robin
+        self._pool_rr[channel] = start + ((rr - start + 1) % pool_size)
+        self._stop_voice(idx)
         return idx
 
-    def _assign_voice(self, channel):
-        """Get the voice slot for a channel name (fallback backend)."""
-        if channel == "sfx":
-            return self._allocate_sfx()
-        idx = CHANNEL_NAMES.get(channel, V_SFX_BASE)
-        if idx == V_SFX_BASE and channel != "sfx":
-            return self._allocate_sfx()
-        v = self._voices[idx]
-        v.stop()
-        return v
-
-    def _stamp_voice(self, voice):
-        """Mark a voice with the current sequence number for age tracking."""
-        self._seq_counter += 1
-        voice._start_seq = self._seq_counter
+    def _stop_voice(self, idx):
+        """Stop a single voice by index."""
+        if self._native:
+            _audiomix.voice_stop(idx)
+            self._stop_streaming(idx)
+        elif idx < len(self._voices):
+            self._voices[idx].stop()
 
     def _stop_streaming(self, idx):
         """Remove any active streaming voice for the given index."""
         self._streaming = [s for s in self._streaming if s.idx != idx]
         self._buf_refs.pop(idx, None)
 
+    def _resolve_voice(self, voice, channel):
+        """Resolve a voice= or channel= argument to a voice index."""
+        if voice is not None:
+            # Direct voice access — stop existing and return
+            self._stop_voice(voice)
+            return voice
+        return self._allocate_voice(channel or "sfx")
+
     # -----------------------------------------------------------------------
-    # Public API: play, tone, stop, etc.
+    # Public API
     # -----------------------------------------------------------------------
 
-    def play(self, path, loop=False, channel="sfx"):
-        """Play a WAV file on the given channel."""
+    def play(self, path, loop=False, channel="sfx", voice=None):
+        """Play a WAV file."""
+        idx = self._resolve_voice(voice, channel)
+
         if self._native:
-            idx = self._assign_voice_idx(channel)
             self._stop_streaming(idx)
             try:
                 f = open(path, "rb")
                 wav = WavReader(f)
                 _audiomix.voice_start_stream(idx, loop)
                 sv = _StreamingVoice(idx, wav, f, self._feed_buf, loop)
-                # Initial fill
                 self._fill_ringbuf(sv)
                 self._streaming.append(sv)
             except Exception as e:
@@ -694,124 +696,127 @@ class AudioEngine:
                 _audiomix.voice_stop(idx)
             return
 
-        v = self._assign_voice(channel)
+        v = self._voices[idx]
         try:
             f = open(path, "rb")
             v.file_obj = f
             v.source = WavReader(f)
             v.loop = loop
-            self._stamp_voice(v)
+            self._seq_counter += 1
+            v._start_seq = self._seq_counter
         except Exception as e:
             print("audio.play error:", e)
             v.stop()
 
-    def play_buffer(self, data, loop=False, channel="sfx"):
-        """Play pre-loaded PCM data (bytearray) on the given channel."""
+    def play_buffer(self, data, loop=False, channel="sfx", voice=None):
+        """Play pre-loaded PCM data (bytearray)."""
+        idx = self._resolve_voice(voice, channel)
+
         if self._native:
-            idx = self._assign_voice_idx(channel)
             self._stop_streaming(idx)
-            self._buf_refs[idx] = data  # prevent GC
+            self._buf_refs[idx] = data
             _audiomix.voice_play_buffer(idx, data, len(data), loop)
             return
 
-        v = self._assign_voice(channel)
+        v = self._voices[idx]
         v.source = MemorySource(data)
         v.loop = loop
-        self._stamp_voice(v)
+        self._seq_counter += 1
+        v._start_seq = self._seq_counter
 
-    def tone(self, freq_hz, duration_ms=200, wave="square", channel="sfx"):
-        """Play a procedural tone on the given channel."""
+    def tone(self, freq_hz, duration_ms=200, wave="square", channel="sfx", voice=None):
+        """Play a procedural tone."""
+        idx = self._resolve_voice(voice, channel)
+
         if self._native:
-            idx = self._assign_voice_idx(channel)
             self._stop_streaming(idx)
             wave_id = _WAVE_MAP.get(wave, 0)
             _audiomix.voice_tone(idx, freq_hz, duration_ms, wave_id)
             return
 
-        v = self._assign_voice(channel)
+        v = self._voices[idx]
         v.source = ToneSource(freq_hz, duration_ms, wave)
         v.loop = False
-        self._stamp_voice(v)
+        self._seq_counter += 1
+        v._start_seq = self._seq_counter
 
-    def play_sound(self, name, channel="ui"):
+    def play_sound(self, name, channel="ui", voice=None):
         """Play a named sound from the sound design system."""
         from bodn.sounds import WAV, SOUNDS
 
         path = WAV.get("sfx", {}).get(name)
         if path:
-            self.play(path, channel=channel)
+            self.play(path, channel=channel, voice=voice)
             return
 
         steps = SOUNDS.get(name)
         if not steps:
             return
 
+        idx = self._resolve_voice(voice, channel)
+
         if self._native:
-            idx = self._assign_voice_idx(channel)
             self._stop_streaming(idx)
-            # Pack steps into bytes: (freq_u16_le, dur_u16_le, wave_u8) × N
             packed = bytearray(len(steps) * 5)
-            for i, (freq, dur, wave) in enumerate(steps):
+            for i, (freq, dur, *rest) in enumerate(steps):
+                w = rest[0] if rest else "sine"
                 off = i * 5
                 f = max(0, freq)
                 packed[off] = f & 0xFF
                 packed[off + 1] = (f >> 8) & 0xFF
                 packed[off + 2] = dur & 0xFF
                 packed[off + 3] = (dur >> 8) & 0xFF
-                packed[off + 4] = _WAVE_MAP.get(wave, 0)
+                packed[off + 4] = _WAVE_MAP.get(w, 1)
             _audiomix.voice_sequence(idx, packed)
             return
 
-        v = self._assign_voice(channel)
+        v = self._voices[idx]
         v.source = SequenceSource(steps)
         v.loop = False
-        self._stamp_voice(v)
+        self._seq_counter += 1
+        v._start_seq = self._seq_counter
 
     def boop(self):
         """Quick UI feedback beep."""
         self.play_sound("boop")
 
-    def stop(self, channel=None):
-        """Stop playback on a channel, or all voices if None."""
+    def stop(self, channel=None, voice=None):
+        """Stop playback. voice=N stops one voice, channel stops a pool, None stops all."""
+        if voice is not None:
+            self._stop_voice(voice)
+            return
+
         if self._native:
             if channel is None:
-                for i in range(_NUM_VOICES):
+                for i in range(self._num_voices):
                     _audiomix.voice_stop(i)
                 for sv in self._streaming:
                     sv.close()
                 self._streaming.clear()
                 self._buf_refs.clear()
-            elif channel == "sfx":
-                for i in range(V_SFX_BASE, V_SFX_END):
+            else:
+                start, end = self._pool_range(channel)
+                for i in range(start, end):
                     _audiomix.voice_stop(i)
                     self._stop_streaming(i)
-            else:
-                idx = CHANNEL_NAMES.get(channel, -1)
-                if 0 <= idx < _NUM_VOICES:
-                    _audiomix.voice_stop(idx)
-                    self._stop_streaming(idx)
             return
 
         if channel is None:
             for v in self._voices:
                 v.stop()
-        elif channel == "sfx":
-            for i in range(V_SFX_BASE, V_SFX_END):
-                self._voices[i].stop()
         else:
-            idx = CHANNEL_NAMES.get(channel, -1)
-            if 0 <= idx < _NUM_VOICES:
-                self._voices[idx].stop()
+            start, end = self._pool_range(channel)
+            for i in range(start, end):
+                if i < len(self._voices):
+                    self._voices[i].stop()
 
     def _apply_volume(self, buf, n_bytes):
-        """Scale int16 samples in-place using fixed-point multiplication."""
         if self._volume >= 100:
             return
         _apply_volume_fast(buf, n_bytes, self._vol_mult)
 
     @staticmethod
     def _mono_to_stereo(mono, stereo, n_mono_bytes):
-        """Duplicate each 16-bit mono sample into L+R stereo frames."""
         i = n_mono_bytes - 2
         j = (n_mono_bytes - 2) * 2
         while i >= 0:
@@ -850,21 +855,18 @@ class AudioEngine:
     # -----------------------------------------------------------------------
 
     async def start(self):
-        """Start the audio engine.
-
-        Native: runs a feeder loop that tops up ring buffers for streaming
-        voices.  The C task on core 1 handles all mixing independently.
-
-        Fallback: primes the I2S DMA chain and registers the IRQ callback.
-        """
+        """Start the audio engine."""
         import gc
 
         if self._native:
-            print("AudioEngine started (native, core 1)")
+            print(
+                "AudioEngine started (native, core 0, {} voices)".format(
+                    self._num_voices
+                )
+            )
             gc_collect = gc.collect
             sleep_ms = asyncio.sleep_ms
             while True:
-                # Only do work if there are active streams to feed
                 if self._streaming:
                     dead = []
                     for sv in self._streaming:
@@ -878,7 +880,6 @@ class AudioEngine:
                         self._buf_refs.pop(sv.idx, None)
                     await sleep_ms(16)
                 else:
-                    # No streams — idle at low frequency
                     gc_collect()
                     await sleep_ms(100)
             return

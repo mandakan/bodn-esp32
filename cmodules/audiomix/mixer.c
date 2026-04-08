@@ -229,9 +229,6 @@ static void mix_task(void *arg) {
     int16_t stereo_buf[AUDIOMIX_MONO_BUF_SIZE];       // 512 samples (256 stereo frames)
     const uint32_t max_samples = AUDIOMIX_MONO_BUF_SIZE / 2;
 
-    // Silence buffer for idle periods
-    static const uint8_t silence[64] = {0};
-
     mp_printf(&mp_plat_print, "audiomix: mix task running on core %d\n",
               xPortGetCoreID());
 
@@ -240,7 +237,6 @@ static void mix_task(void *arg) {
 
         // Handle stop requests
         bool has_active = false;
-        bool non_music_active = false;
         uint32_t n_active = 0;
 
         for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {
@@ -253,11 +249,13 @@ static void mix_task(void *arg) {
             if (v->source_type != SRC_NONE) {
                 has_active = true;
                 n_active++;
-                if (!v->is_music) non_music_active = true;
             }
         }
 
         // --- Step sequencer clock ---
+        // Advance by one chunk (256 mono samples = 16ms at 16kHz).
+        // The clock must advance at a consistent rate tied to the DMA output.
+        // We always output max_samples worth of audio per cycle (silence or mixed).
         seq_clock_t *clk = &state->clock;
         if (clk->playing && clk->samples_per_step > 0) {
             clk->sample_count += max_samples;
@@ -271,16 +269,16 @@ static void mix_task(void *arg) {
                 // Trigger voices for this step
                 seq_step_t *st = &clk->steps[next];
 
-                // Percussion tracks → SFX voices (1..4)
-                for (int t = 0; t < SEQ_MAX_PERC_TRACKS && t < 4; t++) {
+                // Percussion tracks
+                uint32_t threshold = (state->sample_rate * SEQ_ANTI_REPEAT_MS) / 1000;
+                for (int t = 0; t < SEQ_MAX_PERC_TRACKS; t++) {
                     if (!(st->perc_mask & (1 << t))) continue;
-                    // Anti-double: skip if this voice was manually triggered recently
-                    int vi = AUDIOMIX_V_SFX_BASE + t;
+                    int vi = clk->perc_voice[t];
+                    if (vi >= AUDIOMIX_NUM_VOICES) continue;
+                    // Anti-double: skip if manually triggered recently
                     uint32_t since = clk->total_samples - clk->manual_trigger_sample[vi];
-                    uint32_t threshold = (state->sample_rate * SEQ_ANTI_REPEAT_MS) / 1000;
                     if (since < threshold) continue;
 
-                    // Trigger percussion buffer on this SFX voice
                     seq_perc_track_t *pt = &clk->perc_tracks[t];
                     if (pt->buf_ptr && pt->buf_len > 0) {
                         audiomix_voice_t *v = &state->voices[vi];
@@ -294,22 +292,23 @@ static void mix_task(void *arg) {
                     }
                 }
 
-                // Melody → music voice (0)
+                // Melody
                 if (st->melody_freq > 0) {
-                    int vi = AUDIOMIX_V_MUSIC;
-                    uint32_t since = clk->total_samples - clk->manual_trigger_sample[vi];
-                    uint32_t threshold = (state->sample_rate * SEQ_ANTI_REPEAT_MS) / 1000;
-                    if (since >= threshold) {
-                        audiomix_voice_t *v = &state->voices[vi];
-                        uint32_t dur_samples = (state->sample_rate * clk->melody_duration_ms) / 1000;
-                        v->tone_freq = st->melody_freq;
-                        v->tone_samples_left = dur_samples;
-                        v->tone_phase = 0;
-                        v->tone_wave = clk->melody_wave;
-                        v->loop = 0;
-                        v->fade_in = 1;
-                        v->stop_req = 0;
-                        v->source_type = SRC_TONE;
+                    int vi = clk->melody_voice;
+                    if (vi < AUDIOMIX_NUM_VOICES) {
+                        uint32_t since = clk->total_samples - clk->manual_trigger_sample[vi];
+                        if (since >= threshold) {
+                            audiomix_voice_t *v = &state->voices[vi];
+                            uint32_t dur_samples = (state->sample_rate * clk->melody_duration_ms) / 1000;
+                            v->tone_freq = st->melody_freq;
+                            v->tone_samples_left = dur_samples;
+                            v->tone_phase = 0;
+                            v->tone_wave = clk->melody_wave;
+                            v->loop = 0;
+                            v->fade_in = 1;
+                            v->stop_req = 0;
+                            v->source_type = SRC_TONE;
+                        }
                     }
                 }
             }
@@ -318,9 +317,11 @@ static void mix_task(void *arg) {
         }
 
         if (!has_active) {
-            // No active voices and no clock — write silence, yield
+            // No active voices and no clock — write full silence chunk
+            // (must match max_samples so clock timing stays consistent)
+            memset(stereo_buf, 0, max_samples * 4);
             size_t written;
-            i2s_channel_write(s_i2s_handle, silence, sizeof(silence),
+            i2s_channel_write(s_i2s_handle, stereo_buf, max_samples * 4,
                              &written, portMAX_DELAY);
             continue;
         }
@@ -337,22 +338,18 @@ static void mix_task(void *arg) {
             uint32_t n = voice_read(state, v, voice_buf, max_samples);
             if (n == 0) continue;
 
-            // Per-voice gain with ducking
-            uint32_t gain;
-            if (v->is_music && non_music_active) {
-                gain = AUDIOMIX_GAIN_MUSIC_DUCKED;
-            } else {
-                gain = v->gain;
-            }
-            apply_gain(voice_buf, n, gain);
+            // Per-voice gain
+            apply_gain(voice_buf, n, v->gain);
             mix_add(mix_buf, voice_buf, n);
 
             if (n > max_n) max_n = n;
         }
 
         if (max_n == 0) {
+            // No voice produced samples — output full silence chunk
+            memset(stereo_buf, 0, max_samples * 4);
             size_t written;
-            i2s_channel_write(s_i2s_handle, silence, sizeof(silence),
+            i2s_channel_write(s_i2s_handle, stereo_buf, max_samples * 4,
                              &written, portMAX_DELAY);
             continue;
         }
@@ -419,21 +416,17 @@ const char *mixer_init(const mixer_config_t *cfg, audiomix_state_t **state_out) 
     state->clock.n_steps = 8;
     state->clock.melody_duration_ms = 150;
     state->clock.melody_wave = AUDIOMIX_WAVE_SINE;
+    // Default voice mapping: perc tracks → voices 0-4, melody → voice 5
+    for (int i = 0; i < SEQ_MAX_PERC_TRACKS; i++) {
+        state->clock.perc_voice[i] = i;
+    }
+    state->clock.melody_voice = 5;
 
     // Initialise per-voice state
     for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {
         audiomix_voice_t *v = &state->voices[i];
         v->source_type = SRC_NONE;
-        v->is_music = (i == AUDIOMIX_V_MUSIC) ? 1 : 0;
-
-        if (i == AUDIOMIX_V_MUSIC) {
-            v->gain = AUDIOMIX_GAIN_MUSIC;
-        } else if (i == AUDIOMIX_V_UI) {
-            v->gain = AUDIOMIX_GAIN_UI;
-        } else {
-            v->gain = AUDIOMIX_GAIN_SFX;
-        }
-
+        v->gain = AUDIOMIX_GAIN_DEFAULT;
         ringbuf_init(&v->ringbuf, AUDIOMIX_RINGBUF_SIZE);
     }
 

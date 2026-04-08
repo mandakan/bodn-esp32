@@ -278,9 +278,11 @@ class SequencerScreen(Screen):
 
         # --- Advance playhead ---
         if _has_clock and eng.state == PLAYING:
-            # C clock drives timing — just read the current step
-            eng.step = _audiomix.clock_get_step()
-            eng.step_advanced = eng.step != self._prev_step
+            # C clock drives timing — read current step for UI + quantization
+            c_step = _audiomix.clock_get_step()
+            eng.step = c_step
+            eng._frac = float(c_step)  # keep nearest_step() in sync
+            eng.step_advanced = c_step != self._prev_step
         else:
             # Fallback: Python-driven timing
             eng.advance(delta)
@@ -348,15 +350,19 @@ class SequencerScreen(Screen):
         if not self._audio or not self._drum_bufs:
             return
         buf = self._drum_bufs[track] if track < len(self._drum_bufs) else None
-        if buf:
-            self._audio.play_buffer(buf, channel="sfx")
+        if not buf:
+            return
+        # Use direct voice index matching the clock's perc_voice mapping
+        # (default: track 0→voice 0, track 1→voice 1, etc.)
+        self._audio.play_buffer(buf, voice=track)
 
     def _play_melody_note(self, btn_idx):
         """Play a melody tone immediately (button feedback)."""
         if not self._audio or btn_idx >= len(MELODY_FREQS):
             return
         freq = MELODY_FREQS[btn_idx]
-        self._audio.tone(freq, 150, "sine", channel="music")
+        # Use direct voice index matching the clock's melody_voice (default: 5)
+        self._audio.tone(freq, 150, "sine", voice=5)
 
     def _trigger_step_sounds(self, step):
         """Trigger all active sounds at a grid step (called on step tick)."""

@@ -14,11 +14,7 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-#define AUDIOMIX_NUM_VOICES     6
-#define AUDIOMIX_V_MUSIC        0
-#define AUDIOMIX_V_SFX_BASE     1
-#define AUDIOMIX_V_SFX_END      5   // exclusive
-#define AUDIOMIX_V_UI           5
+#define AUDIOMIX_NUM_VOICES     16
 
 #define AUDIOMIX_RINGBUF_SIZE   2048  // bytes per voice (64ms @ 16kHz mono 16-bit)
 #define AUDIOMIX_MONO_BUF_SIZE  512   // bytes per mono read (256 samples = 16ms)
@@ -29,11 +25,8 @@
 #define AUDIOMIX_WAVE_SAWTOOTH  2
 #define AUDIOMIX_WAVE_NOISE     3
 
-// Per-voice gain presets (fixed-point 16.16)
-#define AUDIOMIX_GAIN_MUSIC         45875   // 70%
-#define AUDIOMIX_GAIN_MUSIC_DUCKED  16384   // 25%
-#define AUDIOMIX_GAIN_SFX           45875   // 70%
-#define AUDIOMIX_GAIN_UI            52428   // 80%
+// Default per-voice gain (fixed-point 16.16) — ~70%
+#define AUDIOMIX_GAIN_DEFAULT       45875
 
 // Fade length in samples
 #define AUDIOMIX_FADE_SAMPLES   16  // 1ms @ 16kHz
@@ -73,7 +66,6 @@ typedef struct {
     volatile audiomix_source_t source_type;
     volatile uint32_t gain;             // fixed-point 16.16 multiplier
     volatile uint8_t  loop;             // 1 = loop, 0 = one-shot
-    volatile uint8_t  is_music;         // 1 = music voice (subject to ducking)
     volatile uint8_t  stop_req;         // Python sets 1; core 1 clears + stops
     volatile uint8_t  fade_in;          // apply fade-in on first chunk
 
@@ -138,6 +130,10 @@ typedef struct {
 
     // Percussion track buffers (set once by Python)
     seq_perc_track_t perc_tracks[SEQ_MAX_PERC_TRACKS];
+
+    // Voice mapping: which voice index to use for each track
+    uint8_t perc_voice[SEQ_MAX_PERC_TRACKS];  // voice index for each perc track
+    uint8_t melody_voice;               // voice index for melody
 
     // Melody config
     uint16_t melody_duration_ms;        // tone duration for melody notes (default 150)

@@ -13,7 +13,6 @@ from bodn.audio import (
     _GAIN_MUSIC,
     _GAIN_MUSIC_DUCKED,
     _GAIN_SFX,
-    _GAIN_UI,
     _mix_add_py,
     _apply_volume_py,
 )
@@ -283,20 +282,11 @@ class TestGainStaging:
         duck = struct.unpack_from("<h", buf_duck, 0)[0]
         assert solo > duck * 2  # solo is ~2.8x louder than ducked
 
-    def test_ui_gain_highest(self):
-        """UI gain is higher than SFX gain."""
-        assert _GAIN_UI > _GAIN_SFX
-
-    def test_voice_gain_assignment(self):
-        """Voices are created with correct gain multipliers."""
+    def test_uniform_gain(self):
+        """All voices are created with the same default gain."""
         engine = AudioEngine(FakeI2S())
-        assert engine._voices[V_MUSIC].gain_mult == _GAIN_MUSIC
-        assert engine._voices[V_MUSIC].is_music is True
-        for i in range(V_SFX_BASE, V_SFX_END):
-            assert engine._voices[i].gain_mult == _GAIN_SFX
-            assert engine._voices[i].is_music is False
-        assert engine._voices[V_UI].gain_mult == _GAIN_UI
-        assert engine._voices[V_UI].is_music is False
+        for v in engine._voices:
+            assert v.gain_mult == _GAIN_SFX  # all uniform now
 
 
 class TestVolume:
