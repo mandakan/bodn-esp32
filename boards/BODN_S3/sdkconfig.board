@@ -1,0 +1,5 @@
+# Dual-core (default for S3, but be explicit)
+CONFIG_FREERTOS_UNICORE=n
+
+# I2S ISR in IRAM for reliable DMA callbacks
+CONFIG_I2S_ISR_IRAM_SAFE=y
