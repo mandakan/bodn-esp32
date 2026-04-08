@@ -97,6 +97,10 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
     }
 
     case SRC_BUFFER: {
+        if (v->buf_ptr == NULL || v->buf_len == 0) {
+            v->source_type = SRC_NONE;
+            break;
+        }
         uint32_t remaining = v->buf_len - v->buf_pos;
         uint32_t to_copy = (remaining < max_bytes) ? remaining : max_bytes;
         to_copy = (to_copy / 2) * 2;  // align to sample boundary
@@ -116,7 +120,7 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
     }
 
     case SRC_TONE: {
-        if (v->tone_samples_left == 0) {
+        if (v->tone_samples_left == 0 || v->tone_freq == 0) {
             v->source_type = SRC_NONE;
             break;
         }
@@ -337,7 +341,7 @@ static void mix_task(void *arg) {
         // Mix all active voices
         for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {
             audiomix_voice_t *v = &state->voices[i];
-            if (v->source_type == SRC_NONE) continue;
+            if (v->source_type == SRC_NONE || v->writing) continue;
 
             uint32_t n = voice_read(state, v, voice_buf, max_samples);
             if (n == 0) continue;
