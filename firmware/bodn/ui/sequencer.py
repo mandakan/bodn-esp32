@@ -386,7 +386,6 @@ class SequencerScreen(Screen):
         """Draw one track row with squares (no playhead highlight)."""
         eng = self._engine
         y = self._grid_y + row * self._row_h
-        col_w = self._col_w
         row_h = self._row_h
         n = eng.n_steps
 
