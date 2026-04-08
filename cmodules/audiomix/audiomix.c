@@ -118,7 +118,9 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     uint32_t wave     = mp_obj_get_int(args[3]);
 
     audiomix_voice_t *v = &audiomix_state->voices[idx];
-    // Write payload fields first
+    // Deactivate first so the mixer doesn't read partial state
+    v->source_type = SRC_NONE;
+    // Write payload fields
     v->tone_freq = freq;
     v->tone_samples_left = (audiomix_state->sample_rate * dur_ms) / 1000;
     v->tone_phase = 0;
@@ -131,7 +133,7 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     // Mark manual trigger for anti-double logic
     audiomix_state->clock.manual_trigger_sample[idx] =
         audiomix_state->clock.total_samples;
-    // Commit
+    // Commit — mixer picks it up on next cycle
     v->source_type = SRC_TONE;
 
     return mp_const_none;
@@ -161,6 +163,7 @@ static mp_obj_t audiomix_voice_sequence(mp_obj_t idx_obj, mp_obj_t data_obj) {
     }
 
     audiomix_voice_t *v = &audiomix_state->voices[idx];
+    v->source_type = SRC_NONE;
     uint32_t copy_len = n_steps * AUDIOMIX_SEQ_STEP_SIZE;
     memcpy(v->seq_buf, bufinfo.buf, copy_len);
     v->seq_n_steps = n_steps;
@@ -172,7 +175,6 @@ static mp_obj_t audiomix_voice_sequence(mp_obj_t idx_obj, mp_obj_t data_obj) {
     v->stop_req = 0;
     audiomix_state->seq_counter++;
     v->start_seq = audiomix_state->seq_counter;
-    // Commit
     v->source_type = SRC_SEQUENCE;
 
     return mp_const_none;
@@ -277,14 +279,13 @@ static mp_obj_t audiomix_voice_play_buffer(size_t n_args, const mp_obj_t *args) 
     bool loop = mp_obj_is_true(args[3]);
 
     audiomix_voice_t *v = &audiomix_state->voices[idx];
-    // Write payload first
+    v->source_type = SRC_NONE;
     v->buf_ptr = bufinfo.buf;
     v->buf_len = n_bytes;
     v->buf_pos = 0;
     v->loop = loop ? 1 : 0;
     v->fade_in = 1;
     v->stop_req = 0;
-    // Mark manual trigger for anti-double logic
     audiomix_state->clock.manual_trigger_sample[idx] =
         audiomix_state->clock.total_samples;
     audiomix_state->seq_counter++;

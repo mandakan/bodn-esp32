@@ -282,6 +282,7 @@ static void mix_task(void *arg) {
                     seq_perc_track_t *pt = &clk->perc_tracks[t];
                     if (pt->buf_ptr && pt->buf_len > 0) {
                         audiomix_voice_t *v = &state->voices[vi];
+                        v->source_type = SRC_NONE;
                         v->buf_ptr = pt->buf_ptr;
                         v->buf_len = pt->buf_len;
                         v->buf_pos = 0;
@@ -299,6 +300,7 @@ static void mix_task(void *arg) {
                         uint32_t since = clk->total_samples - clk->manual_trigger_sample[vi];
                         if (since >= threshold) {
                             audiomix_voice_t *v = &state->voices[vi];
+                            v->source_type = SRC_NONE;
                             uint32_t dur_samples = (state->sample_rate * clk->melody_duration_ms) / 1000;
                             v->tone_freq = st->melody_freq;
                             v->tone_samples_left = dur_samples;
