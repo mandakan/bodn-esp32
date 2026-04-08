@@ -10,15 +10,10 @@
 
 #include "ringbuf.h"
 
-// Use heap_caps_malloc on ESP32 for PSRAM allocation
-#if defined(ESP_PLATFORM)
+// PSRAM allocation via ESP-IDF heap_caps
 #include "esp_heap_caps.h"
 #define RB_MALLOC(sz) heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
 #define RB_FREE(p)    heap_caps_free(p)
-#else
-#define RB_MALLOC(sz) malloc(sz)
-#define RB_FREE(p)    free(p)
-#endif
 
 void ringbuf_init(audiomix_ringbuf_t *rb, uint32_t size) {
     rb->buf = RB_MALLOC(size);

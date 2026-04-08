@@ -16,8 +16,9 @@ typedef struct {
 } mixer_config_t;
 
 // Allocate state, configure I2S, start core 1 task.
-// Returns NULL on failure.
-audiomix_state_t *mixer_init(const mixer_config_t *cfg);
+// On success: sets *state_out and returns NULL.
+// On failure: returns a static error string describing what failed.
+const char *mixer_init(const mixer_config_t *cfg, audiomix_state_t **state_out);
 
 // Stop core 1 task, release I2S, free state.
 void mixer_deinit(audiomix_state_t *state);

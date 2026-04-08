@@ -112,9 +112,19 @@ typedef struct {
     volatile uint32_t master_volume;    // 0–100
     volatile uint32_t vol_mult;         // precomputed fixed-point multiplier
     volatile uint8_t  running;          // 1 = mix task active
-    volatile uint32_t underruns;        // diagnostic: ring buffer underrun count
     uint32_t sample_rate;
     uint32_t seq_counter;               // monotonic counter for voice age
+
+    // Diagnostics (written by core 1, read by Python)
+    volatile uint32_t underruns;        // ring buffer underrun count
+    volatile uint32_t mix_calls;        // total mix loop iterations
+    volatile uint32_t mix_us_last;      // last mix cycle duration (µs)
+    volatile uint32_t mix_us_max;       // worst-case mix cycle (µs)
+    volatile uint32_t mix_us_sum;       // accumulated mix time for averaging
+    volatile uint32_t mix_avg_count;    // number of samples in sum
+    volatile uint32_t active_voices;    // voices active in last mix cycle
+    volatile uint32_t task_stack_hwm;   // FreeRTOS high water mark (bytes)
+    volatile uint32_t dma_wait_us;      // last DMA write blocking time (µs)
 } audiomix_state_t;
 
 // Global state (allocated once by init)

@@ -34,7 +34,9 @@ static mp_obj_t audiomix_init(size_t n_args, const mp_obj_t *pos_args,
                      MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
     if (audiomix_state != NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("already initialised"));
+        // Re-init after soft reset — clean up the old instance
+        mixer_deinit(audiomix_state);
+        audiomix_state = NULL;
     }
 
     mixer_config_t cfg = {
@@ -46,9 +48,10 @@ static mp_obj_t audiomix_init(size_t n_args, const mp_obj_t *pos_args,
         .ibuf     = args[5].u_int,
     };
 
-    audiomix_state = mixer_init(&cfg);
-    if (audiomix_state == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("mixer init failed"));
+    const char *err = mixer_init(&cfg, &audiomix_state);
+    if (err != NULL) {
+        mp_raise_msg_varg(&mp_type_RuntimeError,
+                          MP_ERROR_TEXT("audiomix: %s"), err);
     }
 
     return mp_const_none;
@@ -360,6 +363,79 @@ static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_ringbuf_space_obj,
                                   audiomix_ringbuf_space);
 
 // ---------------------------------------------------------------------------
+// _audiomix.stats() -> dict
+// ---------------------------------------------------------------------------
+
+static mp_obj_t audiomix_stats(void) {
+    if (audiomix_state == NULL) {
+        return mp_obj_new_dict(0);
+    }
+    audiomix_state_t *s = audiomix_state;
+    mp_obj_dict_t *d = MP_OBJ_TO_PTR(mp_obj_new_dict(10));
+
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_mix_calls),
+        mp_obj_new_int(s->mix_calls));
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_mix_us_last),
+        mp_obj_new_int(s->mix_us_last));
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_mix_us_max),
+        mp_obj_new_int(s->mix_us_max));
+    uint32_t avg = s->mix_avg_count ? s->mix_us_sum / s->mix_avg_count : 0;
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_mix_us_avg),
+        mp_obj_new_int(avg));
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_underruns),
+        mp_obj_new_int(s->underruns));
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_active_voices),
+        mp_obj_new_int(s->active_voices));
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_stack_hwm),
+        mp_obj_new_int(s->task_stack_hwm));
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_volume),
+        mp_obj_new_int(s->master_volume));
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_sample_rate),
+        mp_obj_new_int(s->sample_rate));
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_dma_wait_us),
+        mp_obj_new_int(s->dma_wait_us));
+
+    // Per-voice ring buffer fill levels
+    mp_obj_t rb_list = mp_obj_new_list(0, NULL);
+    for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {
+        mp_obj_list_append(rb_list,
+            mp_obj_new_int(ringbuf_available(&s->voices[i].ringbuf)));
+    }
+    mp_obj_dict_store(MP_OBJ_FROM_PTR(d),
+        MP_OBJ_NEW_QSTR(MP_QSTR_ringbuf_fill),
+        rb_list);
+
+    return MP_OBJ_FROM_PTR(d);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(audiomix_stats_obj, audiomix_stats);
+
+// ---------------------------------------------------------------------------
+// _audiomix.reset_stats()
+// ---------------------------------------------------------------------------
+
+static mp_obj_t audiomix_reset_stats(void) {
+    if (audiomix_state != NULL) {
+        audiomix_state->mix_us_max = 0;
+        audiomix_state->mix_us_sum = 0;
+        audiomix_state->mix_avg_count = 0;
+        audiomix_state->underruns = 0;
+        audiomix_state->mix_calls = 0;
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(audiomix_reset_stats_obj, audiomix_reset_stats);
+
+// ---------------------------------------------------------------------------
 // Module definition
 // ---------------------------------------------------------------------------
 
@@ -379,6 +455,8 @@ static const mp_rom_map_elem_t audiomix_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_voice_active),        MP_ROM_PTR(&audiomix_voice_active_obj) },
     { MP_ROM_QSTR(MP_QSTR_voice_set_gain),      MP_ROM_PTR(&audiomix_voice_set_gain_obj) },
     { MP_ROM_QSTR(MP_QSTR_ringbuf_space),       MP_ROM_PTR(&audiomix_ringbuf_space_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stats),              MP_ROM_PTR(&audiomix_stats_obj) },
+    { MP_ROM_QSTR(MP_QSTR_reset_stats),        MP_ROM_PTR(&audiomix_reset_stats_obj) },
     // Constants for voice indices
     { MP_ROM_QSTR(MP_QSTR_V_MUSIC),             MP_ROM_INT(AUDIOMIX_V_MUSIC) },
     { MP_ROM_QSTR(MP_QSTR_V_SFX_BASE),          MP_ROM_INT(AUDIOMIX_V_SFX_BASE) },

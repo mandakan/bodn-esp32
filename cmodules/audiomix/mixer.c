@@ -12,14 +12,15 @@
 #include "ringbuf.h"
 #include "tonegen.h"
 
-// ESP-IDF headers — only available when building for ESP32
-#if defined(ESP_PLATFORM)
+#include "py/mpprint.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 #include "driver/i2s_std.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 static const char *TAG = "audiomix";
 
@@ -231,12 +232,16 @@ static void mix_task(void *arg) {
     // Silence buffer for idle periods
     static const uint8_t silence[64] = {0};
 
-    ESP_LOGI(TAG, "mix task started on core %d", xPortGetCoreID());
+    mp_printf(&mp_plat_print, "audiomix: mix task running on core %d\n",
+              xPortGetCoreID());
 
     while (state->running) {
+        int64_t t0 = esp_timer_get_time();
+
         // Handle stop requests
         bool has_active = false;
         bool non_music_active = false;
+        uint32_t n_active = 0;
 
         for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {
             audiomix_voice_t *v = &state->voices[i];
@@ -247,6 +252,7 @@ static void mix_task(void *arg) {
             }
             if (v->source_type != SRC_NONE) {
                 has_active = true;
+                n_active++;
                 if (!v->is_music) non_music_active = true;
             }
         }
@@ -299,13 +305,31 @@ static void mix_task(void *arg) {
         // Mono → stereo
         mono_to_stereo(mix_buf, stereo_buf, max_n);
 
+        // Measure mix computation time (excludes DMA wait)
+        uint32_t mix_elapsed = (uint32_t)(esp_timer_get_time() - t0);
+
         // Write to I2S (blocking — paces loop to DMA timing)
+        int64_t t_dma = esp_timer_get_time();
         size_t written;
         i2s_channel_write(s_i2s_handle, stereo_buf, max_n * 4,
                          &written, portMAX_DELAY);
+        state->dma_wait_us = (uint32_t)(esp_timer_get_time() - t_dma);
+
+        // Update diagnostics (mix time only, not DMA wait)
+        state->mix_calls++;
+        state->mix_us_last = mix_elapsed;
+        if (mix_elapsed > state->mix_us_max) state->mix_us_max = mix_elapsed;
+        state->mix_us_sum += mix_elapsed;
+        state->mix_avg_count++;
+        state->active_voices = n_active;
+
+        // Update stack high water mark periodically
+        if ((state->mix_calls & 0xFF) == 0) {
+            state->task_stack_hwm = uxTaskGetStackHighWaterMark(NULL) * 4;
+        }
     }
 
-    ESP_LOGI(TAG, "mix task stopped");
+    mp_printf(&mp_plat_print, "audiomix: mix task stopped\n");
     vTaskDelete(NULL);
 }
 
@@ -315,13 +339,14 @@ static void mix_task(void *arg) {
 
 static TaskHandle_t s_mix_task = NULL;
 
-audiomix_state_t *mixer_init(const mixer_config_t *cfg) {
+const char *mixer_init(const mixer_config_t *cfg, audiomix_state_t **state_out) {
+    *state_out = NULL;
+
     // Allocate state in PSRAM
     audiomix_state_t *state = heap_caps_calloc(1, sizeof(audiomix_state_t),
                                                 MALLOC_CAP_SPIRAM);
     if (state == NULL) {
-        ESP_LOGE(TAG, "failed to allocate state");
-        return NULL;
+        return "PSRAM alloc failed";
     }
 
     state->sample_rate = cfg->rate;
@@ -335,7 +360,6 @@ audiomix_state_t *mixer_init(const mixer_config_t *cfg) {
         v->source_type = SRC_NONE;
         v->is_music = (i == AUDIOMIX_V_MUSIC) ? 1 : 0;
 
-        // Set default gains
         if (i == AUDIOMIX_V_MUSIC) {
             v->gain = AUDIOMIX_GAIN_MUSIC;
         } else if (i == AUDIOMIX_V_UI) {
@@ -344,20 +368,22 @@ audiomix_state_t *mixer_init(const mixer_config_t *cfg) {
             v->gain = AUDIOMIX_GAIN_SFX;
         }
 
-        // Allocate ring buffer
         ringbuf_init(&v->ringbuf, AUDIOMIX_RINGBUF_SIZE);
     }
 
     // Configure I2S via ESP-IDF new driver
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(
         I2S_NUM_0, I2S_ROLE_MASTER);
-    chan_cfg.dma_desc_num = 4;
-    chan_cfg.dma_frame_num = cfg->ibuf / 4;  // frames per DMA descriptor
+    // DMA config: 8 descriptors × 256 frames = 2048 frames total
+    // At 16kHz stereo 16-bit: 2048 frames × 4 bytes = 8192 bytes ≈ 128ms buffer
+    // Each descriptor holds 256 frames = 16ms — matches our mix chunk size
+    chan_cfg.dma_desc_num = 8;
+    chan_cfg.dma_frame_num = 256;
 
     esp_err_t err = i2s_new_channel(&chan_cfg, &s_i2s_handle, NULL);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "i2s_new_channel failed: %s", esp_err_to_name(err));
-        goto fail;
+        heap_caps_free(state);
+        return "i2s_new_channel failed (I2S_NUM_0 busy?)";
     }
 
     i2s_std_config_t std_cfg = {
@@ -376,46 +402,45 @@ audiomix_state_t *mixer_init(const mixer_config_t *cfg) {
 
     err = i2s_channel_init_std_mode(s_i2s_handle, &std_cfg);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "i2s_channel_init_std_mode failed: %s",
-                 esp_err_to_name(err));
-        goto fail;
+        i2s_del_channel(s_i2s_handle);
+        s_i2s_handle = NULL;
+        heap_caps_free(state);
+        return "i2s_channel_init_std_mode failed (bad pins?)";
     }
 
     err = i2s_channel_enable(s_i2s_handle);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "i2s_channel_enable failed: %s", esp_err_to_name(err));
-        goto fail;
+        i2s_del_channel(s_i2s_handle);
+        s_i2s_handle = NULL;
+        heap_caps_free(state);
+        return "i2s_channel_enable failed";
     }
 
     // Enable amplifier
     gpio_reset_pin((gpio_num_t)cfg->pin_amp);
     gpio_set_direction((gpio_num_t)cfg->pin_amp, GPIO_MODE_OUTPUT);
     gpio_set_level((gpio_num_t)cfg->pin_amp, 1);
-    ESP_LOGI(TAG, "amplifier enabled (GPIO %d)", cfg->pin_amp);
 
-    // Start mix task on core 1
+    // Start mix task on core 0.
+    // MicroPython runs on core 1 (MP_TASK_COREID).  Core 0 runs ESP-IDF
+    // system tasks (WiFi, timers) which are lightweight and cooperative,
+    // so the mixer gets reliable scheduling without competing with the VM.
     BaseType_t ret = xTaskCreatePinnedToCore(
         mix_task, "audiomix", MIX_TASK_STACK,
-        state, MIX_TASK_PRIO, &s_mix_task, 1);
+        state, MIX_TASK_PRIO, &s_mix_task, 0);
     if (ret != pdPASS) {
-        ESP_LOGE(TAG, "failed to create mix task");
-        goto fail;
-    }
-
-    ESP_LOGI(TAG, "initialised: rate=%d, I2S on bck=%d ws=%d din=%d",
-             cfg->rate, cfg->pin_bck, cfg->pin_ws, cfg->pin_din);
-    return state;
-
-fail:
-    if (s_i2s_handle) {
+        i2s_channel_disable(s_i2s_handle);
         i2s_del_channel(s_i2s_handle);
         s_i2s_handle = NULL;
+        for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {
+            ringbuf_deinit(&state->voices[i].ringbuf);
+        }
+        heap_caps_free(state);
+        return "xTaskCreatePinnedToCore failed (no memory?)";
     }
-    for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {
-        ringbuf_deinit(&state->voices[i].ringbuf);
-    }
-    heap_caps_free(state);
-    return NULL;
+
+    *state_out = state;
+    return NULL;  // success
 }
 
 void mixer_deinit(audiomix_state_t *state) {
@@ -446,14 +471,3 @@ void mixer_deinit(audiomix_state_t *state) {
     heap_caps_free(state);
     ESP_LOGI(TAG, "deinitialised");
 }
-
-#else
-// Host stub for compilation/testing without ESP-IDF
-audiomix_state_t *mixer_init(const mixer_config_t *cfg) {
-    (void)cfg;
-    return NULL;
-}
-void mixer_deinit(audiomix_state_t *state) {
-    (void)state;
-}
-#endif // ESP_PLATFORM

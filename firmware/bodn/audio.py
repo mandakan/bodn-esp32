@@ -864,20 +864,23 @@ class AudioEngine:
             gc_collect = gc.collect
             sleep_ms = asyncio.sleep_ms
             while True:
-                # Feed streaming voices
-                dead = []
-                for sv in self._streaming:
-                    if not _audiomix.voice_active(sv.idx):
-                        dead.append(sv)
-                        continue
-                    self._fill_ringbuf(sv)
-                # Clean up finished streams
-                for sv in dead:
-                    sv.close()
-                    self._streaming.remove(sv)
-                    self._buf_refs.pop(sv.idx, None)
-                gc_collect()
-                await sleep_ms(8)
+                # Only do work if there are active streams to feed
+                if self._streaming:
+                    dead = []
+                    for sv in self._streaming:
+                        if not _audiomix.voice_active(sv.idx):
+                            dead.append(sv)
+                            continue
+                        self._fill_ringbuf(sv)
+                    for sv in dead:
+                        sv.close()
+                        self._streaming.remove(sv)
+                        self._buf_refs.pop(sv.idx, None)
+                    await sleep_ms(16)
+                else:
+                    # No streams — idle at low frequency
+                    gc_collect()
+                    await sleep_ms(100)
             return
 
         # Fallback: IRQ callback chain

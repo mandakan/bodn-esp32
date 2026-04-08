@@ -223,7 +223,8 @@ def create_hardware():
             )
             hw_status["audio"] = True
             print("AudioEngine initialised (native, core 1)")
-        except ImportError:
+        except Exception as native_err:
+            print("Native audio failed:", native_err, "— falling back")
             # Fallback: Python-driven I2S on core 0
             from machine import I2S
 
