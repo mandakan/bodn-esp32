@@ -42,10 +42,8 @@ def preload_sequencer_assets(on_progress=None):
 # Grid layout constants (computed once in enter)
 _HEADER_H = const(22)
 _FOOTER_H = const(26)
+_MARKER_H = const(6)  # playhead marker strip height
 _NUM_ROWS = const(6)  # 5 percussion + 1 melody
-
-# Playhead highlight colour (bright bar behind the active column)
-_PLAYHEAD_ALPHA = const(40)  # subtle darkened overlay value
 
 
 class SequencerScreen(Screen):
@@ -80,6 +78,8 @@ class SequencerScreen(Screen):
         self._last_ms = 0
         self._dirty = True
         self._full_clear = True
+        self._marker_dirty = False  # playhead marker needs redraw (cheap)
+        self._cells_dirty = False  # grid cells changed (redraw affected cells)
         self._flash_msg = None  # temporary overlay text (e.g. "Cleared!")
         self._flash_end = 0
 
@@ -91,6 +91,7 @@ class SequencerScreen(Screen):
         self._grid_w = 0
         self._grid_h = 0
         self._label_w = 0
+        self._marker_y = 0
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -120,6 +121,11 @@ class SequencerScreen(Screen):
 
         self._last_ms = time.ticks_ms()
 
+        # Low burst for responsive timing — sequencer uses memory/tone
+        # sources (no file I/O) so DMA headroom needs are modest.
+        if self._audio:
+            self._audio.burst = 2
+
         # Compute grid geometry
         w = manager.tft.width if hasattr(manager.tft, "width") else 320
         h = manager.tft.height if hasattr(manager.tft, "height") else 240
@@ -127,7 +133,7 @@ class SequencerScreen(Screen):
         self._grid_x = self._label_w
         self._grid_y = _HEADER_H
         self._grid_w = w - self._label_w
-        self._grid_h = h - _HEADER_H - _FOOTER_H
+        self._grid_h = h - _HEADER_H - _FOOTER_H - _MARKER_H
         self._recompute_grid()
 
     def _recompute_grid(self):
@@ -135,12 +141,15 @@ class SequencerScreen(Screen):
         n = self._engine.n_steps
         self._col_w = self._grid_w // n
         self._row_h = self._grid_h // _NUM_ROWS
+        # Marker strip sits between grid bottom and footer
+        self._marker_y = self._grid_y + self._grid_h
 
     def exit(self):
         self._drum_bufs = None
         if self._audio:
             self._audio.stop("sfx")
             self._audio.stop("music")
+            self._audio.burst = 0  # restore auto-scaling
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
@@ -218,7 +227,7 @@ class SequencerScreen(Screen):
                 if val:
                     any_toggled_on = True
                     self._play_drum(i)
-                self._dirty = True
+                self._cells_dirty = True
 
         # --- Mini buttons: melody ---
         for i in range(8):
@@ -227,7 +236,7 @@ class SequencerScreen(Screen):
                 if val:
                     any_toggled_on = True
                     self._play_melody_note(i)
-                self._dirty = True
+                self._cells_dirty = True
 
         # Auto-start on first interaction
         if any_toggled_on and eng.state == STOPPED:
@@ -240,11 +249,10 @@ class SequencerScreen(Screen):
         # --- Trigger sounds on step tick ---
         if eng.step_advanced:
             self._trigger_step_sounds(eng.step)
-            self._dirty = True
 
-        # --- Playhead movement (partial redraw) ---
+        # --- Playhead movement (marker-only redraw) ---
         if eng.step != self._prev_step:
-            self._dirty = True
+            self._marker_dirty = True
 
         # --- Update secondary display ---
         if self._secondary:
@@ -262,9 +270,6 @@ class SequencerScreen(Screen):
                 else:
                     arc.off(i)
             arc.flush()
-
-        # Clear dirty_steps each frame (consumed above)
-        eng.dirty_steps.clear()
 
         # Clear flash message if expired
         if self._flash_msg and now >= self._flash_end:
@@ -308,51 +313,77 @@ class SequencerScreen(Screen):
     # ------------------------------------------------------------------
 
     def needs_redraw(self):
-        return self._dirty or self._pause.needs_render
+        return (
+            self._dirty
+            or self._cells_dirty
+            or self._marker_dirty
+            or self._pause.needs_render
+        )
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:
             if self._dirty:
                 self._dirty = False
+                self._cells_dirty = False
+                self._marker_dirty = False
                 tft.fill(theme.BLACK)
-                self._render_game(tft, theme, frame)
+                self._render_game(tft, theme)
             self._pause.render(tft, theme, frame)
             return
 
         if self._dirty:
             self._dirty = False
+            self._cells_dirty = False
+            self._marker_dirty = False
             if self._full_clear:
                 self._full_clear = False
                 tft.fill(theme.BLACK)
-                self._render_game(tft, theme, frame)
-            else:
-                # Partial update: redraw old and new playhead columns
-                self._render_playhead_update(tft, theme)
+            self._render_game(tft, theme)
+            self._engine.dirty_steps.clear()
+            self._prev_step = self._engine.step
+        elif self._cells_dirty:
+            # Redraw only the toggled cells (engine tracks which steps changed)
+            self._cells_dirty = False
+            self._render_dirty_cells(tft, theme)
+            self._engine.dirty_steps.clear()
+            # Also update marker since cells_dirty often comes with a step change
+            if self._marker_dirty:
+                self._marker_dirty = False
+                self._render_marker(tft, theme)
+                self._prev_step = self._engine.step
+        elif self._marker_dirty:
+            # Cheapest path: only move the playhead marker strip
+            self._marker_dirty = False
+            self._render_marker(tft, theme)
             self._prev_step = self._engine.step
 
         self._pause.render(tft, theme, frame)
 
-    def _render_game(self, tft, theme, frame):
-        """Full grid render."""
+    def _render_game(self, tft, theme):
+        """Full grid render (header + grid + marker + footer)."""
         eng = self._engine
         w = theme.width
 
         # Header
+        tft.fill_rect(0, 0, w, _HEADER_H, theme.BLACK)
         title = t("mode_sequencer").upper()
         tft.text(title, 4, 4, theme.WHITE)
         bpm_str = str(eng.bpm)
         bpm_x = w - len(bpm_str) * 8 - 4
         tft.text(bpm_str, bpm_x, 4, theme.CYAN)
 
-        # Grid rows
+        # Grid rows (static — no playhead highlight in cells)
         for row in range(_NUM_ROWS):
-            self._render_row(tft, theme, row, highlight_step=eng.step)
+            self._render_row(tft, theme, row)
+
+        # Playhead marker strip
+        self._render_marker(tft, theme)
 
         # Footer
         self._render_footer(tft, theme)
 
-    def _render_row(self, tft, theme, row, highlight_step=-1):
-        """Draw one track row with circles."""
+    def _render_row(self, tft, theme, row):
+        """Draw one track row with squares (no playhead highlight)."""
         eng = self._engine
         y = self._grid_y + row * self._row_h
         col_w = self._col_w
@@ -364,102 +395,64 @@ class SequencerScreen(Screen):
             label_color = theme.ARC_565[row]
         else:
             label_color = theme.MUTED
-        # Small indicator square
         sq_size = min(12, row_h - 4)
         sq_y = y + (row_h - sq_size) // 2
         tft.fill_rect(2, sq_y, sq_size, sq_size, label_color)
 
         # Grid cells
         for s in range(n):
-            cx = self._grid_x + s * col_w + col_w // 2
-            cy = y + row_h // 2
-            r = min(col_w, row_h) // 2 - 2
-            if r < 2:
-                r = 2
+            self._draw_cell(tft, theme, row, s)
 
-            # Is this cell active?
-            if row < NUM_PERC_TRACKS:
-                active = eng.perc[row][s]
-                color = theme.ARC_565[row] if active else theme.DIM
-            else:
-                mel_val = eng.melody[s]
-                active = mel_val > 0
-                if active:
-                    color = theme.BTN_565[mel_val - 1]
-                else:
-                    color = theme.DIM
-
-            # Playhead highlight
-            is_playhead = s == highlight_step and eng.state == PLAYING
-
-            if active:
-                # Filled circle (approximated with filled rect for performance)
-                tft.fill_rect(cx - r, cy - r, r * 2, r * 2, color)
-            else:
-                # Outline only
-                tft.rect(cx - r, cy - r, r * 2, r * 2, color)
-
-            # Playhead marker — bright border around cell
-            if is_playhead:
-                tft.rect(
-                    self._grid_x + s * col_w + 1,
-                    y + 1,
-                    col_w - 2,
-                    row_h - 2,
-                    theme.WHITE,
-                )
-
-    def _render_playhead_update(self, tft, theme):
-        """Partial redraw: clear old playhead column, draw new one."""
-        eng = self._engine
-        old_step = self._prev_step
-        new_step = eng.step
-
-        # Redraw old column (remove playhead highlight)
-        if 0 <= old_step < eng.n_steps:
-            self._redraw_column(tft, theme, old_step, is_playhead=False)
-
-        # Draw new column (with playhead highlight)
-        if eng.state == PLAYING:
-            self._redraw_column(tft, theme, new_step, is_playhead=True)
-
-    def _redraw_column(self, tft, theme, step, is_playhead):
-        """Redraw all cells in a single column."""
+    def _draw_cell(self, tft, theme, row, step):
+        """Draw a single grid cell."""
         eng = self._engine
         col_w = self._col_w
-        col_x = self._grid_x + step * col_w
+        row_h = self._row_h
+        cx = self._grid_x + step * col_w + col_w // 2
+        cy = self._grid_y + row * row_h + row_h // 2
+        r = min(col_w, row_h) // 2 - 2
+        if r < 2:
+            r = 2
 
-        # Clear the column area
-        tft.fill_rect(col_x, self._grid_y, col_w, self._grid_h, theme.BLACK)
+        if row < NUM_PERC_TRACKS:
+            active = eng.perc[row][step]
+            color = theme.ARC_565[row] if active else theme.DIM
+        else:
+            mel_val = eng.melody[step]
+            active = mel_val > 0
+            color = theme.BTN_565[mel_val - 1] if active else theme.DIM
 
-        for row in range(_NUM_ROWS):
-            y = self._grid_y + row * self._row_h
-            row_h = self._row_h
-            cx = col_x + col_w // 2
-            cy = y + row_h // 2
-            r = min(col_w, row_h) // 2 - 2
-            if r < 2:
-                r = 2
+        if active:
+            tft.fill_rect(cx - r, cy - r, r * 2, r * 2, color)
+        else:
+            # Clear then outline (cell might have been filled before)
+            tft.fill_rect(cx - r, cy - r, r * 2, r * 2, theme.BLACK)
+            tft.rect(cx - r, cy - r, r * 2, r * 2, color)
 
-            if row < NUM_PERC_TRACKS:
-                active = eng.perc[row][step]
-                color = theme.ARC_565[row] if active else theme.DIM
-            else:
-                mel_val = eng.melody[step]
-                active = mel_val > 0
-                color = theme.BTN_565[mel_val - 1] if active else theme.DIM
+    def _render_dirty_cells(self, tft, theme):
+        """Redraw only cells that changed (from engine.dirty_steps)."""
+        eng = self._engine
+        for step in eng.dirty_steps:
+            for row in range(_NUM_ROWS):
+                self._draw_cell(tft, theme, row, step)
 
-            if active:
-                tft.fill_rect(cx - r, cy - r, r * 2, r * 2, color)
-            else:
-                tft.rect(cx - r, cy - r, r * 2, r * 2, color)
+    def _render_marker(self, tft, theme):
+        """Draw the playhead marker strip — tiny dirty rect."""
+        eng = self._engine
+        col_w = self._col_w
+        old_step = self._prev_step
+        new_step = eng.step
+        my = self._marker_y
 
-            if is_playhead:
-                tft.rect(col_x + 1, y + 1, col_w - 2, row_h - 2, theme.WHITE)
+        # Clear old marker
+        if 0 <= old_step < eng.n_steps:
+            ox = self._grid_x + old_step * col_w
+            tft.fill_rect(ox, my, col_w, _MARKER_H, theme.BLACK)
 
-        # Request partial SPI push for just this column
-        if self._manager:
-            self._manager.request_show(col_x, self._grid_y, col_w, self._grid_h)
+        # Draw new marker
+        if eng.state == PLAYING:
+            nx = self._grid_x + new_step * col_w
+            tft.fill_rect(nx + 1, my + 1, col_w - 2, _MARKER_H - 2, theme.WHITE)
 
     def _render_footer(self, tft, theme):
         """Draw footer: play state and step count."""
