@@ -67,6 +67,7 @@ class ScreenManager:
         self._dirty = True  # full clear needed on first frame / transitions
         self._show_needed = False  # framebuffer changed, just push SPI (no re-render)
         self._dirty_rect = None  # (x, y, w, h) bounding box for partial push
+        self._prev_takes_over = False  # track overlay takeover transitions
         self._frames_skipped = 0  # consecutive render skips (for diagnostics)
         # Perf counters (enabled via debug_perf setting)
         self.debug_perf = False
@@ -203,6 +204,16 @@ class ScreenManager:
         """
         active = self.active
 
+        # Detect overlay takeover transitions: when the overlay stops taking
+        # over, the framebuffer still has stale overlay content. Force a full
+        # clear so the active screen repaints from scratch.
+        takes_over = self._overlay and getattr(self._overlay, "takes_over", False)
+        if self._prev_takes_over and not takes_over:
+            self._dirty = True
+            if active and hasattr(active, "_dirty"):
+                active._dirty = True
+        self._prev_takes_over = takes_over
+
         # Check if anything needs drawing
         screen_dirty = self._dirty
         if not screen_dirty and active:
@@ -280,6 +291,14 @@ class ScreenManager:
 
         if self._overlay:
             self._overlay.update(self.inp, self._frame)
+
+        # Detect overlay takeover transitions (see render_and_show)
+        takes_over = self._overlay and getattr(self._overlay, "takes_over", False)
+        if self._prev_takes_over and not takes_over:
+            self._dirty = True
+            if active and hasattr(active, "_dirty"):
+                active._dirty = True
+        self._prev_takes_over = takes_over
 
         # Check if anything needs drawing
         screen_dirty = self._dirty

@@ -2,7 +2,7 @@
 #
 # Live-jam step sequencer: press arcade buttons (percussion) or mini buttons
 # (melody) while the loop plays. Presses quantize to the nearest step.
-# sw[0] toggles play/pause, sw[1] toggles 8/16 steps.
+# sw[0] toggles play/pause, sw[1] toggles 8/16 steps, sw[2] toggles metronome.
 
 try:
     import time
@@ -37,6 +37,11 @@ ENC_A = const(1)  # config.ENC_A — BPM control
 
 # Preview voice for button feedback — separate from clock voices (0-5)
 _PREVIEW_VOICE = const(6)
+# Dedicated voice for metronome clicks — won't steal from preview or clock
+_METRO_VOICE = const(7)
+# Metronome click frequencies (Hz)
+_METRO_HI = const(1200)  # downbeat accent
+_METRO_LO = const(800)  # other beats
 
 # Drum sample names on SD — index matches arcade button hardware index
 _DRUM_NAMES = ["hihat", "snare", "kick", "tom", "crash"]
@@ -86,6 +91,7 @@ class SequencerScreen(Screen):
         self._prev_step = -1
         self._prev_sw0 = None
         self._prev_sw1 = None
+        self._prev_sw2 = None
         self._last_ms = 0
         self._dirty = True
         self._full_clear = True
@@ -121,6 +127,10 @@ class SequencerScreen(Screen):
         sw = manager.inp.sw
         self._prev_sw0 = sw[0] if len(sw) > 0 else False
         self._prev_sw1 = sw[1] if len(sw) > 1 else False
+        self._prev_sw2 = sw[2] if len(sw) > 2 else False
+        # Initialise metronome from outer toggle position
+        if len(sw) > 2 and sw[2]:
+            self._engine.metronome = True
 
         # Preload drum samples into PSRAM (skip if already loaded by factory)
         if self._drum_bufs is None:
@@ -229,6 +239,13 @@ class SequencerScreen(Screen):
             self._full_clear = True
         self._prev_sw1 = sw1
 
+        # sw[2] → metronome on/off (outer left toggle)
+        sw2 = sw[2] if len(sw) > 2 else False
+        if self._prev_sw2 is not None and sw2 != self._prev_sw2:
+            eng.toggle_metronome()
+            self._dirty = True
+        self._prev_sw2 = sw2
+
         # --- Encoder A: BPM ---
         enc_delta = inp.enc_delta[ENC_A]
         if enc_delta:
@@ -292,13 +309,20 @@ class SequencerScreen(Screen):
             if eng.step_advanced:
                 self._trigger_step_sounds(eng.step)
 
+        # --- Metronome click on beat ---
+        if eng.metronome and eng.state == PLAYING and eng.step_advanced:
+            if eng.is_beat(eng.step):
+                self._play_metronome(eng.is_downbeat(eng.step))
+
         # --- Playhead movement (marker-only redraw) ---
         if eng.step != self._prev_step:
             self._marker_dirty = True
 
         # --- Update secondary display ---
         if self._secondary:
-            self._secondary.update_state(eng.bpm, eng.state == PLAYING, eng.n_steps)
+            self._secondary.update_state(
+                eng.bpm, eng.state == PLAYING, eng.n_steps, eng.metronome
+            )
 
         # Arcade LEDs: flash on step hit, glow if track has notes, off otherwise
         arc = self._arcade
@@ -367,6 +391,13 @@ class SequencerScreen(Screen):
         if _has_clock:
             _audiomix.clock_preview(5)  # suppress clock trigger for melody
         self._audio.tone(freq, 150, "sine", voice=_PREVIEW_VOICE)
+
+    def _play_metronome(self, downbeat):
+        """Play a short metronome click. Accented on downbeats."""
+        if not self._audio:
+            return
+        freq = _METRO_HI if downbeat else _METRO_LO
+        self._audio.tone(freq, 30, "square", voice=_METRO_VOICE)
 
     def _trigger_step_sounds(self, step):
         """Trigger all active sounds at a grid step (called on step tick)."""

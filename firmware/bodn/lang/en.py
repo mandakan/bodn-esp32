@@ -221,6 +221,8 @@ STRINGS = {
     "seq_steps": "{} steps",
     "seq_press_start": "Press!",
     "seq_cleared": "Cleared!",
+    "seq_metronome_on": "Metro ON",
+    "seq_metronome_off": "Metro OFF",
     # Boot screen
     "boot_cfg": "Waking up...",
     "boot_sd": "Checking SD card...",

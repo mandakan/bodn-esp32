@@ -3,7 +3,7 @@
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
-from bodn.ui.widgets import draw_centered
+from bodn.ui.widgets import draw_centered, draw_label, make_label_sprite, blit_sprite
 from bodn.i18n import t, get_language, set_language, available
 
 NAV = const(0)  # config.ENC_NAV
@@ -53,6 +53,17 @@ class SettingsScreen(Screen):
     def enter(self, manager):
         self._manager = manager
         self._dirty = True
+        self._full_clear = True
+        self._prev_index = -1
+        self._prev_scroll = -1
+
+        # Pre-render sprites for scaled / extended-char text
+        theme = manager.theme
+        self._title_sprite = make_label_sprite(
+            t("settings_title"), theme.WHITE, scale=2
+        )
+        self._on_sprite = make_label_sprite(t("on"), theme.BLACK)
+        self._off_sprite = make_label_sprite(t("off"), theme.BLACK)
 
     def needs_redraw(self):
         return self._dirty
@@ -238,60 +249,84 @@ class SettingsScreen(Screen):
 
     def render(self, tft, theme, frame):
         self._dirty = False
-        tft.fill(theme.BLACK)
 
         w = theme.width
         h = theme.height
         landscape = w > h
-
-        # Title
         title_h = 28 if landscape else 24
-        draw_centered(tft, t("settings_title"), 8, theme.WHITE, w, scale=2)
-
-        # Menu items — scroll to keep selection centered
         row_h = 24 if landscape else 20
-        menu_h = h - title_h - 4  # available height for menu items
-        visible = menu_h // row_h  # how many items fit on screen
+        menu_h = h - title_h - 4
+        visible = menu_h // row_h
 
-        # Calculate scroll offset to center the selected item
         n = len(_ITEMS)
         half = visible // 2
         scroll = self._index - half
         scroll = max(0, min(scroll, n - visible))
 
-        for i in range(scroll, min(scroll + visible, n)):
-            key, label_key, item_type = _ITEMS[i]
-            y = title_h + (i - scroll) * row_h
-            selected = i == self._index
+        scroll_changed = scroll != self._prev_scroll
 
-            # Highlight bar for selected item
-            if selected:
-                tft.fill_rect(4, y - 2, w - 8, row_h - 2, theme.DIM)
-
-            # Label
-            color = theme.WHITE if selected else theme.MUTED
-            if item_type == "lang":
-                label = t(label_key, get_language().upper())
+        if self._full_clear or scroll_changed:
+            self._full_clear = False
+            tft.fill(theme.BLACK)
+            # Title (cached sprite, blitted once)
+            _, tw, _ = self._title_sprite
+            blit_sprite(tft, self._title_sprite, (w - tw) // 2, 8)
+            # Draw all visible rows
+            for i in range(scroll, min(scroll + visible, n)):
+                self._render_row(tft, theme, i, scroll, title_h, row_h, w)
+        else:
+            # Only redraw the old and new selected rows
+            old_idx = self._prev_index
+            new_idx = self._index
+            if old_idx != new_idx:
+                if scroll <= old_idx < scroll + visible:
+                    self._render_row(tft, theme, old_idx, scroll, title_h, row_h, w)
+                if scroll <= new_idx < scroll + visible:
+                    self._render_row(tft, theme, new_idx, scroll, title_h, row_h, w)
             else:
-                label = t(label_key)
-            tft.text(label, 12, y + 2, color)
+                # Value toggled on the same row
+                self._render_row(tft, theme, new_idx, scroll, title_h, row_h, w)
 
-            # Value indicator
-            if item_type == "bool":
-                value = self._get_value(key)
-                if value:
-                    tft.fill_rect(w - 40, y, 28, row_h - 6, theme.GREEN)
-                    tft.text(t("on"), w - 36, y + 2, theme.BLACK)
-                else:
-                    tft.fill_rect(w - 40, y, 28, row_h - 6, theme.RED)
-                    tft.text(t("off"), w - 38, y + 2, theme.BLACK)
-            elif item_type == "cycle":
-                val_str = str(self._get_value(key))
-                tx = w - 8 - len(val_str) * 8
-                tft.text(val_str, tx, y + 2, theme.WHITE if selected else theme.MUTED)
+        self._prev_index = self._index
+        self._prev_scroll = scroll
 
         # Scroll indicators
         if scroll > 0:
             draw_centered(tft, "^", title_h - 10, theme.MUTED, w)
         if scroll + visible < n:
             draw_centered(tft, "v", h - 12, theme.MUTED, w)
+
+    def _render_row(self, tft, theme, i, scroll, title_h, row_h, w):
+        """Draw a single menu row, clearing its background first."""
+        key, label_key, item_type = _ITEMS[i]
+        y = title_h + (i - scroll) * row_h
+        selected = i == self._index
+
+        # Clear row background
+        tft.fill_rect(0, y - 2, w, row_h, theme.BLACK)
+
+        # Highlight bar for selected item
+        if selected:
+            tft.fill_rect(4, y - 2, w - 8, row_h - 2, theme.DIM)
+
+        # Label
+        color = theme.WHITE if selected else theme.MUTED
+        if item_type == "lang":
+            label = t(label_key, get_language().upper())
+        else:
+            label = t(label_key)
+        draw_label(tft, label, 12, y + 2, color)
+
+        # Value indicator
+        if item_type == "bool":
+            value = self._get_value(key)
+            if value:
+                tft.fill_rect(w - 40, y, 28, row_h - 6, theme.GREEN)
+                blit_sprite(tft, self._on_sprite, w - 36, y + 2)
+            else:
+                tft.fill_rect(w - 40, y, 28, row_h - 6, theme.RED)
+                blit_sprite(tft, self._off_sprite, w - 38, y + 2)
+        elif item_type == "cycle":
+            val_str = str(self._get_value(key))
+            tx = w - 8 - len(val_str) * 8
+            tft.text(val_str, tx, y + 2, theme.WHITE if selected else theme.MUTED)

@@ -15,17 +15,24 @@ class SequencerSecondary(Screen):
         self._bpm = 90
         self._playing = False
         self._n_steps = 8
+        self._metronome = False
         self._dirty = True
 
     def enter(self, display):
         self._dirty = True
 
-    def update_state(self, bpm, playing, n_steps):
+    def update_state(self, bpm, playing, n_steps, metronome=False):
         """Called by SequencerScreen each frame when values change."""
-        if bpm != self._bpm or playing != self._playing or n_steps != self._n_steps:
+        if (
+            bpm != self._bpm
+            or playing != self._playing
+            or n_steps != self._n_steps
+            or metronome != self._metronome
+        ):
             self._bpm = bpm
             self._playing = playing
             self._n_steps = n_steps
+            self._metronome = metronome
             self._dirty = True
 
     def needs_redraw(self):
@@ -49,5 +56,11 @@ class SequencerSecondary(Screen):
             label = t("seq_paused")
         draw_centered(tft, label, 68, color, w, scale=2)
 
+        # Metronome indicator
+        if self._metronome:
+            draw_centered(tft, t("seq_metronome_on"), 88, theme.WHITE, w)
+        else:
+            draw_centered(tft, t("seq_metronome_off"), 88, theme.DIM, w)
+
         # Step count
-        draw_centered(tft, t("seq_steps", self._n_steps), 96, theme.MUTED, w)
+        draw_centered(tft, t("seq_steps", self._n_steps), 108, theme.MUTED, w)

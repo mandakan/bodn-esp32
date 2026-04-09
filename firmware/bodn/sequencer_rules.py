@@ -49,6 +49,7 @@ class SequencerEngine:
         self._frac = 0.0
         self.step_advanced = False
         self.dirty_steps = set()
+        self.metronome = False
         self._recompute_timing()
 
     # ------------------------------------------------------------------
@@ -168,6 +169,19 @@ class SequencerEngine:
         self.step = self.step % n
         self._ms_accum = 0
         self._recompute_timing()
+
+    def toggle_metronome(self):
+        """Toggle metronome on/off. Returns new state."""
+        self.metronome = not self.metronome
+        return self.metronome
+
+    def is_downbeat(self, step):
+        """Return True if step is a downbeat (beat 1 of a bar = step 0 or 8)."""
+        return step % 8 == 0
+
+    def is_beat(self, step):
+        """Return True if step falls on a quarter-note beat (every 2 steps)."""
+        return step % 2 == 0
 
     def clear_all(self):
         """Zero all grid data and reset the playhead."""

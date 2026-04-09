@@ -39,9 +39,21 @@ try:
 except OSError:
     pass
 
+import sys as _sys
+
+
+def _abort_boot():
+    """Ctrl-C during boot — exit immediately so REPL is available for mpremote."""
+    print("boot.py: interrupted — dropping to REPL")
+    _sys.exit()
+
+
 if not _fast_boot:
     print("boot.py: 5s safe-boot window (Ctrl-C to abort)...")
-    time.sleep(5)
+    try:
+        time.sleep(5)
+    except KeyboardInterrupt:
+        _abort_boot()
 
 settings = None
 ip = "0.0.0.0"
@@ -71,7 +83,7 @@ try:
         _mcp2_boot = None
         _i2c_boot = None
     except KeyboardInterrupt:
-        raise
+        _abort_boot()
     except Exception:
         _diag_requested = False
 
@@ -105,7 +117,7 @@ try:
             madctl=config.TFT_MADCTL,
         )
     except KeyboardInterrupt:
-        raise
+        _abort_boot()
     except Exception:
         spi = SPI(
             1,
@@ -130,7 +142,7 @@ try:
         timing=1,
     )
 except KeyboardInterrupt:
-    raise
+    _abort_boot()
 except Exception as e:
     print("Boot display init error:", e)
 
@@ -185,6 +197,8 @@ def _translate(key):
         from bodn.i18n import t
 
         return t(key)
+    except KeyboardInterrupt:
+        _abort_boot()
     except Exception:
         return key
 
@@ -374,8 +388,12 @@ try:
         from bodn.i18n import init as _i18n_init
 
         _i18n_init(settings.get("language", "sv"))
+    except KeyboardInterrupt:
+        _abort_boot()
     except Exception:
         pass
+except KeyboardInterrupt:
+    _abort_boot()
 except Exception as e:
     print("Settings load failed:", e)
     _results[0] = "fail"
@@ -409,6 +427,8 @@ try:
         _results[1] = "ok"
     else:
         _results[1] = "skip"
+except KeyboardInterrupt:
+    _abort_boot()
 except Exception as e:
     print("SD card mount skipped:", e)
     _results[1] = "skip"
@@ -430,6 +450,8 @@ if _results[1] == "ok" and _draw_mod is not None:
         _logo_sprite, _logo_data, _logo_sprite_w, _logo_sprite_h = _load_sprite(
             "/sd/sprites/lo-logo.bdf"
         )
+    except KeyboardInterrupt:
+        _abort_boot()
     except Exception as _e:
         print("BOOT logo:", _e)
 
@@ -438,6 +460,8 @@ if _results[1] == "ok" and _draw_mod is not None:
         _logo_sm_sprite, _logo_sm_data, _logo_sm_w, _logo_sm_h = _load_sprite(
             "/sd/sprites/lo-logo-sm.bdf"
         )
+    except KeyboardInterrupt:
+        _abort_boot()
     except Exception as _e:
         print("BOOT logo-sm:", _e)
 
@@ -446,6 +470,8 @@ if _results[1] == "ok" and _draw_mod is not None:
         _logo_s2_sprite, _logo_s2_data, _logo_s2_w, _logo_s2_h = _load_sprite(
             "/sd/sprites/lo-logo-s2.bdf"
         )
+    except KeyboardInterrupt:
+        _abort_boot()
     except Exception as _e:
         print("BOOT logo-s2:", _e)
 
@@ -462,6 +488,8 @@ else:
 
         ip = connect(settings)
         _results[2] = "ok"
+    except KeyboardInterrupt:
+        _abort_boot()
     except Exception as e:
         print("WiFi failed:", e)
         _results[2] = "fail"
@@ -531,6 +559,8 @@ else:
             )
         )
         _results[3] = "ok"
+    except KeyboardInterrupt:
+        _abort_boot()
     except Exception:
         _results[3] = "warn"
         settings["quiet_start"] = None
@@ -566,6 +596,8 @@ try:
         _results[4] = "ok"
         _bat_detail = "USB"
         _bat_col = COL_GREEN
+except KeyboardInterrupt:
+    _abort_boot()
 except Exception as e:
     print("Battery check failed:", e)
     _results[4] = "skip"
@@ -589,8 +621,19 @@ if _logo_sprite is not None and tft:
     tft.fill(COL_BLACK)
     _lx = (tft.width - _logo_sprite_w) // 2
     _ly = (tft.height - _logo_sprite_h) // 2
+    # White backing rect so the logo's dark parts are visible on black
+    _pad = 6
+    tft.fill_rect(
+        _lx - _pad,
+        _ly - _pad,
+        _logo_sprite_w + _pad * 2,
+        _logo_sprite_h + _pad * 2,
+        COL_WHITE,
+    )
     _draw_mod.sprite(tft._buf, tft.width, _lx, _ly, _logo_sprite, 0, COL_WHITE)
-    tft.mark_dirty(_lx, _ly, _logo_sprite_w, _logo_sprite_h)
+    tft.mark_dirty(
+        _lx - _pad, _ly - _pad, _logo_sprite_w + _pad * 2, _logo_sprite_h + _pad * 2
+    )
     tft.show()
 
 # Free large logo — splash is done
@@ -650,6 +693,8 @@ if _diag_requested and tft:
             time.sleep_ms(50)
         _mcp2_diag = None
         _i2c_diag = None
+    except KeyboardInterrupt:
+        _abort_boot()
     except Exception:
         # MCP2 unavailable — just show for 5 s then continue
         time.sleep(5)
@@ -665,6 +710,8 @@ _logo_s2_data = None  # noqa: F841 — frees backing buffer
 _draw_mod = None
 try:
     _spidma.deinit()
+except KeyboardInterrupt:
+    _abort_boot()
 except Exception:
     pass
 if spi:
@@ -692,5 +739,7 @@ try:
     with open("/data/boot_log.json", "w") as _f:
         _json.dump(_boot_log, _f)
     del _json, _boot_log
+except KeyboardInterrupt:
+    _abort_boot()
 except Exception as _e:
     print("boot log:", _e)
