@@ -498,13 +498,24 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(spidma_push_rect_obj, 6, 6,
                                            spidma_push_rect);
 
 // _spidma.busy(slot) -> bool
+// Non-blocking check: if a result is available, consume it and return False.
 static mp_obj_t spidma_busy(mp_obj_t slot_obj) {
     if (!spidma_state) return mp_const_false;
 
     int slot = mp_obj_get_int(slot_obj);
     if (slot < 0 || slot >= SPIDMA_MAX_DISPLAYS) return mp_const_false;
 
-    return mp_obj_new_bool(spidma_state->displays[slot].pending);
+    spidma_display_t *disp = &spidma_state->displays[slot];
+    if (!disp->pending) return mp_const_false;
+
+    // Non-blocking: check if DMA completed without waiting
+    spi_transaction_t *rtrans;
+    esp_err_t err = spi_device_get_trans_result(disp->handle, &rtrans, 0);
+    if (err == ESP_OK) {
+        disp->pending = false;
+        return mp_const_false;
+    }
+    return mp_const_true;  // still in progress
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(spidma_busy_obj, spidma_busy);
 
