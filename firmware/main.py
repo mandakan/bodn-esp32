@@ -113,6 +113,8 @@ def create_hardware():
             skip_reset=True,
         )
         print("SPI: DMA")
+    except KeyboardInterrupt:
+        raise
     except Exception as e:
         print("SPI DMA failed:", e, "— blocking fallback")
         dc = Pin(config.TFT_DC, Pin.OUT)
@@ -598,6 +600,15 @@ async def primary_task(
     # vsync=False: draw over buffer during DMA (may tear, higher FPS)
     _vsync = settings.get("vsync", True) if _dma else False
 
+    # Frame timing instrumentation
+    _perf = settings.get("debug_perf", False)
+    _perf_renders = 0
+    _perf_skips = 0
+    _perf_render_ms = 0
+    _perf_total_ms = 0
+    _perf_t0 = ticks_ms()
+    _PERF_INTERVAL = const(60)  # print every 60 frames
+
     while True:
         t0 = ticks_ms()
 
@@ -631,6 +642,9 @@ async def primary_task(
                 t_render = ticks_ms()
                 manager.render_and_show()
                 prev_render_ms = ticks_diff(ticks_ms(), t_render)
+                if _perf:
+                    _perf_renders += 1
+                    _perf_render_ms += prev_render_ms
             except KeyboardInterrupt:
                 raise
             except Exception as e:
@@ -645,6 +659,8 @@ async def primary_task(
         elif needs_render:
             manager.skip_render()
             prev_render_ms = 0  # reset predictor after a skip
+            if _perf:
+                _perf_skips += 1
 
         # ── Power management ──────────────────────────────────
         if inp.has_activity():
@@ -695,6 +711,22 @@ async def primary_task(
                     btns, sws, enc_vals, enc_raw
                 )
             )
+
+        # ── Perf stats ───────────────────────────────────────
+        if _perf and frame > 0 and frame % _PERF_INTERVAL == 0:
+            dt = ticks_diff(ticks_ms(), _perf_t0)
+            fps = _perf_renders * 1000 // dt if dt > 0 else 0
+            avg_render = _perf_render_ms // _perf_renders if _perf_renders > 0 else 0
+            busy_now = tft.busy() if _dma else False
+            print(
+                "PERF fps={} renders={} skips={} avg_render={}ms busy={} dt={}ms".format(
+                    fps, _perf_renders, _perf_skips, avg_render, busy_now, dt
+                )
+            )
+            _perf_renders = 0
+            _perf_skips = 0
+            _perf_render_ms = 0
+            _perf_t0 = ticks_ms()
 
         frame += 1
         await asyncio.sleep_ms(2)

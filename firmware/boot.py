@@ -70,6 +70,8 @@ try:
         _diag_requested = _mcp2_boot.pin_value(config.MCP2_ENC1_SW) == 0
         _mcp2_boot = None
         _i2c_boot = None
+    except KeyboardInterrupt:
+        raise
     except Exception:
         _diag_requested = False
 
@@ -102,6 +104,8 @@ try:
             row_offset=config.TFT_ROW_OFFSET,
             madctl=config.TFT_MADCTL,
         )
+    except KeyboardInterrupt:
+        raise
     except Exception:
         spi = SPI(
             1,
@@ -125,6 +129,8 @@ try:
         config.NEOPIXEL_COUNT,
         timing=1,
     )
+except KeyboardInterrupt:
+    raise
 except Exception as e:
     print("Boot display init error:", e)
 
