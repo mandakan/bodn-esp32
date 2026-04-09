@@ -14,7 +14,7 @@
 #include "freertos/FreeRTOS.h"
 
 #define SPIDMA_MAX_DISPLAYS  2
-#define SPIDMA_DMA_CHUNK_SZ  (32 * 1024)   // 32 KB — max safe DMA transfer on ESP32-S3
+#define SPIDMA_DMA_CHUNK_SZ  (16 * 1024)   // 16 KB — fits 2 ping-pong buffers in internal DRAM
 
 // ST7735/ILI9341/ST7789 shared commands
 #define SPIDMA_CMD_CASET  0x2A
