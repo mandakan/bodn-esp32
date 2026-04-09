@@ -221,6 +221,8 @@ STRINGS = {
     "seq_steps": "{} steg",
     "seq_press_start": "Tryck!",
     "seq_cleared": "Rensat!",
+    "seq_metronome_on": "Metro PÅ",
+    "seq_metronome_off": "Metro AV",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_sd": "Kollar SD-kort...",

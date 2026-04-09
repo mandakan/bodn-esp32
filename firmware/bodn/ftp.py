@@ -20,8 +20,10 @@ except ImportError:
     network = None
 
 OTA_STAGE = "/.ota"
-_DATA_PORT = 50100
+_DATA_PORT_BASE = 50100
+_DATA_PORT_RANGE = 10  # rotate through 50100–50109 to avoid TIME_WAIT
 _server = None
+_data_port_idx = 0
 
 
 def _get_ip():
@@ -94,6 +96,7 @@ class _FTPSession:
     # ------------------------------------------------------------------ PASV
 
     async def _cmd_PASV(self, _):
+        global _data_port_idx
         # Close any previous data server that was never used
         if self._data_srv is not None:
             try:
@@ -111,10 +114,13 @@ class _FTPSession:
             self._data_w = w
             self._data_ready.set()
 
-        self._data_srv = await asyncio.start_server(_on_data, "0.0.0.0", _DATA_PORT)
+        # Rotate through a small port range to avoid TIME_WAIT collisions
+        port = _DATA_PORT_BASE + _data_port_idx
+        _data_port_idx = (_data_port_idx + 1) % _DATA_PORT_RANGE
+        self._data_srv = await asyncio.start_server(_on_data, "0.0.0.0", port)
         ip = _get_ip()
         h = ip.replace(".", ",")
-        ph, pl = _DATA_PORT >> 8, _DATA_PORT & 0xFF
+        ph, pl = port >> 8, port & 0xFF
         await self._send("227 Entering Passive Mode ({},{},{})\r\n".format(h, ph, pl))
 
     async def _get_data(self):
@@ -335,12 +341,15 @@ class _FTPSession:
         try:
             with open(tmp, "wb") as f:
                 while True:
-                    chunk = await dr.read(512)
+                    chunk = await dr.read(1024)
                     if not chunk:
                         break
                     f.write(chunk)
+                    # Yield to the async loop so TCP can breathe during
+                    # long flash writes — without this, large files stall.
+                    await asyncio.sleep_ms(0)
             try:
-                dr.close()
+                dw.close()  # close writer to release the socket (reader.close won't)
             except Exception:
                 pass
             try:
@@ -350,6 +359,10 @@ class _FTPSession:
             os.rename(tmp, real)
             await self._send("226 Transfer complete\r\n")
         except Exception as e:
+            try:
+                dw.close()
+            except Exception:
+                pass
             try:
                 os.remove(tmp)
             except OSError:
