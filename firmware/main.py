@@ -152,6 +152,30 @@ def create_hardware():
             skip_reset=True,
         )
 
+    # Show logo on secondary display while the rest of init runs
+    try:
+        import _draw as _dm
+
+        with open("/sd/sprites/lo-logo-s2.bdf", "rb") as _f:
+            _s2d = _f.read()
+        _s2a = _dm.load(_s2d)
+        _s2i = _dm.info(_s2a)
+        _s2w, _s2h = _s2i["max_width"], _s2i["height"]
+        tft2.fill(0)
+        _dm.sprite(
+            tft2._buf,
+            tft2.width,
+            (tft2.width - _s2w) // 2,
+            (tft2.height - _s2h) // 2,
+            _s2a,
+            0,
+            ST7735.rgb(255, 255, 255),
+        )
+        tft2.show()
+        del _s2d, _s2a, _s2i, _dm
+    except Exception as _e:
+        print("Secondary logo:", _e)
+
     # Shared I2C bus for MCP23017 and PCA9685
     i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
 

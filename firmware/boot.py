@@ -195,7 +195,7 @@ try:
 except ImportError:
     _EXT_GLYPHS = {}
 
-# Load pixel art logo
+# Load pixel art logo (fallback)
 try:
     from bodn.ui.logo import draw_logo as _draw_logo
 
@@ -208,6 +208,21 @@ try:
 except ImportError:
     _draw_logo = None
     _LOGO_COLORS = {}
+
+# Native _draw module for sprite logos (loaded after SD mount)
+_logo_sprite = None  # large logo for boot splash
+_logo_sprite_w = 0
+_logo_sprite_h = 0
+_logo_sm_sprite = None  # small logo for progress screen (replaces pixel-art)
+_logo_sm_w = 0
+_logo_sm_h = 0
+_logo_s2_sprite = None  # secondary display logo
+_logo_s2_w = 0
+_logo_s2_h = 0
+try:
+    import _draw as _draw_mod
+except ImportError:
+    _draw_mod = None
 
 
 def _boot_text(tft, text, x, y, color):
@@ -253,11 +268,27 @@ def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
     h = tft.height
 
     # Logo or title — centered at top
-    if _draw_logo:
+    # Prefer the small sprite (48px), fall back to pixel-art, then text-only
+    _active_logo = _logo_sm_sprite
+    _active_w = _logo_sm_w
+    _active_h = _logo_sm_h
+    if _active_logo is not None:
+        logo_w = _active_w
+        logo_h = _active_h
+        title = "Böðn"
+        title_w = len(title) * 8
+        block_h = logo_h + 4 + 8
+        ly = max(2, (h * 3 // 8 - block_h) // 2)
+        lx = (w - logo_w) // 2
+        _draw_mod.sprite(tft._buf, tft.width, lx, ly, _active_logo, 0, COL_WHITE)
+        tft.mark_dirty(lx, ly, logo_w, logo_h)
+        tx = (w - title_w) // 2
+        _boot_text(tft, title, tx, ly + logo_h + 4, COL_TITLE)
+    elif _draw_logo:
+        # Pixel-art fallback logo
         logo_scale = 3 if w >= 240 else 2
         logo_w = 16 * logo_scale
         logo_h = 16 * logo_scale
-        # Center logo + name as a unit
         title = "Böðn"
         title_w = len(title) * 8
         block_h = logo_h + 4 + 8  # logo + gap + text height
@@ -272,7 +303,8 @@ def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
         _boot_text(tft, title, tx, h // 8, COL_TITLE)
 
     # Whimsical message — centered
-    msg_y = h * 3 // 8 + (12 if _draw_logo else 0)
+    has_logo = _logo_sprite is not None or _draw_logo is not None
+    msg_y = h * 3 // 8 + (12 if has_logo else 0)
     mx = max(0, (w - len(message) * 8) // 2)
     _boot_text(tft, message, mx, msg_y, COL_WHITE)
 
@@ -382,6 +414,41 @@ except Exception as e:
     _results[1] = "skip"
 
 print("BOOT [SD]", _results[1])
+
+# Try to load logo sprites from SD (only if _draw C module available)
+if _results[1] == "ok" and _draw_mod is not None:
+
+    def _load_sprite(path):
+        with open(path, "rb") as f:
+            data = f.read()
+        asset = _draw_mod.load(data)
+        info = _draw_mod.info(asset)
+        return asset, data, info["max_width"], info["height"]
+
+    # Large boot splash logo
+    try:
+        _logo_sprite, _logo_data, _logo_sprite_w, _logo_sprite_h = _load_sprite(
+            "/sd/sprites/lo-logo.bdf"
+        )
+    except Exception as _e:
+        print("BOOT logo:", _e)
+
+    # Small logo for progress screen (replaces pixel-art)
+    try:
+        _logo_sm_sprite, _logo_sm_data, _logo_sm_w, _logo_sm_h = _load_sprite(
+            "/sd/sprites/lo-logo-sm.bdf"
+        )
+    except Exception as _e:
+        print("BOOT logo-sm:", _e)
+
+    # Secondary display logo
+    try:
+        _logo_s2_sprite, _logo_s2_data, _logo_s2_w, _logo_s2_h = _load_sprite(
+            "/sd/sprites/lo-logo-s2.bdf"
+        )
+    except Exception as _e:
+        print("BOOT logo-s2:", _e)
+
 _show_progress(2, STEPS[1][1], STEPS[1][2])
 
 # --- Step 2: Connect WiFi ---
@@ -513,6 +580,23 @@ time.sleep(0.5)
 _results[5] = "ok"
 _show_progress(6, STEPS[5][1], STEPS[5][2], detail="IP: " + ip, detail_col=COL_WHITE)
 
+# Free the small logo immediately — progress screen is done
+_logo_sm_sprite = None
+_logo_sm_data = None  # noqa: F841
+
+# --- Boot splash: show large logo while cleanup + main.py init run ---
+if _logo_sprite is not None and tft:
+    tft.fill(COL_BLACK)
+    _lx = (tft.width - _logo_sprite_w) // 2
+    _ly = (tft.height - _logo_sprite_h) // 2
+    _draw_mod.sprite(tft._buf, tft.width, _lx, _ly, _logo_sprite, 0, COL_WHITE)
+    tft.mark_dirty(_lx, _ly, _logo_sprite_w, _logo_sprite_h)
+    tft.show()
+
+# Free large logo — splash is done
+_logo_sprite = None
+_logo_data = None  # noqa: F841
+
 # --- Diagnostic boot screen (hold NAV encoder button to activate) ---
 if _diag_requested and tft:
     from bodn.diag import gather as _diag_gather
@@ -576,6 +660,9 @@ if _diag_requested and tft:
 # framebuffer alone is ~150 KB of RAM.
 # Deinit the SPI bus so main.py can re-initialize it cleanly.
 tft = None
+_logo_s2_sprite = None
+_logo_s2_data = None  # noqa: F841 — frees backing buffer
+_draw_mod = None
 try:
     _spidma.deinit()
 except Exception:

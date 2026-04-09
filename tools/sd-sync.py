@@ -45,6 +45,7 @@ SD_ASSETS = [
     (BUILD_DIR / "sounds", "sounds"),
     (BUILD_DIR / "tts_converted", "sounds/tts"),
     (BUILD_DIR / "stories", "stories"),
+    (BUILD_DIR / "sprites", "sprites"),
 ]
 
 
@@ -71,27 +72,79 @@ def run_tool(script: str, extra_args: list[str] | None = None) -> bool:
     return result.returncode == 0
 
 
+def build_sprites() -> bool:
+    """Convert image assets to BDF sprites."""
+    sprites_dir = BUILD_DIR / "sprites"
+    sprites_dir.mkdir(parents=True, exist_ok=True)
+
+    logo_src = REPO_ROOT / "assets" / "images" / "source" / "lo-logo.svg"
+    if not logo_src.exists():
+        print(f"  skip  {logo_src.relative_to(REPO_ROOT)} (not found)")
+        return True
+
+    # Logo variants: (output name, width, bpp)
+    #   lo-logo.bdf    — 120px wide, full boot splash on primary (320×240)
+    #   lo-logo-sm.bdf — 48px wide, replaces pixel-art logo in progress bar
+    #   lo-logo-s2.bdf — 64px wide, secondary display (128×160) boot splash
+    variants = [
+        ("lo-logo.bdf", 120, 4),
+        ("lo-logo-sm.bdf", 48, 4),
+        ("lo-logo-s2.bdf", 64, 4),
+    ]
+
+    ok = True
+    src_mtime = logo_src.stat().st_mtime
+
+    for name, width, bpp in variants:
+        dst = sprites_dir / name
+        if dst.exists() and dst.stat().st_mtime >= src_mtime:
+            print(f"  up-to-date  {dst.relative_to(REPO_ROOT)}")
+            continue
+        if not run_tool(
+            "make_asset.py",
+            [
+                "--image",
+                str(logo_src),
+                "--width",
+                str(width),
+                "--bpp",
+                str(bpp),
+                "-o",
+                str(dst),
+            ],
+        ):
+            ok = False
+
+    return ok
+
+
 def build_sd_assets(force: bool = False) -> bool:
     """Run the full SD asset build pipeline."""
     ok = True
 
     # Step 1: Generate TTS audio from i18n strings
-    print("\n>>> Step 1/3: Generate TTS audio")
+    print("\n>>> Step 1/4: Generate TTS audio")
     if not run_tool("generate_tts.py"):
         print("WARNING: TTS generation had errors (continuing anyway)")
         ok = False
 
     # Step 2: Generate story TTS audio from story scripts
-    print("\n>>> Step 2/3: Generate story TTS audio")
+    print("\n>>> Step 2/4: Generate story TTS audio")
     if not run_tool("generate_story_tts.py"):
         print("WARNING: Story TTS generation had errors (continuing anyway)")
         ok = False
 
     # Step 3: Convert all audio (includes SD TTS staging → build/tts_converted/)
-    print("\n>>> Step 3/3: Convert audio assets")
+    print("\n>>> Step 3/4: Convert audio assets")
     extra = ["--force"] if force else []
     if not run_tool("convert_audio.py", extra):
         print("WARNING: Audio conversion had errors (continuing anyway)")
+        ok = False
+
+    # Step 4: Build sprite assets (logo etc.)
+    print("\n>>> Step 4/4: Build sprite assets")
+    if not build_sprites():
+        print("WARNING: Sprite build had errors (continuing anyway)")
         ok = False
 
     return ok
