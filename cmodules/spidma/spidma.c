@@ -301,7 +301,7 @@ static mp_obj_t spidma_add_display(size_t n_args, const mp_obj_t *pos_args,
         .spics_io_num = pin_cs,
         .queue_size = 1,
         .post_cb = spi_post_cb,
-        .flags = SPI_DEVICE_HALFDUPLEX | SPI_DEVICE_NO_DUMMY,
+        .flags = SPI_DEVICE_HALFDUPLEX,
     };
 
     esp_err_t err = spi_bus_add_device(spidma_state->host, &devcfg,
