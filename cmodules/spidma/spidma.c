@@ -208,10 +208,21 @@ static mp_obj_t spidma_init(size_t n_args, const mp_obj_t *pos_args,
     // Allocate ping-pong DMA staging buffers in internal DRAM.
     // PSRAM buffers are rejected by spi_device_queue_trans, so we copy
     // chunks into these DMA-capable buffers for pipelined transfers.
+    size_t free_dma = heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    size_t largest_dma = heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    mp_printf(&mp_plat_print,
+              "spidma: DRAM free=%u largest=%u internal_total=%u need=%u\n",
+              (unsigned)free_dma, (unsigned)largest_dma,
+              (unsigned)free_internal, (unsigned)(SPIDMA_DMA_CHUNK_SZ * 2));
+
     for (int i = 0; i < 2; i++) {
         spidma_state->dma_buf[i] = heap_caps_malloc(
             SPIDMA_DMA_CHUNK_SZ, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
         if (!spidma_state->dma_buf[i]) {
+            mp_printf(&mp_plat_print,
+                      "spidma: buf[%d] alloc FAILED (wanted %u)\n",
+                      i, (unsigned)SPIDMA_DMA_CHUNK_SZ);
             if (i == 1) heap_caps_free(spidma_state->dma_buf[0]);
             if (we_own_bus) spi_bus_free(spidma_state->host);
             free(spidma_state);
