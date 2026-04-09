@@ -16,6 +16,11 @@
 
 spidma_state_t *spidma_state = NULL;
 
+// DMA staging buffers — allocated once at first init, never freed.
+// They survive across deinit/init cycles and soft reboots, avoiding
+// fragmentation issues when DRAM is tight after module imports.
+static uint8_t *s_dma_buf[2] = {NULL, NULL};
+
 // ── Internal helpers ───────────────────────────────────────────
 
 // Wait for any in-progress async transfer on this display.
@@ -205,31 +210,24 @@ static mp_obj_t spidma_init(size_t n_args, const mp_obj_t *pos_args,
     }
     spidma_state->bus_initialized = we_own_bus;
 
-    // Allocate ping-pong DMA staging buffers in internal DRAM.
-    // PSRAM buffers are rejected by spi_device_queue_trans, so we copy
-    // chunks into these DMA-capable buffers for pipelined transfers.
-    size_t free_dma = heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    size_t largest_dma = heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    mp_printf(&mp_plat_print,
-              "spidma: DRAM free=%u largest=%u internal_total=%u need=%u\n",
-              (unsigned)free_dma, (unsigned)largest_dma,
-              (unsigned)free_internal, (unsigned)(SPIDMA_DMA_CHUNK_SZ * 2));
-
-    for (int i = 0; i < 2; i++) {
-        spidma_state->dma_buf[i] = heap_caps_malloc(
-            SPIDMA_DMA_CHUNK_SZ, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-        if (!spidma_state->dma_buf[i]) {
-            mp_printf(&mp_plat_print,
-                      "spidma: buf[%d] alloc FAILED (wanted %u)\n",
-                      i, (unsigned)SPIDMA_DMA_CHUNK_SZ);
-            if (i == 1) heap_caps_free(spidma_state->dma_buf[0]);
-            if (we_own_bus) spi_bus_free(spidma_state->host);
-            free(spidma_state);
-            spidma_state = NULL;
-            mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("DMA buf alloc"));
+    // Reuse or allocate ping-pong DMA staging buffers in internal DRAM.
+    // These are static globals — allocated once at first boot, never freed.
+    // This avoids fragmentation issues when DRAM is tight after module imports.
+    if (s_dma_buf[0] == NULL) {
+        for (int i = 0; i < 2; i++) {
+            s_dma_buf[i] = heap_caps_malloc(
+                SPIDMA_DMA_CHUNK_SZ, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+            if (!s_dma_buf[i]) {
+                if (i == 1) { heap_caps_free(s_dma_buf[0]); s_dma_buf[0] = NULL; }
+                if (we_own_bus) spi_bus_free(spidma_state->host);
+                free(spidma_state);
+                spidma_state = NULL;
+                mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("DMA buf alloc"));
+            }
         }
     }
+    spidma_state->dma_buf[0] = s_dma_buf[0];
+    spidma_state->dma_buf[1] = s_dma_buf[1];
 
     return mp_const_none;
 }
@@ -250,11 +248,8 @@ static mp_obj_t spidma_deinit(void) {
     if (spidma_state->bus_initialized) {
         spi_bus_free(spidma_state->host);
     }
-    for (int i = 0; i < 2; i++) {
-        if (spidma_state->dma_buf[i]) {
-            heap_caps_free(spidma_state->dma_buf[i]);
-        }
-    }
+    // DMA buffers (s_dma_buf) are NOT freed — they persist across
+    // init/deinit cycles to avoid fragmentation on reallocation.
     free(spidma_state);
     spidma_state = NULL;
     return mp_const_none;
