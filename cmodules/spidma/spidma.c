@@ -23,11 +23,20 @@ static uint8_t *s_dma_buf[2] = {NULL, NULL};
 
 // ── Internal helpers ───────────────────────────────────────────
 
+// Wait for a transaction result, yielding to MicroPython interrupt
+// checks (Ctrl-C, Ctrl-D) every 100ms instead of blocking forever.
+static void wait_trans_result(spi_device_handle_t handle) {
+    spi_transaction_t *rtrans;
+    while (spi_device_get_trans_result(handle, &rtrans,
+                                       pdMS_TO_TICKS(100)) == ESP_ERR_TIMEOUT) {
+        mp_handle_pending(true);  // raises KeyboardInterrupt on Ctrl-C
+    }
+}
+
 // Wait for any in-progress async transfer on this display.
 static void drain_display(spidma_display_t *disp) {
     if (disp->pending) {
-        spi_transaction_t *rtrans;
-        spi_device_get_trans_result(disp->handle, &rtrans, portMAX_DELAY);
+        wait_trans_result(disp->handle);
         disp->pending = false;
     }
 }
@@ -35,10 +44,8 @@ static void drain_display(spidma_display_t *disp) {
 // Send a transaction via interrupt mode (queue + wait).
 // All SPI operations use this path — never mix polling and interrupt mode.
 static void send_blocking(spidma_display_t *disp, spi_transaction_t *t) {
-    t->user = disp;
     spi_device_queue_trans(disp->handle, t, portMAX_DELAY);
-    spi_transaction_t *rtrans;
-    spi_device_get_trans_result(disp->handle, &rtrans, portMAX_DELAY);
+    wait_trans_result(disp->handle);
 }
 
 // Blocking command write: DC=0 for cmd byte, DC=1 for data bytes.
