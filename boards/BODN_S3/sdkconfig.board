@@ -3,3 +3,6 @@ CONFIG_FREERTOS_UNICORE=n
 
 # I2S ISR in IRAM for reliable DMA callbacks
 CONFIG_I2S_ISR_IRAM_SAFE=y
+
+# SPI master ISR in IRAM for reliable DMA callbacks
+CONFIG_SPI_MASTER_ISR_IN_IRAM=y

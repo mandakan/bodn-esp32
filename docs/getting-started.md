@@ -45,12 +45,19 @@ Use the **ESP32_GENERIC_S3-SPIRAM_OCT** build (octal SPIRAM matches the N8R8 mod
 
 ### Custom firmware (optional)
 
-A custom firmware build adds the `_audiomix` native C module, which moves audio
-mixing to a dedicated FreeRTOS task on core 0 (Python runs on core 1). This
-eliminates audio glitches caused by SPI display writes blocking the Python VM.
-It provides 16 uniform voices and a sample-accurate step clock for the sequencer.
+A custom firmware build adds two native C modules:
+
+- **`_audiomix`** — moves audio mixing to a dedicated FreeRTOS task on core 0
+  (Python runs on core 1). Eliminates audio glitches caused by SPI display
+  writes blocking the Python VM. Provides 16 uniform voices and a
+  sample-accurate step clock for the sequencer.
+- **`_spidma`** — replaces blocking `machine.SPI` display writes with
+  ESP-IDF DMA transfers. The ~47ms primary display push becomes non-blocking,
+  freeing Python for audio feeding, input polling, and secondary display
+  updates during the transfer.
+
 The device works fine with stock firmware — `AudioEngine` falls back to the
-viper/IRQ path automatically.
+viper/IRQ path and display writes fall back to blocking SPI automatically.
 
 ```bash
 # One-time: install ESP-IDF v5.5.1
@@ -70,7 +77,7 @@ esptool.py --chip esp32s3 --port /dev/cu.usbserial-XXXX \
     write_flash -z 0 build/firmware-bodn.bin
 ```
 
-Verify on the REPL: `import _audiomix` should succeed without errors.
+Verify on the REPL: `import _audiomix` and `import _spidma` should both succeed.
 
 ## 2. Deploy firmware
 
@@ -294,6 +301,8 @@ machine.soft_reset()   # re-runs boot.py + main.py
 | MCP pins fluctuate with no buttons pressed | Long button wires need 4.7kΩ external pull-ups to 3.3V (internal 100kΩ too weak for >10cm wires) |
 | Encoders skip steps or behave erratically | Add 4.7kΩ pull-ups on CLK/DT lines. Check wire length and routing away from power lines |
 | Can't Ctrl-C to REPL (encoder IRQ blocks it) | Create `/skip_main` flag file (see §7), or press RST and run `./tools/sync.sh --minimal` within 1s |
+| Display shows corrupted pixels or colour shifts | SPI clock too high for your wiring. Lower `TFT_SPI_BAUDRATE` in `firmware/bodn/config.py` from 80 MHz to 40 MHz (or 26 MHz). No firmware rebuild needed — just sync Python files. Long wires and breadboard connections are especially sensitive to high SPI clocks |
+| Display works but has occasional glitches | Same as above — try 40 MHz. Also check that SPI wires (SCK, MOSI, CS, DC) are short (<10cm) and routed away from power lines |
 
 ## 10. Next steps
 

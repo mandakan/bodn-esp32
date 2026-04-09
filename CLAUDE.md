@@ -27,6 +27,8 @@
   - `docs/science/report.tex` — add or update the feature's `\subsubsection{}` in §4.1 (Feature–Domain Mapping) and its column in the coverage table (Table 1). Mark any new [TODO] sections for later expansion.
   - Rebuild `report.pdf` with `docs/science/build.sh` and commit it alongside the source changes.
 - **Performance**: follow `docs/PERFORMANCE_GUIDELINES.md`. Key rules: event-driven over polling, no full-screen redraws every frame, cooperative async tasks, minimal per-frame allocations, sparse `print()` usage. The review checklist (section 10) applies to all code changes.
+- **Display DMA budget**: the `_spidma` module sends display data in 32 KB DMA chunks at 40 MHz SPI (configurable via `TFT_SPI_BAUDRATE` in `config.py`). The last chunk is async (Python returns immediately), all earlier chunks block. **If a dirty rect fits in one chunk (≤50 full-width rows on the primary display), the push costs only ~1 ms.** Each additional chunk adds ~6.5 ms of blocking. Design animations to stay within a narrow band (≤50 rows) whenever possible — see §3.0 in the performance guidelines. If displays show glitches, lower `TFT_SPI_BAUDRATE` to `26_000_000` — no firmware rebuild needed.
+- **Sprites for scaled graphics**: never draw scaled icons or text pixel-by-pixel in `render()`. Use `make_icon_sprite()` / `make_label_sprite()` in `enter()` to pre-render into cached FrameBuffers, then `blit_sprite()` per frame. One `blit()` call replaces hundreds of `fill_rect()` calls. See `bodn/ui/widgets.py` for the API and `bodn/ui/home.py` for the reference pattern. Sprite buffers >8 KB go to PSRAM automatically.
 - **Thermal safety**: the LiPo charger (BL4054B) and battery have NO hardware thermal protection — software is the only safeguard. Any new peripheral that draws significant power (LEDs, motors, RF) **must** be added to the power-shedding logic in `main.py` `housekeeping_task()`. Non-critical loads are disabled at ≥ 50 °C (critical) and the device deep-sleeps at ≥ 60 °C (emergency). See `docs/hardware.md` § "Thermal protection" for the escalation table.
 - **i18n**: all user-facing UI strings go through `bodn/i18n.py`. Never hardcode display text in screen modules — use `from bodn.i18n import t` and `t("key")` or `t("key", arg)`. Swedish is the default language. String keys follow `screen_concept` naming (e.g. `simon_watch`, `pause_resume`). Translation files live in `firmware/bodn/lang/sv.py` and `firmware/bodn/lang/en.py`. When adding new strings, add to **both** language files. The `test_i18n.py` test enforces key parity. Extended font glyphs for å, ä, ö, Å, Ä, Ö are in `bodn/ui/font_ext.py`. The web UI stays in English (parent-facing).
 - **TTS**: two TTS pipelines generate spoken audio offline with Piper TTS:
@@ -77,7 +79,7 @@ bodn-esp32/
 ├─ firmware/
 │  ├─ boot.py              # WiFi setup, NTP sync, battery check, boot screen
 │  ├─ main.py              # async entry point (uasyncio)
-│  ├─ st7735.py            # framebuf-based ST7735/ILI9341 driver + dirty rect tracking
+│  ├─ st7735.py            # framebuf-based ST7735/ILI9341 driver (DMA or blocking SPI)
 │  └─ bodn/
 │     ├─ __init__.py
 │     ├─ arcade.py          # arcade button input + LED output via MCP/PCA
@@ -157,12 +159,15 @@ bodn-esp32/
 │  └─ sd-sync.py            # build + sync SD card assets (TTS, sounds, etc.)
 ├─ cmodules/                  # native C extensions (compiled into firmware)
 │  ├─ micropython.cmake       # top-level cmake: includes sub-modules
-│  └─ audiomix/               # native audio mixer (_audiomix module, core 0)
+│  ├─ audiomix/               # native audio mixer (_audiomix module, core 0)
+│  │  ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
+│  │  ├─ audiomix.c/h         # Python bindings + shared types (16 uniform voices)
+│  │  ├─ mixer.c/h            # FreeRTOS task: mix loop + I2S + step clock on core 0
+│  │  ├─ ringbuf.c/h          # lock-free SPSC ring buffer
+│  │  └─ tonegen.c/h          # sine/square/sawtooth/noise generators
+│  └─ spidma/                 # DMA SPI display driver (_spidma module, ISR-driven)
 │     ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
-│     ├─ audiomix.c/h         # Python bindings + shared types (16 uniform voices)
-│     ├─ mixer.c/h            # FreeRTOS task: mix loop + I2S + step clock on core 0
-│     ├─ ringbuf.c/h          # lock-free SPSC ring buffer
-│     └─ tonegen.c/h          # sine/square/sawtooth/noise generators
+│     └─ spidma.c/h           # Python bindings + ESP-IDF spi_master DMA
 ├─ boards/
 │  └─ BODN_S3/                # custom board definition (external to MicroPython tree)
 │     ├─ mpconfigboard.cmake  # sdkconfig layering (spiram_oct, I2S IRAM-safe)
@@ -244,8 +249,9 @@ source ~/esp-idf/export.sh                        # once per terminal session
 ./tools/build-firmware.sh                          # build firmware
 ./tools/build-firmware.sh flash                    # build + flash
 ./tools/build-firmware.sh clean                    # clean build directory
-# The custom firmware is stock MicroPython + _audiomix C module.
+# The custom firmware is stock MicroPython + _audiomix + _spidma C modules.
 # If _audiomix is not available, AudioEngine falls back to the viper/IRQ path.
+# If _spidma is not available, display writes fall back to blocking machine.SPI.
 
 # SD card asset sync (build + copy in one step — runs all 3 steps above)
 uv run python tools/sd-sync.py                    # auto-detect BODN* SD card on macOS

@@ -9,6 +9,109 @@ _char_buf = bytearray(8 * 8 * 2)
 _char_fb = framebuf.FrameBuffer(_char_buf, 8, 8, framebuf.RGB565)
 
 
+# ── Sprite support ──────────────────────────────────────────────
+# Pre-render scaled icons/text into a FrameBuffer once, then blit
+# each frame. One blit() call replaces hundreds of fill_rect() calls.
+#
+# Usage:
+#   # In enter() — render once:
+#   sprite = make_icon_sprite(MODE_ICONS["chord"], 16, 16, theme.CYAN, scale=4)
+#   label  = make_label_sprite("CHORD", theme.CYAN, scale=2)
+#
+#   # In render() — blit per frame (fast, single call):
+#   blit_sprite(tft, sprite, x, y)
+
+# Transparent key colour — must not appear in actual content.
+# 0x0000 (black) doesn't work as transparent since we draw on black bg.
+# Use a distinctive magenta (R=31, G=0, B=31 in RGB565 byte-swapped).
+_TRANSPARENT = 0x1FF8
+
+
+def make_icon_sprite(data, w, h, color, scale=1):
+    """Pre-render a 1-bit bitmap at the given scale into a FrameBuffer.
+
+    Returns (framebuf, pixel_width, pixel_height).
+    """
+    pw = w * scale
+    ph = h * scale
+    buf = bytearray(pw * ph * 2)
+    fb = framebuf.FrameBuffer(buf, pw, ph, framebuf.RGB565)
+    fb.fill(_TRANSPARENT)
+
+    byte_idx = 0
+    bit_idx = 7
+    for row in range(h):
+        for col in range(w):
+            if data[byte_idx] & (1 << bit_idx):
+                if scale <= 1:
+                    fb.pixel(col, row, color)
+                else:
+                    fb.fill_rect(col * scale, row * scale, scale, scale, color)
+            bit_idx -= 1
+            if bit_idx < 0:
+                bit_idx = 7
+                byte_idx += 1
+
+    return (fb, pw, ph)
+
+
+def make_label_sprite(text, color, scale=1):
+    """Pre-render scaled text into a FrameBuffer.
+
+    Returns (framebuf, pixel_width, pixel_height).
+    """
+    char_w = 8 * scale
+    pw = len(text) * char_w
+    ph = 8 * scale
+    buf = bytearray(pw * ph * 2)
+    fb = framebuf.FrameBuffer(buf, pw, ph, framebuf.RGB565)
+    fb.fill(_TRANSPARENT)
+
+    cx = 0
+    for ch in text:
+        glyph = _EXT_GLYPHS.get(ch)
+        if glyph:
+            for row in range(8):
+                byte = glyph[row]
+                if byte == 0:
+                    continue
+                for col in range(8):
+                    if byte & (0x80 >> col):
+                        if scale <= 1:
+                            fb.pixel(cx + col, row, color)
+                        else:
+                            fb.fill_rect(
+                                cx + col * scale, row * scale, scale, scale, color
+                            )
+        else:
+            # Render via temp buffer + pixel read-back
+            _char_fb.fill(0)
+            _char_fb.text(ch, 0, 0, 0xFFFF)
+            for py in range(8):
+                for px in range(8):
+                    if _char_fb.pixel(px, py) != 0:
+                        if scale <= 1:
+                            fb.pixel(cx + px, py, color)
+                        else:
+                            fb.fill_rect(
+                                cx + px * scale, py * scale, scale, scale, color
+                            )
+        cx += char_w
+
+    return (fb, pw, ph)
+
+
+def blit_sprite(tft, sprite, x, y):
+    """Blit a pre-rendered sprite onto the display framebuffer.
+
+    sprite: (framebuf, width, height) tuple from make_*_sprite().
+    Transparent pixels (_TRANSPARENT colour) are skipped.
+    """
+    fb, pw, ph = sprite
+    tft.blit(fb, x, y, _TRANSPARENT)
+    tft.mark_dirty(x, y, pw, ph)
+
+
 def _draw_ext_char(tft, glyph, x, y, color, scale):
     """Draw an 8×8 extended glyph (bytes, 1bpp row-major, MSB-first)."""
     for row in range(8):

@@ -28,8 +28,46 @@ Short, practical rules for writing efficient code for Bodn on ESP32-S3 (and for 
 ## 3. Display (ST7735/ILI9341)
 
 Drawing is one of the slowest operations, especially in simulation.
-The SPI push (`show()`) for the primary 240×320 display sends ~150 KB — at 26 MHz
-that alone takes ~47 ms, exceeding a 30 ms frame budget.
+The SPI push for the primary 240×320 display sends ~150 KB over SPI.
+With the `_spidma` DMA driver, transfers are pipelined via 32 KB chunks
+through internal DRAM staging buffers. **The amount of data pushed
+directly determines how long Python is blocked.**
+
+The SPI clock is configured via `TFT_SPI_BAUDRATE` in `config.py`
+(default: 40 MHz). The timings below assume 40 MHz. If you see
+display glitches (corrupted pixels, colour shifts), lower to
+26 MHz — no firmware rebuild needed, just change `config.py` and sync.
+
+### 3.0 DMA chunk budget — the most important rule
+
+The SPI DMA hardware limit is 32 KB per transaction. The `_spidma` driver
+pipelines chunks using ping-pong buffers, and the **last chunk runs
+asynchronously** — Python returns immediately while DMA finishes in the
+background. This creates a massive performance cliff:
+
+| Dirty region | Bytes | DMA chunks | Python blocked | Async (free) |
+|---|---|---|---|---|
+| ≤50 rows (320×50) | 32,000 | **1** | **~1 ms** | ~6.5 ms |
+| 120 rows (half screen) | 76,800 | 3 | ~14 ms | ~6.5 ms |
+| Full screen (240 rows) | 153,600 | 5 | ~26 ms | ~6.5 ms |
+
+**Key insight: if your dirty rect fits in one 32 KB chunk (≤50 full-width
+rows on the primary display), the push is essentially free (~1 ms memcpy,
+then Python continues while DMA runs).** Every additional chunk adds
+~6.5 ms of blocking at 40 MHz.
+
+**Design animations to stay within ≤50 rows whenever possible.** This means:
+- Keep animated content in a narrow horizontal band
+- Slide/scroll within a bounded region, not full-screen
+- Static chrome (title, footer, status dots) should not be redrawn during animation
+- If the whole screen must change (screen transition), accept the ~41 ms cost
+  — but this should be a rare event, not a per-frame occurrence
+
+Without `_spidma` (stock firmware fallback), the full push blocks Python for
+~47 ms regardless of dirty rect size, so these guidelines also help by
+reducing the total data transferred.
+
+### 3.1 General display rules
 
 - **Skip the entire render + show cycle when nothing changed.**
   - Screens should track a `_dirty` flag. Set it on input events or state transitions.
@@ -42,10 +80,29 @@ that alone takes ~47 ms, exceeding a 30 ms frame budget.
   - Use `manager.invalidate_rect(x, y, w, h)` to accumulate multiple regions —
     they are merged into a bounding box and pushed as one `show_rect()` call.
   - Example speedups: a 320×4 hold bar costs ~0.8 ms instead of ~47 ms (~60×).
-  - Fall back to `manager.request_show()` (no args) only when the updated area
-    is large (>50% of screen) or unknown — `show_rect()` auto-falls back anyway.
   - **`tft.show_rect(x, y, w, h)`** is available on both displays and handles CASET/RASET
-    windowing, row extraction, and the 50% fallback automatically.
+    windowing and row extraction automatically.
+- **Use sprites for scaled icons and text** (critical for animation fps):
+  - **Never** draw scaled icons or text pixel-by-pixel in `render()`. A 16×16 icon
+    at scale=4 generates 256 `fill_rect()` calls per frame — each with `mark_dirty()`
+    overhead. This alone costs 30-50 ms of Python time.
+  - **Instead**: pre-render into a cached FrameBuffer in `enter()` using
+    `make_icon_sprite()` / `make_label_sprite()` from `bodn/ui/widgets.py`, then
+    `blit_sprite(tft, sprite, x, y)` per frame. One `blit()` call replaces hundreds
+    of `fill_rect()` calls (~0.1 ms vs ~30 ms).
+  - Sprite buffers are `bytearray` objects — allocations >8 KB go to PSRAM
+    automatically (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=8192`).
+  - Reference: `bodn/ui/home.py` caches carousel icon + label sprites in `enter()`.
+  - **Pattern**:
+    ```python
+    def enter(self, manager):
+        self._icon = make_icon_sprite(ICON_DATA, 16, 16, theme.CYAN, scale=4)
+        self._label = make_label_sprite("TITLE", theme.CYAN, scale=2)
+
+    def render(self, tft, theme, frame):
+        blit_sprite(tft, self._icon, x, y)   # fast: single blit
+        blit_sprite(tft, self._label, x, y)   # fast: single blit
+    ```
 - **Do not redraw the whole screen every frame.**
   - Only update regions that actually changed (`fill_rect`, partial redraws).
   - In `render()`, prefer `tft.fill_rect(x, y, w, h, BLACK)` over `tft.fill(BLACK)`.
@@ -55,9 +112,10 @@ that alone takes ~47 ms, exceeding a 30 ms frame budget.
   draw operations (`fill_rect`, `text`, `pixel`, `line`, etc.) per frame. After
   `render()`, `ScreenManager` calls `tft.show_dirty()` which pushes only the changed
   region via `show_rect()`. This is automatic — no screen code changes needed.
-  - Screens that call `tft.fill(BLACK)` mark the entire screen dirty → full push (same as before).
+  - Screens that call `tft.fill(BLACK)` mark the entire screen dirty → full push.
   - Screens that only redraw changed areas (garden cells, flöde segments) get partial
-    pushes automatically, reducing SPI data from ~150 KB to a few KB.
+    pushes automatically, reducing SPI data from ~150 KB to a few KB — and with DMA,
+    small dirty rects (≤32 KB) return to Python in ~1 ms.
   - **To benefit**: avoid `tft.fill(BLACK)` per frame. Instead, clear only the changed
     sub-region with `tft.fill_rect()`. Use a `_full_clear` flag for transitions.
   - **Pattern for animation screens** (see Flöde as reference):
@@ -97,7 +155,7 @@ The 128×160 secondary display is split into a **content zone** (128×128, y=0..
 - **Zone-aware partial push is automatic.** `SecondaryDisplay.tick()` already calls `show_rect()` for just the dirty zone (content or status) when only one zone changed. Tight `fill_rect` calls in `render()` ensure those zone-level SPI transfers stay small.
 - **Stay within your zone bounds.** Content screens must not draw below y=127. Status screens draw only at y=128..159. There is no clip guard — drawing outside your zone will overwrite the other zone and cause visual glitches.
 - **`show()` / `show_rect()` are never called by the screen** — `SecondaryDisplay.tick()` issues the SPI push. Do not call `tft.show()` from `render()`.
-- **Tick rate is ~200 ms** (5 Hz). Design for state-change-driven redraws, not animation. If a screen needs faster updates, discuss adjusting the tick rate or moving the work to a dedicated task.
+- **Tick rate is ~50 ms with DMA (20 Hz), ~200 ms without (5 Hz).** Design for state-change-driven redraws. The secondary display buffer (40 KB) fits in 2 DMA chunks, so full pushes are affordable.
 
 ---
 
@@ -295,6 +353,12 @@ When generating or reviewing code, check:
      Every `fill()` marks the full screen dirty, defeating partial-push optimization.
    - For animations: does the screen clear only the changed sub-region with `fill_rect()`
      instead of clearing the whole screen? (dirty rect tracking handles the rest automatically)
+   - **DMA chunk budget**: does the animation's dirty rect fit within ≤50 full-width rows
+     (32 KB = 1 DMA chunk = ~1 ms blocking)? If it exceeds this, each extra chunk adds
+     ~6.5 ms of blocking at 40 MHz. Keep animated content in a narrow horizontal band.
+   - **Sprites**: are scaled icons/text pre-rendered in `enter()` via `make_icon_sprite()` /
+     `make_label_sprite()` and blitted per frame? Pixel-by-pixel `fill_rect` for a scale=4
+     icon costs ~30 ms; a single `blit_sprite()` costs ~0.1 ms.
    - For small, frequent updates (progress bars, timers, counters): does the screen use
      `manager.request_show(x, y, w, h)` (partial push) instead of triggering a full render?
    - Secondary display: does the screen clear only its changed sub-region (not the full zone)?

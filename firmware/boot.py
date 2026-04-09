@@ -70,31 +70,67 @@ try:
         _diag_requested = _mcp2_boot.pin_value(config.MCP2_ENC1_SW) == 0
         _mcp2_boot = None
         _i2c_boot = None
+    except KeyboardInterrupt:
+        raise
     except Exception:
         _diag_requested = False
 
-    spi = SPI(
-        1,
-        baudrate=26_000_000,
-        sck=Pin(config.TFT_SCK),
-        mosi=Pin(config.TFT_MOSI),
-    )
-    tft = ST7735(
-        spi,
-        cs=Pin(config.TFT_CS, Pin.OUT),
-        dc=Pin(config.TFT_DC, Pin.OUT),
-        rst=Pin(config.TFT_RST, Pin.OUT),
-        width=config.TFT_WIDTH,
-        height=config.TFT_HEIGHT,
-        col_offset=config.TFT_COL_OFFSET,
-        row_offset=config.TFT_ROW_OFFSET,
-        madctl=config.TFT_MADCTL,
-    )
+    # Use _spidma DMA if available (also cleans up stale state from
+    # previous soft-reboot), otherwise fall back to blocking machine.SPI.
+    spi = None
+    try:
+        import _spidma
+
+        _spidma.init(
+            sck=config.TFT_SCK,
+            mosi=config.TFT_MOSI,
+            baudrate=config.TFT_SPI_BAUDRATE,
+        )
+        _spidma.add_display(
+            slot=0,
+            cs=config.TFT_CS,
+            dc=config.TFT_DC,
+            width=config.TFT_WIDTH,
+            height=config.TFT_HEIGHT,
+            col_off=config.TFT_COL_OFFSET,
+            row_off=config.TFT_ROW_OFFSET,
+        )
+        tft = ST7735(
+            0,
+            rst=Pin(config.TFT_RST, Pin.OUT),
+            width=config.TFT_WIDTH,
+            height=config.TFT_HEIGHT,
+            col_offset=config.TFT_COL_OFFSET,
+            row_offset=config.TFT_ROW_OFFSET,
+            madctl=config.TFT_MADCTL,
+        )
+    except KeyboardInterrupt:
+        raise
+    except Exception:
+        spi = SPI(
+            1,
+            baudrate=config.TFT_SPI_BAUDRATE,
+            sck=Pin(config.TFT_SCK),
+            mosi=Pin(config.TFT_MOSI),
+        )
+        tft = ST7735(
+            spi,
+            cs=Pin(config.TFT_CS, Pin.OUT),
+            dc=Pin(config.TFT_DC, Pin.OUT),
+            rst=Pin(config.TFT_RST, Pin.OUT),
+            width=config.TFT_WIDTH,
+            height=config.TFT_HEIGHT,
+            col_offset=config.TFT_COL_OFFSET,
+            row_offset=config.TFT_ROW_OFFSET,
+            madctl=config.TFT_MADCTL,
+        )
     np = neopixel.NeoPixel(
         Pin(config.NEOPIXEL_PIN, Pin.OUT),
         config.NEOPIXEL_COUNT,
         timing=1,
     )
+except KeyboardInterrupt:
+    raise
 except Exception as e:
     print("Boot display init error:", e)
 
@@ -538,7 +574,14 @@ if _diag_requested and tft:
 
 # Free boot screen objects before main.py starts — the 240×320
 # framebuffer alone is ~150 KB of RAM.
+# Deinit the SPI bus so main.py can re-initialize it cleanly.
 tft = None
+try:
+    _spidma.deinit()
+except Exception:
+    pass
+if spi:
+    spi.deinit()
 spi = None
 np = None
 gc.threshold(gc.mem_free() // 4)

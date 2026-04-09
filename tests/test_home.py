@@ -41,6 +41,12 @@ class FakeTft:
     def show_rect(self, x, y, w, h):
         pass
 
+    def blit(self, fb, x, y, key=-1):
+        pass
+
+    def mark_dirty(self, x, y, w, h):
+        pass
+
 
 class FakeTheme:
     width = 320
