@@ -9,8 +9,8 @@ Regenerate: `uv run python tools/pinout.py --md`
 graph LR
     ESP["ESP32-S3<br/>DevKit-Lipo"]
 
-    ILI9341TFT["ILI9341 TFT<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST<br/>GPIO 1 → BL</sub>"]
-    ESP -- SPI --> ILI9341TFT
+    MHzworksonsomeILI9341modulesbutmaycauseglitcheswithlongwires["MHz works on some ILI9341 modules but may cause glitches with long wires.<br/><sub>GPIO 12 → SCK<br/>GPIO 11 → MOSI<br/>GPIO 10 → CS<br/>GPIO 8 → DC<br/>GPIO 9 → RST<br/>GPIO 1 → BL</sub>"]
+    MHzworksonsomeILI9341modulesbutmaycauseglitcheswithlongwires -.- ESP
 
     ST7735TFT["ST7735 TFT<br/><sub>GPIO 39 → TFT2_CS</sub>"]
     ESP -- SPI --> ST7735TFT
@@ -50,7 +50,7 @@ graph LR
 
 ```
 
-### ILI9341 TFT
+### MHz works on some ILI9341 modules but may cause glitches with long wires.
 
 | Signal | GPIO | Config variable |
 |--------|------|-----------------|
@@ -163,11 +163,11 @@ graph LR
 | 5 | DevKit-Lipo on-board power monitoring | PWR_SENS_PIN |
 | 6 | DevKit-Lipo on-board power monitoring | BAT_SENS_PIN |
 | 7 | MAX98357A I2S amplifier | DIN |
-| 8 | ILI9341 TFT | DC |
-| 9 | ILI9341 TFT | RST |
-| 10 | ILI9341 TFT | CS |
-| 11 | ILI9341 TFT | MOSI |
-| 12 | ILI9341 TFT | SCK |
+| 8 | MHz works on some ILI9341 modules but may cause glitches with long wires. | DC |
+| 9 | MHz works on some ILI9341 modules but may cause glitches with long wires. | RST |
+| 10 | MHz works on some ILI9341 modules but may cause glitches with long wires. | CS |
+| 11 | MHz works on some ILI9341 modules but may cause glitches with long wires. | MOSI |
+| 12 | MHz works on some ILI9341 modules but may cause glitches with long wires. | SCK |
 | 13 | MAX98357A I2S amplifier | BCK |
 | 14 | INMP441 I2S microphone | SCK |
 | 15 | INMP441 I2S microphone | WS |
@@ -191,7 +191,7 @@ graph LR
 
 > **Pin conflicts detected:**
 > - **GPIO 40**: DS18B20 1-Wire temperature sensors: TEMP_WARN_C / previously reserved for touch CS .: SD_MOSI
-> - **GPIO 1**: ILI9341 TFT: BL / detents per logical unit: ENCODER_SENS_DEFAULT
+> - **GPIO 1**: MHz works on some ILI9341 modules but may cause glitches with long wires.: BL / detents per logical unit: ENCODER_SENS_DEFAULT
 > - **GPIO 21**: Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.: CLK / FTP server: FTP_PORT
 <!-- pinout:end -->
 

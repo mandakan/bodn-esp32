@@ -69,7 +69,7 @@ def create_hardware():
         _spidma.init(
             sck=config.TFT_SCK,
             mosi=config.TFT_MOSI,
-            baudrate=26_000_000,
+            baudrate=config.TFT_SPI_BAUDRATE,
         )
         _spidma.add_display(
             slot=0,
@@ -118,7 +118,7 @@ def create_hardware():
         dc = Pin(config.TFT_DC, Pin.OUT)
         spi = SPI(
             1,
-            baudrate=26_000_000,
+            baudrate=config.TFT_SPI_BAUDRATE,
             sck=Pin(config.TFT_SCK),
             mosi=Pin(config.TFT_MOSI),
         )

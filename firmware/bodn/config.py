@@ -10,6 +10,9 @@
 from micropython import const
 
 # Primary display: 2.8" ILI9341 TFT (SPI bus — shared with secondary display)
+# SPI clock: 40 MHz is safe for both ILI9341 and ST7735 modules.
+# 80 MHz works on some ILI9341 modules but may cause glitches with long wires.
+TFT_SPI_BAUDRATE = const(40_000_000)
 TFT_SCK = const(12)
 TFT_MOSI = const(11)
 TFT_CS = const(10)
