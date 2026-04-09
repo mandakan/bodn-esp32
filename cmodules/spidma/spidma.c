@@ -16,21 +16,14 @@
 
 spidma_state_t *spidma_state = NULL;
 
-// ── ISR callbacks ──────────────────────────────────────────────
-
-static void IRAM_ATTR spi_post_cb(spi_transaction_t *t) {
-    spidma_display_t *disp = (spidma_display_t *)t->user;
-    disp->busy = false;
-}
-
 // ── Internal helpers ───────────────────────────────────────────
 
 // Wait for any in-progress async transfer on this display.
 static void drain_display(spidma_display_t *disp) {
-    if (disp->busy) {
+    if (disp->pending) {
         spi_transaction_t *rtrans;
         spi_device_get_trans_result(disp->handle, &rtrans, portMAX_DELAY);
-        disp->busy = false;
+        disp->pending = false;
     }
 }
 
@@ -85,13 +78,12 @@ static void set_window(spidma_display_t *disp, int x, int y, int w, int h) {
     send_cmd(disp, SPIDMA_CMD_RASET, raset, 4);
 }
 
-// Queue async DMA from an internal DRAM buffer.  Sets disp->busy.
+// Queue async DMA from an internal DRAM buffer.  Sets disp->pending.
 static void queue_async(spidma_display_t *disp, const uint8_t *buf, size_t len) {
     memset(&disp->data_trans, 0, sizeof(spi_transaction_t));
-    disp->data_trans.user = disp;
     disp->data_trans.length = len * 8;
     disp->data_trans.tx_buffer = buf;
-    disp->busy = true;
+    disp->pending = true;
     spi_device_queue_trans(disp->handle, &disp->data_trans, portMAX_DELAY);
 }
 
@@ -307,7 +299,6 @@ static mp_obj_t spidma_add_display(size_t n_args, const mp_obj_t *pos_args,
         .mode = 0,
         .spics_io_num = pin_cs,
         .queue_size = 1,
-        .post_cb = spi_post_cb,
         .flags = SPI_DEVICE_HALFDUPLEX,
     };
 
@@ -322,7 +313,7 @@ static mp_obj_t spidma_add_display(size_t n_args, const mp_obj_t *pos_args,
     disp->height  = height;
     disp->col_off = col_off;
     disp->row_off = row_off;
-    disp->busy    = false;
+    disp->pending = false;
     disp->initialized = true;
 
     return mp_const_none;
@@ -502,7 +493,7 @@ static mp_obj_t spidma_busy(mp_obj_t slot_obj) {
     int slot = mp_obj_get_int(slot_obj);
     if (slot < 0 || slot >= SPIDMA_MAX_DISPLAYS) return mp_const_false;
 
-    return mp_obj_new_bool(spidma_state->displays[slot].busy);
+    return mp_obj_new_bool(spidma_state->displays[slot].pending);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(spidma_busy_obj, spidma_busy);
 

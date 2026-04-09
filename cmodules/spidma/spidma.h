@@ -28,7 +28,7 @@ typedef struct {
     int height;
     int col_off;
     int row_off;
-    volatile bool busy;             // set before queue, cleared by post_cb ISR
+    volatile bool pending;          // queue_trans called but get_trans_result not yet
     spi_transaction_t data_trans;   // reused for async pixel DMA transfer
     bool initialized;
 } spidma_display_t;
