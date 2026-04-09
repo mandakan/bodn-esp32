@@ -301,6 +301,8 @@ machine.soft_reset()   # re-runs boot.py + main.py
 | MCP pins fluctuate with no buttons pressed | Long button wires need 4.7kΩ external pull-ups to 3.3V (internal 100kΩ too weak for >10cm wires) |
 | Encoders skip steps or behave erratically | Add 4.7kΩ pull-ups on CLK/DT lines. Check wire length and routing away from power lines |
 | Can't Ctrl-C to REPL (encoder IRQ blocks it) | Create `/skip_main` flag file (see §7), or press RST and run `./tools/sync.sh --minimal` within 1s |
+| Display shows corrupted pixels or colour shifts | SPI clock too high for your wiring. Lower `TFT_SPI_BAUDRATE` in `firmware/bodn/config.py` from 80 MHz to 40 MHz (or 26 MHz). No firmware rebuild needed — just sync Python files. Long wires and breadboard connections are especially sensitive to high SPI clocks |
+| Display works but has occasional glitches | Same as above — try 40 MHz. Also check that SPI wires (SCK, MOSI, CS, DC) are short (<10cm) and routed away from power lines |
 
 ## 10. Next steps
 

@@ -33,6 +33,14 @@ With the `_spidma` DMA driver, transfers are pipelined via 32 KB chunks
 through internal DRAM staging buffers. **The amount of data pushed
 directly determines how long Python is blocked.**
 
+The SPI clock is configured via `TFT_SPI_BAUDRATE` in `config.py`
+(default: 80 MHz with custom firmware, 26 MHz stock). The `_spidma`
+module uses `SPI_DEVICE_NO_DUMMY` to remove the ~27 MHz cap that
+stock MicroPython imposes (dummy cycles are for SPI reads — displays
+are write-only). The timings below assume 80 MHz. If you see display
+glitches (corrupted pixels, colour shifts), lower to 40 MHz — no
+firmware rebuild needed, just change `config.py` and sync.
+
 ### 3.0 DMA chunk budget — the most important rule
 
 The SPI DMA hardware limit is 32 KB per transaction. The `_spidma` driver
@@ -42,15 +50,14 @@ background. This creates a massive performance cliff:
 
 | Dirty region | Bytes | DMA chunks | Python blocked | Async (free) |
 |---|---|---|---|---|
-| ≤50 rows (160×50 = 16 KB) | 16,000 | **1** | **~1 ms** | ~5 ms |
-| ≤100 rows (320×50) | 32,000 | **1** | **~1 ms** | ~10 ms |
-| 120 rows (half screen) | 76,800 | 3 | ~21 ms | ~10 ms |
-| Full screen (240 rows) | 153,600 | 5 | ~41 ms | ~10 ms |
+| ≤50 rows (320×50) | 32,000 | **1** | **~1 ms** | ~3 ms |
+| 120 rows (half screen) | 76,800 | 3 | ~7 ms | ~3 ms |
+| Full screen (240 rows) | 153,600 | 5 | ~13 ms | ~3 ms |
 
 **Key insight: if your dirty rect fits in one 32 KB chunk (≤50 full-width
 rows on the primary display), the push is essentially free (~1 ms memcpy,
-then Python continues while DMA runs).** Every additional chunk adds ~10 ms
-of blocking.
+then Python continues while DMA runs).** Every additional chunk adds ~3 ms
+of blocking at 80 MHz.
 
 **Design animations to stay within ≤50 rows whenever possible.** This means:
 - Keep animated content in a narrow horizontal band
@@ -330,7 +337,7 @@ When generating or reviewing code, check:
      instead of clearing the whole screen? (dirty rect tracking handles the rest automatically)
    - **DMA chunk budget**: does the animation's dirty rect fit within ≤50 full-width rows
      (32 KB = 1 DMA chunk = ~1 ms blocking)? If it exceeds this, each extra chunk adds
-     ~10 ms of blocking. Keep animated content in a narrow horizontal band.
+     ~3 ms of blocking at 80 MHz. Keep animated content in a narrow horizontal band.
    - For small, frequent updates (progress bars, timers, counters): does the screen use
      `manager.request_show(x, y, w, h)` (partial push) instead of triggering a full render?
    - Secondary display: does the screen clear only its changed sub-region (not the full zone)?

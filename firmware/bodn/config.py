@@ -10,9 +10,21 @@
 from micropython import const
 
 # Primary display: 2.8" ILI9341 TFT (SPI bus — shared with secondary display)
-# SPI clock: custom firmware uses SPI_DEVICE_NO_DUMMY which removes the
-# ~27 MHz read-dummy cap.  80 MHz is the ESP32-S3 SPI max and works well
-# for write-only displays.  Drop to 40 MHz if you see display glitches.
+#
+# SPI clock speed.  Both displays share this bus, so the clock is limited
+# by the slower display.  The _spidma C module uses SPI_DEVICE_NO_DUMMY
+# which removes the ~27 MHz dummy-cycle cap that stock MicroPython imposes
+# (dummy cycles are for SPI reads — our displays are write-only).
+#
+# Recommended values:
+#   80_000_000  — maximum, best performance (~3.3ms per 32KB DMA chunk)
+#   40_000_000  — safe fallback (~6.5ms per chunk), use if 80 MHz glitches
+#   26_000_000  — conservative, matches stock MicroPython default
+#
+# TROUBLESHOOTING: if displays show corrupted pixels, colour shifts,
+# flickering, or partial updates after changing hardware (longer wires,
+# different display modules, breadboard vs PCB), lower this value.
+# No firmware rebuild needed — just change and sync Python files.
 TFT_SPI_BAUDRATE = const(80_000_000)
 TFT_SCK = const(12)
 TFT_MOSI = const(11)
