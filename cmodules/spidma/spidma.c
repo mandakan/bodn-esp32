@@ -78,6 +78,51 @@ static void set_window(spidma_display_t *disp, int x, int y, int w, int h) {
     send_cmd(disp, SPIDMA_CMD_RASET, raset, 4);
 }
 
+// Queue async DMA from an internal DRAM buffer.  Sets disp->busy.
+static void queue_dma(spidma_display_t *disp, const uint8_t *buf, size_t len) {
+    memset(&disp->data_trans, 0, sizeof(spi_transaction_t));
+    disp->data_trans.user = disp;
+    disp->data_trans.length = len * 8;
+    disp->data_trans.tx_buffer = buf;
+    disp->busy = true;
+    spi_device_queue_trans(disp->handle, &disp->data_trans, portMAX_DELAY);
+}
+
+// Pipelined chunked push: copies PSRAM → DRAM staging buffers while
+// DMA sends the previous chunk.  Last chunk is async (non-blocking).
+static void push_data(spidma_display_t *disp, const uint8_t *src, size_t total) {
+    int cur = 0;
+    size_t remaining = total;
+
+    // Copy first chunk
+    size_t chunk = (remaining > SPIDMA_DMA_CHUNK_SZ)
+                   ? SPIDMA_DMA_CHUNK_SZ : remaining;
+    memcpy(spidma_state->dma_buf[0], src, chunk);
+    src += chunk;
+    remaining -= chunk;
+
+    // Pipeline: DMA current buffer while copying next
+    while (remaining > 0) {
+        queue_dma(disp, spidma_state->dma_buf[cur], chunk);
+
+        int next = 1 - cur;
+        size_t next_chunk = (remaining > SPIDMA_DMA_CHUNK_SZ)
+                            ? SPIDMA_DMA_CHUNK_SZ : remaining;
+        memcpy(spidma_state->dma_buf[next], src, next_chunk);
+        src += next_chunk;
+        remaining -= next_chunk;
+
+        // Wait for current DMA before reusing its buffer
+        drain_display(disp);
+
+        chunk = next_chunk;
+        cur = next;
+    }
+
+    // Last chunk: start async DMA and return (non-blocking)
+    queue_dma(disp, spidma_state->dma_buf[cur], chunk);
+}
+
 // ── Python bindings ────────────────────────────────────────────
 
 // _spidma.init(sck=, mosi=, baudrate=26_000_000)
@@ -160,6 +205,21 @@ static mp_obj_t spidma_init(size_t n_args, const mp_obj_t *pos_args,
     }
     spidma_state->bus_initialized = we_own_bus;
 
+    // Allocate ping-pong DMA staging buffers in internal DRAM.
+    // PSRAM buffers can't be used with spi_device_queue_trans (async),
+    // so we copy chunks into these DMA-capable buffers for pipelining.
+    for (int i = 0; i < 2; i++) {
+        spidma_state->dma_buf[i] = heap_caps_malloc(
+            SPIDMA_DMA_CHUNK_SZ, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+        if (!spidma_state->dma_buf[i]) {
+            // Cleanup on failure
+            if (i == 1) heap_caps_free(spidma_state->dma_buf[0]);
+            if (we_own_bus) spi_bus_free(spidma_state->host);
+            free(spidma_state);
+            spidma_state = NULL;
+            mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("DMA buf alloc"));
+        }
+    }
 
     return mp_const_none;
 }
@@ -179,6 +239,11 @@ static mp_obj_t spidma_deinit(void) {
     }
     if (spidma_state->bus_initialized) {
         spi_bus_free(spidma_state->host);
+    }
+    for (int i = 0; i < 2; i++) {
+        if (spidma_state->dma_buf[i]) {
+            heap_caps_free(spidma_state->dma_buf[i]);
+        }
     }
     free(spidma_state);
     spidma_state = NULL;
@@ -330,27 +395,9 @@ static mp_obj_t spidma_push(mp_obj_t slot_obj, mp_obj_t buf_obj) {
     cmd_t.flags = SPI_TRANS_USE_TXDATA;
     spi_device_polling_transmit(disp->handle, &cmd_t);
 
-    // Set DC=1 for pixel data
+    // Set DC=1 for pixel data, then pipeline chunks via staging buffers
     gpio_set_level(disp->dc_pin, 1);
-
-    // Chunked blocking DMA: ≤32KB per transaction (ESP32-S3 SPI DMA limit).
-    // ESP-IDF auto-copies PSRAM→DRAM for polling_transmit.  Runs entirely
-    // in C so Python overhead is eliminated vs machine.SPI.write().
-    uint8_t *src = (uint8_t *)bufinfo.buf;
-    size_t remaining = expected;
-    spi_transaction_t t;
-
-    while (remaining > 0) {
-        size_t chunk = (remaining > SPIDMA_DMA_CHUNK_SZ)
-                       ? SPIDMA_DMA_CHUNK_SZ : remaining;
-        memset(&t, 0, sizeof(t));
-        t.user = disp;
-        t.length = chunk * 8;
-        t.tx_buffer = src;
-        spi_device_polling_transmit(disp->handle, &t);
-        src += chunk;
-        remaining -= chunk;
-    }
+    push_data(disp, (const uint8_t *)bufinfo.buf, expected);
 
     return mp_const_none;
 }
@@ -407,33 +454,38 @@ static mp_obj_t spidma_push_rect(size_t n_args, const mp_obj_t *args) {
     int stride = disp->width * 2;
 
     if (w == disp->width) {
-        // Full-width strip: contiguous — chunked blocking DMA
+        // Full-width strip: contiguous — pipelined DMA
         uint8_t *src = (uint8_t *)bufinfo.buf + y * stride;
-        size_t remaining = (size_t)h * stride;
+        push_data(disp, src, (size_t)h * stride);
+    } else {
+        // Partial-width: gather rows into staging buffer, then DMA.
+        // Rows are small so no pipelining needed — just batch into chunks.
+        int row_bytes = w * 2;
+        uint8_t *dst = spidma_state->dma_buf[0];
+        size_t filled = 0;
         spi_transaction_t t;
 
-        while (remaining > 0) {
-            size_t chunk = (remaining > SPIDMA_DMA_CHUNK_SZ)
-                           ? SPIDMA_DMA_CHUNK_SZ : remaining;
-            memset(&t, 0, sizeof(t));
-            t.user = disp;
-            t.length = chunk * 8;
-            t.tx_buffer = src;
-            spi_device_polling_transmit(disp->handle, &t);
-            src += chunk;
-            remaining -= chunk;
-        }
-    } else {
-        // Partial-width: per-row blocking directly from buffer
-        int row_bytes = w * 2;
-        spi_transaction_t t;
         for (int row = 0; row < h; row++) {
-            memset(&t, 0, sizeof(t));
-            t.user = disp;
             uint8_t *ptr = (uint8_t *)bufinfo.buf +
                            (y + row) * stride + x * 2;
-            t.length = row_bytes * 8;
-            t.tx_buffer = ptr;
+            // Flush if this row won't fit
+            if (filled + row_bytes > SPIDMA_DMA_CHUNK_SZ && filled > 0) {
+                memset(&t, 0, sizeof(t));
+                t.user = disp;
+                t.length = filled * 8;
+                t.tx_buffer = dst;
+                spi_device_polling_transmit(disp->handle, &t);
+                filled = 0;
+            }
+            memcpy(dst + filled, ptr, row_bytes);
+            filled += row_bytes;
+        }
+        // Flush remaining rows
+        if (filled > 0) {
+            memset(&t, 0, sizeof(t));
+            t.user = disp;
+            t.length = filled * 8;
+            t.tx_buffer = dst;
             spi_device_polling_transmit(disp->handle, &t);
         }
     }

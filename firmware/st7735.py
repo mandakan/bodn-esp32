@@ -276,8 +276,9 @@ class ST7735(framebuf.FrameBuffer):
     def show_rect(self, x, y, w, h):
         """Push a sub-rectangle of the framebuffer to the display.
 
-        Falls back to show() when the region covers more than half the screen.
         Coordinates are in logical (post-rotation) framebuffer space.
+        With DMA, partial pushes are always more efficient than full-screen
+        since they transfer fewer bytes through the same pipeline.
         """
         # Clamp to screen bounds
         if x < 0:
@@ -291,10 +292,6 @@ class ST7735(framebuf.FrameBuffer):
         if y + h > self.height:
             h = self.height - y
         if w <= 0 or h <= 0:
-            return
-        # Fallback for large regions
-        if w * h > self.width * self.height // 2:
-            self.show()
             return
         if self._native:
             _spidma.push_rect(self._slot, self._buf, x, y, w, h)

@@ -38,6 +38,7 @@ typedef struct {
     spidma_display_t displays[SPIDMA_MAX_DISPLAYS];
     int baudrate;
     bool bus_initialized;
+    uint8_t *dma_buf[2];    // ping-pong DMA staging buffers (internal DRAM)
 } spidma_state_t;
 
 extern spidma_state_t *spidma_state;
