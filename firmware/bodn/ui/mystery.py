@@ -13,6 +13,9 @@ from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = const(0)  # config.ENC_NAV
 
+# Discovery tones — whole-tone scale, mysterious and exploratory
+_MYSTERY_TONES = (262, 294, 330, 370, 415, 466, 523, 587)  # C4–D5 whole-tone
+
 
 class MysteryScreen(Screen):
     """Mystery Box — discover hidden rules through experimentation.
@@ -28,6 +31,7 @@ class MysteryScreen(Screen):
         np,
         overlay,
         arcade=None,
+        audio=None,
         settings=None,
         secondary_screen=None,
         on_exit=None,
@@ -35,6 +39,7 @@ class MysteryScreen(Screen):
         self._np = np
         self._overlay = overlay
         self._arcade = arcade
+        self._audio = audio
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = MysteryEngine()
@@ -54,6 +59,13 @@ class MysteryScreen(Screen):
         self._hud_found = -1
         self._hud_total = -1
 
+    def _on_immediate_press(self, kind, index):
+        """Scan-time callback — fires at 200 Hz, bypassing frame sync."""
+        if kind != "btn" or index >= len(_MYSTERY_TONES):
+            return
+        if self._audio:
+            self._audio.tone(_MYSTERY_TONES[index], 200)
+
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
@@ -66,8 +78,11 @@ class MysteryScreen(Screen):
         if arc:
             arc.wave(0, speed=1)
             arc.flush()
+        manager.inp.set_on_press(self._on_immediate_press)
 
     def exit(self):
+        if self._manager:
+            self._manager.inp.set_on_press(None)
         arc = self._arcade
         if arc:
             arc.all_off()

@@ -22,6 +22,9 @@ from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = const(0)  # config.ENC_NAV
 
+# Pentatonic tones per button (6 buttons, ascending pitch)
+_SIMON_TONES = (262, 330, 392, 523, 659, 784)  # C4 E4 G4 C5 E5 G5
+
 # Map game states to cat emotions
 _STATE_EMOTIONS = {
     READY: NEUTRAL,
@@ -45,6 +48,7 @@ class SimonScreen(Screen):
         np,
         overlay,
         arcade=None,
+        audio=None,
         settings=None,
         secondary_screen=None,
         on_exit=None,
@@ -52,6 +56,7 @@ class SimonScreen(Screen):
         self._np = np
         self._overlay = overlay
         self._arcade = arcade
+        self._audio = audio
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = SimonEngine()
@@ -64,6 +69,16 @@ class SimonScreen(Screen):
         self._full_clear = True
         self._leds_dirty = True
 
+    def _on_immediate_press(self, kind, index):
+        """Scan-time callback — fires at 200 Hz, bypassing frame sync."""
+        if kind != "btn" or index >= NUM_BUTTONS:
+            return
+        state = self._engine.state
+        if state == WAITING and self._audio:
+            self._audio.tone(_SIMON_TONES[index], 150)
+        elif state == READY and self._audio:
+            self._audio.tone(_SIMON_TONES[0], 100)
+
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
@@ -71,8 +86,11 @@ class SimonScreen(Screen):
         self._brightness.reset()
         self._dirty = True
         self._full_clear = True
+        manager.inp.set_on_press(self._on_immediate_press)
 
     def exit(self):
+        if self._manager:
+            self._manager.inp.set_on_press(None)
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
@@ -105,6 +123,12 @@ class SimonScreen(Screen):
             self._dirty = True
             self._full_clear = True
             self._leds_dirty = True
+            # Audio feedback for state transitions
+            if self._audio:
+                if state == WIN:
+                    self._audio.play_sound("correct", channel="sfx")
+                elif state == FAIL:
+                    self._audio.play_sound("wrong", channel="sfx")
             # Update cat face
             if self._secondary:
                 emotion = _STATE_EMOTIONS.get(state, NEUTRAL)
@@ -116,6 +140,9 @@ class SimonScreen(Screen):
         if active_btn != self._prev_active_btn:
             self._prev_active_btn = active_btn
             self._leds_dirty = True
+            # Play tone when sequence shows a new button
+            if state == SHOWING and active_btn >= 0 and self._audio:
+                self._audio.tone(_SIMON_TONES[active_btn], 150)
             if state == SHOWING and not self._dirty and self._manager:
                 self._push_dot_row()
             else:

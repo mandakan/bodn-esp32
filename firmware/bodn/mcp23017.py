@@ -32,6 +32,7 @@ class MCP23017:
         self._i2c = i2c
         self._addr = addr
         self._buf1 = bytearray(1)
+        self._buf2 = bytearray(2)
         # Cache the last-read port values to avoid redundant I2C reads
         # when multiple pins are read in the same scan cycle.
         self._porta = 0xFF
@@ -57,9 +58,14 @@ class MCP23017:
         return self._read_reg(_GPIOB)
 
     def refresh(self):
-        """Read both ports in one go. Call once per scan cycle."""
-        self._porta = self.read_port_a()
-        self._portb = self.read_port_b()
+        """Read both ports in a single 2-byte I2C transaction.
+
+        SEQOP=0 (default) auto-increments from GPIOA to GPIOB,
+        saving one I2C start/stop/address cycle per scan.
+        """
+        self._i2c.readfrom_mem_into(self._addr, _GPIOA, self._buf2)
+        self._porta = self._buf2[0]
+        self._portb = self._buf2[1]
         self._dirty = False
 
     def pin_value(self, pin):

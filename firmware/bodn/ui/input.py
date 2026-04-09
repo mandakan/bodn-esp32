@@ -126,7 +126,7 @@ class InputState:
 
         self._btn_deb = [Debouncer(delay_ms=15) for _ in range(len(buttons))]
         self._enc_btn_deb = [Debouncer(delay_ms=15) for _ in range(len(encoders))]
-        self._arc_deb = [Debouncer(delay_ms=15) for _ in range(len(self._arcade_pins))]
+        self._arc_deb = [Debouncer(delay_ms=10) for _ in range(len(self._arcade_pins))]
 
         n_btn = len(buttons)
         n_enc = len(encoders)
@@ -162,6 +162,10 @@ class InputState:
         self._prev_enc_btn = [False] * n_enc
         self._enc_last_step_ms = [0] * n_enc
 
+        # Scan-time press callback: fired at 200 Hz on debounced press edge.
+        # Signature: callback(kind, index) where kind is "btn" or "arc".
+        self._on_press = None
+
         # Gesture detection for all buttons + arcade buttons + encoder buttons
         n_total = n_btn + n_arc + n_enc
         self.gestures = GestureDetector(n_total)
@@ -185,6 +189,7 @@ class InputState:
         prev_btn = self._prev_btn
         pend_bp = self._pend_btn_press
         pend_br = self._pend_btn_release
+        on_press = self._on_press
 
         # Buttons
         for i, btn in enumerate(buttons):
@@ -193,6 +198,8 @@ class InputState:
             btn_held[i] = cur
             if cur and not prev:
                 pend_bp[i] = True
+                if on_press:
+                    on_press("btn", i)
             if not cur and prev:
                 pend_br[i] = True
             prev_btn[i] = cur
@@ -216,6 +223,8 @@ class InputState:
             arc_held[i] = cur
             if cur and not prev:
                 pend_ap[i] = True
+                if on_press:
+                    on_press("arc", i)
             if not cur and prev:
                 pend_ar[i] = True
             prev_arc[i] = cur
@@ -256,6 +265,16 @@ class InputState:
             if not cur_btn and p_btn:
                 pend_er[i] = True
             prev_enc_btn[i] = cur_btn
+
+    def set_on_press(self, callback):
+        """Register a callback fired from scan() on debounced press edge.
+
+        Signature: callback(kind, index) where kind is "btn" or "arc".
+        Runs at scan rate (~200 Hz), bypassing the frame sync delay.
+        Callback must be fast — no I2C, no allocations.
+        Pass None to clear.
+        """
+        self._on_press = callback
 
     def consume(self):
         """Copy latched edges to public state and clear pending.

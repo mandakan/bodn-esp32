@@ -18,7 +18,8 @@ class FakeI2C:
         self.regs[reg] = val
 
     def readfrom_mem_into(self, addr, reg, buf):
-        buf[0] = self.regs.get(reg, 0xFF)
+        for i in range(len(buf)):
+            buf[i] = self.regs.get(reg + i, 0xFF)
 
 
 def _make_arcade(i2c=None):
