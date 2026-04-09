@@ -78,49 +78,26 @@ static void set_window(spidma_display_t *disp, int x, int y, int w, int h) {
     send_cmd(disp, SPIDMA_CMD_RASET, raset, 4);
 }
 
-// Queue async DMA from an internal DRAM buffer.  Sets disp->busy.
-static void queue_dma(spidma_display_t *disp, const uint8_t *buf, size_t len) {
-    memset(&disp->data_trans, 0, sizeof(spi_transaction_t));
-    disp->data_trans.user = disp;
-    disp->data_trans.length = len * 8;
-    disp->data_trans.tx_buffer = buf;
-    disp->busy = true;
-    spi_device_queue_trans(disp->handle, &disp->data_trans, portMAX_DELAY);
-}
-
-// Pipelined chunked push: copies PSRAM → DRAM staging buffers while
-// DMA sends the previous chunk.  Last chunk is async (non-blocking).
+// Chunked push via internal DRAM staging buffer.  Copies PSRAM → DRAM
+// in ≤32KB chunks, then DMA each chunk with blocking polling_transmit.
+// The internal buffer ensures DMA-capable memory (PSRAM not accepted by
+// spi_device_queue_trans).
 static void push_data(spidma_display_t *disp, const uint8_t *src, size_t total) {
-    int cur = 0;
     size_t remaining = total;
+    spi_transaction_t t;
 
-    // Copy first chunk
-    size_t chunk = (remaining > SPIDMA_DMA_CHUNK_SZ)
-                   ? SPIDMA_DMA_CHUNK_SZ : remaining;
-    memcpy(spidma_state->dma_buf[0], src, chunk);
-    src += chunk;
-    remaining -= chunk;
-
-    // Pipeline: DMA current buffer while copying next
     while (remaining > 0) {
-        queue_dma(disp, spidma_state->dma_buf[cur], chunk);
-
-        int next = 1 - cur;
-        size_t next_chunk = (remaining > SPIDMA_DMA_CHUNK_SZ)
-                            ? SPIDMA_DMA_CHUNK_SZ : remaining;
-        memcpy(spidma_state->dma_buf[next], src, next_chunk);
-        src += next_chunk;
-        remaining -= next_chunk;
-
-        // Wait for current DMA before reusing its buffer
-        drain_display(disp);
-
-        chunk = next_chunk;
-        cur = next;
+        size_t chunk = (remaining > SPIDMA_DMA_CHUNK_SZ)
+                       ? SPIDMA_DMA_CHUNK_SZ : remaining;
+        memcpy(spidma_state->dma_buf[0], src, chunk);
+        memset(&t, 0, sizeof(t));
+        t.user = disp;
+        t.length = chunk * 8;
+        t.tx_buffer = spidma_state->dma_buf[0];
+        spi_device_polling_transmit(disp->handle, &t);
+        src += chunk;
+        remaining -= chunk;
     }
-
-    // Last chunk: start async DMA and return (non-blocking)
-    queue_dma(disp, spidma_state->dma_buf[cur], chunk);
 }
 
 // ── Python bindings ────────────────────────────────────────────
@@ -205,20 +182,17 @@ static mp_obj_t spidma_init(size_t n_args, const mp_obj_t *pos_args,
     }
     spidma_state->bus_initialized = we_own_bus;
 
-    // Allocate ping-pong DMA staging buffers in internal DRAM.
-    // PSRAM buffers can't be used with spi_device_queue_trans (async),
-    // so we copy chunks into these DMA-capable buffers for pipelining.
-    for (int i = 0; i < 2; i++) {
-        spidma_state->dma_buf[i] = heap_caps_malloc(
-            SPIDMA_DMA_CHUNK_SZ, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-        if (!spidma_state->dma_buf[i]) {
-            // Cleanup on failure
-            if (i == 1) heap_caps_free(spidma_state->dma_buf[0]);
-            if (we_own_bus) spi_bus_free(spidma_state->host);
-            free(spidma_state);
-            spidma_state = NULL;
-            mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("DMA buf alloc"));
-        }
+    // Allocate DMA staging buffer in internal DRAM.  PSRAM buffers are
+    // rejected by spi_device_queue_trans and auto-copied by polling_transmit,
+    // but using our own buffer avoids the per-chunk internal allocation.
+    spidma_state->dma_buf[0] = heap_caps_malloc(
+        SPIDMA_DMA_CHUNK_SZ, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    spidma_state->dma_buf[1] = NULL;
+    if (!spidma_state->dma_buf[0]) {
+        if (we_own_bus) spi_bus_free(spidma_state->host);
+        free(spidma_state);
+        spidma_state = NULL;
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("DMA buf alloc"));
     }
 
     return mp_const_none;
