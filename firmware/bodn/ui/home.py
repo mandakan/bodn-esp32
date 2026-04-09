@@ -3,7 +3,12 @@
 from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.icons import MODE_ICONS
-from bodn.ui.widgets import draw_icon, draw_centered, draw_label
+from bodn.ui.widgets import (
+    draw_centered,
+    make_icon_sprite,
+    make_label_sprite,
+    blit_sprite,
+)
 from bodn.chord import ChordDetector
 from bodn.i18n import t
 
@@ -90,6 +95,30 @@ class HomeScreen(Screen):
         self._anim_step = _ANIM_STEPS
         self._dirty = True
         self._full_clear = True
+        # Pre-render scaled icon/label sprites — one blit per frame
+        # instead of hundreds of fill_rect calls.
+        self._icon_sprites = {}
+        self._label_sprites = {}
+        self._sprite_color = None  # rebuilt on first render when theme available
+
+    def _build_sprites(self, theme):
+        """Pre-render icon and label sprites for all carousel modes."""
+        color = theme.CYAN
+        icon_scale = 4 if theme.width > theme.height else 3
+        label_scale = 2
+        self._icon_scale = icon_scale
+        for name in self._names:
+            icon_data = MODE_ICONS.get(name)
+            if icon_data and name not in self._icon_sprites:
+                self._icon_sprites[name] = make_icon_sprite(
+                    icon_data, 16, 16, color, scale=icon_scale
+                )
+            label_text = t("mode_" + name).upper()
+            if name not in self._label_sprites:
+                self._label_sprites[name] = make_label_sprite(
+                    label_text, color, scale=label_scale
+                )
+        self._sprite_color = color
 
     def needs_redraw(self):
         return self._dirty
@@ -276,11 +305,15 @@ class HomeScreen(Screen):
 
     def _render_landscape(self, tft, theme, frame, name, full_clear):
         """Landscape layout: centered, icon above mode name."""
+        # Lazy-build sprites on first render (need theme for colour)
+        if self._sprite_color != theme.CYAN:
+            self._build_sprites(theme)
+
         w = theme.width
         h = theme.height
         ox = self._anim_x(w)
 
-        icon_scale = 4
+        icon_scale = self._icon_scale
         icon_size = 16 * icon_scale
         name_y = 40 + icon_size + 12
         dots_y = name_y + 28
@@ -303,23 +336,21 @@ class HomeScreen(Screen):
         # Outgoing item (slides out in opposite direction)
         if self._prev_name and ox != 0:
             out_ox = ox - self._anim_dir * w
-            prev_icon = MODE_ICONS.get(self._prev_name)
-            if prev_icon:
-                pix = (w - icon_size) // 2 + out_ox
-                draw_icon(tft, prev_icon, pix, 40, 16, 16, theme.CYAN, scale=icon_scale)
-            prev_text = t("mode_" + self._prev_name).upper()
-            ptx = (w - len(prev_text) * 16) // 2 + out_ox
-            draw_label(tft, prev_text, ptx, name_y, theme.CYAN, scale=2)
+            icon_spr = self._icon_sprites.get(self._prev_name)
+            if icon_spr:
+                blit_sprite(tft, icon_spr, (w - icon_size) // 2 + out_ox, 40)
+            label_spr = self._label_sprites.get(self._prev_name)
+            if label_spr:
+                blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + out_ox, name_y)
 
         # Incoming item (slides in from the side)
-        icon_data = MODE_ICONS.get(name)
-        if icon_data:
-            ix = (w - icon_size) // 2 + ox
-            draw_icon(tft, icon_data, ix, 40, 16, 16, theme.CYAN, scale=icon_scale)
+        icon_spr = self._icon_sprites.get(name)
+        if icon_spr:
+            blit_sprite(tft, icon_spr, (w - icon_size) // 2 + ox, 40)
 
-        mode_text = t("mode_" + name).upper()
-        mtx = (w - len(mode_text) * 16) // 2 + ox
-        draw_label(tft, mode_text, mtx, name_y, theme.CYAN, scale=2)
+        label_spr = self._label_sprites.get(name)
+        if label_spr:
+            blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + ox, name_y)
 
         # Clear prev_name when animation completes
         if ox == 0:
@@ -356,19 +387,17 @@ class HomeScreen(Screen):
         # Outgoing item
         if self._prev_name and ox != 0:
             out_ox = ox - self._anim_dir * w
-            prev_icon = MODE_ICONS.get(self._prev_name)
-            if prev_icon:
-                pix = (w - icon_size) // 2 + out_ox
-                draw_icon(tft, prev_icon, pix, iy, 16, 16, theme.CYAN, scale=icon_scale)
+            icon_spr = self._icon_sprites.get(self._prev_name)
+            if icon_spr:
+                blit_sprite(tft, icon_spr, (w - icon_size) // 2 + out_ox, iy)
             prev_text = t("mode_" + self._prev_name).upper()
             ptx = (w - len(prev_text) * 8) // 2 + out_ox
             tft.text(prev_text, ptx, theme.CENTER_Y + 24, theme.CYAN)
 
         # Incoming item
-        icon_data = MODE_ICONS.get(name)
-        if icon_data:
-            ix = (w - icon_size) // 2 + ox
-            draw_icon(tft, icon_data, ix, iy, 16, 16, theme.CYAN, scale=icon_scale)
+        icon_spr = self._icon_sprites.get(name)
+        if icon_spr:
+            blit_sprite(tft, icon_spr, (w - icon_size) // 2 + ox, iy)
 
         mode_text = t("mode_" + name).upper()
         mtx = (w - len(mode_text) * 8) // 2 + ox
