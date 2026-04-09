@@ -246,9 +246,12 @@ static void mix_task(void *arg) {
         for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {
             audiomix_voice_t *v = &state->voices[i];
             if (v->stop_req) {
-                v->source_type = SRC_NONE;
                 v->stop_req = 0;
-                ringbuf_reset(&v->ringbuf);
+                if (v->source_type != SRC_NONE) {
+                    v->fade_out = 1;  // graceful fade-out next chunk
+                } else {
+                    ringbuf_reset(&v->ringbuf);
+                }
             }
             if (v->source_type != SRC_NONE) {
                 has_active = true;
@@ -293,6 +296,7 @@ static void mix_task(void *arg) {
                         v->buf_pos = 0;
                         v->loop = 0;
                         v->fade_in = 0;
+                        v->fade_out = 0;
                         v->stop_req = 0;
                         v->source_type = SRC_BUFFER;
                     }
@@ -314,6 +318,7 @@ static void mix_task(void *arg) {
                             v->tone_wave = clk->melody_wave;
                             v->loop = 0;
                             v->fade_in = 1;
+                            v->fade_out = 0;
                             v->stop_req = 0;
                             v->source_type = SRC_TONE;
                         }
@@ -343,7 +348,19 @@ static void mix_task(void *arg) {
             audiomix_voice_t *v = &state->voices[i];
             if (v->source_type == SRC_NONE || v->writing) continue;
 
-            uint32_t n = voice_read(state, v, voice_buf, max_samples);
+            uint32_t n;
+            if (v->fade_out) {
+                // Read just enough for a fade-out ramp, then kill voice
+                n = voice_read(state, v, voice_buf, AUDIOMIX_FADE_SAMPLES);
+                if (n > 0) {
+                    tonegen_fade(voice_buf, n, 0, 1, AUDIOMIX_FADE_SAMPLES);
+                }
+                v->fade_out = 0;
+                v->source_type = SRC_NONE;
+                ringbuf_reset(&v->ringbuf);
+            } else {
+                n = voice_read(state, v, voice_buf, max_samples);
+            }
             if (n == 0) continue;
 
             // Per-voice gain

@@ -68,6 +68,7 @@ typedef struct {
     volatile uint8_t  loop;             // 1 = loop, 0 = one-shot
     volatile uint8_t  stop_req;         // Python sets 1; core 0 clears + stops
     volatile uint8_t  fade_in;          // apply fade-in on first chunk
+    volatile uint8_t  fade_out;         // 1 = fade out this chunk then stop
     volatile uint8_t  writing;          // 1 = Python is writing fields, clock must skip
 
     // SRC_RINGBUF fields

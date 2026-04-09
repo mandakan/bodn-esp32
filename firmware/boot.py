@@ -4,6 +4,7 @@
 # Hold NAV encoder button (ENC1_SW) during power-on for diagnostic screen.
 
 import gc
+import sys as _sys
 import time
 
 # Keep amplifier in shutdown immediately — before anything else can make noise.
@@ -38,8 +39,6 @@ try:
     print("boot.py: /fast_boot flag found — skipping WiFi/NTP for quick sync")
 except OSError:
     pass
-
-import sys as _sys
 
 
 def _abort_boot():

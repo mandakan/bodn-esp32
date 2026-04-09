@@ -196,13 +196,19 @@ class HomeScreen(Screen):
         velocity = inp.enc_velocity[NAV]
         units = self._accumulate(delta, velocity)
         if units != 0:
+            # Clamp to ±1 so each frame steps once with its own animation + click.
+            # Put excess back into the accumulator for subsequent frames.
+            sign = 1 if units > 0 else -1
+            excess = (abs(units) - 1) * self._dpu
+            self._accum += excess * sign
+            units = sign
             self._prev_name = self._names[self._index]
             self._index = (self._index + units) % len(self._names)
             # Start slide animation: incoming from direction of turn
             self._anim_step = 0
             self._anim_dir = 1 if units > 0 else -1
             self._dirty = True
-            if self._audio and not self._audio.channel_active("ui"):
+            if self._audio:
                 self._audio.play_sound("nav_click")
 
     def _draw_loading_bar(self, loaded, total):
