@@ -82,6 +82,27 @@ reducing the total data transferred.
   - Example speedups: a 320×4 hold bar costs ~0.8 ms instead of ~47 ms (~60×).
   - **`tft.show_rect(x, y, w, h)`** is available on both displays and handles CASET/RASET
     windowing and row extraction automatically.
+- **Use sprites for scaled icons and text** (critical for animation fps):
+  - **Never** draw scaled icons or text pixel-by-pixel in `render()`. A 16×16 icon
+    at scale=4 generates 256 `fill_rect()` calls per frame — each with `mark_dirty()`
+    overhead. This alone costs 30-50 ms of Python time.
+  - **Instead**: pre-render into a cached FrameBuffer in `enter()` using
+    `make_icon_sprite()` / `make_label_sprite()` from `bodn/ui/widgets.py`, then
+    `blit_sprite(tft, sprite, x, y)` per frame. One `blit()` call replaces hundreds
+    of `fill_rect()` calls (~0.1 ms vs ~30 ms).
+  - Sprite buffers are `bytearray` objects — allocations >8 KB go to PSRAM
+    automatically (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=8192`).
+  - Reference: `bodn/ui/home.py` caches carousel icon + label sprites in `enter()`.
+  - **Pattern**:
+    ```python
+    def enter(self, manager):
+        self._icon = make_icon_sprite(ICON_DATA, 16, 16, theme.CYAN, scale=4)
+        self._label = make_label_sprite("TITLE", theme.CYAN, scale=2)
+
+    def render(self, tft, theme, frame):
+        blit_sprite(tft, self._icon, x, y)   # fast: single blit
+        blit_sprite(tft, self._label, x, y)   # fast: single blit
+    ```
 - **Do not redraw the whole screen every frame.**
   - Only update regions that actually changed (`fill_rect`, partial redraws).
   - In `render()`, prefer `tft.fill_rect(x, y, w, h, BLACK)` over `tft.fill(BLACK)`.
@@ -335,6 +356,9 @@ When generating or reviewing code, check:
    - **DMA chunk budget**: does the animation's dirty rect fit within ≤50 full-width rows
      (32 KB = 1 DMA chunk = ~1 ms blocking)? If it exceeds this, each extra chunk adds
      ~6.5 ms of blocking at 40 MHz. Keep animated content in a narrow horizontal band.
+   - **Sprites**: are scaled icons/text pre-rendered in `enter()` via `make_icon_sprite()` /
+     `make_label_sprite()` and blitted per frame? Pixel-by-pixel `fill_rect` for a scale=4
+     icon costs ~30 ms; a single `blit_sprite()` costs ~0.1 ms.
    - For small, frequent updates (progress bars, timers, counters): does the screen use
      `manager.request_show(x, y, w, h)` (partial push) instead of triggering a full render?
    - Secondary display: does the screen clear only its changed sub-region (not the full zone)?

@@ -22,6 +22,10 @@ try:
 except ImportError:
     _spidma = None
 
+# Reusable 8×8 glyph buffer for extended character blit
+_glyph_buf = bytearray(8 * 8 * 2)
+_glyph_fb = framebuf.FrameBuffer(_glyph_buf, 8, 8, framebuf.RGB565)
+
 try:
     from bodn.ui.font_ext import GLYPHS as _EXT_GLYPHS
 except ImportError:
@@ -229,13 +233,18 @@ class ST7735(framebuf.FrameBuffer):
                 if ascii_buf:
                     super().text("".join(ascii_buf), ascii_start, y, color)
                     ascii_buf = []
+                # Render into tiny framebuf and blit — one call instead of
+                # up to 64 pixel() calls with mark_dirty() each.
+                _glyph_fb.fill(0)
                 for row in range(8):
                     byte = glyph[row]
                     if byte == 0:
                         continue
                     for col in range(8):
                         if byte & (0x80 >> col):
-                            self.pixel(cx + col, y + row, color)
+                            _glyph_fb.pixel(col, row, color)
+                super().blit(_glyph_fb, cx, y, 0)
+                self.mark_dirty(cx, y, 8, 8)
                 cx += 8
                 ascii_start = cx
             else:
