@@ -76,17 +76,17 @@ SC_LANDING = const(4)  # press the indicated arcade button
 
 NUM_SCENARIOS = const(5)
 
-# Timing in frames (~30 fps)
-ANNOUNCE_FRAMES = const(60)  # AI speaks, then ACTIVE starts (~2 s)
-SUCCESS_FRAMES = const(60)  # celebration before returning to CRUISING (~2 s)
-HINT_FRAMES = const(45)  # hint shown, then retry ACTIVE (~1.5 s)
+# Timing in milliseconds (wall-clock, frame-rate independent)
+ANNOUNCE_MS = const(2000)  # AI speaks, then ACTIVE starts
+SUCCESS_MS = const(2000)  # celebration before returning to CRUISING
+HINT_MS = const(1500)  # hint shown, then retry ACTIVE
 
-# Timeout per difficulty level (frames)
-TIMEOUTS = [240, 180, 150]  # level 1/2/3 → 8 s / 6 s / 5 s
+# Timeout per difficulty level (milliseconds)
+TIMEOUT_MS = [8000, 6000, 5000]  # level 1/2/3
 
-# Cruise intervals: random within [BASE, BASE + SPREAD)
-CRUISE_BASE = const(200)  # minimum frames between scenarios (~6.5 s)
-CRUISE_SPREAD = const(150)  # additional random frames (~5 s)
+# Cruise intervals in milliseconds: random within [BASE, BASE + SPREAD)
+CRUISE_BASE_MS = const(7000)  # minimum ms between scenarios
+CRUISE_SPREAD_MS = const(5000)  # additional random ms
 
 # Arcade button roles — fixed mapping, physical left-to-right order.
 # Indices are stable so future difficulty levels can remap without touching scenarios.
@@ -111,6 +111,11 @@ def _rand8():
     return int.from_bytes(os.urandom(1), "big")
 
 
+def _rand16():
+    """Return a random 0–65535."""
+    return int.from_bytes(os.urandom(2), "big")
+
+
 def _clamp(v, lo, hi):
     if v < lo:
         return lo
@@ -123,7 +128,8 @@ class SpaceEngine:
     """Stateful engine for the Spaceship Cockpit mode.
 
     Pure logic — no hardware imports beyond patterns.
-    Call update() every frame; it returns an event string or None.
+    Call update() every tick with dt (milliseconds since last tick).
+    Returns an event string or None.
 
     Events:
         "announce"  — scenario picked; play TTS for scenario_type
@@ -157,17 +163,17 @@ class SpaceEngine:
         self._sw0_was_on = False  # SC_SHIELD: sw0 state at scenario start
         self._hinted = False  # whether HINT phase was already shown
 
-        # Timers
-        self._state_frame = 0
-        self._timer = 0
-        self._cruise_countdown = CRUISE_BASE + _rand8() % CRUISE_SPREAD
+        # Timers (milliseconds)
+        self._state_ms = 0  # ms accumulated in current state
+        self._cruise_ms = 0  # ms accumulated during CRUISING
+        self._cruise_target = CRUISE_BASE_MS + _rand16() % CRUISE_SPREAD_MS
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def update(self, btn, arc, enc_a_delta, enc_b_delta, sw0, sw1, frame):
-        """Call every frame.  Returns event string or None.
+    def update(self, btn, arc, enc_a_delta, enc_b_delta, sw0, sw1, dt):
+        """Call every tick.  Returns event string or None.
 
         Args:
             btn          -- just-pressed button index (0–7), -1 if none
@@ -176,7 +182,7 @@ class SpaceEngine:
             enc_b_delta  -- steering encoder delta (signed detent count)
             sw0          -- toggle switch 0 state (bool)
             sw1          -- toggle switch 1 state (bool)
-            frame        -- current frame counter
+            dt           -- milliseconds since last tick (caller provides)
         """
         # Always update cockpit instruments (ambient feedback)
         self.throttle = _clamp(self.throttle + enc_a_delta * 8, 0, 255)
@@ -184,48 +190,54 @@ class SpaceEngine:
         self.shields_on = sw0
         self.stealth = sw1
 
-        elapsed = frame - self._state_frame
+        self._state_ms += dt
 
         if self.state == CRUISING:
-            self._timer += 1
-            if self._timer >= self._cruise_countdown:
-                return self._pick_scenario(frame, sw0)
+            self._cruise_ms += dt
+            if self._cruise_ms >= self._cruise_target:
+                return self._pick_scenario(sw0)
 
         elif self.state == ANNOUNCE:
-            if elapsed >= ANNOUNCE_FRAMES:
-                self.state = ACTIVE
-                self._state_frame = frame
+            if self._state_ms >= ANNOUNCE_MS:
+                self._set_state(ACTIVE)
 
         elif self.state == ACTIVE:
             if self._check_solution(btn, arc, enc_a_delta, enc_b_delta, sw0):
-                self.state = SUCCESS
-                self._state_frame = frame
+                self._set_state(SUCCESS)
                 self._successes += 1
                 self._timeouts = 0
                 self._adjust_difficulty()
                 return "success"
-            if elapsed >= TIMEOUTS[self.difficulty - 1]:
+            if self._state_ms >= TIMEOUT_MS[self.difficulty - 1]:
                 if not self._hinted:
                     self._hinted = True
-                    self.state = HINT
-                    self._state_frame = frame
+                    self._set_state(HINT)
                     return "hint"
                 else:
                     self._timeouts += 1
                     self._adjust_difficulty()
-                    self._end_scenario(frame)
+                    self._end_scenario()
                     return "resolve"
 
         elif self.state == HINT:
-            if elapsed >= HINT_FRAMES:
-                self.state = ACTIVE
-                self._state_frame = frame
+            if self._state_ms >= HINT_MS:
+                self._set_state(ACTIVE)
 
         elif self.state == SUCCESS:
-            if elapsed >= SUCCESS_FRAMES:
-                self._end_scenario(frame)
+            if self._state_ms >= SUCCESS_MS:
+                self._end_scenario()
 
         return None
+
+    @property
+    def active_timeout_ms(self):
+        """Total timeout for the current difficulty level (ms)."""
+        return TIMEOUT_MS[self.difficulty - 1]
+
+    @property
+    def active_elapsed_ms(self):
+        """Milliseconds elapsed in the current ACTIVE/HINT phase."""
+        return self._state_ms
 
     @property
     def target_color(self):
@@ -261,7 +273,12 @@ class SpaceEngine:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _pick_scenario(self, frame, sw0):
+    def _set_state(self, new_state):
+        """Transition to a new state, resetting the state timer."""
+        self.state = new_state
+        self._state_ms = 0
+
+    def _pick_scenario(self, sw0):
         """Choose and configure a random scenario."""
         # Avoid SC_SHIELD if shields are already on
         candidates = list(range(NUM_SCENARIOS))
@@ -273,9 +290,8 @@ class SpaceEngine:
         r = _rand8() % len(candidates)
         sc = candidates[r]
         self.scenario_type = sc
-        self.state = ANNOUNCE
-        self._state_frame = frame
-        self._timer = 0
+        self._set_state(ANNOUNCE)
+        self._cruise_ms = 0
         self._hinted = False
         self._throttle_clicks = 0
 
@@ -319,14 +335,13 @@ class SpaceEngine:
             self.difficulty -= 1
             self._timeouts = 0
 
-    def _end_scenario(self, frame):
+    def _end_scenario(self):
         """Return to CRUISING with a fresh random interval."""
-        self.state = CRUISING
-        self._timer = 0
-        self._state_frame = frame
+        self._set_state(CRUISING)
+        self._cruise_ms = 0
         self.scenario_type = -1
         self._target_arc = -1
-        self._cruise_countdown = CRUISE_BASE + _rand8() % CRUISE_SPREAD
+        self._cruise_target = CRUISE_BASE_MS + _rand16() % CRUISE_SPREAD_MS
 
     # ------------------------------------------------------------------
     # LED generation (sticks only — lid ring handled by screen)
@@ -402,7 +417,6 @@ class SpaceEngine:
         buf = _led_buf
         n = N_STICKS
         _s = scale
-        _hsv = None  # avoid import at module level; inline if needed
 
         phase = (frame * 2) & 0xFF
         v = phase if phase < 128 else 255 - phase

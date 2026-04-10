@@ -6,11 +6,11 @@
 
 
 import os
+import time
 
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
-from bodn.ui.input import BrightnessControl
 from bodn.ui.widgets import draw_centered
 from bodn.ui.pause import PauseMenu
 from bodn.i18n import t
@@ -218,19 +218,17 @@ class SpaceScreen(Screen):
         self._secondary = secondary_screen
         self._on_exit = on_exit
         self._engine = SpaceEngine()
-        self._brightness = BrightnessControl(settings=settings)
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._prev_state = None
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
-        self._prev_throttle = 128
-        self._prev_steering = 0
-        self._active_state_frame = 0  # frame when ACTIVE began (for countdown)
+        self._last_ms = 0  # initialised in enter()
         self._prev_sw0 = None  # None = not yet initialised
         self._prev_sw1 = None
         self._drone_zone = -1  # current throttle zone (0/1/2), -1 = not started
+        self._arc_led_mode = None  # track current arcade LED mode to set-once
         self._alarm_active = False
         self._bridge_next = 0  # frame when next bridge ambience can play
         # Pre-loaded PCM buffers (bytearray in PSRAM, None = use procedural tone)
@@ -246,7 +244,7 @@ class SpaceScreen(Screen):
         self._manager = manager
         self._pause.set_manager(manager)
         self._engine.reset()
-        self._brightness.reset()
+        self._last_ms = time.ticks_ms()
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
@@ -256,6 +254,7 @@ class SpaceScreen(Screen):
         self._drone_zone = -1
         self._alarm_active = False
         self._bridge_next = 0
+        self._arc_led_mode = None
         if self._preloaded_bufs is not None:
             pb = self._preloaded_bufs
             self._btn_bufs = pb.get("btn")
@@ -300,8 +299,8 @@ class SpaceScreen(Screen):
             self._on_exit()
 
     def needs_redraw(self):
-        # Redraw every frame during ACTIVE/ANNOUNCE for countdown + animations
-        if self._engine.state in (ACTIVE, ANNOUNCE):
+        # ANNOUNCE: cheap border tick.  ACTIVE/HINT: cheap countdown tick.
+        if self._engine.state in (ACTIVE, ANNOUNCE, HINT):
             return True
         return self._dirty or self._pause.needs_render
 
@@ -324,7 +323,10 @@ class SpaceScreen(Screen):
         sw0 = inp.sw[0] if len(inp.sw) > 0 else False
         sw1 = inp.sw[1] if len(inp.sw) > 1 else False
 
-        event = self._engine.update(btn, arc, enc_a, enc_b, sw0, sw1, frame)
+        now = time.ticks_ms()
+        dt = time.ticks_diff(now, self._last_ms)
+        self._last_ms = now
+        event = self._engine.update(btn, arc, enc_a, enc_b, sw0, sw1, dt)
 
         # Button ambient sounds (always, regardless of scenario)
         if btn >= 0 and self._audio:
@@ -398,18 +400,11 @@ class SpaceScreen(Screen):
             self._dirty = True
             self._full_clear = True
             self._leds_dirty = True
-            if state == ACTIVE:
-                self._active_state_frame = frame
             if self._secondary:
                 self._secondary.set_emotion(_STATE_EMOTIONS.get(state, NEUTRAL))
 
         # Throttle/steering changes → redraw instruments + update drone pitch
-        if (
-            abs(self._engine.throttle - self._prev_throttle) >= 4
-            or abs(self._engine.steering - self._prev_steering) >= 4
-        ):
-            self._prev_throttle = self._engine.throttle
-            self._prev_steering = self._engine.steering
+        if enc_a or enc_b:
             self._dirty = True
             self._leds_dirty = True
 
@@ -431,19 +426,13 @@ class SpaceScreen(Screen):
             self._speak_toggle("space_stealth_on" if sw1 else "space_stealth_off", sw1)
             self._dirty = True
 
-        # Arcade LEDs — called every frame (animation driven by frame counter)
+        # Arcade LEDs — set mode once, C engine animates autonomously
         self._update_arcade_leds(state, frame)
 
-        # Brightness from encoder A
-        prev_bri = self._brightness.value
-        self._brightness.update(
-            inp.enc_delta[config.ENC_A], inp.enc_velocity[config.ENC_A]
-        )
-        if self._brightness.value != prev_bri:
-            self._leds_dirty = True
-
-        # Write LEDs
-        if self._leds_dirty:
+        # NeoPixel LEDs — animate lid ring during active states, throttled
+        if self._leds_dirty or (
+            state in (ANNOUNCE, ACTIVE, HINT, SUCCESS) and frame % 3 == 0
+        ):
             self._leds_dirty = False
             self._write_leds(state, frame)
 
@@ -566,33 +555,45 @@ class SpaceScreen(Screen):
             pass
 
     def _update_arcade_leds(self, state, frame):
-        """Drive arcade button LEDs based on game state.
+        """Set arcade LED animation mode on state/scenario changes.
 
-        Called every frame from update() so animations stay smooth.
-        All LED writes are no-ops when self._arcade is None.
+        Animation runs autonomously in C at 500 Hz.  Python only needs
+        to call the semantic method once per mode change; the C engine
+        handles per-frame math and I2C writes.  For the Python fallback
+        path, the arcade module internally tracks whether a re-call is
+        needed.
         """
         arc = self._arcade
         if arc is None:
             return
 
+        # Build a mode key so we only reconfigure on actual changes
+        sc = self._engine.scenario_type
+        tgt = self._engine.target_arc_idx
+        mode = (state, sc, tgt)
+        if mode == self._arc_led_mode:
+            # Same mode — only tick flash decay (Python fallback)
+            if state == SUCCESS:
+                arc.tick_flash()
+                arc.flush()
+            return
+        self._arc_led_mode = mode
+
         if state == SUCCESS:
-            # Celebratory burst that decays
-            if not any(arc._flash_ttl):
-                for i in range(5):
-                    arc.flash(i, duration=15)
+            for i in range(5):
+                arc.flash(i, duration=15)
             arc.tick_flash()
 
         elif state in (ACTIVE, HINT):
-            sc = self._engine.scenario_type
             if sc in (SC_LANDING, SC_COURSE):
-                tgt = self._engine.target_arc_idx
                 for i in range(5):
                     if i == tgt:
-                        arc.blink(i, frame, speed=5)
+                        arc.pulse(i, frame, speed=3)
                     else:
                         arc.glow(i)
             else:
-                arc.wave(frame, speed=2)
+                for i in range(5):
+                    arc.glow(i)
 
         elif state == ANNOUNCE:
             arc.all_blink(frame, speed=4)
@@ -607,7 +608,7 @@ class SpaceScreen(Screen):
 
     def _write_leds(self, state, frame):
         """Update NeoPixel sticks and lid ring."""
-        brightness = self._brightness.value
+        brightness = config.NEOPIXEL_BRIGHTNESS
         lid_bright = min(brightness, config.NEOPIXEL_LID_BRIGHTNESS)
 
         leds = self._engine.make_static_leds(brightness)
@@ -659,12 +660,22 @@ class SpaceScreen(Screen):
             self._pause.render(tft, theme, frame)
             return
 
-        if self._dirty or self._engine.state in (ACTIVE, ANNOUNCE):
+        state = self._engine.state
+
+        if self._dirty:
             self._dirty = False
             if self._full_clear:
                 self._full_clear = False
                 tft.fill(theme.BLACK)
             self._render_game(tft, theme, frame)
+        elif state == ANNOUNCE:
+            # Cheap per-frame update: just the pulsing border
+            self._tick_announce_border(tft, theme, frame)
+        elif state in (ACTIVE, HINT):
+            # Cheap per-frame update: just the countdown bar
+            w = theme.width
+            h = theme.height
+            self._tick_countdown_bar(tft, theme, frame, w, h)
 
         self._pause.render(tft, theme, frame)
 
@@ -703,13 +714,8 @@ class SpaceScreen(Screen):
         self._render_instruments(tft, theme, w, h, eng)
 
     def _render_cruising(self, tft, theme, frame, w, h):
-        """Starfield + 'all clear' display."""
-        # Simple deterministic starfield
+        """Static cruising display — no animation, redrawn only when dirty."""
         tft.fill_rect(0, 20, w, h - 40, theme.BLACK)
-        for i in range(24):
-            sx = (i * 53 + frame // 3) % w
-            sy = (i * 37 + i * 11) % (h - 50) + 22
-            tft.pixel(sx, sy, theme.WHITE if i % 3 != 0 else theme.MUTED)
 
         draw_centered(tft, t("space_cruising_label"), h // 2 - 8, theme.CYAN, w)
         # Shield indicator
@@ -719,7 +725,7 @@ class SpaceScreen(Screen):
             tft.text(t("space_stealth"), w // 2, h // 2 + 8, theme.DIM)
 
     def _render_announce(self, tft, theme, frame, w, h):
-        """Full-screen scenario announcement with pulsing border."""
+        """Scenario announcement with pulsing border + instruction."""
         sc = self._engine.scenario_type
         tft.fill_rect(0, 20, w, h - 40, theme.BLACK)
 
@@ -731,8 +737,11 @@ class SpaceScreen(Screen):
         tft.rect(3, 23, w - 6, h - 46, border_col)
 
         label_key = _SC_LABEL[sc] if 0 <= sc < len(_SC_LABEL) else "space_alert"
-        draw_centered(tft, t(label_key), h // 2 - 16, theme.YELLOW, w, scale=2)
-        draw_centered(tft, t("space_alert"), h // 2 + 8, theme.WHITE, w)
+        draw_centered(tft, t(label_key), h // 2 - 20, theme.YELLOW, w, scale=2)
+
+        # Show instruction already so the child knows what to do
+        if 0 <= sc < len(_SC_INSTR):
+            draw_centered(tft, t(_SC_INSTR[sc]), h // 2 + 8, theme.WHITE, w)
 
     def _render_active(self, tft, theme, frame, w, h):
         """Scenario active: instruction + countdown bar."""
@@ -775,10 +784,10 @@ class SpaceScreen(Screen):
             draw_centered(tft, t("space_hint_label"), h // 2 + 28, theme.CYAN, w)
 
         # Countdown bar (time remaining)
-        limit = [240, 180, 150][eng.difficulty - 1]
-        elapsed = frame - self._active_state_frame
-        remaining = max(0, limit - elapsed)
-        prog = remaining / limit
+        timeout = eng.active_timeout_ms
+        elapsed = eng.active_elapsed_ms
+        remaining = max(0, timeout - elapsed)
+        prog = remaining / timeout if timeout else 0
         bar_w = w - 16
         tft.rect(8, h - 36, bar_w, 8, theme.MUTED)
         filled = int(prog * (bar_w - 2))
@@ -822,6 +831,35 @@ class SpaceScreen(Screen):
         dot_x = sx0 + mid + int(eng.steering * mid // 128)
         dot_x = max(sx0 + 1, min(sx0 + steer_w - 3, dot_x))
         tft.fill_rect(dot_x, bar_y + 4, 4, 8, theme.GREEN)
+
+    def _tick_announce_border(self, tft, theme, frame):
+        """Cheap per-frame update: just redraw the pulsing border lines."""
+        w = theme.width
+        h = theme.height
+        phase = (frame * 6) & 0xFF
+        v = phase if phase < 128 else 255 - phase
+        border_col = theme.MAGENTA if (v > 64) else theme.CYAN
+        tft.rect(2, 22, w - 4, h - 44, border_col)
+        tft.rect(3, 23, w - 6, h - 46, border_col)
+
+    def _tick_countdown_bar(self, tft, theme, frame, w, h):
+        """Cheap per-frame update: just redraw the countdown bar."""
+        eng = self._engine
+        timeout = eng.active_timeout_ms
+        elapsed = eng.active_elapsed_ms
+        remaining = max(0, timeout - elapsed)
+        prog = remaining / timeout if timeout else 0
+        bar_w = w - 16
+        tft.fill_rect(8, h - 36, bar_w, 8, theme.BLACK)
+        tft.rect(8, h - 36, bar_w, 8, theme.MUTED)
+        filled = int(prog * (bar_w - 2))
+        if filled > 0:
+            col = (
+                theme.GREEN
+                if prog > 0.5
+                else (theme.YELLOW if prog > 0.25 else theme.RED)
+            )
+            tft.fill_rect(9, h - 35, filled, 6, col)
 
     def _render_portrait(self, tft, theme, frame):
         """Portrait layout for secondary/rotated mounting."""
