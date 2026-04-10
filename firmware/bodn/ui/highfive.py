@@ -206,10 +206,14 @@ class HighFiveScreen(Screen):
         return self._dirty or self._pause.needs_render
 
     def _on_press(self, kind, index):
-        """Scan-time audio callback (~200 Hz). Play tone on any arcade press."""
+        """Scan-time audio callback (~200 Hz). Play tone on wrong button press."""
         if kind != "arc" or index >= NUM_BUTTONS:
             return
-        if self._audio and self._engine.state == SHOWING:
+        # Only play a tone for wrong-button presses — correct hits get the
+        # clap/cheer WAV from the state transition, so we skip here to
+        # avoid a double-sound.
+        eng = self._engine
+        if self._audio and eng.state == SHOWING and index != eng.target:
             self._audio.tone(_TONES[index], 100)
 
     def _play_sfx(self, bufs, fallback_freq, fallback_ms, wave="sine", channel="sfx"):
@@ -380,11 +384,11 @@ class HighFiveScreen(Screen):
         if eng.state == READY:
             draw_centered(tft, t("hf_ready"), cy, theme.MUTED, w, scale=2)
         elif eng.state == SHOWING:
-            # Show which button to hit — button color name
+            # Show which button to hit — translated color name
             if 0 <= eng.target < len(config.ARCADE_COLORS):
-                color_name = config.ARCADE_COLORS[eng.target].upper()
+                color_key = "color_" + config.ARCADE_COLORS[eng.target]
                 draw_centered(tft, t("hf_go"), cy - 16, theme.WHITE, w, scale=2)
-                draw_centered(tft, color_name, cy + 16, theme.CYAN, w, scale=2)
+                draw_centered(tft, t(color_key), cy + 16, theme.CYAN, w, scale=2)
         elif eng.state == HIT_FLASH:
             draw_centered(tft, t("hf_hit"), cy, theme.GREEN, w, scale=2)
         elif eng.state == MISS_FLASH:

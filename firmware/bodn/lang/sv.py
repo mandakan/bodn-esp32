@@ -224,7 +224,12 @@ STRINGS = {
     "seq_metronome_on": "Metro PÅ",
     "seq_metronome_off": "Metro AV",
     # High-Five Friends
-    "mode_highfive": "heja-fem",
+    "mode_highfive": "high-five",
+    "color_green": "GRÖN",
+    "color_blue": "BLÅ",
+    "color_white": "VIT",
+    "color_yellow": "GUL",
+    "color_red": "RÖD",
     "hf_ready": "Gör dig redo!",
     "hf_go": "GE FEM!",
     "hf_hit": "Najs!",

@@ -225,6 +225,11 @@ STRINGS = {
     "seq_metronome_off": "Metro OFF",
     # High-Five Friends
     "mode_highfive": "high-five",
+    "color_green": "GREEN",
+    "color_blue": "BLUE",
+    "color_white": "WHITE",
+    "color_yellow": "YELLOW",
+    "color_red": "RED",
     "hf_ready": "Get ready!",
     "hf_go": "HIGH-FIVE!",
     "hf_hit": "Yeah!",
