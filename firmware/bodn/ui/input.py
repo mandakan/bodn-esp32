@@ -266,6 +266,73 @@ class InputState:
                 pend_er[i] = True
             prev_enc_btn[i] = cur_btn
 
+    def native_press(self, kind, index):
+        """Latch a press edge from native C module events."""
+        on_press = self._on_press
+        if kind == "btn" and index < len(self.btn_held):
+            self.btn_held[index] = True
+            self._pend_btn_press[index] = True
+            if on_press:
+                on_press("btn", index)
+        elif kind == "arc" and index < len(self.arc_held):
+            self.arc_held[index] = True
+            self._pend_arc_press[index] = True
+            if on_press:
+                on_press("arc", index)
+
+    def native_release(self, kind, index):
+        """Latch a release edge from native C module events."""
+        if kind == "btn" and index < len(self.btn_held):
+            self.btn_held[index] = False
+            self._pend_btn_release[index] = True
+        elif kind == "arc" and index < len(self.arc_held):
+            self.arc_held[index] = False
+            self._pend_arc_release[index] = True
+
+    def scan_encoders(self):
+        """Scan only encoders and encoder buttons (for native input mode).
+
+        MCP1 buttons/arcade are handled by native_press/native_release.
+        MCP2 encoder buttons and toggle switches are still Python-polled.
+        """
+        now = self._time_ms()
+
+        encoders = self._encoders
+        enc_pos = self.enc_pos
+        enc_velocity = self.enc_velocity
+        prev_enc_pos = self._prev_enc_pos
+        enc_btn_held = self.enc_btn_held
+        prev_enc_btn = self._prev_enc_btn
+        enc_btn_deb = self._enc_btn_deb
+        enc_last_step = self._enc_last_step_ms
+        pend_ed = self._pend_enc_delta
+        pend_ep = self._pend_enc_btn_press
+        pend_er = self._pend_enc_btn_release
+
+        for i, enc in enumerate(encoders):
+            pos = enc.value
+            enc_pos[i] = pos
+            d = pos - prev_enc_pos[i]
+            pend_ed[i] += d
+            prev_enc_pos[i] = pos
+
+            if d != 0:
+                elapsed = now - enc_last_step[i]
+                if elapsed > 0:
+                    enc_velocity[i] = abs(d) * 1000 // elapsed
+                enc_last_step[i] = now
+            elif now - enc_last_step[i] > _VELOCITY_TIMEOUT_MS:
+                enc_velocity[i] = 0
+
+            p_btn = prev_enc_btn[i]
+            cur_btn = enc_btn_deb[i].update(enc.sw.value(), now)
+            enc_btn_held[i] = cur_btn
+            if cur_btn and not p_btn:
+                pend_ep[i] = True
+            if not cur_btn and p_btn:
+                pend_er[i] = True
+            prev_enc_btn[i] = cur_btn
+
     def set_on_press(self, callback):
         """Register a callback fired from scan() on debounced press edge.
 

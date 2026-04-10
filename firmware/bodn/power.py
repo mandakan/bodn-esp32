@@ -102,18 +102,21 @@ class PowerManager:
         if self._mcp:
             self._mcp.enable_interrupts()
 
-        # Wake sources: encoder buttons (all active-low) + MCP INT if present
+        # Wake sources: MCP INT pin (any button/toggle change) is the primary
+        # wake source.  Encoder buttons moved to MCP2, so they can't be GPIO
+        # wake sources directly — the MCP interrupt covers them.
         has_gpio_wake = False
         try:
             import esp32
 
-            wake_pins = [config.ENC1_SW, config.ENC2_SW]
+            wake_pins = []
             if self._mcp:
                 wake_pins.append(config.MCP_INT_PIN)
             for pin_num in wake_pins:
                 p = Pin(pin_num, Pin.IN, Pin.PULL_UP)
                 esp32.gpio_wakeup(p, esp32.WAKEUP_ANY_LOW)
-            has_gpio_wake = True
+            if wake_pins:
+                has_gpio_wake = True
         except (ImportError, AttributeError) as e:
             print("POWER: gpio_wakeup unavailable:", e)
 
@@ -125,16 +128,10 @@ class PowerManager:
             print("POWER: entering light sleep (GPIO wake)")
             machine.lightsleep()
         else:
-            # Fallback: poll encoder buttons in a light sleep loop
+            # Fallback: poll MCP expander buttons in a light sleep loop
             print("POWER: entering poll sleep (no GPIO wake)")
-            enc_pins = [
-                Pin(config.ENC1_SW, Pin.IN, Pin.PULL_UP),
-                Pin(config.ENC2_SW, Pin.IN, Pin.PULL_UP),
-            ]
             while True:
                 machine.lightsleep(200)  # wake every 200ms to check buttons
-                if any(p.value() == 0 for p in enc_pins):
-                    break
                 if self._mcp:
                     self._mcp.refresh()
                     # Check if any button was pressed on expander

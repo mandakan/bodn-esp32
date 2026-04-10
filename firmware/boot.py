@@ -60,31 +60,11 @@ ip = "0.0.0.0"
 # --- Init display + LEDs early so we can show progress ---
 tft = None
 np = None
-_diag_requested = False
 try:
     from machine import Pin, SPI
     import neopixel
     from bodn import config
     from st7735 import ST7735
-
-    # Check NAV encoder button (ENC1 SW, now on MCP2 GPA0) for diagnostic mode.
-    # Initialise I2C + MCP2 early; if MCP2 is absent, skip diag check.
-    try:
-        from machine import I2C
-        from bodn.mcp23017 import MCP23017
-
-        _i2c_boot = I2C(
-            0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000
-        )
-        _mcp2_boot = MCP23017(_i2c_boot, config.MCP2_ADDR)
-        _mcp2_boot.refresh()
-        _diag_requested = _mcp2_boot.pin_value(config.MCP2_ENC1_SW) == 0
-        _mcp2_boot = None
-        _i2c_boot = None
-    except KeyboardInterrupt:
-        _abort_boot()
-    except Exception:
-        _diag_requested = False
 
     # Use _spidma DMA if available (also cleans up stale state from
     # previous soft-reboot), otherwise fall back to blocking machine.SPI.
@@ -638,67 +618,6 @@ if _logo_sprite is not None and tft:
 # Free large logo — splash is done
 _logo_sprite = None
 _logo_data = None  # noqa: F841
-
-# --- Diagnostic boot screen (hold NAV encoder button to activate) ---
-if _diag_requested and tft:
-    from bodn.diag import gather as _diag_gather
-
-    _diag_info = _diag_gather(ip=ip, boot_results=_results, boot_steps=STEPS)
-
-    # --- Draw diagnostic screen ---
-    tft.fill(COL_BLACK)
-    _line_h = 14
-    _y = 4
-    _title = "~ Diagnostics ~"
-    _tx = (tft.width - len(_title) * 8) // 2
-    tft.text(_title, _tx, _y, COL_TITLE)
-    _y += _line_h + 4
-
-    for _label, _val in _diag_info:
-        tft.text(_label, 4, _y, COL_AMBER)
-        _vx = min(80, (len(_label) + 1) * 8 + 4)
-        tft.text(str(_val), _vx, _y, COL_WHITE)
-        _y += _line_h
-
-    # Hint at bottom
-    _hint = "Press any button"
-    _hx = (tft.width - len(_hint) * 8) // 2
-    tft.text(_hint, _hx, tft.height - 16, COL_CYAN)
-    tft.show()
-
-    # Wait for any encoder button press via MCP2 to dismiss.
-    # Re-initialise MCP2 (boot I2C instance was released above).
-    try:
-        from machine import I2C
-        from bodn.mcp23017 import MCP23017
-
-        _i2c_diag = I2C(
-            0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000
-        )
-        _mcp2_diag = MCP23017(_i2c_diag, config.MCP2_ADDR)
-        # Wait for the initially-held button to be released
-        _mcp2_diag.refresh()
-        while _mcp2_diag.pin_value(config.MCP2_ENC1_SW) == 0:
-            time.sleep_ms(50)
-            _mcp2_diag.refresh()
-        # Then wait for any encoder button press to dismiss
-        while True:
-            _mcp2_diag.refresh()
-            if (
-                _mcp2_diag.pin_value(config.MCP2_ENC1_SW) == 0
-                or _mcp2_diag.pin_value(config.MCP2_ENC2_SW) == 0
-            ):
-                break
-            time.sleep_ms(50)
-        _mcp2_diag = None
-        _i2c_diag = None
-    except KeyboardInterrupt:
-        _abort_boot()
-    except Exception:
-        # MCP2 unavailable — just show for 5 s then continue
-        time.sleep(5)
-
-    print("BOOT [DIAG] screen shown")
 
 # Free boot screen objects before main.py starts — the 240×320
 # framebuffer alone is ~150 KB of RAM.

@@ -177,7 +177,31 @@ def create_hardware():
         print("Secondary logo:", _e)
 
     # Shared I2C bus for MCP23017 and PCA9685
-    i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+    # Try native _mcpinput C module first (deterministic input capture on core 0).
+    # Falls back to machine.I2C if the C module isn't compiled in.
+    _native_input = False
+    try:
+        import _mcpinput
+
+        # boot.py uses SoftI2C so I2C_NUM_0 is free for us.
+        _mcpinput.init(
+            sda=config.I2C_SDA,
+            scl=config.I2C_SCL,
+            freq=400_000,
+            mcp_addr=config.MCP23017_ADDR,
+            debounce_ms=12,
+            int_pin=-1,
+        )
+        from bodn.native_i2c import NativeI2C
+
+        i2c = NativeI2C()
+        _native_input = True
+        print("_mcpinput: native I2C + MCP1 scan task on core 0")
+    except ImportError:
+        i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+    except Exception as e:
+        print("_mcpinput init failed, falling back to machine.I2C:", e)
+        i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
 
     # I2C bus scan — show all devices for diagnostics
     i2c_devs = i2c.scan()
@@ -341,6 +365,7 @@ def create_hardware():
         arcade,
         audio,
         hw_status,
+        _native_input,
     )
 
 
@@ -587,22 +612,73 @@ def create_ui(
 # ---------------------------------------------------------------------------
 
 
-async def input_scan_task(mcp, mcp2, inp):
+async def input_scan_task(mcp, mcp2, inp, native_input=False, switches=None):
     """Fast input scanning at ~200 Hz.
 
-    Reads MCP23017 port caches and runs debounce/edge detection.
+    Two paths:
+    - Native: MCP1 buttons/arcade are debounced by the _mcpinput C task
+      on core 0.  Python drains events and scans MCP2 + encoders only.
+    - Fallback: reads MCP23017 port caches, debounce/edge detection in Python.
+
     Edges are latched until the display task calls inp.consume().
     """
-    while True:
-        try:
-            if mcp:
-                mcp.refresh()
-            if mcp2:
-                mcp2.refresh()
-            inp.scan()
-        except Exception:
-            pass  # I2C glitches — next scan will recover
-        await asyncio.sleep_ms(5)
+    if native_input:
+        import _mcpinput
+
+        # Build MCP1 pin → (kind, index) lookup from config
+        _pin_map = {}
+        for i, p in enumerate(config.MCP_BTN_PINS):
+            _pin_map[p] = ("btn", i)
+        for i, p in enumerate(config.MCP_ARC_PINS):
+            _pin_map[p] = ("arc", i)
+        # MCP1 toggle switch pins (read from bitmask, not events)
+        _sw_pins = config.MCP_SW_PINS
+        # Number of MCP1 switches (sw[0], sw[1])
+        _n_mcp1_sw = len(_sw_pins)
+        _sw = switches or []
+
+        while True:
+            try:
+                # Drain debounced events from C module
+                events = _mcpinput.get_events()
+                for ev_type, pin, _t in events:
+                    mapping = _pin_map.get(pin)
+                    if mapping:
+                        kind, idx = mapping
+                        if ev_type == _mcpinput.PRESS:
+                            inp.native_press(kind, idx)
+                        else:
+                            inp.native_release(kind, idx)
+
+                # Read MCP1 toggle switch state from bitmask
+                port_state = _mcpinput.read_state()
+                for i in range(_n_mcp1_sw):
+                    inp.sw[i] = bool(port_state & (1 << _sw_pins[i]))
+
+                # Read MCP2 toggle switches (sw[2], sw[3], etc.) via Python
+                for i in range(_n_mcp1_sw, len(_sw)):
+                    inp.sw[i] = _sw[i].value() == 0
+
+                # MCP2 refresh for encoder buttons
+                if mcp2:
+                    mcp2.refresh()
+
+                # Encoders + encoder buttons (PCNT + MCP2)
+                inp.scan_encoders()
+            except Exception:
+                pass
+            await asyncio.sleep_ms(5)
+    else:
+        while True:
+            try:
+                if mcp:
+                    mcp.refresh()
+                if mcp2:
+                    mcp2.refresh()
+                inp.scan()
+            except Exception:
+                pass  # I2C glitches — next scan will recover
+            await asyncio.sleep_ms(5)
 
 
 async def primary_task(
@@ -1005,6 +1081,7 @@ async def main():
         arcade,
         audio,
         hw_status,
+        _native_input,
     ) = create_hardware()
 
     # Publish hardware status for diagnostics
@@ -1062,7 +1139,7 @@ async def main():
     #         audio.play_sound("start")
 
     tasks = [
-        input_scan_task(mcp, mcp2, inp),
+        input_scan_task(mcp, mcp2, inp, _native_input, switches),
         primary_task(
             manager,
             settings,
