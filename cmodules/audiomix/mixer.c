@@ -147,12 +147,21 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
             break;
         }
 
-        // Fade in/out at start/end of tone
-        int is_last = (v->tone_samples_left <= n);
-        if (v->fade_in || is_last) {
-            tonegen_fade(voice_buf, n, v->fade_in, is_last,
-                        AUDIOMIX_FADE_SAMPLES);
-            v->fade_in = 0;
+        // Apply envelope or legacy fade
+        if (v->env_total_samples > 0) {
+            // Clock-driven envelope (attack/release + velocity)
+            tonegen_envelope(voice_buf, n, v->env_pos, v->env_total_samples,
+                            v->env_attack_samples, v->env_release_samples,
+                            v->env_velocity);
+            v->env_pos += n;
+        } else {
+            // Legacy fade for Python-triggered tones
+            int is_last = (v->tone_samples_left <= n);
+            if (v->fade_in || is_last) {
+                tonegen_fade(voice_buf, n, v->fade_in, is_last,
+                            AUDIOMIX_FADE_SAMPLES);
+                v->fade_in = 0;
+            }
         }
 
         v->tone_samples_left -= n;
@@ -302,11 +311,10 @@ static void mix_task(void *arg) {
                     }
                 }
 
-                // Melody
+                // Melody (DEPRECATED — kept for backward compat)
                 if (st->melody_freq > 0) {
                     int vi = clk->melody_voice;
                     if (vi < AUDIOMIX_NUM_VOICES && !state->voices[vi].writing) {
-                        // Anti-double: check melody preview marker (index 5)
                         uint32_t since = clk->total_samples - clk->manual_trigger_sample[SEQ_MAX_PERC_TRACKS];
                         if (since >= threshold) {
                             audiomix_voice_t *v = &state->voices[vi];
@@ -320,9 +328,50 @@ static void mix_task(void *arg) {
                             v->fade_in = 1;
                             v->fade_out = 0;
                             v->stop_req = 0;
+                            v->env_total_samples = 0;  // legacy path
                             v->source_type = SRC_TONE;
                         }
                     }
+                }
+
+                // Tone tracks (sample-accurate synth notes)
+                for (int tt = 0; tt < SEQ_MAX_TONE_TRACKS; tt++) {
+                    seq_tone_track_t *trk = &clk->tone_tracks[tt];
+                    if (!(trk->step_mask & (1 << next))) continue;
+
+                    int vi = trk->voice_idx;
+                    if (vi >= AUDIOMIX_NUM_VOICES) continue;
+                    if (state->voices[vi].writing) continue;
+
+                    // Anti-double-trigger
+                    uint32_t since = clk->total_samples
+                        - clk->manual_trigger_sample[SEQ_MAX_PERC_TRACKS + tt];
+                    if (since < threshold) continue;
+
+                    seq_tone_step_t *ts = &trk->steps[next];
+                    if (ts->freq == 0) continue;  // rest step
+
+                    audiomix_voice_t *v = &state->voices[vi];
+                    v->source_type = SRC_NONE;
+
+                    uint32_t dur_samples = (state->sample_rate * ts->duration_ms) / 1000;
+                    v->tone_freq = ts->freq;
+                    v->tone_samples_left = dur_samples;
+                    v->tone_phase = 0;
+                    v->tone_wave = ts->wave;
+                    v->loop = 0;
+                    v->fade_in = 0;   // envelope handles attack
+                    v->fade_out = 0;
+                    v->stop_req = 0;
+
+                    // Envelope parameters
+                    v->env_attack_samples = (state->sample_rate * ts->attack_ms) / 1000;
+                    v->env_release_samples = (state->sample_rate * ts->release_ms) / 1000;
+                    v->env_total_samples = dur_samples;
+                    v->env_pos = 0;
+                    v->env_velocity = ts->velocity;
+
+                    v->source_type = SRC_TONE;
                 }
             }
             // Clock is active — always process even if no voices were triggered
@@ -446,6 +495,12 @@ const char *mixer_init(const mixer_config_t *cfg, audiomix_state_t **state_out) 
         state->clock.perc_voice[i] = i;
     }
     state->clock.melody_voice = 5;
+
+    // Tone track defaults: all disabled (voice_idx=255, step_mask=0)
+    for (int i = 0; i < SEQ_MAX_TONE_TRACKS; i++) {
+        state->clock.tone_tracks[i].voice_idx = 255;
+        state->clock.tone_tracks[i].step_mask = 0;
+    }
 
     // Initialise per-voice state
     for (int i = 0; i < AUDIOMIX_NUM_VOICES; i++) {

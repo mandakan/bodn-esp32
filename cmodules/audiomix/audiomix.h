@@ -67,7 +67,7 @@ typedef struct {
     volatile uint32_t gain;             // fixed-point 16.16 multiplier
     volatile uint8_t  loop;             // 1 = loop, 0 = one-shot
     volatile uint8_t  stop_req;         // Python sets 1; core 0 clears + stops
-    volatile uint8_t  fade_in;          // apply fade-in on first chunk
+    volatile uint8_t  fade_in;          // apply fade-in on first chunk (WAV/legacy)
     volatile uint8_t  fade_out;         // 1 = fade out this chunk then stop
     volatile uint8_t  writing;          // 1 = Python is writing fields, clock must skip
 
@@ -80,6 +80,13 @@ typedef struct {
     uint32_t tone_samples_left;
     uint32_t tone_phase;
     uint8_t  tone_wave;
+
+    // Envelope state (for clock-driven tone tracks — replaces fade_in for tones)
+    uint32_t env_attack_samples;        // attack ramp length (0 = instant)
+    uint32_t env_release_samples;       // release ramp length
+    uint32_t env_total_samples;         // total note duration (0 = legacy fade path)
+    uint32_t env_pos;                   // current position in envelope
+    uint8_t  env_velocity;              // 0-127 volume scaling
 
     // SRC_SEQUENCE fields
     uint8_t  seq_buf[AUDIOMIX_SEQ_MAX_STEPS * AUDIOMIX_SEQ_STEP_SIZE];
@@ -107,10 +114,8 @@ typedef struct {
 
 // Per-step trigger: what to play when the playhead crosses this step
 typedef struct {
-    // Percussion: which tracks are active (bitmask, bits 0-4)
-    uint8_t perc_mask;
-    // Melody: frequency in Hz (0 = off)
-    uint16_t melody_freq;
+    uint8_t perc_mask;                  // percussion: which tracks fire (bitmask, bits 0-4)
+    uint16_t melody_freq;               // DEPRECATED — use tone tracks; kept for compat
 } seq_step_t;
 
 // Percussion track config: pointer to pre-loaded PCM buffer
@@ -118,6 +123,25 @@ typedef struct {
     const uint8_t *buf_ptr;
     uint32_t buf_len;
 } seq_perc_track_t;
+
+// Per-step tone parameters (synth note definition)
+typedef struct {
+    uint16_t freq;                      // Hz (0 = rest / silent)
+    uint16_t duration_ms;               // note length
+    uint8_t  wave;                      // AUDIOMIX_WAVE_*
+    uint8_t  attack_ms;                 // envelope attack (0 = instant click)
+    uint8_t  release_ms;                // envelope release tail-off
+    uint8_t  velocity;                  // volume 0-127
+} seq_tone_step_t;                      // 8 bytes, naturally aligned
+
+// Tone track: a voice slot + per-step tone data, triggered by the clock
+#define SEQ_MAX_TONE_TRACKS 3           // melody + metronome + spare
+
+typedef struct {
+    uint8_t  voice_idx;                 // which mixer voice this track drives
+    uint16_t step_mask;                 // bitmask: which steps are active (bits 0-15)
+    seq_tone_step_t steps[SEQ_MAX_STEPS]; // per-step tone parameters
+} seq_tone_track_t;
 
 typedef struct {
     // Clock state
@@ -133,18 +157,20 @@ typedef struct {
     // Percussion track buffers (set once by Python)
     seq_perc_track_t perc_tracks[SEQ_MAX_PERC_TRACKS];
 
-    // Voice mapping: which voice index to use for each track
-    uint8_t perc_voice[SEQ_MAX_PERC_TRACKS];  // voice index for each perc track
-    uint8_t melody_voice;               // voice index for melody
+    // Voice mapping: which voice index to use for each perc track
+    uint8_t perc_voice[SEQ_MAX_PERC_TRACKS];
 
-    // Melody config
-    uint16_t melody_duration_ms;        // tone duration for melody notes (default 150)
+    // DEPRECATED melody fields — kept for backward compat with clock_set_melody()
+    uint8_t melody_voice;               // voice index for melody
+    uint16_t melody_duration_ms;        // tone duration (default 150)
     uint8_t  melody_wave;               // waveform type (default SINE)
 
-    // Anti-double-trigger: sample count when each track/melody was last
-    // manually triggered (by button preview).  Indexed by perc track (0-4)
-    // + melody (index 5).
-    uint32_t manual_trigger_sample[SEQ_MAX_PERC_TRACKS + 1];
+    // Tone tracks (clock-driven synth notes — replaces melody for new code)
+    seq_tone_track_t tone_tracks[SEQ_MAX_TONE_TRACKS];
+
+    // Anti-double-trigger: sample count when each track was last manually
+    // triggered.  Indices 0..4 = perc tracks, 5..7 = tone tracks.
+    uint32_t manual_trigger_sample[SEQ_MAX_PERC_TRACKS + SEQ_MAX_TONE_TRACKS];
     uint32_t total_samples;             // monotonic sample counter for anti-repeat
 
     // BPM for Python query

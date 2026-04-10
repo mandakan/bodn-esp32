@@ -145,12 +145,29 @@ class SequencerScreen(Screen):
         # Register drum buffers with C clock for sample-accurate triggering
         if _has_clock:
             _audiomix.clock_clear_grid()
-            _audiomix.clock_set_melody_config(150, _audiomix.WAVE_SINE)
             if self._drum_bufs:
-                for t in range(min(NUM_PERC_TRACKS, len(self._drum_bufs))):
-                    buf = self._drum_bufs[t]
+                for ti in range(min(NUM_PERC_TRACKS, len(self._drum_bufs))):
+                    buf = self._drum_bufs[ti]
                     if buf:
-                        _audiomix.clock_set_perc_buffer(t, buf, len(buf))
+                        _audiomix.clock_set_perc_buffer(ti, buf, len(buf))
+
+            # Melody tone track (track 0, voice 5)
+            _audiomix.clock_set_tone_track(0, 5, 0)  # mask filled by _sync_all
+
+            # Metronome tone track (track 1, voice 7)
+            # Pre-fill step data for all 16 possible steps
+            for s in range(16):
+                is_down = (
+                    s % (self._engine.n_steps // 2) == 0
+                    if self._engine.n_steps > 2
+                    else s == 0
+                )
+                freq = _METRO_HI if (s % 4 == 0) else _METRO_LO
+                _audiomix.clock_set_tone_step(
+                    1, s, freq, 30, _audiomix.WAVE_SQUARE, 0, 5, 100
+                )
+            metro_mask = self._metro_mask() if self._engine.metronome else 0
+            _audiomix.clock_set_tone_track(1, _METRO_VOICE, metro_mask)
 
         # Compute grid geometry
         w = manager.tft.width if hasattr(manager.tft, "width") else 320
@@ -234,6 +251,9 @@ class SequencerScreen(Screen):
             if _has_clock:
                 _audiomix.clock_set_steps(new_steps)
                 self._sync_all_to_clock()
+                # Update metronome mask for new step count
+                if eng.metronome:
+                    _audiomix.clock_set_tone_track(1, _METRO_VOICE, self._metro_mask())
             self._recompute_grid()
             self._dirty = True
             self._full_clear = True
@@ -243,6 +263,9 @@ class SequencerScreen(Screen):
         sw2 = sw[2] if len(sw) > 2 else False
         if self._prev_sw2 is not None and sw2 != self._prev_sw2:
             eng.toggle_metronome()
+            if _has_clock:
+                mask = self._metro_mask() if eng.metronome else 0
+                _audiomix.clock_set_tone_track(1, _METRO_VOICE, mask)
             self._dirty = True
         self._prev_sw2 = sw2
 
@@ -260,6 +283,16 @@ class SequencerScreen(Screen):
             eng.clear_all()
             if _has_clock:
                 _audiomix.clock_clear_grid()
+                # Re-setup tone tracks (clear_grid zeros them)
+                _audiomix.clock_set_tone_track(0, 5, 0)  # melody
+                # Re-fill metronome step data and restore mask if active
+                for s in range(16):
+                    freq = _METRO_HI if (s % 4 == 0) else _METRO_LO
+                    _audiomix.clock_set_tone_step(
+                        1, s, freq, 30, _audiomix.WAVE_SQUARE, 0, 5, 100
+                    )
+                metro_mask = self._metro_mask() if eng.metronome else 0
+                _audiomix.clock_set_tone_track(1, _METRO_VOICE, metro_mask)
             self._dirty = True
             self._full_clear = True
             self._flash_msg = t("seq_cleared")
@@ -309,8 +342,13 @@ class SequencerScreen(Screen):
             if eng.step_advanced:
                 self._trigger_step_sounds(eng.step)
 
-        # --- Metronome click on beat ---
-        if eng.metronome and eng.state == PLAYING and eng.step_advanced:
+        # --- Metronome click on beat (fallback: no C clock) ---
+        if (
+            not _has_clock
+            and eng.metronome
+            and eng.state == PLAYING
+            and eng.step_advanced
+        ):
             if eng.is_beat(eng.step):
                 self._play_metronome(eng.is_downbeat(eng.step))
 
@@ -357,16 +395,34 @@ class SequencerScreen(Screen):
             if eng.perc[ti][step]:
                 mask |= 1 << ti
         _audiomix.clock_set_perc(step, mask)
+        # Melody via tone track 0
         mel = eng.melody[step]
-        freq = MELODY_FREQS[mel - 1] if mel > 0 else 0
-        _audiomix.clock_set_melody(step, freq)
+        if mel > 0:
+            freq = MELODY_FREQS[mel - 1]
+            _audiomix.clock_set_tone_step(
+                0, step, freq, 150, _audiomix.WAVE_SINE, 2, 10, 100
+            )
+        else:
+            _audiomix.clock_set_tone_step(0, step, 0, 0, 0, 0, 0, 0)
 
     def _sync_all_to_clock(self):
         """Push entire grid to C clock."""
         if not _has_clock:
             return
+        mel_mask = 0
         for s in range(self._engine.n_steps):
             self._sync_step_to_clock(s)
+            if self._engine.melody[s] > 0:
+                mel_mask |= 1 << s
+        _audiomix.clock_set_tone_track(0, 5, mel_mask)
+
+    def _metro_mask(self):
+        """Build step bitmask for metronome beats (every 2nd step = quarter note)."""
+        mask = 0
+        for s in range(self._engine.n_steps):
+            if self._engine.is_beat(s):
+                mask |= 1 << s
+        return mask
 
     # ------------------------------------------------------------------
     # Audio helpers
@@ -389,8 +445,18 @@ class SequencerScreen(Screen):
             return
         freq = MELODY_FREQS[btn_idx]
         if _has_clock:
-            _audiomix.clock_preview(5)  # suppress clock trigger for melody
+            _audiomix.clock_tone_preview(0)  # suppress clock trigger for melody
+            self._update_melody_mask()
         self._audio.tone(freq, 150, "sine", voice=_PREVIEW_VOICE)
+
+    def _update_melody_mask(self):
+        """Recompute and push the melody tone track step mask."""
+        mel_mask = 0
+        eng = self._engine
+        for s in range(eng.n_steps):
+            if eng.melody[s] > 0:
+                mel_mask |= 1 << s
+        _audiomix.clock_set_tone_track(0, 5, mel_mask)
 
     def _play_metronome(self, downbeat):
         """Play a short metronome click. Accented on downbeats."""
