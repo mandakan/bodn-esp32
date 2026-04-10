@@ -7,6 +7,7 @@ from bodn.ui.widgets import draw_centered, draw_label, make_label_sprite, blit_s
 from bodn.i18n import t, get_language, set_language, available
 
 NAV = const(0)  # config.ENC_NAV
+ADJ = const(1)  # config.ENC_A — value adjustment encoder
 
 # Setting definitions: (key, label_key, type)
 # type: "bool" = toggle, "action" = triggers an action, "lang" = language cycler
@@ -38,7 +39,7 @@ class SettingsScreen(Screen):
 
     Nav encoder rotates through items.
     Nav encoder button = confirm (toggle or activate).
-    Consistent with all other screens: encoder button = "do the thing".
+    Adjustment encoder (ENC_A) changes the selected value directly.
     """
 
     def __init__(self, settings, np, wifi_ctrl):
@@ -95,7 +96,7 @@ class SettingsScreen(Screen):
             return self._settings.get(key, key in ("sessions_enabled", "audio_enabled"))
         return False
 
-    def _activate(self, key):
+    def _activate(self, key, step=1):
         if key == "back":
             if self._manager:
                 self._manager.pop()
@@ -123,7 +124,7 @@ class SettingsScreen(Screen):
                     idx = i
                     break
             self._settings["sleep_timeout_s"] = _SLEEP_OPTIONS[
-                (idx + 1) % len(_SLEEP_OPTIONS)
+                (idx + step) % len(_SLEEP_OPTIONS)
             ]
             try:
                 from bodn.storage import save_settings
@@ -141,7 +142,7 @@ class SettingsScreen(Screen):
                 if opts[i] == cur:
                     idx = i
                     break
-            self._settings["encoder_sensitivity"] = opts[(idx + 1) % len(opts)]
+            self._settings["encoder_sensitivity"] = opts[(idx + step) % len(opts)]
             try:
                 from bodn.storage import save_settings
 
@@ -157,7 +158,9 @@ class SettingsScreen(Screen):
                 if _VOLUME_OPTIONS[i] == cur:
                     idx = i
                     break
-            self._settings["volume"] = _VOLUME_OPTIONS[(idx + 1) % len(_VOLUME_OPTIONS)]
+            self._settings["volume"] = _VOLUME_OPTIONS[
+                (idx + step) % len(_VOLUME_OPTIONS)
+            ]
             try:
                 from bodn.storage import save_settings
 
@@ -173,7 +176,7 @@ class SettingsScreen(Screen):
                 if _TZ_OPTIONS[i] == cur:
                     idx = i
                     break
-            self._settings["tz_offset"] = _TZ_OPTIONS[(idx + 1) % len(_TZ_OPTIONS)]
+            self._settings["tz_offset"] = _TZ_OPTIONS[(idx + step) % len(_TZ_OPTIONS)]
             try:
                 from bodn.storage import save_settings
 
@@ -190,7 +193,7 @@ class SettingsScreen(Screen):
                 if langs[i] == cur:
                     idx = i
                     break
-            new_lang = langs[(idx + 1) % len(langs)]
+            new_lang = langs[(idx + step) % len(langs)]
             set_language(new_lang)
             self._settings["language"] = new_lang
             try:
@@ -237,6 +240,14 @@ class SettingsScreen(Screen):
             step = 1 if delta > 0 else -1
             self._index = (self._index + step) % len(_ITEMS)
             self._dirty = True
+
+        # Adjustment encoder changes the value of the selected item
+        adj_delta = inp.enc_delta[ADJ]
+        if adj_delta != 0:
+            key, _, item_type = _ITEMS[self._index]
+            if item_type in ("cycle", "bool", "lang"):
+                step = 1 if adj_delta > 0 else -1
+                self._activate(key, step)
 
         # Nav encoder button or any play button → activate selected item
         if inp.enc_btn_pressed[NAV] or inp.any_btn_pressed():
