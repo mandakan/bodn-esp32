@@ -138,6 +138,7 @@ class StoryEngine:
         self.ending_type = None
         self._state_frame = 0
         self._choice_count = 0
+        self._pending_target = None
 
     def load(self, story):
         """Load a story dict and move to the start node.

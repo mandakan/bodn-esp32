@@ -44,6 +44,16 @@ class ArcadeButtons:
         self._ch_start = self._channels[0] if self._channels else 0
         # Native C engine flag — when True, all animation runs in C
         self._native = _native
+        if self._native and self._channels:
+            addr = pwm._addr if pwm else 0x40
+            ok = _mcpinput.led_init(
+                addr=addr,
+                start_ch=self._ch_start,
+                n_channels=len(self._channels),
+            )
+            if not ok:
+                print("arcade: C led_init failed, falling back to Python")
+                self._native = False
         # Python-fallback state (only used when _native is False)
         self._duty = [0] * _N_BUTTONS
         self._target = [0] * _N_BUTTONS

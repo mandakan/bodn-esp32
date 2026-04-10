@@ -90,7 +90,7 @@ class DemoScreen(Screen):
         self._arcade = arcade
         self._brightness = BrightnessControl(settings=settings)
         self._active_pattern = 0
-        self._speed = 5  # 1-20, controlled by NAV/ENC_B rotation
+        self._speed = 3  # 1-10, controlled by NAV/ENC_B rotation
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._dirty_sections = _D_ALL  # bitmask of sections needing redraw
@@ -175,7 +175,7 @@ class DemoScreen(Screen):
         # NAV/ENC_B rotation adjusts speed
         delta_b = inp.enc_delta[ENC_B]
         if delta_b != 0:
-            self._speed = max(1, min(20, self._speed + delta_b))
+            self._speed = max(1, min(10, self._speed + delta_b))
             ds |= _D_HEADER | _D_ENCODERS
 
         # Dirty detection for display: encoders
@@ -394,7 +394,7 @@ class DemoScreen(Screen):
                 bar_w,
                 8,
                 self._speed,
-                20,
+                10,
                 theme.ORANGE,
                 theme.BLACK,
             )

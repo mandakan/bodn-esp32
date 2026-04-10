@@ -255,7 +255,7 @@ class StoryScreen(Screen):
         self._tts_has_choices = eng.narrate_choices and eng.choice_count > 0
         # Try to play scene TTS
         tts_found = False
-        if self._audio:
+        if self._audio and self._audio._voices:
             scene_path = self._resolve_story_tts(eng.node_id)
             if scene_path:
                 self._audio.play(scene_path, channel="ui")
@@ -280,7 +280,7 @@ class StoryScreen(Screen):
 
         if self._tts_playing:
             # Check if UI voice is still active
-            if self._audio:
+            if self._audio and self._audio._voices:
                 from bodn.audio import V_UI
 
                 ui_voice = self._audio._voices[V_UI]
@@ -383,6 +383,24 @@ class StoryScreen(Screen):
         # has a chance to reset TTS state for new nodes)
         self._check_tts_done()
 
+        # _check_tts_done may have changed state (NARRATING → CHOOSING,
+        # or ENDING → handled).  Detect that transition here so the UI
+        # gets _dirty / LED updates exactly like engine-driven transitions.
+        new_state = self._engine.state
+        if new_state != state:
+            self._prev_state = state
+            state = new_state
+            self._dirty = True
+            self._full_clear = True
+            self._leds_dirty = True
+
+            if self._secondary:
+                mood = self._engine.mood
+                emotion = _MOOD_EMOTIONS.get(mood, NEUTRAL)
+                if state == ENDING:
+                    emotion = HAPPY
+                self._secondary.set_emotion(emotion)
+
         # Handle arcade input during CHOOSING
         if state == CHOOSING:
             arc = inp.first_arc_pressed() if hasattr(inp, "first_arc_pressed") else -1
@@ -405,10 +423,12 @@ class StoryScreen(Screen):
         if self._brightness.value != prev_bri:
             self._leds_dirty = True
 
-        # Update LEDs
+        # Update LEDs (NeoPixels only on dirty; arcade every frame for animation)
         if self._leds_dirty:
             self._leds_dirty = False
             self._update_leds(frame)
+        elif self._arcade:
+            self._update_arcade_leds(self._engine.state, frame)
 
     def _update_picker(self, inp, frame):
         """Handle story picker input."""
@@ -518,21 +538,25 @@ class StoryScreen(Screen):
             np[i] = leds[i]
         np.write()
 
-        # Arcade LEDs
+        # Arcade LEDs (animated — also called standalone between dirty frames)
         if self._arcade:
-            if state == CHOOSING:
-                for i in range(N_ARCADE):
-                    if i < self._engine.choice_count:
-                        self._arcade.pulse(i, frame, speed=1)
-                    else:
-                        self._arcade.off(i)
-            elif state == NARRATING:
-                self._arcade.wave(frame, speed=1)
-            elif state == ENDING:
-                self._arcade.wave(frame, speed=2)
-            else:
-                self._arcade.all_off()
-            self._arcade.flush()
+            self._update_arcade_leds(state, frame)
+
+    def _update_arcade_leds(self, state, frame):
+        """Update arcade button LEDs. Called every frame for smooth animation."""
+        if state == CHOOSING:
+            for i in range(N_ARCADE):
+                if i < self._engine.choice_count:
+                    self._arcade.pulse(i, frame, speed=1)
+                else:
+                    self._arcade.off(i)
+        elif state == NARRATING:
+            self._arcade.wave(frame, speed=1)
+        elif state == ENDING:
+            self._arcade.wave(frame, speed=2)
+        else:
+            self._arcade.all_off()
+        self._arcade.flush()
 
     def render(self, tft, theme, frame):
         if self._pause.is_open:
