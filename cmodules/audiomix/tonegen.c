@@ -98,6 +98,37 @@ void tonegen_noise(int16_t *out, uint32_t n_samples,
     }
 }
 
+void tonegen_envelope(int16_t *buf, uint32_t n_samples,
+                      uint32_t pos, uint32_t total,
+                      uint32_t attack, uint32_t release,
+                      uint8_t velocity) {
+    // Velocity gain: 0-127 mapped to 0-256 (fixed-point 8.8 style, >>7)
+    // 127 → 256 (unity), 64 → ~128 (half), 0 → 0 (silent)
+    uint32_t vel_gain = (velocity < 127) ? (velocity * 2) : 256;
+    uint32_t release_start = (total > release) ? (total - release) : 0;
+
+    for (uint32_t i = 0; i < n_samples; i++) {
+        uint32_t abs_pos = pos + i;
+        uint32_t gain = 256;  // full amplitude (8-bit fixed point)
+
+        if (attack > 0 && abs_pos < attack) {
+            // Attack ramp: linear 0 → 256
+            gain = (abs_pos * 256) / attack;
+        } else if (release > 0 && abs_pos >= release_start) {
+            // Release ramp: linear 256 → 0
+            uint32_t rel_pos = abs_pos - release_start;
+            gain = ((release - rel_pos) * 256) / release;
+        }
+
+        // Combine envelope gain with velocity
+        gain = (gain * vel_gain) >> 8;
+
+        int32_t val = buf[i];
+        val = (val * (int32_t)gain) >> 8;
+        buf[i] = (int16_t)val;
+    }
+}
+
 void tonegen_fade(int16_t *buf, uint32_t n_samples,
                   int fade_in, int fade_out, uint32_t fade_len) {
     if (fade_in) {

@@ -3,6 +3,8 @@
 // Registers the _audiomix module and exposes Python-callable functions
 // that control the core 1 mix task.
 
+#include <string.h>
+
 #include "py/runtime.h"
 #include "py/obj.h"
 
@@ -524,6 +526,68 @@ static mp_obj_t audiomix_clock_set_melody_config(mp_obj_t dur_obj, mp_obj_t wave
 static MP_DEFINE_CONST_FUN_OBJ_2(audiomix_clock_set_melody_config_obj,
                                   audiomix_clock_set_melody_config);
 
+// _audiomix.clock_set_tone_track(track, voice_idx, step_mask)
+static mp_obj_t audiomix_clock_set_tone_track(mp_obj_t track_obj,
+                                               mp_obj_t voice_obj,
+                                               mp_obj_t mask_obj) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int track = mp_obj_get_int(track_obj);
+    if (track < 0 || track >= SEQ_MAX_TONE_TRACKS) {
+        mp_raise_ValueError(MP_ERROR_TEXT("bad tone track"));
+    }
+    seq_tone_track_t *trk = &audiomix_state->clock.tone_tracks[track];
+    trk->voice_idx = mp_obj_get_int(voice_obj);
+    trk->step_mask = mp_obj_get_int(mask_obj) & 0xFFFF;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(audiomix_clock_set_tone_track_obj,
+                                  audiomix_clock_set_tone_track);
+
+// _audiomix.clock_set_tone_step(track, step, freq, duration_ms, wave,
+//                                attack_ms, release_ms, velocity)
+static mp_obj_t audiomix_clock_set_tone_step(size_t n_args, const mp_obj_t *args) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int track = mp_obj_get_int(args[0]);
+    int step  = mp_obj_get_int(args[1]);
+    if (track < 0 || track >= SEQ_MAX_TONE_TRACKS) {
+        mp_raise_ValueError(MP_ERROR_TEXT("bad tone track"));
+    }
+    if (step < 0 || step >= SEQ_MAX_STEPS) {
+        mp_raise_ValueError(MP_ERROR_TEXT("bad step"));
+    }
+    seq_tone_step_t *ts = &audiomix_state->clock.tone_tracks[track].steps[step];
+    ts->freq        = mp_obj_get_int(args[2]);
+    ts->duration_ms = mp_obj_get_int(args[3]);
+    ts->wave        = mp_obj_get_int(args[4]);
+    ts->attack_ms   = mp_obj_get_int(args[5]);
+    ts->release_ms  = mp_obj_get_int(args[6]);
+    ts->velocity    = mp_obj_get_int(args[7]);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audiomix_clock_set_tone_step_obj, 8, 8,
+                                            audiomix_clock_set_tone_step);
+
+// _audiomix.clock_tone_preview(track)
+// Mark a tone track as just previewed (anti-double for button feedback)
+static mp_obj_t audiomix_clock_tone_preview(mp_obj_t track_obj) {
+    if (audiomix_state == NULL) {
+        return mp_const_none;
+    }
+    int track = mp_obj_get_int(track_obj);
+    if (track < 0 || track >= SEQ_MAX_TONE_TRACKS) {
+        return mp_const_none;
+    }
+    audiomix_state->clock.manual_trigger_sample[SEQ_MAX_PERC_TRACKS + track] =
+        audiomix_state->clock.total_samples;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_clock_tone_preview_obj,
+                                  audiomix_clock_tone_preview);
+
 // _audiomix.clock_clear_grid()
 static mp_obj_t audiomix_clock_clear_grid(void) {
     if (audiomix_state == NULL) {
@@ -533,6 +597,13 @@ static mp_obj_t audiomix_clock_clear_grid(void) {
     for (int i = 0; i < SEQ_MAX_STEPS; i++) {
         clk->steps[i].perc_mask = 0;
         clk->steps[i].melody_freq = 0;
+    }
+    // Clear all tone tracks
+    for (int t = 0; t < SEQ_MAX_TONE_TRACKS; t++) {
+        clk->tone_tracks[t].step_mask = 0;
+        for (int s = 0; s < SEQ_MAX_STEPS; s++) {
+            memset(&clk->tone_tracks[t].steps[s], 0, sizeof(seq_tone_step_t));
+        }
     }
     return mp_const_none;
 }
@@ -645,8 +716,13 @@ static const mp_rom_map_elem_t audiomix_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_clock_set_melody_config), MP_ROM_PTR(&audiomix_clock_set_melody_config_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_clear_grid),   MP_ROM_PTR(&audiomix_clock_clear_grid_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_preview),     MP_ROM_PTR(&audiomix_clock_preview_obj) },
+    // Tone tracks
+    { MP_ROM_QSTR(MP_QSTR_clock_set_tone_track), MP_ROM_PTR(&audiomix_clock_set_tone_track_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_set_tone_step),  MP_ROM_PTR(&audiomix_clock_set_tone_step_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_tone_preview),   MP_ROM_PTR(&audiomix_clock_tone_preview_obj) },
     // Constants
     { MP_ROM_QSTR(MP_QSTR_NUM_VOICES),           MP_ROM_INT(AUDIOMIX_NUM_VOICES) },
+    { MP_ROM_QSTR(MP_QSTR_SEQ_MAX_TONE_TRACKS),  MP_ROM_INT(SEQ_MAX_TONE_TRACKS) },
     // Waveform type constants
     { MP_ROM_QSTR(MP_QSTR_WAVE_SQUARE),          MP_ROM_INT(AUDIOMIX_WAVE_SQUARE) },
     { MP_ROM_QSTR(MP_QSTR_WAVE_SINE),            MP_ROM_INT(AUDIOMIX_WAVE_SINE) },
