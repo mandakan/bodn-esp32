@@ -157,11 +157,6 @@ class SequencerScreen(Screen):
             # Metronome tone track (track 1, voice 7)
             # Pre-fill step data for all 16 possible steps
             for s in range(16):
-                is_down = (
-                    s % (self._engine.n_steps // 2) == 0
-                    if self._engine.n_steps > 2
-                    else s == 0
-                )
                 freq = _METRO_HI if (s % 4 == 0) else _METRO_LO
                 _audiomix.clock_set_tone_step(
                     1, s, freq, 30, _audiomix.WAVE_SQUARE, 0, 5, 100
