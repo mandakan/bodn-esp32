@@ -64,12 +64,32 @@ typedef struct {
 } mcpinput_debounce_t;
 
 // ---------------------------------------------------------------------------
-// LED mode constants
+// LED animation engine
 // ---------------------------------------------------------------------------
 
-#define MCPINPUT_LED_MODE_PYTHON    0   // Python drives LEDs via i2c_write
-#define MCPINPUT_LED_MODE_BEAT_SYNC 1   // C drives LEDs from audiomix clock
 #define MCPINPUT_LED_MAX_CH         5   // max arcade LED channels
+
+// Per-channel animation modes (set by Python, evaluated by C engine tick)
+#define LED_ANIM_OFF    0   // duty = 0
+#define LED_ANIM_ON     1   // duty = 4095
+#define LED_ANIM_GLOW   2   // duty = 192
+#define LED_ANIM_PULSE  3   // triangle wave: glow ↔ on
+#define LED_ANIM_BLINK  4   // on/off square wave
+#define LED_ANIM_FLASH  5   // linear decay on→off (frame-timed)
+#define LED_ANIM_WAVE   6   // staggered pulse per channel
+
+// Per-channel animation state
+typedef struct {
+    uint8_t  mode;       // LED_ANIM_*
+    uint8_t  speed;      // animation speed parameter (1-8)
+    uint8_t  flash_ttl;  // frames remaining for FLASH (Python decrements)
+    uint8_t  flash_start; // initial flash duration (for computing duty ratio)
+} led_channel_t;
+
+// Global LED operating modes (controls which tick function runs)
+#define MCPINPUT_LED_MODE_PYTHON    0   // Python drives via led_anim() → C engine tick
+#define MCPINPUT_LED_MODE_BEAT_SYNC 1   // C reads audiomix clock → sets ch modes → engine tick
+#define MCPINPUT_LED_MODE_WHACK     2   // C pulse + hit/miss detection → engine tick
 
 // PCA9685 duty presets (12-bit)
 #define MCPINPUT_LED_DUTY_OFF       0
@@ -103,9 +123,19 @@ typedef struct {
     uint8_t                 pca_start_ch;   // first PCA9685 channel
     uint8_t                 pca_n_ch;       // number of channels (max 5)
     volatile uint8_t        led_mode;       // MCPINPUT_LED_MODE_*
+    led_channel_t           led_ch[MCPINPUT_LED_MAX_CH]; // per-channel animation state
+    uint16_t                led_duty[MCPINPUT_LED_MAX_CH]; // current duty (dirty check)
+
+    // Beat-sync mode state (sequencer)
     uint8_t                 led_last_step;  // cached step for change detection
     volatile uint8_t        led_track_active; // 5-bit mask: tracks with notes
-    uint16_t                led_duty[MCPINPUT_LED_MAX_CH]; // current duty (dirty check)
+
+    // Whack / High-Five mode state (hit detection + timing)
+    volatile uint8_t        whack_target;    // active button 0-4, 0xFF = none
+    volatile uint32_t       whack_deadline_ms; // esp_timer ms deadline for timeout
+    volatile uint8_t        whack_hit;       // set by scan task on hit, cleared by Python
+    volatile uint8_t        whack_miss;      // set by scan task on timeout, cleared by Python
+    uint8_t                 whack_pins[MCPINPUT_LED_MAX_CH]; // MCP pin per arcade button
 
     // Diagnostics
     volatile uint32_t       poll_count;

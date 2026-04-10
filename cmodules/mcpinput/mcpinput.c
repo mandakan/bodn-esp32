@@ -281,6 +281,154 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mcpinput_led_set_track_active_obj,
                                   mcpinput_led_set_track_active);
 
 // ---------------------------------------------------------------------------
+// _mcpinput.led_anim(channel, mode, speed=0)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_anim(size_t n_args, const mp_obj_t *args) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int ch = mp_obj_get_int(args[0]);
+    if (ch < 0 || ch >= MCPINPUT_LED_MAX_CH) return mp_const_none;
+    mcpinput_state->led_ch[ch].mode = (uint8_t)mp_obj_get_int(args[1]);
+    if (n_args > 2) {
+        mcpinput_state->led_ch[ch].speed = (uint8_t)mp_obj_get_int(args[2]);
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mcpinput_led_anim_obj, 2, 3,
+                                             mcpinput_led_anim);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_anim_all(mode, speed=0)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_anim_all(size_t n_args, const mp_obj_t *args) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    uint8_t mode = (uint8_t)mp_obj_get_int(args[0]);
+    uint8_t speed = (n_args > 1) ? (uint8_t)mp_obj_get_int(args[1]) : 0;
+    for (int i = 0; i < MCPINPUT_LED_MAX_CH; i++) {
+        mcpinput_state->led_ch[i].mode = mode;
+        mcpinput_state->led_ch[i].speed = speed;
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mcpinput_led_anim_all_obj, 1, 2,
+                                             mcpinput_led_anim_all);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_flash(channel, duration=9)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_flash(size_t n_args, const mp_obj_t *args) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int ch = mp_obj_get_int(args[0]);
+    if (ch < 0 || ch >= MCPINPUT_LED_MAX_CH) return mp_const_none;
+    uint8_t dur = (n_args > 1) ? (uint8_t)mp_obj_get_int(args[1]) : 9;
+    mcpinput_state->led_ch[ch].mode = LED_ANIM_FLASH;
+    mcpinput_state->led_ch[ch].flash_ttl = dur;
+    mcpinput_state->led_ch[ch].flash_start = dur;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mcpinput_led_flash_obj, 1, 2,
+                                             mcpinput_led_flash);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_tick_flash() — decrement all active flash timers by 1 frame
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_tick_flash(void) {
+    if (mcpinput_state == NULL) return mp_obj_new_bool(false);
+    bool active = false;
+    for (int i = 0; i < MCPINPUT_LED_MAX_CH; i++) {
+        led_channel_t *ch = &mcpinput_state->led_ch[i];
+        if (ch->mode == LED_ANIM_FLASH && ch->flash_ttl > 0) {
+            ch->flash_ttl--;
+            if (ch->flash_ttl > 0) {
+                active = true;
+            } else {
+                ch->mode = LED_ANIM_OFF;
+            }
+        }
+    }
+    return mp_obj_new_bool(active);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_led_tick_flash_obj,
+                                  mcpinput_led_tick_flash);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_set_whack_pins(pins_tuple)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_set_whack_pins(mp_obj_t pins_obj) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    size_t len;
+    mp_obj_t *items;
+    mp_obj_get_array(pins_obj, &len, &items);
+    if (len > MCPINPUT_LED_MAX_CH) len = MCPINPUT_LED_MAX_CH;
+    for (size_t i = 0; i < len; i++) {
+        mcpinput_state->whack_pins[i] = (uint8_t)mp_obj_get_int(items[i]);
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mcpinput_led_set_whack_pins_obj,
+                                  mcpinput_led_set_whack_pins);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_set_whack_target(index, deadline_ms, pulse_speed=3)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_set_whack_target(size_t n_args,
+                                                const mp_obj_t *args) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int idx = mp_obj_get_int(args[0]);
+    mcpinput_state->whack_deadline_ms = (uint32_t)mp_obj_get_int(args[1]);
+    // Store pulse speed in the target channel's animation state
+    uint8_t speed = (n_args > 2) ? (uint8_t)mp_obj_get_int(args[2]) : 3;
+    if (idx < MCPINPUT_LED_MAX_CH) {
+        mcpinput_state->led_ch[idx].speed = speed;
+    }
+    mcpinput_state->whack_hit = 0;
+    mcpinput_state->whack_miss = 0;
+    // Set target last to avoid race with scan task
+    mcpinput_state->whack_target = (uint8_t)idx;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mcpinput_led_set_whack_target_obj,
+                                             2, 3,
+                                             mcpinput_led_set_whack_target);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_get_whack_result() -> (hit, miss)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_get_whack_result(void) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    uint8_t hit = mcpinput_state->whack_hit;
+    uint8_t miss = mcpinput_state->whack_miss;
+    // Clear flags after reading
+    mcpinput_state->whack_hit = 0;
+    mcpinput_state->whack_miss = 0;
+    mp_obj_t tuple[2] = {
+        mp_obj_new_bool(hit),
+        mp_obj_new_bool(miss),
+    };
+    return mp_obj_new_tuple(2, tuple);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_led_get_whack_result_obj,
+                                  mcpinput_led_get_whack_result);
+
+// ---------------------------------------------------------------------------
 // Module definition
 // ---------------------------------------------------------------------------
 
@@ -298,11 +446,29 @@ static const mp_rom_map_elem_t mcpinput_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_led_init),    MP_ROM_PTR(&mcpinput_led_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_led_mode),    MP_ROM_PTR(&mcpinput_led_mode_obj) },
     { MP_ROM_QSTR(MP_QSTR_led_set_track_active), MP_ROM_PTR(&mcpinput_led_set_track_active_obj) },
+    // General animation API
+    { MP_ROM_QSTR(MP_QSTR_led_anim),    MP_ROM_PTR(&mcpinput_led_anim_obj) },
+    { MP_ROM_QSTR(MP_QSTR_led_anim_all), MP_ROM_PTR(&mcpinput_led_anim_all_obj) },
+    { MP_ROM_QSTR(MP_QSTR_led_flash),   MP_ROM_PTR(&mcpinput_led_flash_obj) },
+    { MP_ROM_QSTR(MP_QSTR_led_tick_flash), MP_ROM_PTR(&mcpinput_led_tick_flash_obj) },
+    // Whack / High-Five mode
+    { MP_ROM_QSTR(MP_QSTR_led_set_whack_pins), MP_ROM_PTR(&mcpinput_led_set_whack_pins_obj) },
+    { MP_ROM_QSTR(MP_QSTR_led_set_whack_target), MP_ROM_PTR(&mcpinput_led_set_whack_target_obj) },
+    { MP_ROM_QSTR(MP_QSTR_led_get_whack_result), MP_ROM_PTR(&mcpinput_led_get_whack_result_obj) },
     // Constants
     { MP_ROM_QSTR(MP_QSTR_PRESS),       MP_ROM_INT(MCPINPUT_PRESS) },
     { MP_ROM_QSTR(MP_QSTR_RELEASE),     MP_ROM_INT(MCPINPUT_RELEASE) },
     { MP_ROM_QSTR(MP_QSTR_LED_PYTHON),  MP_ROM_INT(MCPINPUT_LED_MODE_PYTHON) },
     { MP_ROM_QSTR(MP_QSTR_LED_BEAT_SYNC), MP_ROM_INT(MCPINPUT_LED_MODE_BEAT_SYNC) },
+    { MP_ROM_QSTR(MP_QSTR_LED_WHACK),   MP_ROM_INT(MCPINPUT_LED_MODE_WHACK) },
+    // Animation mode constants
+    { MP_ROM_QSTR(MP_QSTR_ANIM_OFF),    MP_ROM_INT(LED_ANIM_OFF) },
+    { MP_ROM_QSTR(MP_QSTR_ANIM_ON),     MP_ROM_INT(LED_ANIM_ON) },
+    { MP_ROM_QSTR(MP_QSTR_ANIM_GLOW),   MP_ROM_INT(LED_ANIM_GLOW) },
+    { MP_ROM_QSTR(MP_QSTR_ANIM_PULSE),  MP_ROM_INT(LED_ANIM_PULSE) },
+    { MP_ROM_QSTR(MP_QSTR_ANIM_BLINK),  MP_ROM_INT(LED_ANIM_BLINK) },
+    { MP_ROM_QSTR(MP_QSTR_ANIM_FLASH),  MP_ROM_INT(LED_ANIM_FLASH) },
+    { MP_ROM_QSTR(MP_QSTR_ANIM_WAVE),   MP_ROM_INT(LED_ANIM_WAVE) },
 };
 static MP_DEFINE_CONST_DICT(mcpinput_module_globals,
                              mcpinput_module_globals_table);

@@ -99,7 +99,7 @@ static esp_err_t mcp_write_reg(mcpinput_state_t *s, uint8_t reg, uint8_t val) {
 }
 
 // ---------------------------------------------------------------------------
-// PCA9685 LED helpers (used by scan task for beat-sync mode)
+// PCA9685 LED engine — general-purpose animation for arcade buttons
 // ---------------------------------------------------------------------------
 
 // PCA9685 registers
@@ -113,26 +113,25 @@ static esp_err_t mcp_write_reg(mcpinput_state_t *s, uint8_t reg, uint8_t val) {
 #define PCA_MODE1_AI      0x20  // auto-increment
 #define PCA_MODE1_RESTART 0x80
 
+// Wave animation: phase offset per channel (creates ripple effect)
+#define WAVE_SPACING    32
+
 // Batch-write up to 5 channels of PCA9685 duty values in one I2C transaction.
 // Caller must NOT hold i2c_mutex — this function acquires it.
 static void pca_write_batch(mcpinput_state_t *s,
                              const uint16_t *duties, int n) {
     if (s->pca_dev == NULL || n <= 0 || n > MCPINPUT_LED_MAX_CH) return;
 
-    // Build register payload: reg_addr + 4 bytes per channel
     uint8_t buf[1 + MCPINPUT_LED_MAX_CH * 4];
     buf[0] = PCA_LED0_ON_L + 4 * s->pca_start_ch;
     for (int i = 0; i < n; i++) {
         int off = 1 + i * 4;
         uint16_t d = duties[i];
         if (d == 0) {
-            // Full off: set OFF_H bit 4
             buf[off] = 0; buf[off+1] = 0; buf[off+2] = 0; buf[off+3] = 0x10;
         } else if (d >= 4095) {
-            // Full on: set ON_H bit 4
             buf[off] = 0; buf[off+1] = 0x10; buf[off+2] = 0; buf[off+3] = 0;
         } else {
-            // PWM: ON=0, OFF=duty
             buf[off] = 0; buf[off+1] = 0; buf[off+2] = d & 0xFF; buf[off+3] = d >> 8;
         }
     }
@@ -142,56 +141,131 @@ static void pca_write_batch(mcpinput_state_t *s,
     xSemaphoreGive(s->i2c_mutex);
 }
 
-// Read audiomix clock and update arcade LEDs on step change.
-// Called from scan_task when led_mode == BEAT_SYNC and pca_dev != NULL.
-//
-// Cross-module coupling: reads audiomix_state->clock (extern from audiomix.h).
-// This is a read-only volatile access — no locks needed.
-// If audiomix is not linked, audiomix_state is NULL and we skip.
+// --- Animation duty helpers (pure math, no I/O) ---
 
-// Cross-module access: read audiomix clock state for beat-sync LEDs.
-// Both modules are compiled into the same firmware binary.
+static inline uint16_t pulse_duty(uint32_t now_ms, uint8_t speed) {
+    if (speed == 0) speed = 2;
+    uint8_t phase = (uint8_t)((now_ms * speed) >> 2) & 0xFF;
+    uint16_t v = phase < 128 ? phase : 255 - phase;
+    return MCPINPUT_LED_DUTY_GLOW
+         + ((v * (MCPINPUT_LED_DUTY_ON - MCPINPUT_LED_DUTY_GLOW)) >> 7);
+}
+
+static inline uint16_t blink_duty(uint32_t now_ms, uint8_t speed) {
+    if (speed == 0) speed = 4;
+    return ((now_ms * speed) >> 7) & 1 ? MCPINPUT_LED_DUTY_ON
+                                        : MCPINPUT_LED_DUTY_OFF;
+}
+
+static inline uint16_t flash_duty(const led_channel_t *ch) {
+    if (ch->flash_ttl == 0 || ch->flash_start == 0) return 0;
+    return (uint16_t)ch->flash_ttl * MCPINPUT_LED_DUTY_ON / ch->flash_start;
+}
+
+static inline uint16_t wave_duty(uint32_t now_ms, int channel, uint8_t speed) {
+    if (speed == 0) speed = 2;
+    // Stagger phase per channel for ripple effect
+    uint32_t offset_ms = (uint32_t)channel * WAVE_SPACING * 4 / (speed ? speed : 1);
+    uint8_t phase = (uint8_t)(((now_ms - offset_ms) * speed) >> 2) & 0xFF;
+    uint16_t v = phase < 128 ? phase : 255 - phase;
+    return MCPINPUT_LED_DUTY_GLOW
+         + ((v * (MCPINPUT_LED_DUTY_ON - MCPINPUT_LED_DUTY_GLOW)) >> 7);
+}
+
+// Compute duties from per-channel animation state and write PCA9685.
+// Called every scan cycle when led_mode != PYTHON.
+static void led_engine_tick(mcpinput_state_t *s, uint32_t now_ms) {
+    int n = s->pca_n_ch;
+    uint16_t duties[MCPINPUT_LED_MAX_CH];
+    bool changed = false;
+
+    for (int i = 0; i < n; i++) {
+        led_channel_t *ch = &s->led_ch[i];
+        uint16_t d;
+        switch (ch->mode) {
+            case LED_ANIM_ON:    d = MCPINPUT_LED_DUTY_ON;    break;
+            case LED_ANIM_GLOW:  d = MCPINPUT_LED_DUTY_GLOW;  break;
+            case LED_ANIM_PULSE: d = pulse_duty(now_ms, ch->speed); break;
+            case LED_ANIM_BLINK: d = blink_duty(now_ms, ch->speed); break;
+            case LED_ANIM_FLASH: d = flash_duty(ch);           break;
+            case LED_ANIM_WAVE:  d = wave_duty(now_ms, i, ch->speed); break;
+            default:             d = MCPINPUT_LED_DUTY_OFF;    break;
+        }
+        duties[i] = d;
+        if (d != s->led_duty[i]) changed = true;
+    }
+
+    if (changed) {
+        pca_write_batch(s, duties, n);
+        for (int i = 0; i < n; i++) s->led_duty[i] = duties[i];
+    }
+}
+
+// --- Beat-sync: set channel modes from audiomix clock, then engine tick ---
+
 #include "audiomix.h"
 
-static void led_beat_sync_tick(mcpinput_state_t *s) {
+static void led_beat_sync_update(mcpinput_state_t *s) {
     if (audiomix_state == NULL) return;
 
     seq_clock_t *clk = &audiomix_state->clock;
     uint8_t playing = clk->playing;
     uint8_t step = clk->current_step;
-    uint8_t n_ch = s->pca_n_ch;
 
     if (playing && step != s->led_last_step) {
         s->led_last_step = step;
         uint8_t perc_mask = clk->steps[step].perc_mask;
         uint8_t active = s->led_track_active;
 
-        uint16_t duties[MCPINPUT_LED_MAX_CH];
-        bool changed = false;
-        for (int i = 0; i < n_ch; i++) {
-            uint16_t d;
-            if (perc_mask & (1 << i))       d = MCPINPUT_LED_DUTY_ON;
-            else if (active & (1 << i))     d = MCPINPUT_LED_DUTY_GLOW;
-            else                            d = MCPINPUT_LED_DUTY_OFF;
-            duties[i] = d;
-            if (d != s->led_duty[i]) changed = true;
-        }
-
-        if (changed) {
-            pca_write_batch(s, duties, n_ch);
-            for (int i = 0; i < n_ch; i++) s->led_duty[i] = duties[i];
+        for (int i = 0; i < s->pca_n_ch; i++) {
+            if (perc_mask & (1 << i))       s->led_ch[i].mode = LED_ANIM_ON;
+            else if (active & (1 << i))     s->led_ch[i].mode = LED_ANIM_GLOW;
+            else                            s->led_ch[i].mode = LED_ANIM_OFF;
         }
     } else if (!playing && s->led_last_step != 0xFF) {
-        // Clock stopped — set all to glow (if track active) or off
         s->led_last_step = 0xFF;
         uint8_t active = s->led_track_active;
-        uint16_t duties[MCPINPUT_LED_MAX_CH];
-        for (int i = 0; i < n_ch; i++) {
-            duties[i] = (active & (1 << i)) ? MCPINPUT_LED_DUTY_GLOW
-                                              : MCPINPUT_LED_DUTY_OFF;
+        for (int i = 0; i < s->pca_n_ch; i++) {
+            s->led_ch[i].mode = (active & (1 << i)) ? LED_ANIM_GLOW
+                                                       : LED_ANIM_OFF;
         }
-        pca_write_batch(s, duties, n_ch);
-        for (int i = 0; i < n_ch; i++) s->led_duty[i] = duties[i];
+    }
+    // Engine tick computes duties and writes PCA9685
+}
+
+// --- Whack: hit/timeout detection, then set channel modes for engine tick ---
+
+static void led_whack_update(mcpinput_state_t *s, uint32_t now_ms) {
+    uint8_t target = s->whack_target;
+    if (target >= s->pca_n_ch) return;
+
+    // Hit detection
+    uint8_t pin = s->whack_pins[target];
+    if (s->port_state & (1 << pin)) {
+        s->whack_hit = 1;
+        s->whack_target = 0xFF;
+        for (int i = 0; i < s->pca_n_ch; i++)
+            s->led_ch[i].mode = (i == target) ? LED_ANIM_ON : LED_ANIM_OFF;
+        return;
+    }
+
+    // Timeout detection
+    if (now_ms >= s->whack_deadline_ms) {
+        s->whack_miss = 1;
+        s->whack_target = 0xFF;
+        for (int i = 0; i < s->pca_n_ch; i++)
+            s->led_ch[i].mode = LED_ANIM_OFF;
+        return;
+    }
+
+    // Active target: pulse it, others off
+    for (int i = 0; i < s->pca_n_ch; i++) {
+        if (i == target) {
+            s->led_ch[i].mode = LED_ANIM_PULSE;
+            s->led_ch[i].speed = s->led_ch[target].speed;
+        } else {
+            s->led_ch[i].mode = LED_ANIM_OFF;
+        }
     }
 }
 
@@ -243,9 +317,17 @@ static void scan_task(void *arg) {
         }
         s->port_state = state;
 
-        // Beat-sync LED update (reads audiomix clock, writes PCA9685)
-        if (s->led_mode == MCPINPUT_LED_MODE_BEAT_SYNC && s->pca_dev != NULL) {
-            led_beat_sync_tick(s);
+        // LED engine: compute animation duties and write PCA9685.
+        // Composite modes (beat-sync, whack) update channel states first.
+        // In all modes (including PYTHON), the engine tick runs the
+        // per-channel animation and writes I2C at 500Hz.
+        if (s->pca_dev != NULL) {
+            if (s->led_mode == MCPINPUT_LED_MODE_BEAT_SYNC) {
+                led_beat_sync_update(s);
+            } else if (s->led_mode == MCPINPUT_LED_MODE_WHACK) {
+                led_whack_update(s, now);
+            }
+            led_engine_tick(s, now);
         }
 
         // Update stack high water mark periodically

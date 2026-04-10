@@ -549,6 +549,22 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_highfive(on_progress=None):
+        from bodn.ui.highfive import HighFiveScreen, preload_highfive_assets
+
+        sound_bufs = preload_highfive_assets(on_progress=on_progress)
+        _reset_secondary()
+        return HighFiveScreen(
+            np,
+            overlay,
+            arcade=arcade,
+            audio=audio,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
+            sound_bufs=sound_bufs,
+        )
+
     def _make_settings():
         from bodn.ui.settings import SettingsScreen
 
@@ -565,6 +581,7 @@ def create_ui(
         "story": _make_story,
         "soundboard": _make_soundboard,
         "sequencer": _make_sequencer,
+        "highfive": _make_highfive,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, arcade=arcade, settings=settings),
@@ -576,6 +593,7 @@ def create_ui(
         "demo",
         "mystery",
         "simon",
+        "highfive",
         "rulefollow",
         "space",
         "story",
