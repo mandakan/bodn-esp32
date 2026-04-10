@@ -146,15 +146,21 @@ def sync(
 
     try:
         with ftplib.FTP() as ftp:
-            ftp.connect(host, ftp_port, timeout=10)
+            ftp.connect(host, ftp_port, timeout=30)
             ftp.login(ftp_user, ftp_pass)
             ftp.set_pasv(True)
 
             for rel_path, local, _ in to_upload:
+                size = local.stat().st_size
                 _ensure_remote_dirs(ftp, rel_path)
+                ft0 = time.monotonic()
                 with open(local, "rb") as f:
                     ftp.storbinary(f"STOR {rel_path}", f)
-                print(f"  {rel_path} ({local.stat().st_size} B)")
+                elapsed = time.monotonic() - ft0
+                rate = size / elapsed if elapsed > 0 else 0
+                print(
+                    f"  {rel_path} ({size} B, {elapsed:.1f}s, {rate / 1024:.0f} KB/s)"
+                )
 
             # Upload manifest last. The commit endpoint requires it to be
             # present and will refuse to activate if any hash mismatches.
