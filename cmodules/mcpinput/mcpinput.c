@@ -281,6 +281,71 @@ static MP_DEFINE_CONST_FUN_OBJ_1(mcpinput_led_set_track_active_obj,
                                   mcpinput_led_set_track_active);
 
 // ---------------------------------------------------------------------------
+// _mcpinput.led_set_whack_pins(pins_tuple)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_set_whack_pins(mp_obj_t pins_obj) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    size_t len;
+    mp_obj_t *items;
+    mp_obj_get_array(pins_obj, &len, &items);
+    if (len > MCPINPUT_LED_MAX_CH) len = MCPINPUT_LED_MAX_CH;
+    for (size_t i = 0; i < len; i++) {
+        mcpinput_state->whack_pins[i] = (uint8_t)mp_obj_get_int(items[i]);
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mcpinput_led_set_whack_pins_obj,
+                                  mcpinput_led_set_whack_pins);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_set_whack_target(index, deadline_ms, pulse_speed=3)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_set_whack_target(size_t n_args,
+                                                const mp_obj_t *args) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    int idx = mp_obj_get_int(args[0]);
+    mcpinput_state->whack_deadline_ms = (uint32_t)mp_obj_get_int(args[1]);
+    mcpinput_state->whack_pulse_speed = (n_args > 2)
+        ? (uint8_t)mp_obj_get_int(args[2]) : 3;
+    mcpinput_state->whack_hit = 0;
+    mcpinput_state->whack_miss = 0;
+    // Set target last to avoid race with scan task
+    mcpinput_state->whack_target = (uint8_t)idx;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mcpinput_led_set_whack_target_obj,
+                                             2, 3,
+                                             mcpinput_led_set_whack_target);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_get_whack_result() -> (hit, miss)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_get_whack_result(void) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    uint8_t hit = mcpinput_state->whack_hit;
+    uint8_t miss = mcpinput_state->whack_miss;
+    // Clear flags after reading
+    mcpinput_state->whack_hit = 0;
+    mcpinput_state->whack_miss = 0;
+    mp_obj_t tuple[2] = {
+        mp_obj_new_bool(hit),
+        mp_obj_new_bool(miss),
+    };
+    return mp_obj_new_tuple(2, tuple);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_led_get_whack_result_obj,
+                                  mcpinput_led_get_whack_result);
+
+// ---------------------------------------------------------------------------
 // Module definition
 // ---------------------------------------------------------------------------
 
@@ -298,11 +363,16 @@ static const mp_rom_map_elem_t mcpinput_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_led_init),    MP_ROM_PTR(&mcpinput_led_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_led_mode),    MP_ROM_PTR(&mcpinput_led_mode_obj) },
     { MP_ROM_QSTR(MP_QSTR_led_set_track_active), MP_ROM_PTR(&mcpinput_led_set_track_active_obj) },
+    // Whack / High-Five mode
+    { MP_ROM_QSTR(MP_QSTR_led_set_whack_pins), MP_ROM_PTR(&mcpinput_led_set_whack_pins_obj) },
+    { MP_ROM_QSTR(MP_QSTR_led_set_whack_target), MP_ROM_PTR(&mcpinput_led_set_whack_target_obj) },
+    { MP_ROM_QSTR(MP_QSTR_led_get_whack_result), MP_ROM_PTR(&mcpinput_led_get_whack_result_obj) },
     // Constants
     { MP_ROM_QSTR(MP_QSTR_PRESS),       MP_ROM_INT(MCPINPUT_PRESS) },
     { MP_ROM_QSTR(MP_QSTR_RELEASE),     MP_ROM_INT(MCPINPUT_RELEASE) },
     { MP_ROM_QSTR(MP_QSTR_LED_PYTHON),  MP_ROM_INT(MCPINPUT_LED_MODE_PYTHON) },
     { MP_ROM_QSTR(MP_QSTR_LED_BEAT_SYNC), MP_ROM_INT(MCPINPUT_LED_MODE_BEAT_SYNC) },
+    { MP_ROM_QSTR(MP_QSTR_LED_WHACK),   MP_ROM_INT(MCPINPUT_LED_MODE_WHACK) },
 };
 static MP_DEFINE_CONST_DICT(mcpinput_module_globals,
                              mcpinput_module_globals_table);

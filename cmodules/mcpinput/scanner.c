@@ -196,6 +196,56 @@ static void led_beat_sync_tick(mcpinput_state_t *s) {
 }
 
 // ---------------------------------------------------------------------------
+// Whack / High-Five mode: pulse target LED, detect hit or timeout
+// ---------------------------------------------------------------------------
+
+static void led_whack_tick(mcpinput_state_t *s, uint32_t now_ms) {
+    uint8_t target = s->whack_target;
+    if (target >= s->pca_n_ch) return;  // 0xFF or invalid = no target
+
+    // Hit detection: check debounced state of the target's MCP pin
+    uint8_t pin = s->whack_pins[target];
+    if (s->port_state & (1 << pin)) {
+        // Target button is pressed — HIT!
+        s->whack_hit = 1;
+        s->whack_target = 0xFF;
+        // Briefly show full brightness on hit button
+        uint16_t duties[MCPINPUT_LED_MAX_CH] = {0};
+        duties[target] = MCPINPUT_LED_DUTY_ON;
+        pca_write_batch(s, duties, s->pca_n_ch);
+        for (int i = 0; i < s->pca_n_ch; i++) s->led_duty[i] = duties[i];
+        return;
+    }
+
+    // Timeout detection
+    if (now_ms >= s->whack_deadline_ms) {
+        s->whack_miss = 1;
+        s->whack_target = 0xFF;
+        // All LEDs off on miss
+        uint16_t duties[MCPINPUT_LED_MAX_CH] = {0};
+        pca_write_batch(s, duties, s->pca_n_ch);
+        for (int i = 0; i < s->pca_n_ch; i++) s->led_duty[i] = 0;
+        return;
+    }
+
+    // Animate: pulse the target LED (triangle wave based on wall clock)
+    uint8_t speed = s->whack_pulse_speed;
+    if (speed == 0) speed = 3;
+    uint8_t phase = (uint8_t)((now_ms * speed) >> 2) & 0xFF;
+    uint16_t v = phase < 128 ? phase : 255 - phase;
+    // Scale to 12-bit with a minimum glow so the LED is never fully dark
+    uint16_t duty = MCPINPUT_LED_DUTY_GLOW + ((v * (MCPINPUT_LED_DUTY_ON - MCPINPUT_LED_DUTY_GLOW)) >> 7);
+
+    // Only write I2C if duty changed meaningfully (reduce bus traffic)
+    if (duty != s->led_duty[target] || s->led_duty[target] == 0) {
+        uint16_t duties[MCPINPUT_LED_MAX_CH] = {0};
+        duties[target] = duty;
+        pca_write_batch(s, duties, s->pca_n_ch);
+        for (int i = 0; i < s->pca_n_ch; i++) s->led_duty[i] = duties[i];
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Scan task (core 0)
 // ---------------------------------------------------------------------------
 
@@ -243,9 +293,13 @@ static void scan_task(void *arg) {
         }
         s->port_state = state;
 
-        // Beat-sync LED update (reads audiomix clock, writes PCA9685)
-        if (s->led_mode == MCPINPUT_LED_MODE_BEAT_SYNC && s->pca_dev != NULL) {
-            led_beat_sync_tick(s);
+        // LED mode updates (PCA9685)
+        if (s->pca_dev != NULL) {
+            if (s->led_mode == MCPINPUT_LED_MODE_BEAT_SYNC) {
+                led_beat_sync_tick(s);
+            } else if (s->led_mode == MCPINPUT_LED_MODE_WHACK) {
+                led_whack_tick(s, now);
+            }
         }
 
         // Update stack high water mark periodically

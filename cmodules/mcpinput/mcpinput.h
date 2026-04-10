@@ -69,6 +69,7 @@ typedef struct {
 
 #define MCPINPUT_LED_MODE_PYTHON    0   // Python drives LEDs via i2c_write
 #define MCPINPUT_LED_MODE_BEAT_SYNC 1   // C drives LEDs from audiomix clock
+#define MCPINPUT_LED_MODE_WHACK     2   // C drives pulse + hit/miss detection
 #define MCPINPUT_LED_MAX_CH         5   // max arcade LED channels
 
 // PCA9685 duty presets (12-bit)
@@ -106,6 +107,14 @@ typedef struct {
     uint8_t                 led_last_step;  // cached step for change detection
     volatile uint8_t        led_track_active; // 5-bit mask: tracks with notes
     uint16_t                led_duty[MCPINPUT_LED_MAX_CH]; // current duty (dirty check)
+
+    // Whack-a-mole / High-Five mode state
+    volatile uint8_t        whack_target;    // active button 0-4, 0xFF = none
+    volatile uint32_t       whack_deadline_ms; // esp_timer ms deadline for timeout
+    volatile uint8_t        whack_hit;       // set by scan task on hit, cleared by Python
+    volatile uint8_t        whack_miss;      // set by scan task on timeout, cleared by Python
+    uint8_t                 whack_pulse_speed; // animation speed (2=slow, 6=fast)
+    uint8_t                 whack_pins[MCPINPUT_LED_MAX_CH]; // MCP pin per arcade button
 
     // Diagnostics
     volatile uint32_t       poll_count;
