@@ -100,14 +100,13 @@ class HighFiveScreen(Screen):
         self._full_clear = True
         self._leds_dirty = True
 
-        # Init C LED driver for whack mode
+        # Init C LED driver for whack mode (hit detection at 500Hz)
         self._c_leds = False
         if _has_whack and self._arcade:
             try:
                 if _mcpinput.led_init():
                     _mcpinput.led_set_whack_pins(config.MCP_ARC_PINS)
                     _mcpinput.led_mode(_mcpinput.LED_WHACK)
-                    self._arcade.set_c_driven(True)
                     self._c_leds = True
             except Exception as e:
                 print("highfive: C LED init failed:", e)
@@ -119,13 +118,10 @@ class HighFiveScreen(Screen):
     def exit(self):
         if self._c_leds:
             try:
-                # Clear target and switch back to Python mode
                 _mcpinput.led_set_whack_target(0xFF, 0)
                 _mcpinput.led_mode(_mcpinput.LED_PYTHON)
             except Exception:
                 pass
-            if self._arcade:
-                self._arcade.set_c_driven(False)
             self._c_leds = False
 
         if self._arcade:

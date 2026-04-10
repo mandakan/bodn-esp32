@@ -181,7 +181,6 @@ class SequencerScreen(Screen):
             try:
                 if _mcpinput.led_init():
                     _mcpinput.led_mode(_mcpinput.LED_BEAT_SYNC)
-                    self._arcade.set_c_driven(True)
                     self._c_leds = True
             except Exception as e:
                 print("seq: C LED init failed:", e)
@@ -205,14 +204,12 @@ class SequencerScreen(Screen):
         self._marker_y = self._grid_y + self._grid_h
 
     def exit(self):
-        # Restore Python LED control before cleanup
+        # Restore default LED mode before cleanup
         if self._c_leds:
             try:
                 _mcpinput.led_mode(_mcpinput.LED_PYTHON)
             except Exception:
                 pass
-            if self._arcade:
-                self._arcade.set_c_driven(False)
             self._c_leds = False
         if _has_clock:
             _audiomix.clock_stop()
