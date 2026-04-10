@@ -3,6 +3,8 @@
 # Every physical input is visible on-screen with its real color, making
 # this both the original "leklåda" experience and a quick hardware check.
 
+from micropython import const
+
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
@@ -14,6 +16,14 @@ from bodn.i18n import t
 NAV = config.ENC_NAV
 ENC_A = config.ENC_A
 ENC_B = config.ENC_B
+
+# Dirty section flags (bitmask)
+_D_HEADER = const(1)
+_D_ENCODERS = const(2)
+_D_TOGGLES = const(4)
+_D_BUTTONS = const(8)
+_D_ARCADE = const(16)
+_D_ALL = const(31)  # 1|2|4|8|16
 
 # Colour palette per pattern index — module-level to avoid per-frame allocation
 _COLOUR_RGB = [
@@ -83,7 +93,7 @@ class DemoScreen(Screen):
         self._speed = 5  # 1-20, controlled by NAV/ENC_B rotation
         self._manager = None
         self._pause = PauseMenu(settings=settings)
-        self._dirty = True
+        self._dirty_sections = _D_ALL  # bitmask of sections needing redraw
         self._full_clear = True
         # Arcade flash: when an arcade button is tapped, flash its color
         self._arc_flash = -1  # arcade index, or -1
@@ -99,7 +109,11 @@ class DemoScreen(Screen):
         self._manager = manager
         self._pause.set_manager(manager)
         self._brightness.reset()
-        self._dirty = True
+        self._dirty_sections = _D_ALL
+        self._full_clear = True
+
+    def on_reveal(self):
+        self._dirty_sections = _D_ALL
         self._full_clear = True
 
     def exit(self):
@@ -108,7 +122,7 @@ class DemoScreen(Screen):
             self._arcade.flush()
 
     def needs_redraw(self):
-        return self._dirty or self._pause.needs_render
+        return self._dirty_sections != 0 or self._pause.needs_render
 
     def update(self, inp, frame):
         # Pause menu handles hold-to-open and menu navigation
@@ -117,10 +131,12 @@ class DemoScreen(Screen):
             self._manager.pop()
             return
         elif result == "resume":
-            self._dirty = True
+            self._dirty_sections = _D_ALL
             self._full_clear = True
         if self._pause.is_open or self._pause.is_holding:
             return
+
+        ds = self._dirty_sections
 
         # Button tap → select pattern (uses gesture layer)
         g = inp.gestures
@@ -128,7 +144,7 @@ class DemoScreen(Screen):
         for i in range(n_btn):
             if g.tap[i]:
                 self._active_pattern = i % len(PATTERNS)
-                self._dirty = True
+                ds |= _D_HEADER
                 break
 
         # Arcade button tap → flash that button's color on all LEDs
@@ -137,40 +153,38 @@ class DemoScreen(Screen):
             if inp.arc_just_pressed[i]:
                 self._arc_flash = i
                 self._arc_flash_ttl = 9  # ~300 ms at 30 fps
-                self._dirty = True
                 break
 
-        # Decay arcade flash
+        # Decay arcade flash (LED-only, no screen section)
         if self._arc_flash_ttl > 0:
             self._arc_flash_ttl -= 1
             if self._arc_flash_ttl == 0:
                 self._arc_flash = -1
-                self._dirty = True
 
         # Encoder A button → cycle pattern
         if inp.enc_btn_pressed[ENC_A]:
             self._active_pattern = (self._active_pattern + 1) % len(PATTERNS)
-            self._dirty = True
+            ds |= _D_HEADER
 
         # Update brightness from encoder A (velocity-aware)
         prev_bri = self._brightness.value
         self._brightness.update(inp.enc_delta[ENC_A], inp.enc_velocity[ENC_A])
         if self._brightness.value != prev_bri:
-            self._dirty = True
+            ds |= _D_HEADER | _D_ENCODERS
 
         # NAV/ENC_B rotation adjusts speed
         delta_b = inp.enc_delta[ENC_B]
         if delta_b != 0:
             self._speed = max(1, min(20, self._speed + delta_b))
-            self._dirty = True
+            ds |= _D_HEADER | _D_ENCODERS
 
         # Dirty detection for display: encoders
         if inp.enc_pos[ENC_A] != self._prev_enc[ENC_A]:
             self._prev_enc[ENC_A] = inp.enc_pos[ENC_A]
-            self._dirty = True
+            ds |= _D_ENCODERS
         if inp.enc_pos[ENC_B] != self._prev_enc[ENC_B]:
             self._prev_enc[ENC_B] = inp.enc_pos[ENC_B]
-            self._dirty = True
+            ds |= _D_ENCODERS
 
         # Dirty detection: mini buttons
         if not self._prev_btn:
@@ -178,7 +192,7 @@ class DemoScreen(Screen):
         for i in range(n_btn):
             if inp.btn_held[i] != self._prev_btn[i]:
                 self._prev_btn[i] = inp.btn_held[i]
-                self._dirty = True
+                ds |= _D_BUTTONS
 
         # Dirty detection: arcade buttons
         if not self._prev_arc:
@@ -186,7 +200,7 @@ class DemoScreen(Screen):
         for i in range(n_arc):
             if inp.arc_held[i] != self._prev_arc[i]:
                 self._prev_arc[i] = inp.arc_held[i]
-                self._dirty = True
+                ds |= _D_ARCADE
 
         # Dirty detection: toggle switches (all 4)
         n_sw = len(inp.sw)
@@ -195,19 +209,24 @@ class DemoScreen(Screen):
         for i in range(min(n_sw, len(self._prev_sw))):
             if inp.sw[i] != self._prev_sw[i]:
                 self._prev_sw[i] = inp.sw[i]
-                self._dirty = True
+                ds |= _D_TOGGLES
         # Handle switch list growing (MCP2 came online)
         if n_sw > len(self._prev_sw):
             self._prev_sw = list(inp.sw)
-            self._dirty = True
+            ds |= _D_TOGGLES
 
         # Dirty detection: encoder buttons
         for i in range(min(len(inp.enc_btn_held), len(self._prev_enc_btn))):
             if inp.enc_btn_held[i] != self._prev_enc_btn[i]:
                 self._prev_enc_btn[i] = inp.enc_btn_held[i]
-                self._dirty = True
+                ds |= _D_ENCODERS
 
-        # Only compute and write LEDs on NeoPixel-write frames
+        self._dirty_sections = ds
+
+        # Arcade button LEDs update every frame (cheap I2C)
+        self._update_arcade_leds(inp, frame)
+
+        # NeoPixel strip updates every 3rd frame (expensive bit-bang)
         if frame % 3 == 0:
             self._update_leds(inp, frame)
 
@@ -276,45 +295,49 @@ class DemoScreen(Screen):
             np[i] = leds[i]
         np.write()
 
-        # Arcade button LEDs: bright when held, wave or glow when idle
+    def _update_arcade_leds(self, inp, frame):
+        """Update arcade button LEDs every frame (cheap I2C, not gated by NeoPixel throttle)."""
         arc = self._arcade
-        if arc:
-            sw = inp.sw
-            use_wave = len(sw) > 3 and sw[3]  # SW_R: wave mode
-            if use_wave:
-                arc.wave(frame, speed=self._speed)
-            n_arc = len(inp.arc_held)
-            for i in range(min(n_arc, arc.count)):
-                if inp.arc_held[i]:
-                    arc.on(i)
-                elif not use_wave:
-                    arc.glow(i)
-            arc.flush()
+        if not arc:
+            return
+        sw = inp.sw
+        use_wave = len(sw) > 3 and sw[3]  # SW_R: wave mode
+        if use_wave:
+            arc.wave(frame, speed=self._speed)
+        n_arc = len(inp.arc_held)
+        for i in range(min(n_arc, arc.count)):
+            if inp.arc_held[i]:
+                arc.on(i)
+            elif not use_wave:
+                arc.glow(i)
+        arc.flush()
 
     def render(self, tft, theme, frame):
         _init_565(theme.rgb)
+        ds = self._dirty_sections
 
         if self._pause.is_open:
-            if self._dirty:
-                self._dirty = False
+            if ds:
+                self._dirty_sections = 0
                 tft.fill(theme.BLACK)
                 self._full_clear = False
-                self._render_main(tft, theme)
+                self._render_sections(tft, theme, _D_ALL)
             self._pause.render(tft, theme, frame)
             return
 
-        if not self._dirty:
+        if not ds:
             self._pause.render(tft, theme, frame)
             return
-        self._dirty = False
+        self._dirty_sections = 0
         if self._full_clear:
             self._full_clear = False
             tft.fill(theme.BLACK)
-        self._render_main(tft, theme)
+            ds = _D_ALL  # full clear → redraw everything
+        self._render_sections(tft, theme, ds)
         self._pause.render(tft, theme, frame)
 
-    def _render_main(self, tft, theme):
-        """Single unified layout — mirrors the physical lid from top to bottom."""
+    def _render_sections(self, tft, theme, ds):
+        """Redraw only the dirty sections of the display."""
         sw = []
         held = [False] * 8
         arc_held = [False] * 5
@@ -332,70 +355,81 @@ class DemoScreen(Screen):
         h = theme.height  # 240
 
         # --- Row 1: Pattern name banner (y 0–16) ---
-        pat_idx = self._active_pattern
-        pat_c = _btn_565[pat_idx % len(_btn_565)]
-        tft.fill_rect(0, 0, w, 16, pat_c)
-        tft.text(PATTERN_NAMES[pat_idx], 4, 4, theme.BLACK)
-        # Brightness and speed on the right
-        bri_txt = "{}:{}".format(t("demo_bri"), self._brightness.value)
-        spd_txt = "{}:{}".format(t("demo_spd"), self._speed)
-        tft.text(bri_txt, w - len(bri_txt) * 8 - 4, 4, theme.BLACK)
-        tft.text(spd_txt, w - len(spd_txt) * 8 - len(bri_txt) * 8 - 12, 4, theme.BLACK)
+        if ds & _D_HEADER:
+            pat_idx = self._active_pattern
+            pat_c = _btn_565[pat_idx % len(_btn_565)]
+            tft.fill_rect(0, 0, w, 16, pat_c)
+            tft.text(PATTERN_NAMES[pat_idx], 4, 4, theme.BLACK)
+            bri_txt = "{}:{}".format(t("demo_bri"), self._brightness.value)
+            spd_txt = "{}:{}".format(t("demo_spd"), self._speed)
+            tft.text(bri_txt, w - len(bri_txt) * 8 - 4, 4, theme.BLACK)
+            tft.text(
+                spd_txt, w - len(spd_txt) * 8 - len(bri_txt) * 8 - 12, 4, theme.BLACK
+            )
 
-        # --- Row 2: Encoders + brightness/speed bars (y 20–56) ---
-        tft.text(t("demo_encoders"), 0, 20, theme.MUTED)
-        # NAV encoder
-        _draw_encoder(tft, theme, 0, 32, "NAV", enc_pos[ENC_B], enc_btn[ENC_B])
-        # ENC_A encoder
-        _draw_encoder(tft, theme, 100, 32, "ENC", enc_pos[ENC_A], enc_btn[ENC_A])
-        # Brightness bar
-        bar_x = 200
-        bar_w = w - bar_x - 4
-        tft.text(t("demo_bri"), bar_x, 32, theme.CYAN)
-        draw_progress_bar(
-            tft,
-            bar_x,
-            42,
-            bar_w,
-            8,
-            self._brightness.value,
-            255,
-            theme.CYAN,
-            theme.BLACK,
-        )
-        # Speed bar
-        tft.text(t("demo_spd"), bar_x, 52, theme.ORANGE)
-        draw_progress_bar(
-            tft, bar_x, 62, bar_w, 8, self._speed, 20, theme.ORANGE, theme.BLACK
-        )
+        # --- Row 2: Encoders + brightness/speed bars (y 20–70) ---
+        if ds & _D_ENCODERS:
+            tft.text(t("demo_encoders"), 0, 20, theme.MUTED)
+            _draw_encoder(tft, theme, 0, 32, "NAV", enc_pos[ENC_B], enc_btn[ENC_B])
+            _draw_encoder(tft, theme, 100, 32, "ENC", enc_pos[ENC_A], enc_btn[ENC_A])
+            bar_x = 200
+            bar_w = w - bar_x - 4
+            tft.text(t("demo_bri"), bar_x, 32, theme.CYAN)
+            draw_progress_bar(
+                tft,
+                bar_x,
+                42,
+                bar_w,
+                8,
+                self._brightness.value,
+                255,
+                theme.CYAN,
+                theme.BLACK,
+            )
+            tft.text(t("demo_spd"), bar_x, 52, theme.ORANGE)
+            draw_progress_bar(
+                tft,
+                bar_x,
+                62,
+                bar_w,
+                8,
+                self._speed,
+                20,
+                theme.ORANGE,
+                theme.BLACK,
+            )
 
-        # --- Row 3: Toggle switches (y 74–92) ---
-        tft.text(t("demo_toggles"), 0, 74, theme.MUTED)
-        toggle_info = [
-            (t("tog_left"), 2),  # sw[2] = SW_L
-            (t("tog_reverse"), 0),  # sw[0]
-            (t("tog_mirror"), 1),  # sw[1]
-            (t("tog_right"), 3),  # sw[3] = SW_R
-        ]
-        for ti, (label, sw_idx) in enumerate(toggle_info):
-            x = ti * 40
-            y = 86
-            on = sw_idx < len(sw) and sw[sw_idx]
-            tft.fill_rect(x, y, 36, 14, theme.GREEN if on else theme.BLACK)
-            if not on:
-                tft.rect(x, y, 36, 14, theme.DIM)
-            tft.text(label, x + 2, y + 3, theme.BLACK if on else theme.WHITE)
+        # --- Row 3: Toggle switches (y 74–100) ---
+        if ds & _D_TOGGLES:
+            tft.text(t("demo_toggles"), 0, 74, theme.MUTED)
+            toggle_info = [
+                (t("tog_left"), 2),
+                (t("tog_reverse"), 0),
+                (t("tog_mirror"), 1),
+                (t("tog_right"), 3),
+            ]
+            for ti, (label, sw_idx) in enumerate(toggle_info):
+                x = ti * 40
+                y = 86
+                on = sw_idx < len(sw) and sw[sw_idx]
+                tft.fill_rect(x, y, 36, 14, theme.GREEN if on else theme.BLACK)
+                if not on:
+                    tft.rect(x, y, 36, 14, theme.DIM)
+                tft.text(label, x + 2, y + 3, theme.BLACK if on else theme.WHITE)
 
-        # --- Row 4: Mini buttons (y 104–128) ---
-        tft.text(t("demo_buttons"), 0, 104, theme.MUTED)
-        _draw_btn_row(tft, theme, held, 0, 118, w)
+        # --- Row 4: Mini buttons (y 104–134) ---
+        if ds & _D_BUTTONS:
+            tft.text(t("demo_buttons"), 0, 104, theme.MUTED)
+            _draw_btn_row(tft, theme, held, 0, 118, w)
 
         # --- Row 5: Arcade buttons (y 136–176) ---
-        tft.text(t("demo_arcade"), 0, 136, theme.MUTED)
-        _draw_arc_row(tft, theme, arc_held, 0, 150, w)
+        if ds & _D_ARCADE:
+            tft.text(t("demo_arcade"), 0, 136, theme.MUTED)
+            _draw_arc_row(tft, theme, arc_held, 0, 150, w)
 
-        # --- Bottom: back hint ---
-        tft.text(t("demo_back"), 4, h - 12, theme.MUTED)
+        # --- Bottom: back hint (only on full redraw) ---
+        if ds == _D_ALL:
+            tft.text(t("demo_back"), 4, h - 12, theme.MUTED)
 
 
 def _draw_encoder(tft, theme, x, y, label, pos, btn_held):

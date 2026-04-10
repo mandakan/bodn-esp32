@@ -67,6 +67,33 @@ Without `_spidma` (stock firmware fallback), the full push blocks Python for
 ~47 ms regardless of dirty rect size, so these guidelines also help by
 reducing the total data transferred.
 
+### 3.05 Section-level dirty tracking
+
+Screens with multiple independent UI regions (e.g. header, buttons, encoders,
+toggles) should **not** use a single `_dirty` flag that triggers a full redraw.
+Instead, use a **section bitmask**:
+
+```python
+from micropython import const
+_D_HEADER  = const(1)
+_D_BUTTONS = const(2)
+_D_ARCADE  = const(4)
+_D_ALL     = const(7)
+
+# In update():
+if inp.arc_held[i] != self._prev_arc[i]:
+    ds |= _D_ARCADE          # only arcade row needs redraw
+
+# In render():
+if ds & _D_ARCADE:
+    _draw_arc_row(tft, ...)   # 24px tall, not 240px
+```
+
+A single `_dirty` flag means pressing one arcade button redraws the entire
+screen (~20 SPI draw calls, potentially blowing the frame budget). With
+section flags, only the affected 24px strip is redrawn — a fraction of the
+cost, fitting easily in one DMA chunk.
+
 ### 3.1 General display rules
 
 - **Skip the entire render + show cycle when nothing changed.**
@@ -263,6 +290,58 @@ decorated function small and self-contained.
 
 
 
+### 3.2 Decouple cheap I/O from expensive I/O
+
+NeoPixel writes (~3.2 ms for 108 LEDs, interrupts disabled) are expensive and
+should be throttled (e.g. every 3rd frame). But **do not bundle other I/O
+into the same throttled path** if it has different latency requirements.
+
+Arcade button LEDs (PCA9685 via I2C, ~0.6 ms for 5 channels) are cheap enough
+to update every frame. Bundling them into the NeoPixel function adds up to
+~66 ms of unnecessary latency to button-press feedback. Keep them separate:
+
+```python
+# Every frame: cheap I2C arcade LEDs
+self._update_arcade_leds(inp, frame)
+
+# Every 3rd frame: expensive NeoPixel bit-bang
+if frame % 3 == 0:
+    self._update_neopixels(inp, frame)
+```
+
+### 3.3 Never couple game state to the render path
+
+State that drives `update()` logic must be updated in `update()`, not
+`render()`. Render frames can be skipped (frame budget exhausted, DMA busy),
+so any state updated only in `render()` becomes stale when renders are
+skipped.
+
+**Anti-pattern** (sequencer LED flash duration drifts):
+```python
+def update(self, inp, frame):
+    eng.step_advanced = eng.step != self._prev_step  # reads prev_step
+
+def render(self, tft, theme, frame):
+    self._prev_step = eng.step  # only updated here!
+```
+
+If a render is skipped, `_prev_step` stays stale → `step_advanced` stays
+`True` for multiple frames → LEDs stay lit too long. If renders catch up
+and skip a step, the flash is missed entirely.
+
+**Fix**: split into two variables — one for update logic, one for render:
+```python
+def update(self, inp, frame):
+    eng.step_advanced = eng.step != self._prev_step
+    self._prev_step = eng.step          # always updated
+
+def render(self, tft, theme, frame):
+    self._clear_old_marker(self._render_step)
+    self._render_step = eng.step        # render tracks its own state
+```
+
+---
+
 - **Debounce in software** with minimal overhead:
   - Sample inputs at a fixed interval (e.g. every 5-10 ms).
   - Treat a change as "real" after it has been stable for N samples.
@@ -346,7 +425,9 @@ When generating or reviewing code, check:
 1. **Loops**:
    - Does every `while True` or long loop yield (`sleep` / `await`) regularly?
 2. **Display**:
-   - Does the screen implement `needs_redraw()` and track `_dirty` state?
+   - Does the screen implement `needs_redraw()` and track dirty state?
+   - For screens with multiple independent sections: does it use a **section bitmask**
+     instead of a single `_dirty` flag? (§3.05)
    - Is `render()` + `show()` skipped entirely when nothing changed?
    - No full `fill()` calls inside fast loops?
    - Is `tft.fill(BLACK)` reserved for screen transitions (guarded by a `_full_clear` flag)?
@@ -363,9 +444,12 @@ When generating or reviewing code, check:
      `manager.request_show(x, y, w, h)` (partial push) instead of triggering a full render?
    - Secondary display: does the screen clear only its changed sub-region (not the full zone)?
      Does it stay within zone bounds (content: y<128, status: y≥128)?
-3. **Input**:
+3. **Input & output coupling**:
    - Debouncing implemented? No polling at insane rates?
    - Hold-to-pause: does the game screen use `PauseMenu.update()` (which reads from `GestureDetector`) instead of rolling its own hold logic? No per-frame allocations in the hold path?
+   - Are cheap I2C LED updates (PCA9685) decoupled from expensive NeoPixel writes? (§3.2)
+   - Is all game/timing state updated in `update()`, not `render()`? State updated only in
+     `render()` goes stale when frames are skipped. (§3.3)
 4. **Audio**:
    - Reasonable sample rate & buffer size? No per-sample Python loops?
 5. **WiFi**:

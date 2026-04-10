@@ -37,4 +37,9 @@ int scanner_i2c_read(mcpinput_state_t *state, uint8_t addr,
 // writes found addresses into addrs (max addrs_size entries).
 int scanner_i2c_scan(mcpinput_state_t *state, uint8_t *addrs, size_t addrs_size);
 
+// Probe and configure a PCA9685 PWM driver for LED control.
+// Returns 0 on success, non-zero on failure (device not found).
+int scanner_led_init(mcpinput_state_t *state, uint8_t pca_addr,
+                     uint8_t start_ch, uint8_t n_ch);
+
 #endif // MCPINPUT_SCANNER_H
