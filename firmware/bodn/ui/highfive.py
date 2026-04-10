@@ -74,7 +74,9 @@ _SND_POP = ["pop_1", "pop_2", "pop_3"]  # animal popping up
 _SND_CLAP = ["clap_1", "clap_2"]  # high-five slap
 _SND_CHEER = ["cheer_1", "cheer_2"]  # success celebration
 _SND_AWW = ["aww_1", "aww_2"]  # missed / too slow
-_ALL_SND_NAMES = _SND_POP + _SND_CLAP + _SND_CHEER + _SND_AWW
+_SND_WRONG = ["wrong_1", "wrong_2"]  # wrong button pressed
+_SND_OVER = ["gameover_1", "gameover_2"]  # game over
+_ALL_SND_NAMES = _SND_POP + _SND_CLAP + _SND_CHEER + _SND_AWW + _SND_WRONG + _SND_OVER
 
 
 def _rand_pick(bufs):
@@ -126,6 +128,8 @@ class HighFiveScreen(Screen):
         self._snd_clap = []
         self._snd_cheer = []
         self._snd_aww = []
+        self._snd_wrong = []
+        self._snd_over = []
 
     def enter(self, manager):
         self._manager = manager
@@ -138,17 +142,18 @@ class HighFiveScreen(Screen):
 
         # Split preloaded sound buffers into event groups
         bufs = self._snd_bufs or [None] * len(_ALL_SND_NAMES)
-        n_pop = len(_SND_POP)
-        n_clap = len(_SND_CLAP)
-        n_cheer = len(_SND_CHEER)
         off = 0
-        self._snd_pop = bufs[off : off + n_pop]
-        off += n_pop
-        self._snd_clap = bufs[off : off + n_clap]
-        off += n_clap
-        self._snd_cheer = bufs[off : off + n_cheer]
-        off += n_cheer
+        self._snd_pop = bufs[off : off + len(_SND_POP)]
+        off += len(_SND_POP)
+        self._snd_clap = bufs[off : off + len(_SND_CLAP)]
+        off += len(_SND_CLAP)
+        self._snd_cheer = bufs[off : off + len(_SND_CHEER)]
+        off += len(_SND_CHEER)
         self._snd_aww = bufs[off : off + len(_SND_AWW)]
+        off += len(_SND_AWW)
+        self._snd_wrong = bufs[off : off + len(_SND_WRONG)]
+        off += len(_SND_WRONG)
+        self._snd_over = bufs[off : off + len(_SND_OVER)]
 
         # Init C LED driver for whack mode (hit detection at 500Hz)
         self._c_leds = False
@@ -180,6 +185,8 @@ class HighFiveScreen(Screen):
         self._snd_clap = []
         self._snd_cheer = []
         self._snd_aww = []
+        self._snd_wrong = []
+        self._snd_over = []
 
         if self._arcade:
             self._arcade.all_off()
@@ -261,6 +268,14 @@ class HighFiveScreen(Screen):
                             hit = True
                         break
 
+        # Wrong button sound (any non-target arcade press during SHOWING)
+        if eng.state == SHOWING and self._audio and eng.target >= 0:
+            for i in range(NUM_BUTTONS):
+                if i < len(inp.arc_just_pressed) and inp.arc_just_pressed[i]:
+                    if i != eng.target:
+                        self._play_sfx(self._snd_wrong, _TONES[i], 80, wave="square")
+                        break
+
         # Advance game state
         eng.advance(hit, miss, frame)
 
@@ -278,7 +293,7 @@ class HighFiveScreen(Screen):
             elif eng.state == MISS_FLASH and self._audio:
                 self._play_sfx(self._snd_aww, _TONE_MISS, 300, wave="square")
             elif eng.state == GAME_OVER and self._audio:
-                self._play_sfx(self._snd_aww, _TONE_MISS, 500, wave="sawtooth")
+                self._play_sfx(self._snd_over, _TONE_MISS, 500, wave="sawtooth")
 
             # Cat face emotion
             if self._secondary:
