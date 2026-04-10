@@ -17,7 +17,13 @@ from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
-from bodn.ui.widgets import draw_centered, draw_label
+from bodn.ui.widgets import (
+    draw_centered,
+    draw_label,
+    make_label_sprite,
+    blit_sprite,
+    blit_centered,
+)
 from bodn.ui.pause import PauseMenu
 from bodn.i18n import t, get_language
 from bodn.story_rules import (
@@ -161,6 +167,10 @@ class StoryScreen(Screen):
         self._picker_mode = False
         self._end_menu = False  # post-story choice screen
         self._last_story_index = 0  # for replay
+        # Sprite caches (built in enter / on node transitions)
+        self._spr = {}  # static i18n sprites
+        self._narr_sprites = []  # word-wrapped narration lines
+        self._end_sprites = []  # end menu option labels
         # TTS state
         self._tts_playing = False
         self._tts_has_choices = False
@@ -182,6 +192,18 @@ class StoryScreen(Screen):
         rgb = manager.theme.rgb
         _MOOD_565 = {mood: rgb(c[0], c[1], c[2]) for mood, c in MOOD_COLORS.items()}
         _ARC_565 = [rgb(c[0], c[1], c[2]) for c in ARC_COLORS]
+
+        # Pre-render static i18n label sprites
+        theme = manager.theme
+        self._spr = {
+            "title2": make_label_sprite(t("story_title"), theme.CYAN, scale=2),
+            "title_muted": make_label_sprite(t("story_title"), theme.MUTED, scale=2),
+            "the_end3": make_label_sprite(t("story_the_end"), theme.YELLOW, scale=3),
+            "the_end2": make_label_sprite(t("story_the_end"), theme.YELLOW, scale=2),
+            "dots3": make_label_sprite("...", theme.MUTED, scale=2),
+            "dots2": make_label_sprite("..", theme.MUTED, scale=2),
+            "trans": make_label_sprite("...", theme.MUTED, scale=2),
+        }
 
         # Discover available stories from SD and pre-load titles
         self._stories = _discover_stories()
@@ -219,6 +241,7 @@ class StoryScreen(Screen):
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
+        self._cache_narration_sprites()
         self._start_narration()
 
     def _resolve_story_tts(self, node_id, suffix=""):
@@ -240,6 +263,27 @@ class StoryScreen(Screen):
             return resolved
         except OSError:
             return None
+
+    def _cache_narration_sprites(self):
+        """Pre-render word-wrapped narration lines for the current node."""
+        eng = self._engine
+        lang = get_language()
+        text = eng.text(lang)
+        w = self._manager.theme.width if self._manager else 240
+        max_chars = w // 16  # scale 2 = 16px per char
+        lines = _word_wrap(text, max_chars)
+        color = self._manager.theme.WHITE if self._manager else 0xFFFF
+        self._narr_sprites = [
+            make_label_sprite(line, color, scale=2) for line in lines[:4]
+        ]
+
+    def _cache_end_sprites(self):
+        """Pre-render end menu option labels."""
+        color = self._manager.theme.WHITE if self._manager else 0xFFFF
+        labels = [t("story_end_replay"), t("story_end_exit")]
+        if len(self._stories) > 1:
+            labels.append(t("story_end_pick"))
+        self._end_sprites = [make_label_sprite(lb, color, scale=2) for lb in labels]
 
     def _start_narration(self):
         """Begin TTS for the current node.
@@ -369,11 +413,13 @@ class StoryScreen(Screen):
 
             # Start narration when entering a new scene (or ending)
             if prev_state == TRANSITIONING and state in (NARRATING, ENDING):
+                self._cache_narration_sprites()
                 self._start_narration()
 
             # Show end menu when story finishes
             if state == IDLE and prev_state == ENDING:
                 self._end_menu = True
+                self._cache_end_sprites()
                 self._dirty = True
                 self._full_clear = True
                 self._leds_dirty = True
@@ -587,7 +633,7 @@ class StoryScreen(Screen):
         w = theme.width
         h = theme.height
 
-        draw_centered(tft, t("story_title"), 16, theme.CYAN, w, scale=2)
+        blit_centered(tft, self._spr["title2"], 16, w)
 
         if not self._stories:
             draw_centered(tft, t("story_no_stories"), h // 2, theme.MUTED, w)
@@ -601,7 +647,9 @@ class StoryScreen(Screen):
         # Clear title + dots region before redrawing
         title_y = h // 2 - 8
         tft.fill_rect(0, title_y, w, 16, theme.BLACK)
-        draw_centered(tft, title, title_y, theme.WHITE, w, scale=2)
+        # Picker titles are dynamic — build sprite on demand
+        spr = make_label_sprite(title, theme.WHITE, scale=2)
+        blit_centered(tft, spr, title_y, w)
 
         # Dots
         n = len(self._stories)
@@ -626,23 +674,17 @@ class StoryScreen(Screen):
         h = theme.height
 
         # Title
-        draw_centered(tft, t("story_the_end"), 30, theme.YELLOW, w, scale=3)
+        blit_centered(tft, self._spr["the_end3"], 30, w)
 
         # Options with arcade button colour dots
-        options = [
-            (_END_REPLAY, t("story_end_replay")),
-            (_END_EXIT, t("story_end_exit")),
-        ]
-        if len(self._stories) > 1:
-            options.append((_END_PICK, t("story_end_pick")))
-
-        y0 = h // 2 - len(options) * 12
-        for arc_idx, label in options:
-            y = y0 + arc_idx * 28
-            # Colour dot matching arcade button
-            if _ARC_565 and arc_idx < len(_ARC_565):
-                tft.fill_rect(40, y + 2, 12, 12, _ARC_565[arc_idx])
-            draw_label(tft, label, 60, y, theme.WHITE, scale=2)
+        n_options = 3 if len(self._stories) > 1 else 2
+        y0 = h // 2 - n_options * 12
+        for i in range(n_options):
+            y = y0 + i * 28
+            if _ARC_565 and i < len(_ARC_565):
+                tft.fill_rect(40, y + 2, 12, 12, _ARC_565[i])
+            if i < len(self._end_sprites):
+                blit_sprite(tft, self._end_sprites[i], 60, y)
 
     def _render_story(self, tft, theme, frame):
         """Render the active story scene."""
@@ -653,7 +695,7 @@ class StoryScreen(Screen):
         lang = get_language()
 
         if state == IDLE:
-            draw_centered(tft, t("story_title"), h // 2, theme.MUTED, w, scale=2)
+            blit_centered(tft, self._spr["title_muted"], h // 2, w)
             return
 
         # --- Top: mood colour wash ---
@@ -672,24 +714,21 @@ class StoryScreen(Screen):
             cx = dot_x0 + i * dot_gap + 3
             tft.fill_rect(cx - 2, dot_y - 2, 4, 4, theme.WHITE)
 
-        # --- Middle: narration text ---
-        text = eng.text(lang)
+        # --- Middle: narration text (pre-rendered sprites) ---
         text_y = wash_h + 8
-        max_chars = w // 16  # scale 2 = 16px per char
-        lines = _word_wrap(text, max_chars)
-        for i, line in enumerate(lines[:4]):  # max 4 lines
-            draw_centered(tft, line, text_y + i * 20, theme.WHITE, w, scale=2)
+        for i, spr in enumerate(self._narr_sprites):
+            blit_centered(tft, spr, text_y + i * 20, w)
 
         # --- Bottom: choices or status ---
         choice_y = h - 56
 
         if state == NARRATING:
             # Listening indicator
-            dots = "..." if (frame // 15) % 2 == 0 else ".."
-            draw_centered(tft, dots, choice_y + 20, theme.MUTED, w, scale=2)
+            key = "dots3" if (frame // 15) % 2 == 0 else "dots2"
+            blit_centered(tft, self._spr[key], choice_y + 20, w)
 
         elif state == CHOOSING:
-            # Show choices with arcade button colour indicators
+            # Show choices with arcade button colour indicators (scale=1, no sprites needed)
             choices = eng.choices
             for i, ch in enumerate(choices):
                 if i >= N_ARCADE:
@@ -700,13 +739,11 @@ class StoryScreen(Screen):
                 # Colour dot
                 if _ARC_565 and i < len(_ARC_565):
                     tft.fill_rect(8, y + 1, 8, 8, _ARC_565[i])
-                # Label
+                # Label (scale=1 — already fast)
                 draw_label(tft, text, 20, y, theme.WHITE)
 
         elif state == ENDING:
-            draw_centered(
-                tft, t("story_the_end"), choice_y + 10, theme.YELLOW, w, scale=2
-            )
+            blit_centered(tft, self._spr["the_end2"], choice_y + 10, w)
 
         elif state == TRANSITIONING:
-            draw_centered(tft, "...", choice_y + 20, theme.MUTED, w, scale=2)
+            blit_centered(tft, self._spr["trans"], choice_y + 20, w)
