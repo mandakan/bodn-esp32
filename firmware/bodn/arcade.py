@@ -53,6 +53,8 @@ class ArcadeButtons:
         self._pulse_start = [-1] * _N_BUTTONS
         # First arcade channel (for batch writes)
         self._ch_start = self._channels[0] if self._channels else 0
+        # When True, C code drives LEDs — flush() becomes a no-op
+        self._c_driven = False
 
     @property
     def count(self):
@@ -69,6 +71,10 @@ class ArcadeButtons:
 
     # --- Flush (call once per frame after all LED updates) ---
 
+    def set_c_driven(self, active):
+        """Enable/disable C-driven LED mode. When active, flush() is a no-op."""
+        self._c_driven = active
+
     def flush(self):
         """Write changed LED duties to PCA9685 in a single I2C batch.
 
@@ -76,7 +82,7 @@ class ArcadeButtons:
         that actually changed are written, and contiguous dirty channels
         are batched into one I2C transaction.
         """
-        if not self._pwm:
+        if self._c_driven or not self._pwm:
             return
         duty = self._duty
         target = self._target

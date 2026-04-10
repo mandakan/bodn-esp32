@@ -64,6 +64,19 @@ typedef struct {
 } mcpinput_debounce_t;
 
 // ---------------------------------------------------------------------------
+// LED mode constants
+// ---------------------------------------------------------------------------
+
+#define MCPINPUT_LED_MODE_PYTHON    0   // Python drives LEDs via i2c_write
+#define MCPINPUT_LED_MODE_BEAT_SYNC 1   // C drives LEDs from audiomix clock
+#define MCPINPUT_LED_MAX_CH         5   // max arcade LED channels
+
+// PCA9685 duty presets (12-bit)
+#define MCPINPUT_LED_DUTY_OFF       0
+#define MCPINPUT_LED_DUTY_GLOW      192   // ~5% brightness
+#define MCPINPUT_LED_DUTY_ON        4095  // full brightness
+
+// ---------------------------------------------------------------------------
 // Global state
 // ---------------------------------------------------------------------------
 
@@ -84,6 +97,15 @@ typedef struct {
 
     // Task control
     volatile uint8_t        running;
+
+    // PCA9685 LED control (optional, initialized by led_init)
+    i2c_master_dev_handle_t pca_dev;        // NULL if not initialized
+    uint8_t                 pca_start_ch;   // first PCA9685 channel
+    uint8_t                 pca_n_ch;       // number of channels (max 5)
+    volatile uint8_t        led_mode;       // MCPINPUT_LED_MODE_*
+    uint8_t                 led_last_step;  // cached step for change detection
+    volatile uint8_t        led_track_active; // 5-bit mask: tracks with notes
+    uint16_t                led_duty[MCPINPUT_LED_MAX_CH]; // current duty (dirty check)
 
     // Diagnostics
     volatile uint32_t       poll_count;

@@ -224,6 +224,63 @@ static mp_obj_t mcpinput_stats(void) {
 static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_stats_obj, mcpinput_stats);
 
 // ---------------------------------------------------------------------------
+// _mcpinput.led_init(addr=0x40, start_ch=1, n_channels=5) -> bool
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_init(size_t n_args, const mp_obj_t *pos_args,
+                                   mp_map_t *kw_args) {
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_addr,       MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0x40} },
+        { MP_QSTR_start_ch,   MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 1} },
+        { MP_QSTR_n_channels, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 5} },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args,
+                     MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+
+    int ret = scanner_led_init(mcpinput_state,
+                                (uint8_t)args[0].u_int,
+                                (uint8_t)args[1].u_int,
+                                (uint8_t)args[2].u_int);
+    return mp_obj_new_bool(ret == 0);
+}
+static MP_DEFINE_CONST_FUN_OBJ_KW(mcpinput_led_init_obj, 0, mcpinput_led_init);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_mode(mode)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_mode(mp_obj_t mode_obj) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    mcpinput_state->led_mode = (uint8_t)mp_obj_get_int(mode_obj);
+    // Reset step tracking so first tick after mode change triggers an update
+    mcpinput_state->led_last_step = 0xFF;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mcpinput_led_mode_obj, mcpinput_led_mode);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.led_set_track_active(mask)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_led_set_track_active(mp_obj_t mask_obj) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    mcpinput_state->led_track_active = (uint8_t)mp_obj_get_int(mask_obj);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mcpinput_led_set_track_active_obj,
+                                  mcpinput_led_set_track_active);
+
+// ---------------------------------------------------------------------------
 // Module definition
 // ---------------------------------------------------------------------------
 
@@ -237,9 +294,15 @@ static const mp_rom_map_elem_t mcpinput_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_i2c_read),    MP_ROM_PTR(&mcpinput_i2c_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_i2c_scan),    MP_ROM_PTR(&mcpinput_i2c_scan_obj) },
     { MP_ROM_QSTR(MP_QSTR_stats),       MP_ROM_PTR(&mcpinput_stats_obj) },
+    // LED control
+    { MP_ROM_QSTR(MP_QSTR_led_init),    MP_ROM_PTR(&mcpinput_led_init_obj) },
+    { MP_ROM_QSTR(MP_QSTR_led_mode),    MP_ROM_PTR(&mcpinput_led_mode_obj) },
+    { MP_ROM_QSTR(MP_QSTR_led_set_track_active), MP_ROM_PTR(&mcpinput_led_set_track_active_obj) },
     // Constants
     { MP_ROM_QSTR(MP_QSTR_PRESS),       MP_ROM_INT(MCPINPUT_PRESS) },
     { MP_ROM_QSTR(MP_QSTR_RELEASE),     MP_ROM_INT(MCPINPUT_RELEASE) },
+    { MP_ROM_QSTR(MP_QSTR_LED_PYTHON),  MP_ROM_INT(MCPINPUT_LED_MODE_PYTHON) },
+    { MP_ROM_QSTR(MP_QSTR_LED_BEAT_SYNC), MP_ROM_INT(MCPINPUT_LED_MODE_BEAT_SYNC) },
 };
 static MP_DEFINE_CONST_DICT(mcpinput_module_globals,
                              mcpinput_module_globals_table);

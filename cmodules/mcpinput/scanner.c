@@ -99,6 +99,103 @@ static esp_err_t mcp_write_reg(mcpinput_state_t *s, uint8_t reg, uint8_t val) {
 }
 
 // ---------------------------------------------------------------------------
+// PCA9685 LED helpers (used by scan task for beat-sync mode)
+// ---------------------------------------------------------------------------
+
+// PCA9685 registers
+#define PCA_MODE1       0x00
+#define PCA_MODE2       0x04
+#define PCA_LED0_ON_L   0x06
+#define PCA_ALL_LED_ON_L 0xFA
+#define PCA_PRE_SCALE   0xFE
+
+#define PCA_MODE1_SLEEP   0x10
+#define PCA_MODE1_AI      0x20  // auto-increment
+#define PCA_MODE1_RESTART 0x80
+
+// Batch-write up to 5 channels of PCA9685 duty values in one I2C transaction.
+// Caller must NOT hold i2c_mutex — this function acquires it.
+static void pca_write_batch(mcpinput_state_t *s,
+                             const uint16_t *duties, int n) {
+    if (s->pca_dev == NULL || n <= 0 || n > MCPINPUT_LED_MAX_CH) return;
+
+    // Build register payload: reg_addr + 4 bytes per channel
+    uint8_t buf[1 + MCPINPUT_LED_MAX_CH * 4];
+    buf[0] = PCA_LED0_ON_L + 4 * s->pca_start_ch;
+    for (int i = 0; i < n; i++) {
+        int off = 1 + i * 4;
+        uint16_t d = duties[i];
+        if (d == 0) {
+            // Full off: set OFF_H bit 4
+            buf[off] = 0; buf[off+1] = 0; buf[off+2] = 0; buf[off+3] = 0x10;
+        } else if (d >= 4095) {
+            // Full on: set ON_H bit 4
+            buf[off] = 0; buf[off+1] = 0x10; buf[off+2] = 0; buf[off+3] = 0;
+        } else {
+            // PWM: ON=0, OFF=duty
+            buf[off] = 0; buf[off+1] = 0; buf[off+2] = d & 0xFF; buf[off+3] = d >> 8;
+        }
+    }
+
+    xSemaphoreTake(s->i2c_mutex, portMAX_DELAY);
+    i2c_master_transmit(s->pca_dev, buf, 1 + n * 4, I2C_TIMEOUT_MS);
+    xSemaphoreGive(s->i2c_mutex);
+}
+
+// Read audiomix clock and update arcade LEDs on step change.
+// Called from scan_task when led_mode == BEAT_SYNC and pca_dev != NULL.
+//
+// Cross-module coupling: reads audiomix_state->clock (extern from audiomix.h).
+// This is a read-only volatile access — no locks needed.
+// If audiomix is not linked, audiomix_state is NULL and we skip.
+
+// Cross-module access: read audiomix clock state for beat-sync LEDs.
+// Both modules are compiled into the same firmware binary.
+#include "audiomix.h"
+
+static void led_beat_sync_tick(mcpinput_state_t *s) {
+    if (audiomix_state == NULL) return;
+
+    seq_clock_t *clk = &audiomix_state->clock;
+    uint8_t playing = clk->playing;
+    uint8_t step = clk->current_step;
+    uint8_t n_ch = s->pca_n_ch;
+
+    if (playing && step != s->led_last_step) {
+        s->led_last_step = step;
+        uint8_t perc_mask = clk->steps[step].perc_mask;
+        uint8_t active = s->led_track_active;
+
+        uint16_t duties[MCPINPUT_LED_MAX_CH];
+        bool changed = false;
+        for (int i = 0; i < n_ch; i++) {
+            uint16_t d;
+            if (perc_mask & (1 << i))       d = MCPINPUT_LED_DUTY_ON;
+            else if (active & (1 << i))     d = MCPINPUT_LED_DUTY_GLOW;
+            else                            d = MCPINPUT_LED_DUTY_OFF;
+            duties[i] = d;
+            if (d != s->led_duty[i]) changed = true;
+        }
+
+        if (changed) {
+            pca_write_batch(s, duties, n_ch);
+            for (int i = 0; i < n_ch; i++) s->led_duty[i] = duties[i];
+        }
+    } else if (!playing && s->led_last_step != 0xFF) {
+        // Clock stopped — set all to glow (if track active) or off
+        s->led_last_step = 0xFF;
+        uint8_t active = s->led_track_active;
+        uint16_t duties[MCPINPUT_LED_MAX_CH];
+        for (int i = 0; i < n_ch; i++) {
+            duties[i] = (active & (1 << i)) ? MCPINPUT_LED_DUTY_GLOW
+                                              : MCPINPUT_LED_DUTY_OFF;
+        }
+        pca_write_batch(s, duties, n_ch);
+        for (int i = 0; i < n_ch; i++) s->led_duty[i] = duties[i];
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Scan task (core 0)
 // ---------------------------------------------------------------------------
 
@@ -145,6 +242,11 @@ static void scan_task(void *arg) {
             }
         }
         s->port_state = state;
+
+        // Beat-sync LED update (reads audiomix clock, writes PCA9685)
+        if (s->led_mode == MCPINPUT_LED_MODE_BEAT_SYNC && s->pca_dev != NULL) {
+            led_beat_sync_tick(s);
+        }
 
         // Update stack high water mark periodically
         if ((s->poll_count & 0xFF) == 0) {
@@ -261,6 +363,12 @@ void scanner_deinit(mcpinput_state_t *state) {
         s_scan_task = NULL;
     }
 
+    // Release PCA9685 device handle (if initialized)
+    if (state->pca_dev) {
+        i2c_master_bus_rm_device(state->pca_dev);
+        state->pca_dev = NULL;
+    }
+
     // Release I2C
     if (state->mcp_dev) {
         i2c_master_bus_rm_device(state->mcp_dev);
@@ -274,6 +382,85 @@ void scanner_deinit(mcpinput_state_t *state) {
 
     heap_caps_free(state);
     ESP_LOGI(TAG, "deinit complete");
+}
+
+// ---------------------------------------------------------------------------
+// PCA9685 LED initialization
+// ---------------------------------------------------------------------------
+
+int scanner_led_init(mcpinput_state_t *state, uint8_t pca_addr,
+                     uint8_t start_ch, uint8_t n_ch) {
+    if (state == NULL) return -1;
+    if (n_ch > MCPINPUT_LED_MAX_CH) n_ch = MCPINPUT_LED_MAX_CH;
+
+    // Remove old device handle if re-initializing
+    if (state->pca_dev) {
+        i2c_master_bus_rm_device(state->pca_dev);
+        state->pca_dev = NULL;
+    }
+
+    // Probe the PCA9685
+    xSemaphoreTake(state->i2c_mutex, portMAX_DELAY);
+    esp_err_t err = i2c_master_probe(state->bus, pca_addr, I2C_TIMEOUT_MS);
+    xSemaphoreGive(state->i2c_mutex);
+
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "PCA9685 (0x%02X) not found", pca_addr);
+        return -1;
+    }
+
+    // Add persistent device handle
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = pca_addr,
+        .scl_speed_hz = 400000,
+    };
+
+    xSemaphoreTake(state->i2c_mutex, portMAX_DELAY);
+    err = i2c_master_bus_add_device(state->bus, &dev_cfg, &state->pca_dev);
+    if (err != ESP_OK) {
+        xSemaphoreGive(state->i2c_mutex);
+        ESP_LOGE(TAG, "PCA9685 add_device failed (%d)", err);
+        return -1;
+    }
+
+    // Init sequence: sleep → set prescaler → wake + auto-increment
+    // Prescaler for 1 kHz: round(25_000_000 / (4096 * 1000)) - 1 = 5
+    uint8_t cmd[2];
+
+    // 1. Sleep + auto-increment
+    cmd[0] = PCA_MODE1; cmd[1] = PCA_MODE1_SLEEP | PCA_MODE1_AI;
+    i2c_master_transmit(state->pca_dev, cmd, 2, I2C_TIMEOUT_MS);
+
+    // 2. MODE2: totem-pole outputs
+    cmd[0] = PCA_MODE2; cmd[1] = 0x04;
+    i2c_master_transmit(state->pca_dev, cmd, 2, I2C_TIMEOUT_MS);
+
+    // 3. Set prescaler (1 kHz)
+    cmd[0] = PCA_PRE_SCALE; cmd[1] = 5;
+    i2c_master_transmit(state->pca_dev, cmd, 2, I2C_TIMEOUT_MS);
+
+    // 4. All LEDs off
+    uint8_t all_off[5] = { PCA_ALL_LED_ON_L, 0, 0, 0, 0x10 };
+    i2c_master_transmit(state->pca_dev, all_off, 5, I2C_TIMEOUT_MS);
+
+    // 5. Wake up (clear sleep, enable auto-increment)
+    cmd[0] = PCA_MODE1; cmd[1] = PCA_MODE1_AI;
+    i2c_master_transmit(state->pca_dev, cmd, 2, I2C_TIMEOUT_MS);
+
+    xSemaphoreGive(state->i2c_mutex);
+
+    // Store config
+    state->pca_start_ch = start_ch;
+    state->pca_n_ch = n_ch;
+    state->led_mode = MCPINPUT_LED_MODE_PYTHON;  // default: Python controls
+    state->led_last_step = 0xFF;
+    state->led_track_active = 0;
+    for (int i = 0; i < MCPINPUT_LED_MAX_CH; i++) state->led_duty[i] = 0;
+
+    ESP_LOGI(TAG, "PCA9685 (0x%02X) LED init OK — ch %d..%d",
+             pca_addr, start_ch, start_ch + n_ch - 1);
+    return 0;
 }
 
 // ---------------------------------------------------------------------------

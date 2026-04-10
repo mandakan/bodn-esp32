@@ -33,6 +33,14 @@ try:
 except ImportError:
     _has_clock = False
 
+# Try to import native input module for C-driven LED beat sync
+try:
+    import _mcpinput
+
+    _has_led_sync = hasattr(_mcpinput, "led_init")
+except ImportError:
+    _has_led_sync = False
+
 ENC_A = const(1)  # config.ENC_A — BPM control
 
 # Preview voice for button feedback — separate from clock voices (0-5)
@@ -88,7 +96,9 @@ class SequencerScreen(Screen):
 
         self._engine = SequencerEngine()
         self._drum_bufs = drum_bufs  # PSRAM preloaded percussion WAVs (or None)
-        self._prev_step = -1
+        self._c_leds = False  # True when C drives arcade LEDs (beat-sync mode)
+        self._prev_step = -1  # last step seen by update() (for step_advanced)
+        self._render_step = -1  # last step drawn by render (for marker clear)
         self._prev_sw0 = None
         self._prev_sw1 = None
         self._prev_sw2 = None
@@ -119,6 +129,7 @@ class SequencerScreen(Screen):
         self._pause.set_manager(manager)
         self._engine = SequencerEngine()
         self._prev_step = -1
+        self._render_step = -1
         self._dirty = True
         self._full_clear = True
         self._flash_msg = None
@@ -164,6 +175,17 @@ class SequencerScreen(Screen):
             metro_mask = self._metro_mask() if self._engine.metronome else 0
             _audiomix.clock_set_tone_track(1, _METRO_VOICE, metro_mask)
 
+        # Enable C-driven beat-sync LEDs if available
+        self._c_leds = False
+        if _has_led_sync and _has_clock and self._arcade:
+            try:
+                if _mcpinput.led_init():
+                    _mcpinput.led_mode(_mcpinput.LED_BEAT_SYNC)
+                    self._arcade.set_c_driven(True)
+                    self._c_leds = True
+            except Exception as e:
+                print("seq: C LED init failed:", e)
+
         # Compute grid geometry
         w = manager.tft.width if hasattr(manager.tft, "width") else 320
         h = manager.tft.height if hasattr(manager.tft, "height") else 240
@@ -183,6 +205,15 @@ class SequencerScreen(Screen):
         self._marker_y = self._grid_y + self._grid_h
 
     def exit(self):
+        # Restore Python LED control before cleanup
+        if self._c_leds:
+            try:
+                _mcpinput.led_mode(_mcpinput.LED_PYTHON)
+            except Exception:
+                pass
+            if self._arcade:
+                self._arcade.set_c_driven(False)
+            self._c_leds = False
         if _has_clock:
             _audiomix.clock_stop()
         self._drum_bufs = None
@@ -288,6 +319,8 @@ class SequencerScreen(Screen):
                     )
                 metro_mask = self._metro_mask() if eng.metronome else 0
                 _audiomix.clock_set_tone_track(1, _METRO_VOICE, metro_mask)
+            if self._c_leds:
+                self._sync_track_active()
             self._dirty = True
             self._full_clear = True
             self._flash_msg = t("seq_cleared")
@@ -295,15 +328,19 @@ class SequencerScreen(Screen):
 
         # --- Arcade buttons: percussion ---
         any_toggled_on = False
+        perc_changed = False
         for i in range(NUM_PERC_TRACKS):
             if i < len(inp.arc_just_pressed) and inp.arc_just_pressed[i]:
                 step, val = eng.toggle_perc(i)
+                perc_changed = True
                 if _has_clock:
                     self._sync_step_to_clock(step)
                 if val:
                     any_toggled_on = True
                     self._play_drum(i)
                 self._cells_dirty = True
+        if perc_changed and self._c_leds:
+            self._sync_track_active()
 
         # --- Mini buttons: melody ---
         for i in range(8):
@@ -322,6 +359,8 @@ class SequencerScreen(Screen):
             if _has_clock:
                 self._sync_all_to_clock()
                 _audiomix.clock_start(eng.bpm, eng.n_steps)
+            if self._c_leds:
+                self._sync_track_active()
             self._dirty = True
 
         # --- Advance playhead ---
@@ -347,8 +386,11 @@ class SequencerScreen(Screen):
             if eng.is_beat(eng.step):
                 self._play_metronome(eng.is_downbeat(eng.step))
 
+        # Update prev_step in update() so step_advanced is frame-accurate
+        self._prev_step = eng.step
+
         # --- Playhead movement (marker-only redraw) ---
-        if eng.step != self._prev_step:
+        if eng.step != self._render_step:
             self._marker_dirty = True
 
         # --- Update secondary display ---
@@ -357,9 +399,9 @@ class SequencerScreen(Screen):
                 eng.bpm, eng.state == PLAYING, eng.n_steps, eng.metronome
             )
 
-        # Arcade LEDs: flash on step hit, glow if track has notes, off otherwise
+        # Arcade LEDs: C handles beat-sync, Python fallback otherwise
         arc = self._arcade
-        if arc:
+        if arc and not self._c_leds:
             step = eng.step
             step_changed = eng.step_advanced
             for i in range(NUM_PERC_TRACKS):
@@ -410,6 +452,15 @@ class SequencerScreen(Screen):
             if self._engine.melody[s] > 0:
                 mel_mask |= 1 << s
         _audiomix.clock_set_tone_track(0, 5, mel_mask)
+
+    def _sync_track_active(self):
+        """Push track-active bitmask to C LED driver."""
+        eng = self._engine
+        mask = 0
+        for i in range(NUM_PERC_TRACKS):
+            if any(eng.perc[i]):
+                mask |= 1 << i
+        _mcpinput.led_set_track_active(mask)
 
     def _metro_mask(self):
         """Build step bitmask for metronome beats (every 2nd step = quarter note)."""
@@ -505,7 +556,7 @@ class SequencerScreen(Screen):
                 tft.fill(theme.BLACK)
             self._render_game(tft, theme)
             self._engine.dirty_steps.clear()
-            self._prev_step = self._engine.step
+            self._render_step = self._engine.step
         elif self._cells_dirty:
             # Redraw only the toggled cells (engine tracks which steps changed)
             self._cells_dirty = False
@@ -515,12 +566,12 @@ class SequencerScreen(Screen):
             if self._marker_dirty:
                 self._marker_dirty = False
                 self._render_marker(tft, theme)
-                self._prev_step = self._engine.step
+                self._render_step = self._engine.step
         elif self._marker_dirty:
             # Cheapest path: only move the playhead marker strip
             self._marker_dirty = False
             self._render_marker(tft, theme)
-            self._prev_step = self._engine.step
+            self._render_step = self._engine.step
 
         self._pause.render(tft, theme, frame)
 
@@ -604,7 +655,7 @@ class SequencerScreen(Screen):
         """Draw the playhead marker strip — tiny dirty rect."""
         eng = self._engine
         col_w = self._col_w
-        old_step = self._prev_step
+        old_step = self._render_step
         new_step = eng.step
         my = self._marker_y
 
