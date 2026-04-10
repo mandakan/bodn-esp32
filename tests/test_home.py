@@ -123,15 +123,26 @@ def test_single_detent_moves_one_step():
 
 
 def test_fast_spin_skips_modes():
-    """Fast spin: velocity multiplier makes fewer detents go further."""
+    """Fast spin: velocity multiplier accumulates but steps ±1 per frame.
+
+    The home screen clamps to 1 step per update() to play the slide
+    animation.  Excess units are kept in the accumulator and consumed
+    on subsequent frames when new detents arrive.
+    """
     home, mgr = make_home(n_modes=6)
     inp = mgr.inp
 
-    # 2 detents at high velocity → 2*2=4 effective, 4//1=4 units
+    # 2 detents at high velocity → 2*2=4 effective, clamped to 1 step
     inp.enc_delta[0] = 2
     inp.enc_velocity[0] = 500
     home.update(inp, 1)
-    assert home._index == 4
+    assert home._index == 1  # first step (excess 3 in accumulator)
+
+    # Next detent triggers the accumulator to drain one more step
+    inp.enc_delta[0] = 1
+    inp.enc_velocity[0] = 50
+    home.update(inp, 2)
+    assert home._index == 2  # accumulator had 3, +1 = 4, clamped to 1 step
 
 
 def test_mode_change_starts_animation():

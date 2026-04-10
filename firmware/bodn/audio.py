@@ -662,9 +662,25 @@ class AudioEngine:
             self._voices[idx].stop()
 
     def _stop_streaming(self, idx):
-        """Remove any active streaming voice for the given index."""
-        self._streaming = [s for s in self._streaming if s.idx != idx]
-        self._buf_refs.pop(idx, None)
+        """Remove any active streaming voice for the given index.
+
+        Mutates the list in-place (never replaces the reference) so the
+        async start() loop's iteration stays valid.
+
+        Does NOT drop _buf_refs — callers that replace the buffer set
+        _buf_refs[idx] themselves; callers that just stop a voice call
+        _drop_buf_ref() separately.  This prevents a window where the
+        old buffer has no Python reference while the C mixer may still
+        be reading from it.
+        """
+        i = 0
+        while i < len(self._streaming):
+            sv = self._streaming[i]
+            if sv.idx == idx:
+                sv.close()
+                self._streaming.pop(i)
+            else:
+                i += 1
 
     def _resolve_voice(self, voice, channel):
         """Resolve a voice= or channel= argument to a voice index."""
@@ -714,6 +730,11 @@ class AudioEngine:
 
         if self._native:
             self._stop_streaming(idx)
+            # Set the new buffer reference BEFORE telling C to play.
+            # voice_play_buffer atomically swaps source_type via the
+            # writing flag, so the mixer won't read the old buf_ptr
+            # after this call.  Keeping _buf_refs[idx] = data ensures
+            # GC can't free the buffer while C is using it.
             self._buf_refs[idx] = data
             _audiomix.voice_play_buffer(idx, data, len(data), loop)
             return
@@ -799,6 +820,7 @@ class AudioEngine:
                 for i in range(start, end):
                     _audiomix.voice_stop(i)
                     self._stop_streaming(i)
+                    self._buf_refs.pop(i, None)
             return
 
         if channel is None:
@@ -876,7 +898,10 @@ class AudioEngine:
                         self._fill_ringbuf(sv)
                     for sv in dead:
                         sv.close()
-                        self._streaming.remove(sv)
+                        try:
+                            self._streaming.remove(sv)
+                        except ValueError:
+                            pass  # already removed by _stop_streaming
                         self._buf_refs.pop(sv.idx, None)
                     await sleep_ms(16)
                 else:
