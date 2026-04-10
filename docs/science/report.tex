@@ -276,8 +276,9 @@ The firmware is written in MicroPython and follows a modular architecture:
     no hardware dependencies, testable via standard pytest on the host.
   \item \textbf{Screen modules} (\texttt{ui/*.py}): Render game state to
     displays and LEDs; handle input events.
-  \item \textbf{Audio engine}: 6-voice mixer with priority channels
-    (music, SFX pool, UI feedback).
+  \item \textbf{Audio engine}: 16-voice native C mixer running on a dedicated
+    CPU core, with priority channels (music, SFX pool, UI feedback) and
+    built-in tone generators (sine, square, sawtooth, noise).
   \item \textbf{Session manager}: Enforces play time limits, breaks, and
     quiet hours.
   \item \textbf{i18n system}: All user-facing strings localised
@@ -355,6 +356,31 @@ Stories are defined as script files on the SD card; adding new stories requires
 no code changes.  The first story adapts Beatrix Potter's \emph{The Tale of
 Peter Rabbit} (public domain) into a choose-your-own-adventure with four endings.
 
+\subsubsection{High-Five Friends (Heja-kompisar)}
+A reaction-time game targeting \textbf{hand-eye coordination} and
+\textbf{inhibitory control}. Animals ``pop up'' on illuminated arcade buttons
+and the child must tap the lit button before it disappears. The reaction window
+shrinks from 2\,s to 0.5\,s as the child succeeds, providing adaptive
+difficulty within the child's zone of proximal development
+\citep{vygotsky1978mind}. Gentle miss feedback (soft sound, dim animation) and
+automatic restart after three misses support \textbf{persistence} while keeping
+emotional stakes low \citep{dweck2006mindset}. The mode also exercises
+\textbf{auditory processing} (distinct hit/miss sounds) and
+\textbf{self-regulation} (managing the frustration of near-misses).
+
+\subsubsection{Sequencer (Sequenser)}
+A loop-based step sequencer targeting \textbf{working memory},
+\textbf{sequential thinking}, \textbf{pattern recognition}, and
+\textbf{creative expression}. Five percussion tracks (arcade buttons) and one
+melody track (eight mini buttons mapping to a pentatonic scale) are recorded
+into an 8- or 16-step grid during looped playback. Toggle switches control
+play/pause, step count, and metronome---making abstract musical concepts
+tangible. The mode introduces computational thinking through creative play
+\citep{papert1980mindstorms}: building patterns, running them, hearing something
+unexpected, and debugging by toggling individual steps. BPM is adjustable via
+encoder (70--140), providing fine motor practice with immediate auditory
+feedback.
+
 % --- 4.2 Coverage Matrix ---
 \subsection{Coverage Matrix}
 \label{sec:coverage}
@@ -368,38 +394,39 @@ Peter Rabbit} (public domain) into a choose-your-own-adventure with four endings
   blank = not applicable.}
 \label{tab:matrix}
 \small
-\begin{tabular}{lcccccccc}
+\begin{tabular}{lcccccccccc}
 \toprule
 \textbf{Domain} & \rotatebox{70}{Simon} & \rotatebox{70}{Rule Follow}
   & \rotatebox{70}{Mystery Box} & \rotatebox{70}{Fl\"ode}
   & \rotatebox{70}{Garden} & \rotatebox{70}{Soundboard}
-  & \rotatebox{70}{Spaceship} & \rotatebox{70}{Story Mode} \\
+  & \rotatebox{70}{Spaceship} & \rotatebox{70}{Story Mode}
+  & \rotatebox{70}{High-Five} & \rotatebox{70}{Sequencer} \\
 \midrule
-Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet$ \\
-Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ & \\
-Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & \\
+Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ \\
+Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ & & $\bullet\bullet$ & \\
+Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ \\
 \midrule
-Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ \\
-Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & \\
-Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & & \\
-Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & & $\bullet\bullet$ \\
-Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ & \\
+Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ \\
+Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & & & & \\
+Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ \\
+Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ & & & $\bullet\bullet$ \\
 \midrule
-Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ \\
-Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & \\
-Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ \\
-Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ \\
+Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ \\
+Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet$ \\
+Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
 \midrule
-Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ \\
-Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ \\
+Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & \\
+Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet$ \\
 \midrule
-Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ & $\bullet$ \\
-Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet$ \\
-Imaginative play     & & & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ \\
+Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & \\
+Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Imaginative play     & & & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ \\
 \midrule
-Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & \\
-Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & \\
-Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & \\
+Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & \\
+Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ \\
+Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & $\bullet\bullet\bullet$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -409,22 +436,23 @@ Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & \\
 \label{sec:gaps}
 
 The matrix reveals strong coverage for executive functions, visual processing,
-and open exploration. Story Mode significantly improved three previously
-identified gaps: listening comprehension, bilingual exposure, and imaginative
-play each now have two primary-level features (Spaceship + Story Mode).
-Remaining areas with limited coverage include:
+open exploration, and---with the addition of Sequencer and High-Five
+Friends---auditory processing, hand-eye coordination, and persistence.
+Story Mode significantly improved three previously identified gaps: listening
+comprehension, bilingual exposure, and imaginative play each now have two
+primary-level features (Spaceship + Story Mode). The Sequencer filled the
+creative expression gap, and High-Five Friends added a dedicated hand-eye
+coordination mode. Remaining areas with limited coverage include:
 
 \begin{enumerate}[noitemsep]
   \item \textbf{Spatial reasoning}: Currently addressed only by Fl\"ode. A
     tangram or construction mode would add breadth.
-  \item \textbf{Problem solving}: Only Fl\"ode and (incidentally) Spaceship
-    exercise strategic planning. More puzzle types would strengthen this domain.
+  \item \textbf{Problem solving}: Fl\"ode (primary) and Sequencer (debugging)
+    address this, but more puzzle types would strengthen the domain.
   \item \textbf{Bilingual exposure}: Story Mode provides the first active
     bilingual experience (full narration in both languages), but a dedicated
     language-switching game could further leverage the bilingual advantage for
     EF development \citep{bialystok2011reshaping}.
-  \item \textbf{Creative expression}: Primarily addressed by Soundboard and
-    Garden. The planned Sequencer mode will significantly strengthen this area.
 \end{enumerate}
 
 % =============================================================================
@@ -466,9 +494,9 @@ Remaining areas with limited coverage include:
   \item \textbf{Empirical validation}: Conduct pre--post studies comparing
     EF measures (DCCS, digit span) in children using \Bodn{} vs.\ control
     activities.
-  \item \textbf{Sequencer mode}: Implement the planned sequencing mode to
-    strengthen creative expression and computational thinking
-    (cf.\ \citealt{papert1980mindstorms}).
+  \item \textbf{Record \& Replay mode}: Implement voice recording and playback
+    with effects (pitch shift, echo) to strengthen creative expression,
+    auditory processing, and bilingual exposure.
   \item \textbf{Cooperative play}: Add turn-taking and collaborative modes to
     support social-cognitive development.
   \item \textbf{Adaptive difficulty modelling}: Implement Bayesian difficulty

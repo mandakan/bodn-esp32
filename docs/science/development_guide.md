@@ -88,8 +88,11 @@ flashed on the screen, then pressing them back in the right order.
   Steer out of the way!") and the child must hold that instruction in mind while
   figuring out which physical action to take.
 
-- **Sequencer** (planned): Building sound-and-light patterns step by step
+- **Sequencer**: Building sound-and-light patterns step by step
   requires holding the growing sequence in mind.
+
+- **High-Five Friends**: Mild WM load — the child tracks which button is
+  lit and mentally prepares while waiting for the next target.
 
 #### Inhibitory Control
 
@@ -107,6 +110,10 @@ to press it because the current rule says to press the *opposite* color.
 - **Spaceship**: The child must wait for the right moment — mashing buttons
   randomly does not solve scenarios. Each scenario type requires a specific
   response.
+
+- **High-Five Friends**: The child must resist tapping randomly and wait
+  for the target to appear. Premature taps are ignored — rewarding patience
+  and focused attention.
 
 #### Cognitive Flexibility
 
@@ -159,6 +166,18 @@ neural pathways (Kraus & Chandrasekaran, 2010; Trainor, 2005).
 - **Simon**: Each button has a unique color *and* a unique tone. The child must
   process both the visual sequence and the auditory pattern, strengthening
   cross-modal association.
+
+- **High-Five Friends**: A reaction-time game that exercises **hand-eye
+  coordination** directly — the child must spot the lit arcade button and tap
+  it before it disappears. Celebration sounds and LED flashes reward
+  successful taps, while gentle "aww" feedback softens misses. The
+  progressively shrinking reaction window (from 2 seconds down to 0.5
+  seconds) provides adaptive fine motor challenge.
+
+- **Sequencer**: Precise timing of button presses, combined with visual
+  step-grid feedback and auditory playback, creates a tight
+  perception-action loop that exercises fine motor skills, hand-eye
+  coordination, and auditory processing simultaneously.
 
 ---
 
@@ -343,6 +362,11 @@ stronger skills and greater confidence (Dweck, 2006).
 - **Flöde**: Puzzles cannot be "lost," only "not yet solved." The child can keep
   adjusting segments at their own pace with no timer.
 
+- **High-Five Friends**: After 3 misses the round ends, but the game
+  auto-restarts — encouraging the child to beat their previous score. The
+  gentle miss feedback ("aww" sound, soft animation) keeps frustration low
+  while the score counter provides visible progress.
+
 ### Imaginative Play
 
 **What it is:** Pretending — taking on roles, creating fictional scenarios, using
@@ -410,10 +434,13 @@ emotional) in a single activity.
 - **Garden of Life**: Seed placement is a creative act — the child creates
   living, evolving art.
 
-- **Sequencer** (planned): The most expressive mode — composing original
-  light-and-sound patterns. This introduces computational thinking (sequencing,
-  debugging, iteration) through creative play, following Papert's (1980)
-  constructionist philosophy.
+- **Sequencer**: The most expressive mode — composing original
+  sound patterns with 5 percussion tracks and a melody track. This introduces
+  computational thinking (sequencing, debugging, iteration) through creative
+  play, following Papert's (1980) constructionist philosophy. The child
+  records hits in real-time during looped playback; toggle switches control
+  play/pause, step count (8/16), and metronome — making abstract music
+  concepts tangible.
 
 ---
 
@@ -466,14 +493,16 @@ Böðn addresses these guidelines through:
 
 | Developmental Area | Key Finding | Böðn Response |
 |--------------------|-------------|---------------|
-| Executive functions | Strongest predictor of school readiness (Diamond, 2013) | Simon (WM), Rule Follow (IC, CF), Spaceship (CF) |
+| Executive functions | Strongest predictor of school readiness (Diamond, 2013) | Simon (WM), Rule Follow (IC, CF), Spaceship (CF), High-Five (IC) |
 | Self-control | Predicts lifelong outcomes in a gradient (Moffitt et al., 2011) | Gentle failure feedback, session limits, pause mechanics |
 | Tangible interaction | Stronger learning than touchscreen-only (Marshall, 2007) | 18 physical controls; screens for feedback only |
 | Cause-and-effect | Foundation of scientific thinking (Gopnik, 2012) | Mystery Box, Soundboard, Garden |
 | Guided play | Deep learning through structured exploration (Weisberg et al., 2013) | Mystery Box, Garden, Soundboard — open-ended within designed environments |
 | Spatial reasoning | Predicts math achievement (Verdine et al., 2014) | Flöde |
 | Bilingualism | Enhanced EF through dual-language management (Bialystok, 2011) | Swedish/English UI and TTS |
-| Pretend play | Develops theory of mind and narrative skills (Lillard et al., 2013) | Spaceship cockpit mode |
+| Pretend play | Develops theory of mind and narrative skills (Lillard et al., 2013) | Spaceship cockpit mode, Story Mode |
+| Reaction time & coordination | Hand-eye coordination critical for motor development | High-Five Friends (adaptive difficulty) |
+| Musical & rhythmic development | Auditory processing underpins language (Kraus, 2010) | Sequencer (composition), Soundboard (exploration) |
 | Screen time limits | WHO recommends < 1 hour/day for 2–4 year-olds (WHO, 2019) | Parental session limits, break enforcement, usage dashboard |
 
 ---
