@@ -112,6 +112,12 @@ def blit_sprite(tft, sprite, x, y):
     tft.mark_dirty(x, y, pw, ph)
 
 
+def blit_centered(tft, sprite, y, w):
+    """Blit a sprite horizontally centered within width w."""
+    _, pw, _ = sprite
+    blit_sprite(tft, sprite, (w - pw) // 2, y)
+
+
 def _draw_ext_char(tft, glyph, x, y, color, scale):
     """Draw an 8×8 extended glyph (bytes, 1bpp row-major, MSB-first)."""
     for row in range(8):
