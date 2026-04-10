@@ -549,9 +549,10 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
-    def _make_highfive():
-        from bodn.ui.highfive import HighFiveScreen
+    def _make_highfive(on_progress=None):
+        from bodn.ui.highfive import HighFiveScreen, preload_highfive_assets
 
+        sound_bufs = preload_highfive_assets(on_progress=on_progress)
         _reset_secondary()
         return HighFiveScreen(
             np,
@@ -561,6 +562,7 @@ def create_ui(
             settings=settings,
             secondary_screen=cat,
             on_exit=_reset_secondary,
+            sound_bufs=sound_bufs,
         )
 
     def _make_settings():

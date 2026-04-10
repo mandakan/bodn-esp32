@@ -9,6 +9,11 @@ try:
 except ImportError:
     import utime as time
 
+try:
+    import os
+except ImportError:
+    import uos as os
+
 from micropython import const
 
 from bodn import config
@@ -26,6 +31,7 @@ from bodn.highfive_rules import (
     NUM_BUTTONS,
 )
 from bodn.patterns import N_LEDS, ZONE_LID_RING, zone_pulse, zone_rainbow, zone_clear
+from bodn.assets import preload_sounds
 
 # Try native LED driver for C-level hit detection
 try:
@@ -61,6 +67,29 @@ _TONE_MISS = const(150)  # sad tone
 _HEADER_H = const(20)
 _FOOTER_H = const(20)
 
+# Sound effect names on SD: /sounds/highfive/<name>.wav
+# Multiple variants per event — game picks randomly for variation.
+_SND_DIR = "/sounds/highfive/"
+_SND_POP = ["pop_1", "pop_2", "pop_3"]  # animal popping up
+_SND_CLAP = ["clap_1", "clap_2"]  # high-five slap
+_SND_CHEER = ["cheer_1", "cheer_2"]  # success celebration
+_SND_AWW = ["aww_1", "aww_2"]  # missed / too slow
+_ALL_SND_NAMES = _SND_POP + _SND_CLAP + _SND_CHEER + _SND_AWW
+
+
+def _rand_pick(bufs):
+    """Pick a random non-None buffer from a list."""
+    valid = [b for b in bufs if b]
+    if not valid:
+        return None
+    idx = int.from_bytes(os.urandom(1), "big") % len(valid)
+    return valid[idx]
+
+
+def preload_highfive_assets(on_progress=None):
+    """Preload all High-Five sound variations into PSRAM."""
+    return preload_sounds(_SND_DIR, _ALL_SND_NAMES, on_progress=on_progress)
+
 
 class HighFiveScreen(Screen):
     """High-Five Friends — tap the animal before it disappears."""
@@ -74,6 +103,7 @@ class HighFiveScreen(Screen):
         settings=None,
         secondary_screen=None,
         on_exit=None,
+        sound_bufs=None,
     ):
         self._np = np
         self._overlay = overlay
@@ -90,6 +120,12 @@ class HighFiveScreen(Screen):
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
+        # Sound buffers grouped by event type
+        self._snd_bufs = sound_bufs
+        self._snd_pop = []
+        self._snd_clap = []
+        self._snd_cheer = []
+        self._snd_aww = []
 
     def enter(self, manager):
         self._manager = manager
@@ -99,6 +135,20 @@ class HighFiveScreen(Screen):
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
+
+        # Split preloaded sound buffers into event groups
+        bufs = self._snd_bufs or [None] * len(_ALL_SND_NAMES)
+        n_pop = len(_SND_POP)
+        n_clap = len(_SND_CLAP)
+        n_cheer = len(_SND_CHEER)
+        off = 0
+        self._snd_pop = bufs[off : off + n_pop]
+        off += n_pop
+        self._snd_clap = bufs[off : off + n_clap]
+        off += n_clap
+        self._snd_cheer = bufs[off : off + n_cheer]
+        off += n_cheer
+        self._snd_aww = bufs[off : off + len(_SND_AWW)]
 
         # Init C LED driver for whack mode (hit detection at 500Hz)
         self._c_leds = False
@@ -123,6 +173,13 @@ class HighFiveScreen(Screen):
             except Exception:
                 pass
             self._c_leds = False
+
+        # Free sound buffers (PSRAM)
+        self._snd_bufs = None
+        self._snd_pop = []
+        self._snd_clap = []
+        self._snd_cheer = []
+        self._snd_aww = []
 
         if self._arcade:
             self._arcade.all_off()
@@ -154,6 +211,14 @@ class HighFiveScreen(Screen):
             return
         if self._audio and self._engine.state == SHOWING:
             self._audio.tone(_TONES[index], 100)
+
+    def _play_sfx(self, bufs, fallback_freq, fallback_ms, wave="sine", channel="sfx"):
+        """Play a random WAV variation, or fall back to a procedural tone."""
+        buf = _rand_pick(bufs)
+        if buf:
+            self._audio.play_buffer(buf, channel=channel)
+        else:
+            self._audio.tone(fallback_freq, fallback_ms, wave, channel=channel)
 
     # ------------------------------------------------------------------
     # Update
@@ -198,13 +263,16 @@ class HighFiveScreen(Screen):
             self._dirty = True
             self._leds_dirty = True
 
-            # Audio feedback
-            if eng.state == HIT_FLASH and self._audio:
-                self._audio.tone(_TONE_HIT, 200)
+            # Audio feedback (WAV with random variation, tone fallback)
+            if eng.state == SHOWING and self._audio:
+                self._play_sfx(self._snd_pop, _TONES[eng.target % len(_TONES)], 100)
+            elif eng.state == HIT_FLASH and self._audio:
+                self._play_sfx(self._snd_clap, _TONE_HIT, 100)
+                self._play_sfx(self._snd_cheer, _TONE_HIT, 200, channel="music")
             elif eng.state == MISS_FLASH and self._audio:
-                self._audio.tone(_TONE_MISS, 300, "square")
+                self._play_sfx(self._snd_aww, _TONE_MISS, 300, wave="square")
             elif eng.state == GAME_OVER and self._audio:
-                self._audio.tone(_TONE_MISS, 500, "sawtooth")
+                self._play_sfx(self._snd_aww, _TONE_MISS, 500, wave="sawtooth")
 
             # Cat face emotion
             if self._secondary:
