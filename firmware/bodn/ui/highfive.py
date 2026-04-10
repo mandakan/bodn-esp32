@@ -206,17 +206,17 @@ class HighFiveScreen(Screen):
         return self._dirty or self._pause.needs_render
 
     def _on_press(self, kind, index):
-        """Scan-time audio callback (~200 Hz). Play tone on arcade press."""
+        """Scan-time audio callback (~200 Hz). Tone fallback when no WAVs."""
         if kind != "arc" or index >= NUM_BUTTONS:
             return
+        # When WAV files are loaded, all audio comes from state transitions
+        # (pop/clap/cheer/aww). Only play procedural tones as a fallback
+        # when no sound files are available.
+        if any(self._snd_pop):
+            return
         eng = self._engine
-        if not self._audio or eng.state != SHOWING:
-            return
-        if index == eng.target and any(self._snd_clap):
-            # Correct hit with WAV loaded — skip tone to avoid double sound
-            # (the clap WAV plays from the state transition instead)
-            return
-        self._audio.tone(_TONES[index], 100)
+        if self._audio and eng.state == SHOWING:
+            self._audio.tone(_TONES[index], 100)
 
     def _play_sfx(self, bufs, fallback_freq, fallback_ms, wave="sine", channel="sfx"):
         """Play a random WAV variation, or fall back to a procedural tone."""
