@@ -273,6 +273,9 @@ class SettingsScreen(Screen):
         return self._leds_on
 
     def render(self, tft, theme, frame):
+        import time as _t
+
+        _t0 = _t.ticks_ms()
         self._dirty = False
 
         w = theme.width
@@ -320,6 +323,10 @@ class SettingsScreen(Screen):
             draw_centered(tft, "^", title_h - 10, theme.MUTED, w)
         if scroll + visible < n:
             draw_centered(tft, "v", h - 12, theme.MUTED, w)
+
+        _ms = _t.ticks_diff(_t.ticks_ms(), _t0)
+        dr = tft.dirty_rect
+        print("SETTINGS render={}ms scroll={} dirty={}".format(_ms, scroll_changed, dr))
 
     def _render_row(self, tft, theme, i, scroll, title_h, row_h, w):
         """Draw a single menu row, clearing its background first."""
