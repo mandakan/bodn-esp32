@@ -444,6 +444,54 @@ emotional) in a single activity.
 
 ---
 
+## NFC: Adding a Tangible Manipulation Layer
+
+### Why NFC for a 4-Year-Old?
+
+Böðn already offers a rich physical interface (buttons, encoders, switches), but
+these are **fixed** — the child interacts with the same physical controls regardless
+of context. NFC-tagged cards and stickers add a **tangible manipulation layer**: the
+child selects, sorts, sequences, and brings physical objects to the device. This is
+qualitatively different from pressing buttons because:
+
+- **The child decides what to bring.** Button presses are reactive (respond to a
+  prompt); NFC scanning is proactive (choose an object, bring it). This exercises
+  planning and intentionality (Deci & Ryan, 2000).
+
+- **Physical tokens offload memory.** A spread of NFC cards on the table is an
+  external memory — the child can see all options at once without holding them in
+  mind, freeing working memory for the task itself (Marshall, 2007).
+
+- **Sorting and sequencing become physical acts.** Arranging cards into piles or
+  lines exercises fine motor skills and spatial reasoning simultaneously with the
+  cognitive task (Manches & O'Malley, 2012).
+
+- **The scan gesture is deliberate and embodied.** Find the card → pick it up →
+  bring it to the reader → hold. This multi-step motor sequence is richer than a
+  button press and more age-appropriate than touchscreen gestures (Antle, 2013).
+
+### Commercial Proof
+
+The Toniebox and Yoto Player have proven at massive scale that children as young as
+3 handle NFC with zero instruction. The interaction is inherently intuitive: bring
+the thing to the thing, something happens.
+
+### Developmental Impact
+
+NFC modes can address several gaps identified in the development matrix:
+
+| Gap | NFC Application |
+|-----|----------------|
+| **Problem Solving** | Scavenger hunts, puzzle cards (scan clues to unlock next step) |
+| **Fine Motor** | Card manipulation, sorting into physical piles, precision placement |
+| **Bilingual Exposure** | Same picture, two language cards — scan to hear each word |
+| **Categorisation (CF/IC)** | Physical DCCS: sort cards by one dimension, then switch rules |
+
+See `docs/science/nfc_tangible_learning.md` for the full research summary with
+references.
+
+---
+
 ## Tangible Interfaces: Why Physical Beats Touchscreen
 
 Research on tangible user interfaces (TUI) consistently shows advantages over
