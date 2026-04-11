@@ -204,9 +204,9 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Aspect | Current state | Suggested feature |
 |--------|---------------|-------------------|
 | **Spatial Reasoning (SR)** | Only Flöde | Building/construction mode; tangram puzzles |
-| **Problem Solving (PS)** | Only Flöde + Sequencer (debugging) | More puzzle types; scavenger hunts |
-| **Bilingual Exposure (BL)** | Story Mode + passive UI labels | Language-switch game; more bilingual content |
-| **Fine Motor (FM)** | Mostly incidental (Flöde, Sequencer significant) | Tracing/drawing mode; precision encoder challenge |
+| **Problem Solving (PS)** | Only Flöde + Sequencer (debugging) | More puzzle types; NFC scavenger hunts |
+| **Bilingual Exposure (BL)** | Story Mode + passive UI labels | NFC vocabulary cards (sv/en); language-switch game |
+| **Fine Motor (FM)** | Mostly incidental (Flöde, Sequencer significant) | NFC card manipulation/sorting; tracing mode |
 
 ---
 
@@ -272,6 +272,67 @@ Features shift from guided challenge toward creative expression and composition.
 
 Features that would fill developmental gaps, ordered by coverage impact.
 
+### NFC Tangible Modes (PN532 reader + programmable tags)
+
+NFC-tagged cards and stickers add a **tangible manipulation layer** backed by
+extensive research on Tangible User Interfaces (TUI) for early childhood
+(Marshall, 2007; Antle, 2013; Horn et al., 2009). The scan-and-discover
+interaction requires a deliberate, embodied action sequence (find → pick up →
+bring to reader → hold) that exercises fine motor skills and reinforces
+intentionality. See `docs/science/nfc_tangible_learning.md` for the full research
+summary.
+
+#### NFC-1. Sortera — Classification Game
+
+**Primary targets:** CF, IC, PR, BL
+**Fills gaps in:** Cognitive flexibility (tangible DCCS), bilingual exposure, fine motor
+**Concept:** Scan NFC cards to sort by announced categories; rules switch mid-game
+(colour → shape → animal). Direct tangible implementation of the DCCS task.
+**References:** Zelazo (2006) DCCS; Diamond (2013) EF training; Antle (2013) TUI for children
+
+#### NFC-2. Saga Builder — Tangible Storytelling
+
+**Primary targets:** ST, IP, LC, BL, CX
+**Fills gaps in:** Bilingual exposure, sequential thinking, creative expression
+**Concept:** Scan character/setting/object NFC cards to build stories. Order matters;
+each combination triggers different narration in Swedish or English.
+**References:** Sylla et al. (2012) TinkRBook; Kumpulainen & Lipponen (2012) physical story props
+
+#### NFC-3. NFC Soundboard Extension
+
+**Primary targets:** AP, CE, CX, OE
+**Fills gaps in:** Auditory processing (tangible layer), creative expression
+**Concept:** NFC cards as physical instrument/sound collection. Scan to trigger,
+layer multiple cards for composition.
+**References:** Paivio (1986) dual coding theory; multisensory association
+
+#### NFC-4. Memory Match
+
+**Primary targets:** WM, HC, FM, VP
+**Fills gaps in:** Fine motor (physical card retrieval), working memory (extended action sequence)
+**Concept:** Device plays a stimulus; child finds and scans the matching card from
+a physical spread. Physical search adds motor planning to the memory task.
+**References:** Manches & O'Malley (2012) tangible manipulation and learning
+
+#### NFC-5. Vocabulary Explorer — Bilingual Word Cards
+
+**Primary targets:** BL, LC, AP
+**Fills gaps in:** Bilingual exposure (primary-level), listening comprehension
+**Concept:** Picture cards with NFC tags. Scan to hear the word in Swedish; scan
+again for English. Quiz mode: device says a word, child scans the right card.
+**References:** Wohlwend (2015) physical-digital literacy; Bialystok (2011) bilingual EF advantage
+
+#### NFC-6. Free Discovery / Tag Registry
+
+**Primary targets:** OE, CE, DT
+**Concept:** First-time tags get a random colour + sound + animation. Child builds
+a personal collection by tagging household objects, toys, and drawings.
+**References:** Bonawitz et al. (2011) exploration-driven discovery
+
+---
+
+### Other Future Opportunities
+
 ### 1. Rhythm Game
 
 **Primary targets:** ST, AP, FM, PR
@@ -286,14 +347,7 @@ Features that would fill developmental gaps, ordered by coverage impact.
 **Concept:** Arrange shapes on screen using encoder + buttons to match a target pattern.
 **References:** Verdine et al. (2014) spatial assembly and math readiness
 
-### 3. Sorting / Categorization Game
-
-**Primary targets:** CF, IC, PR, ST
-**Fills gaps in:** Adds another cognitive flexibility source; strengthens inhibitory control
-**Concept:** Sort items by one rule (color), then switch to another (shape). Based on the DCCS task.
-**References:** Zelazo (2006) Dimensional Change Card Sort
-
-### 4. Record & Replay (planned)
+### 3. Record & Replay (planned)
 
 **Primary targets:** CX, AP, LC, BL
 **Fills gaps in:** Creative expression, listening comprehension, bilingual exposure

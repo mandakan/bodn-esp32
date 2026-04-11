@@ -491,6 +491,34 @@ coordination mode. Remaining areas with limited coverage include:
 \label{sec:future}
 
 \begin{enumerate}
+  \item \textbf{NFC tangible interaction layer}: Integrate a PN532 NFC reader to
+    enable tagged physical objects (cards, stickers, figurines) as input.
+    Research on tangible user interfaces consistently shows that physical
+    manipulation benefits learning in preschoolers through reduced cognitive load,
+    embodied engagement, and support for classification tasks
+    \citep{marshall2007tangible, antle2013embodied, manches2012tangibles}. Planned
+    NFC modes include:
+    \begin{itemize}[noitemsep]
+      \item \emph{Sortera} --- a tangible classification game implementing the DCCS
+        task \citep{zelazo2006dccs} with physical cards, targeting cognitive
+        flexibility and inhibitory control.
+      \item \emph{Saga Builder} --- tangible storytelling where scanned
+        character/setting cards trigger narration, extending the existing Story
+        Mode with a richer physical input method
+        \citep{sylla2012tinkrbook}.
+      \item \emph{Vocabulary Explorer} --- bilingual word cards for active
+        language switching, leveraging the bilingual EF advantage
+        \citep{bialystok2011reshaping}.
+      \item \emph{Memory Match} --- a physical search-and-select task that adds
+        motor planning to working memory challenges
+        \citep{manches2012tangibles}.
+    \end{itemize}
+    The NFC interaction pattern (find object $\to$ bring to reader $\to$ hold)
+    gives children physical agency in a way that fixed buttons cannot, and has
+    been commercially validated by products like Toniebox and Yoto Player for
+    children as young as 3. See the companion document
+    \texttt{nfc\_tangible\_learning.md} for the full research summary.
+
   \item \textbf{Empirical validation}: Conduct pre--post studies comparing
     EF measures (DCCS, digit span) in children using \Bodn{} vs.\ control
     activities.
