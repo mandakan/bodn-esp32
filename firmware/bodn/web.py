@@ -486,6 +486,53 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 pass
             await _send_json(writer, file_list)
 
+        # --- NFC card set endpoints ---
+
+        elif method == "GET" and path == "/api/nfc/sets":
+            try:
+                from bodn.nfc import list_card_sets, load_card_set
+
+                sets = []
+                for mode in list_card_sets():
+                    cs = load_card_set(mode)
+                    if cs:
+                        sets.append(
+                            {
+                                "mode": mode,
+                                "version": cs.get("version", 1),
+                                "card_count": len(cs.get("cards", [])),
+                                "dimensions": cs.get("dimensions", []),
+                            }
+                        )
+                await _send_json(writer, sets)
+            except Exception as e:
+                await _send_json(writer, {"error": str(e)}, 500)
+
+        elif method == "GET" and path.startswith("/api/nfc/set/"):
+            mode_name = path.rsplit("/", 1)[-1]
+            try:
+                from bodn.nfc import load_card_set
+
+                cs = load_card_set(mode_name)
+                if cs:
+                    await _send_json(writer, cs)
+                else:
+                    await _send_json(writer, {"error": "not found"}, 404)
+            except Exception as e:
+                await _send_json(writer, {"error": str(e)}, 500)
+
+        elif method == "GET" and path == "/api/nfc/cache":
+            try:
+                from bodn.nfc import UIDCache
+
+                cache = UIDCache()
+                await _send_json(writer, cache.entries())
+            except Exception as e:
+                await _send_json(writer, {"error": str(e)}, 500)
+
+        # NFC provisioning endpoints (POST /api/nfc/provision/*) will be
+        # added when the PN532 hardware reader is available (issue #121).
+
         else:
             await _send(writer, 404, "text/plain", "Not found")
 

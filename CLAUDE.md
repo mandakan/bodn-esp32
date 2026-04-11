@@ -101,6 +101,7 @@ bodn-esp32/
 │     ├─ life_rules.py      # Game of Life cellular automata (pure logic)
 │     ├─ mcp23017.py        # MCP23017 I2C GPIO expander driver
 │     ├─ mystery_rules.py   # Mystery Box rule engine (pure logic)
+│     ├─ nfc.py             # NFC tag parsing, card sets, UID cache, reader stub
 │     ├─ patterns.py        # LED animation patterns (shared buffer)
 │     ├─ pca9685.py         # PCA9685 I2C PWM driver
 │     ├─ power.py           # power management (sleep, wake, master switch)
@@ -131,6 +132,7 @@ bodn-esp32/
 │        ├─ input.py        # unified input state with debouncing
 │        ├─ logo.py         # pixel art boot logo (Norse mead vessel)
 │        ├─ mystery.py      # Mystery Box discovery game
+│        ├─ nfc_provision.py # NFC card set viewer + provisioning (stub)
 │        ├─ overlay.py      # session state overlay
 │        ├─ pause.py        # in-game pause menu (hold-to-open)
 │        ├─ rulefollow.py   # Rule Follow game screen
@@ -146,6 +148,7 @@ bodn-esp32/
 │  ├─ wiring.md             # auto-generated pin diagram and tables
 │  ├─ UX_GUIDELINES.md      # child-facing interaction design
 │  ├─ PERFORMANCE_GUIDELINES.md  # ESP32 performance rules
+│  ├─ nfc.md                # NFC tag format, card sets, provisioning
 │  └─ roadmap.md            # milestones and progress
 ├─ tools/
 │  ├─ pinout.py             # generate wiring docs from config.py
@@ -156,7 +159,8 @@ bodn-esp32/
 │  ├─ build-firmware.sh      # build custom MicroPython firmware with C modules
 │  ├─ generate_story_tts.py  # generate story narration TTS from story scripts
 │  ├─ story_preview.py      # preview story scripts in terminal
-│  └─ sd-sync.py            # build + sync SD card assets (TTS, sounds, etc.)
+│  ├─ sd-sync.py            # build + sync SD card assets (TTS, sounds, etc.)
+│  └─ generate_cards.py     # NFC card face PDF generator (OpenMoji → A4 PDF)
 ├─ cmodules/                  # native C extensions (compiled into firmware)
 │  ├─ micropython.cmake       # top-level cmake: includes sub-modules
 │  ├─ audiomix/               # native audio mixer (_audiomix module, core 0)
@@ -259,6 +263,12 @@ uv run python tools/sd-sync.py /Volumes/BODN_SD   # explicit mount point
 uv run python tools/sd-sync.py --build-only        # build without copying
 uv run python tools/sd-sync.py --no-build /Volumes/BODN_SD  # copy without rebuilding
 uv run python tools/sd-sync.py --dry-run           # preview what would happen
+
+# NFC card face PDF generator (requires OpenMoji SVGs)
+# One-time: git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji
+uv run python tools/generate_cards.py --openmoji ~/openmoji  # generate all card PDFs
+uv run python tools/generate_cards.py --set sortera          # specific set
+uv run python tools/generate_cards.py --dry-run              # preview without generating
 ```
 
 ## Git hooks
