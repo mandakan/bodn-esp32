@@ -290,13 +290,19 @@ class SettingsScreen(Screen):
 
         scroll_changed = scroll != self._prev_scroll
 
-        if self._full_clear or scroll_changed:
+        if self._full_clear:
             self._full_clear = False
             tft.fill(theme.BLACK)
             # Title (cached sprite, blitted once)
             _, tw, _ = self._title_sprite
             blit_sprite(tft, self._title_sprite, (w - tw) // 2, 8)
             # Draw all visible rows
+            for i in range(scroll, min(scroll + visible, n)):
+                self._render_row(tft, theme, i, scroll, title_h, row_h, w)
+        elif scroll_changed:
+            # Scroll changed — redraw all visible rows (each row clears
+            # its own background, so no full-screen fill needed).
+            tft.reset_dirty()
             for i in range(scroll, min(scroll + visible, n)):
                 self._render_row(tft, theme, i, scroll, title_h, row_h, w)
         else:

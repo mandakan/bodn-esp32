@@ -149,6 +149,48 @@ def load_emoji(name, size=48):
     return result
 
 
+_emoji_sprite_cache = {}
+
+# Background pad colour for emoji (light grey-blue, byte-swapped RGB565)
+_EMOJI_PAD_COLOR = 0xEF7D
+
+
+def make_emoji_sprite(name, size=48, pad=4):
+    """Pre-render an OpenMoji emoji into a FrameBuffer sprite with background pad.
+
+    Returns (framebuf, width, height) tuple like make_icon_sprite(),
+    or None if the emoji is not available.
+    Results are cached.
+    """
+    key = (name, size, pad)
+    if key in _emoji_sprite_cache:
+        return _emoji_sprite_cache[key]
+
+    emoji = load_emoji(name, size)
+    if emoji is None:
+        _emoji_sprite_cache[key] = None
+        return None
+
+    asset, ew, eh = emoji
+    try:
+        import _draw
+
+        pw = ew + pad * 2
+        ph = eh + pad * 2
+        buf = bytearray(pw * ph * 2)
+        fb = framebuf.FrameBuffer(buf, pw, ph, framebuf.RGB565)
+        # Fill with background pad colour
+        fb.fill(_EMOJI_PAD_COLOR)
+        # Render emoji into the padded framebuffer via the C draw module
+        _draw.sprite(buf, pw, pad, pad, asset, 0, 0xFFFF)
+        result = (fb, pw, ph)
+    except (ImportError, Exception):
+        result = None
+
+    _emoji_sprite_cache[key] = result
+    return result
+
+
 def blit_centered(tft, sprite, y, w):
     """Blit a sprite horizontally centered within width w."""
     _, pw, _ = sprite

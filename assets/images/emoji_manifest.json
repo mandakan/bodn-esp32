@@ -15,6 +15,7 @@
     {"name": "sequencer",  "codepoint": "1F941", "label": "Drum"},
     {"name": "highfive",   "codepoint": "270B",  "label": "Raised Hand"},
     {"name": "soundboard", "codepoint": "1F50A", "label": "Speaker High Volume"},
+    {"name": "sortera",   "codepoint": "1F9E9", "label": "Puzzle Piece"},
 
     {"name": "cat",        "codepoint": "1F431", "label": "Cat Face"},
     {"name": "dog",        "codepoint": "1F436", "label": "Dog Face"},

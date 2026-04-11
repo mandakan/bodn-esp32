@@ -109,6 +109,7 @@ bodn-esp32/
 │     ├─ rulefollow_rules.py # Rule Follow game engine (pure logic)
 │     ├─ session.py         # play session state machine (pure logic)
 │     ├─ simon_rules.py     # Simon game engine (pure logic)
+│     ├─ sortera_rules.py   # Sortera classification game engine (pure logic)
 │     ├─ storage.py         # JSON settings & session history on flash
 │     ├─ temperature.py     # DS18B20 + SoC temperature monitoring
 │     ├─ tones.py           # procedural tone generation (pure logic)
@@ -141,6 +142,7 @@ bodn-esp32/
 │        ├─ secondary.py    # two-zone secondary display manager
 │        ├─ settings.py     # on-device settings menu (scrollable)
 │        ├─ simon.py        # Simon memory game screen
+│        ├─ sortera.py      # Sortera NFC classification game
 │        ├─ theme.py        # colour palette and layout constants
 │        └─ widgets.py      # stateless draw helpers
 ├─ docs/

@@ -453,6 +453,20 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_sortera():
+        from bodn.ui.sortera import SorteraScreen
+
+        _reset_secondary()
+        return SorteraScreen(
+            np,
+            overlay,
+            arcade=arcade,
+            audio=audio,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
+        )
+
     def _make_flode():
         from bodn.ui.flode import FlodeScreen
 
@@ -582,6 +596,7 @@ def create_ui(
         "soundboard": _make_soundboard,
         "sequencer": _make_sequencer,
         "highfive": _make_highfive,
+        "sortera": _make_sortera,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, arcade=arcade, settings=settings),
@@ -601,6 +616,7 @@ def create_ui(
         "garden",
         "soundboard",
         "sequencer",
+        "sortera",
         "clock",
         "settings",
     ]

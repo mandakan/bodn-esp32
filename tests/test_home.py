@@ -47,6 +47,13 @@ class FakeTft:
     def mark_dirty(self, x, y, w, h):
         pass
 
+    def reset_dirty(self):
+        pass
+
+    @property
+    def dirty_rect(self):
+        return None
+
 
 class FakeTheme:
     width = 320

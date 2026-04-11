@@ -8,17 +8,17 @@ from bodn.ui.widgets import (
     make_icon_sprite,
     make_label_sprite,
     blit_sprite,
-    load_emoji,
+    make_emoji_sprite,
 )
 from bodn.chord import ChordDetector
 from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
 
-# Animation: ease-out x-offsets as fraction of screen width (numerator / 8)
-# Smoother slide: 8 steps so both incoming and outgoing are clearly visible
-_ANIM_STEPS = const(8)
-_ANIM_FRAC = (8, 7, 5, 4, 3, 2, 1, 0)  # multiplied by width//8
+# Animation: linear slide over 6 steps ≈ 180ms at 30ms/frame.
+# Short enough to not feel sluggish, enough steps for smooth motion.
+_ANIM_STEPS = const(6)
+_ANIM_FRAC = (6, 5, 4, 3, 2, 1)  # linear, no skips
 
 # Loading bar: lives in the free zone between the carousel dots (y≈147) and
 # the "plays left" footer (y≈220).  Values tuned for 320×240 landscape.
@@ -100,7 +100,7 @@ class HomeScreen(Screen):
         # instead of hundreds of fill_rect calls.
         self._icon_sprites = {}
         self._label_sprites = {}
-        self._emoji_assets = {}  # name → (asset, w, h) or None
+        self._icon_display_size = 64  # default, updated in _build_sprites
         self._sprite_color = None  # rebuilt on first render when theme available
 
     def _build_sprites(self, theme):
@@ -111,51 +111,46 @@ class HomeScreen(Screen):
         self._icon_scale = icon_scale
         # Emoji: 96px on landscape primary, 48px on smaller/portrait displays
         emoji_size = 96 if theme.width > theme.height else 48
-        self._emoji_size = emoji_size
+        has_emoji = False
         for name in self._names:
-            # Try OpenMoji emoji first (full-colour BDF from SD)
-            if name not in self._emoji_assets:
-                emoji = load_emoji(name, emoji_size)
-                # Fall back to 48px if 96px not available
-                if emoji is None and emoji_size != 48:
-                    emoji = load_emoji(name, 48)
-                self._emoji_assets[name] = emoji
-            # Fall back to 1-bit icon sprite
-            if self._emoji_assets.get(name) is None:
-                icon_data = MODE_ICONS.get(name)
-                if icon_data and name not in self._icon_sprites:
-                    self._icon_sprites[name] = make_icon_sprite(
-                        icon_data, 16, 16, color, scale=icon_scale
-                    )
+            # Try pre-rendered emoji sprite (with background pad)
+            if name not in self._icon_sprites:
+                spr = make_emoji_sprite(name, emoji_size)
+                if spr is None and emoji_size != 48:
+                    spr = make_emoji_sprite(name, 48)
+                if spr is not None:
+                    self._icon_sprites[name] = spr
+                    has_emoji = True
+                else:
+                    # Fall back to 1-bit icon sprite
+                    icon_data = MODE_ICONS.get(name)
+                    if icon_data:
+                        self._icon_sprites[name] = make_icon_sprite(
+                            icon_data, 16, 16, color, scale=icon_scale
+                        )
+            elif self._icon_sprites.get(name) is not None:
+                # Already cached — check if it's emoji-sized
+                _, pw, _ = self._icon_sprites[name]
+                if pw > 16 * icon_scale:
+                    has_emoji = True
             label_text = t("mode_" + name).upper()
             if name not in self._label_sprites:
                 self._label_sprites[name] = make_label_sprite(
                     label_text, color, scale=label_scale
                 )
+        # Compute icon_size once — used for layout in render
+        if has_emoji:
+            self._icon_display_size = emoji_size + 8  # include pad
+        else:
+            self._icon_display_size = 16 * icon_scale
         self._sprite_color = color
 
     def _blit_mode_icon(self, tft, name, screen_w, icon_size, ox, y):
-        """Render a mode icon: emoji (colour BDF) first, 1-bit fallback."""
-        emoji = self._emoji_assets.get(name)
-        if emoji:
-            asset, ew, eh = emoji
-            try:
-                from bodn.ui.draw import sprite
-
-                ix = (screen_w - ew) // 2 + ox
-                iy = y + (icon_size - eh) // 2
-                # Light background pad so emoji are visible on dark bg
-                pad = 4
-                tft.fill_rect(
-                    ix - pad, iy - pad, ew + pad * 2, eh + pad * 2, 0xEF7D
-                )  # 0xEF7D ≈ RGB(236, 240, 248) light grey-blue
-                sprite(tft, ix, iy, asset, 0, 0xFFFF)
-                return
-            except Exception:
-                pass
-        icon_spr = self._icon_sprites.get(name)
-        if icon_spr:
-            blit_sprite(tft, icon_spr, (screen_w - icon_size) // 2 + ox, y)
+        """Render a mode icon (pre-rendered sprite — emoji or 1-bit)."""
+        spr = self._icon_sprites.get(name)
+        if spr:
+            _, pw, ph = spr
+            blit_sprite(tft, spr, (screen_w - pw) // 2 + ox, y + (icon_size - ph) // 2)
 
     def needs_redraw(self):
         return self._dirty
@@ -233,18 +228,23 @@ class HomeScreen(Screen):
         velocity = inp.enc_velocity[NAV]
         units = self._accumulate(delta, velocity)
         if units != 0:
-            # Clamp to ±1 so each frame steps once with its own animation + click.
-            # Put excess back into the accumulator for subsequent frames.
             sign = 1 if units > 0 else -1
             excess = (abs(units) - 1) * self._dpu
             self._accum += excess * sign
             units = sign
+
+            if self._anim_step < _ANIM_STEPS:
+                # Animation in progress — skip to the end instantly so
+                # the next animation starts from a clean state.
+                self._anim_step = _ANIM_STEPS
+                self._prev_name = None
+
             self._prev_name = self._names[self._index]
             self._index = (self._index + units) % len(self._names)
-            # Start slide animation: incoming from direction of turn
             self._anim_step = 0
             self._anim_dir = 1 if units > 0 else -1
             self._dirty = True
+            self._full_clear = True
             if self._audio:
                 self._audio.play_sound("nav_click")
 
@@ -288,7 +288,7 @@ class HomeScreen(Screen):
         if self._anim_step >= _ANIM_STEPS:
             return 0
         frac = _ANIM_FRAC[self._anim_step]
-        return self._anim_dir * (frac * width // 8)
+        return self._anim_dir * (frac * width // 6)
 
     def render(self, tft, theme, frame):
         self._dirty = False
@@ -339,6 +339,8 @@ class HomeScreen(Screen):
         gap = 12
         total_w = n * gap - (gap - dot_r * 2)
         x0 = (w - total_w) // 2
+        # Clear the dots row to avoid stale dot remnants
+        tft.fill_rect(x0 - 1, y - dot_r - 1, total_w + 2, dot_r * 2 + 2, theme.BLACK)
         for i in range(n):
             cx = x0 + i * gap + dot_r
             if i == self._index:
@@ -356,38 +358,81 @@ class HomeScreen(Screen):
         h = theme.height
         ox = self._anim_x(w)
 
-        icon_scale = self._icon_scale
-        icon_size = getattr(self, "_emoji_size", 16 * icon_scale)
-        # Use emoji size if available, else fallback 1-bit size
-        if not any(self._emoji_assets.get(n) for n in self._names):
-            icon_size = 16 * icon_scale
+        icon_size = self._icon_display_size
         name_y = 40 + icon_size + 12
         dots_y = name_y + 28
 
-        # Content band: from icon top to below dots
+        # Content band: icon + label rows (dots sit below)
         band_top = 40
-        band_bot = dots_y + 8
+        band_bot = name_y + 20
 
-        # Clear only the content band during animation, not the whole screen
-        if not full_clear:
-            tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
-
-        # Static elements — only drawn on full clear
         if full_clear:
             draw_centered(tft, t("home_title"), 8, theme.WHITE, w, scale=2)
             remaining = self._session_mgr.sessions_remaining
             color = theme.GREEN if remaining > 0 else theme.RED
             draw_centered(tft, t("home_plays_left", remaining), h - 20, color, w)
+        elif ox != 0:
+            # Animation frames only: reset dirty so show_dirty() pushes
+            # just the sprites, not the full screen.
+            tft.reset_dirty()
 
-        # Outgoing item (slides out in opposite direction)
-        if self._prev_name and ox != 0:
+        # --- Sprite-only rendering: no full-band clear ---
+        # Both sprites are opaque (solid background pad). We only need
+        # to clear the margins and gap around them, not the full width.
+
+        # Compute on-screen bounds of both sprites
+        in_spr = self._icon_sprites.get(name)
+        in_pw = in_spr[1] if in_spr else icon_size
+        in_x = (w - in_pw) // 2 + ox
+
+        # Outgoing sprite position
+        has_out = self._prev_name is not None and ox != 0
+        if has_out:
+            out_spr = self._icon_sprites.get(self._prev_name)
+            out_pw = out_spr[1] if out_spr else icon_size
             out_ox = ox - self._anim_dir * w
-            self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, 40)
-            label_spr = self._label_sprites.get(self._prev_name)
-            if label_spr:
-                blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + out_ox, name_y)
+            out_x = (w - out_pw) // 2 + out_ox
+        else:
+            out_x = in_x
+            out_pw = 0
 
-        # Incoming item (slides in from the side)
+        # Find the visible span of both sprites (clamped to screen)
+        left = max(0, min(in_x, out_x))
+        right = min(w, max(in_x + in_pw, out_x + out_pw))
+
+        # Clear left margin
+        if left > 0:
+            tft.fill_rect(0, band_top, left, band_bot - band_top, theme.BLACK)
+        # Clear gap between sprites (if they don't overlap)
+        if has_out:
+            if self._anim_dir > 0:
+                gap_l = out_x + out_pw
+                gap_r = in_x
+            else:
+                gap_l = in_x + in_pw
+                gap_r = out_x
+            if gap_r > gap_l and gap_l < w and gap_r > 0:
+                gl = max(0, gap_l)
+                gr = min(w, gap_r)
+                if gr > gl:
+                    tft.fill_rect(
+                        gl, band_top, gr - gl, band_bot - band_top, theme.BLACK
+                    )
+        # Clear right margin
+        if right < w:
+            tft.fill_rect(right, band_top, w - right, band_bot - band_top, theme.BLACK)
+
+        # Clear the label row within the visible sprite span
+        tft.fill_rect(left, name_y, right - left, 20, theme.BLACK)
+
+        # Draw outgoing sprite
+        if has_out:
+            self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, 40)
+            out_label = self._label_sprites.get(self._prev_name)
+            if out_label:
+                blit_sprite(tft, out_label, (w - out_label[1]) // 2 + out_ox, name_y)
+
+        # Draw incoming sprite
         self._blit_mode_icon(tft, name, w, icon_size, ox, 40)
 
         label_spr = self._label_sprites.get(name)
@@ -406,8 +451,7 @@ class HomeScreen(Screen):
         w = theme.width
         ox = self._anim_x(w)
 
-        icon_scale = 3
-        icon_size = 16 * icon_scale
+        icon_size = self._icon_display_size
         iy = theme.CENTER_Y - icon_size // 2 - 8
         dots_y = theme.CENTER_Y + 44
 

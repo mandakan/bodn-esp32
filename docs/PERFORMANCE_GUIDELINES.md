@@ -17,6 +17,7 @@ Short, practical rules for writing efficient code for Bodn on ESP32-S3 (and for 
 - If using `uasyncio`:
   - Make each task **cooperative**: no blocking I/O or long CPU bursts.
   - Break work into small chunks and `await` frequently.
+  - **NEVER call `gc.collect()` in periodic async loops.** On ESP32-S3 with 8 MB PSRAM, a single `gc.collect()` takes **180–200 ms**, blocking the entire event loop and causing jerkiness across all screens, sluggish input, and uneven animation timing. Let MicroPython's automatic GC handle collection (triggers on allocation failure). If GC pressure is a concern, use `gc.threshold()` for incremental collection instead.
 - Separate responsibilities:
   - One task for **input handling** (buttons/encoders).
   - One for **UI updates** (screen + LEDs).
