@@ -14,6 +14,7 @@ try:
 except ImportError:
     import uos as os
 
+import time
 from micropython import const
 
 from bodn import config
@@ -134,7 +135,8 @@ class HighFiveScreen(Screen):
     def enter(self, manager):
         self._manager = manager
         self._pause.set_manager(manager)
-        self._engine.start(manager._frame)
+        self._engine.start()
+        self._last_ms = time.ticks_ms()
         self._prev_state = -1
         self._dirty = True
         self._full_clear = True
@@ -277,7 +279,10 @@ class HighFiveScreen(Screen):
                         break
 
         # Advance game state
-        eng.advance(hit, miss, frame)
+        now = time.ticks_ms()
+        dt = time.ticks_diff(now, self._last_ms)
+        self._last_ms = now
+        eng.advance(hit, miss, dt)
 
         # State transition effects
         if eng.state != prev_state:

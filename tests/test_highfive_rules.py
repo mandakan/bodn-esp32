@@ -12,11 +12,29 @@ from bodn.highfive_rules import (
     NUM_BUTTONS,
 )
 
+# -- helpers --
+
+DT = 33  # default tick in ms (~30 fps)
+
+
+def _tick(eng, dt=DT, hit=False, miss=False):
+    """Advance the engine by one tick."""
+    return eng.advance(hit, miss, dt)
+
+
+def _advance_ms(eng, ms, dt=DT):
+    """Advance the engine by approximately *ms* milliseconds in dt-sized steps."""
+    elapsed = 0
+    while elapsed < ms:
+        step = min(dt, ms - elapsed)
+        eng.advance(False, False, step)
+        elapsed += step
+
 
 @pytest.fixture
 def eng():
     e = HighFiveEngine()
-    e.start(0)
+    e.start()
     return e
 
 
@@ -35,12 +53,11 @@ class TestInitialState:
 
 
 class TestReadyToShowing:
-    def test_transitions_after_ready_frames(self, eng):
-        # READY lasts ~45 frames
-        for f in range(1, 45):
-            eng.advance(False, False, f)
+    def test_transitions_after_ready_ms(self, eng):
+        # READY lasts 1500 ms
+        _advance_ms(eng, 1400)
         assert eng.state == READY
-        eng.advance(False, False, 45)
+        _advance_ms(eng, 200)  # total >= 1500
         assert eng.state == SHOWING
         assert 0 <= eng.target < NUM_BUTTONS
 
@@ -48,116 +65,93 @@ class TestReadyToShowing:
 class TestHitDetection:
     def test_hit_advances_to_hit_flash(self, eng):
         # Get to SHOWING
-        eng.advance(False, False, 50)
+        _advance_ms(eng, 1600)
         assert eng.state == SHOWING
         # Signal hit
-        eng.advance(True, False, 51)
+        _tick(eng, hit=True)
         assert eng.state == HIT_FLASH
         assert eng.score == 1
         assert eng.streak == 1
 
     def test_hit_flash_returns_to_showing(self, eng):
-        eng.advance(False, False, 50)
-        eng.advance(True, False, 51)
+        _advance_ms(eng, 1600)
+        _tick(eng, hit=True)
         assert eng.state == HIT_FLASH
-        # Wait out the flash duration (20 frames)
-        for f in range(52, 72):
-            eng.advance(False, False, f)
-        assert eng.state == HIT_FLASH or eng.state == SHOWING
-        # Should definitely be SHOWING after enough frames
-        eng.advance(False, False, 72)
+        # Wait out the flash duration (660 ms)
+        _advance_ms(eng, 600)
+        assert eng.state == HIT_FLASH
+        _advance_ms(eng, 100)  # total >= 660
         assert eng.state == SHOWING
 
 
 class TestMissDetection:
     def test_miss_advances_to_miss_flash(self, eng):
-        eng.advance(False, False, 50)
+        _advance_ms(eng, 1600)
         assert eng.state == SHOWING
-        eng.advance(False, True, 51)
+        _tick(eng, miss=True)
         assert eng.state == MISS_FLASH
         assert eng.misses == 1
         assert eng.streak == 0
 
     def test_three_misses_game_over(self, eng):
-        frame = 50
         for miss_num in range(3):
             # Get to SHOWING
             while eng.state != SHOWING:
-                eng.advance(False, False, frame)
-                frame += 1
+                _tick(eng)
             # Miss
-            eng.advance(False, True, frame)
-            frame += 1
+            _tick(eng, miss=True)
             assert eng.misses == miss_num + 1
-            # Wait out MISS_FLASH
-            for _ in range(30):
-                eng.advance(False, False, frame)
-                frame += 1
+            # Wait out MISS_FLASH (830 ms)
+            _advance_ms(eng, 900)
         assert eng.state == GAME_OVER
 
 
 class TestStreakTracking:
     def test_streak_increments_on_consecutive_hits(self, eng):
-        frame = 50
         for i in range(3):
             while eng.state != SHOWING:
-                eng.advance(False, False, frame)
-                frame += 1
-            eng.advance(True, False, frame)
-            frame += 1
+                _tick(eng)
+            _tick(eng, hit=True)
             assert eng.streak == i + 1
 
     def test_streak_resets_on_miss(self, eng):
-        frame = 50
         # Get 2 hits
         for _ in range(2):
             while eng.state != SHOWING:
-                eng.advance(False, False, frame)
-                frame += 1
-            eng.advance(True, False, frame)
-            frame += 1
+                _tick(eng)
+            _tick(eng, hit=True)
         assert eng.streak == 2
         # Wait for next SHOWING
         while eng.state != SHOWING:
-            eng.advance(False, False, frame)
-            frame += 1
+            _tick(eng)
         # Miss
-        eng.advance(False, True, frame)
+        _tick(eng, miss=True)
         assert eng.streak == 0
 
     def test_best_streak_tracked(self, eng):
-        frame = 50
         # Get 3 hits
         for _ in range(3):
             while eng.state != SHOWING:
-                eng.advance(False, False, frame)
-                frame += 1
-            eng.advance(True, False, frame)
-            frame += 1
+                _tick(eng)
+            _tick(eng, hit=True)
         assert eng.best_streak == 3
         # Miss resets streak but not best
         while eng.state != SHOWING:
-            eng.advance(False, False, frame)
-            frame += 1
-        eng.advance(False, True, frame)
+            _tick(eng)
+        _tick(eng, miss=True)
         assert eng.best_streak == 3
 
 
 class TestDifficultyCurve:
     def test_window_shrinks_after_round(self, eng):
         initial = eng.window_ms
-        frame = 50
-        # Complete 5 hits (one round) — level-up happens when HIT_FLASH expires
+        # Complete 5 hits (one round) -- level-up happens when HIT_FLASH expires
         for _ in range(5):
             while eng.state != SHOWING:
-                eng.advance(False, False, frame)
-                frame += 1
-            eng.advance(True, False, frame)
-            frame += 1
+                _tick(eng)
+            _tick(eng, hit=True)
         # Wait through HIT_FLASH to trigger level-up
-        for _ in range(25):
-            eng.advance(False, False, frame)
-            frame += 1
+        _advance_ms(eng, 800)
         assert eng.round == 2
         assert eng.window_ms < initial
 
@@ -179,20 +173,17 @@ class TestDifficultyCurve:
 
 class TestTargetPicking:
     def test_target_in_valid_range(self, eng):
-        eng.advance(False, False, 50)
+        _advance_ms(eng, 1600)
         assert 0 <= eng.target < NUM_BUTTONS
 
     def test_avoids_repeat(self, eng):
         """Target should usually differ from previous (not guaranteed but likely)."""
-        eng.advance(False, False, 50)
+        _advance_ms(eng, 1600)
         targets = set()
-        frame = 51
         for _ in range(20):
-            eng.advance(True, False, frame)
-            frame += 1
+            _tick(eng, hit=True)
             while eng.state != SHOWING:
-                eng.advance(False, False, frame)
-                frame += 1
+                _tick(eng)
             targets.add(eng.target)
         # Should have seen more than 1 unique target
         assert len(targets) > 1
@@ -201,9 +192,9 @@ class TestTargetPicking:
 class TestGameOver:
     def test_game_over_auto_restarts(self, eng):
         eng.state = GAME_OVER
-        eng._state_frame = 0
-        # Wait for auto-restart (90 frames)
-        eng.advance(False, False, 91)
+        eng._state_ms = 0
+        # Wait for auto-restart (3000 ms)
+        _advance_ms(eng, 3100)
         assert eng.state == READY
         assert eng.score == 0
 
@@ -211,11 +202,10 @@ class TestGameOver:
         eng.score = 10
         eng.misses = 2
         eng.state = SHOWING
-        eng._state_frame = 0
+        eng._state_ms = 0
         # Third miss triggers game over
-        eng.advance(False, True, 1)
-        # Wait through MISS_FLASH
-        for f in range(2, 30):
-            eng.advance(False, False, f)
+        _tick(eng, miss=True)
+        # Wait through MISS_FLASH (830 ms)
+        _advance_ms(eng, 900)
         assert eng.state == GAME_OVER
         assert eng.high_score == 10

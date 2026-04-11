@@ -1,5 +1,6 @@
 # bodn/ui/simon.py — Pattern Copy (Simon) game screen
 
+import time
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
@@ -84,6 +85,7 @@ class SimonScreen(Screen):
         self._pause.set_manager(manager)
         self._engine.reset()
         self._brightness.reset()
+        self._last_ms = time.ticks_ms()
         self._dirty = True
         self._full_clear = True
         manager.inp.set_on_press(self._on_immediate_press)
@@ -114,7 +116,10 @@ class SimonScreen(Screen):
 
         # Find first just-pressed button
         btn = inp.first_btn_pressed()
-        self._engine.update(btn, frame)
+        now = time.ticks_ms()
+        dt = time.ticks_diff(now, self._last_ms)
+        self._last_ms = now
+        self._engine.update(btn, dt)
 
         # Detect state changes
         state = self._engine.state

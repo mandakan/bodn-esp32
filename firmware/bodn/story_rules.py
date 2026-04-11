@@ -22,9 +22,9 @@ CHOOSING = const(2)  # choices lit, waiting for arcade press
 TRANSITIONING = const(3)  # brief pause between scenes
 ENDING = const(4)  # terminal node reached, celebration
 
-# Timing (frames, ~30 fps)
-TRANSITION_FRAMES = const(20)  # ~0.7s between scenes
-ENDING_FRAMES = const(120)  # ~4s celebration before returning to idle
+# Timing (milliseconds, wall-clock, frame-rate independent)
+TRANSITION_MS = const(700)  # between scenes
+ENDING_MS = const(4000)  # celebration before returning to idle
 
 # --- Mood palette (RGB tuples for stick LEDs) ---
 MOOD_COLORS = {
@@ -136,7 +136,7 @@ class StoryEngine:
         self.node = None
         self.visited = []  # ordered list of visited node IDs
         self.ending_type = None
-        self._state_frame = 0
+        self._state_ms = 0
         self._choice_count = 0
         self._pending_target = None
 
@@ -150,7 +150,7 @@ class StoryEngine:
             self.state = IDLE
             return errors
         self.story = story
-        self._go_to_node(story["start"], 0)
+        self._go_to_node(story["start"])
         return []
 
     def reset(self):
@@ -163,7 +163,12 @@ class StoryEngine:
         self.ending_type = None
         self._choice_count = 0
 
-    def _go_to_node(self, node_id, frame):
+    def _set_state(self, new_state):
+        """Transition to a new state, resetting the state timer."""
+        self.state = new_state
+        self._state_ms = 0
+
+    def _go_to_node(self, node_id):
         """Set current node and determine state."""
         nodes = self.story["nodes"]
         self.node_id = node_id
@@ -171,14 +176,13 @@ class StoryEngine:
         self.visited.append(node_id)
 
         if self.node.get("ending"):
-            self.state = ENDING
+            self._set_state(ENDING)
             self.ending_type = self.node.get("ending_type", "gentle")
         else:
-            self.state = NARRATING
+            self._set_state(NARRATING)
 
         choices = self.node.get("choices", [])
         self._choice_count = len(choices)
-        self._state_frame = frame
 
     @property
     def mood(self):
@@ -248,7 +252,7 @@ class StoryEngine:
         label = choices[index].get("label", {})
         return label.get(lang, label.get("en", ""))
 
-    def narration_done(self, frame):
+    def narration_done(self):
         """Called by the screen when TTS narration finishes.
 
         Transitions from NARRATING to CHOOSING (or ENDING if
@@ -256,11 +260,10 @@ class StoryEngine:
         """
         if self.state == NARRATING:
             if self._choice_count > 0:
-                self.state = CHOOSING
-                self._state_frame = frame
+                self._set_state(CHOOSING)
             # If no choices (shouldn't happen for non-endings), stay
 
-    def choose(self, arc_index, frame):
+    def choose(self, arc_index):
         """Handle an arcade button press during CHOOSING.
 
         arc_index: 0-4 (arcade button index, maps 1:1 to choice index).
@@ -273,25 +276,26 @@ class StoryEngine:
 
         choices = self.node.get("choices", [])
         target = choices[arc_index]["next"]
-        self.state = TRANSITIONING
-        self._state_frame = frame
+        self._set_state(TRANSITIONING)
         self._pending_target = target
         return True
 
-    def update(self, frame):
-        """Called every frame. Handles timed transitions.
+    def update(self, dt):
+        """Called every tick. Handles timed transitions.
+
+        Args:
+            dt -- milliseconds since last tick
 
         Returns the current state.
         """
-        elapsed = frame - self._state_frame
+        self._state_ms += dt
 
         if self.state == TRANSITIONING:
-            if elapsed >= TRANSITION_FRAMES:
-                self._go_to_node(self._pending_target, frame)
+            if self._state_ms >= TRANSITION_MS:
+                self._go_to_node(self._pending_target)
         elif self.state == ENDING:
-            if elapsed >= ENDING_FRAMES:
-                self.state = IDLE
-                self._state_frame = frame
+            if self._state_ms >= ENDING_MS:
+                self._set_state(IDLE)
 
         return self.state
 

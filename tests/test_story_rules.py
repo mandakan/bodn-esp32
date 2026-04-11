@@ -17,12 +17,28 @@ from bodn.story_rules import (
     CHOOSING,
     TRANSITIONING,
     ENDING,
-    TRANSITION_FRAMES,
-    ENDING_FRAMES,
+    TRANSITION_MS,
+    ENDING_MS,
     validate_story,
     find_endings,
     reachable_nodes,
 )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+TICK_MS = 33  # ~30 fps
+
+
+def _advance_ms(eng, ms):
+    """Advance the engine by *ms* milliseconds in TICK_MS-sized steps."""
+    elapsed = 0
+    while elapsed < ms:
+        step = min(TICK_MS, ms - elapsed)
+        eng.update(step)
+        elapsed += step
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +256,7 @@ class TestEngineNarration:
         eng = StoryEngine()
         eng.load(MINIMAL_STORY)
         assert eng.state == NARRATING
-        eng.narration_done(frame=10)
+        eng.narration_done()
         assert eng.state == CHOOSING
 
     def test_text_returns_correct_language(self):
@@ -271,33 +287,32 @@ class TestEngineChoosing:
     def test_choose_valid(self):
         eng = StoryEngine()
         eng.load(MINIMAL_STORY)
-        eng.narration_done(frame=0)
+        eng.narration_done()
         assert eng.state == CHOOSING
-        assert eng.choose(0, frame=10) is True
+        assert eng.choose(0) is True
         assert eng.state == TRANSITIONING
 
     def test_choose_invalid_index(self):
         eng = StoryEngine()
         eng.load(MINIMAL_STORY)
-        eng.narration_done(frame=0)
-        assert eng.choose(5, frame=10) is False
+        eng.narration_done()
+        assert eng.choose(5) is False
         assert eng.state == CHOOSING
 
     def test_choose_wrong_state(self):
         eng = StoryEngine()
         eng.load(MINIMAL_STORY)
         # Still NARRATING
-        assert eng.choose(0, frame=10) is False
+        assert eng.choose(0) is False
 
     def test_transition_leads_to_next_node(self):
         eng = StoryEngine()
         eng.load(MINIMAL_STORY)
-        eng.narration_done(frame=0)
-        eng.choose(0, frame=10)
+        eng.narration_done()
+        eng.choose(0)
         assert eng.state == TRANSITIONING
         # Advance past transition
-        for f in range(11, 11 + TRANSITION_FRAMES + 1):
-            eng.update(f)
+        _advance_ms(eng, TRANSITION_MS + TICK_MS)
         # Should now be at ending node "b"
         assert eng.node_id == "b"
         assert eng.state == ENDING
@@ -312,29 +327,26 @@ class TestEngineBranching:
     def test_left_branch(self):
         eng = StoryEngine()
         eng.load(BRANCHING_STORY)
-        eng.narration_done(frame=0)
-        eng.choose(0, frame=10)  # "left"
-        for f in range(11, 11 + TRANSITION_FRAMES + 1):
-            eng.update(f)
+        eng.narration_done()
+        eng.choose(0)  # "left"
+        _advance_ms(eng, TRANSITION_MS + TICK_MS)
         assert eng.node_id == "left"
         assert eng.state == NARRATING
 
     def test_right_branch(self):
         eng = StoryEngine()
         eng.load(BRANCHING_STORY)
-        eng.narration_done(frame=0)
-        eng.choose(1, frame=10)  # "right"
-        for f in range(11, 11 + TRANSITION_FRAMES + 1):
-            eng.update(f)
+        eng.narration_done()
+        eng.choose(1)  # "right"
+        _advance_ms(eng, TRANSITION_MS + TICK_MS)
         assert eng.node_id == "right"
 
     def test_middle_direct_ending(self):
         eng = StoryEngine()
         eng.load(BRANCHING_STORY)
-        eng.narration_done(frame=0)
-        eng.choose(2, frame=10)  # "middle" — direct ending
-        for f in range(11, 11 + TRANSITION_FRAMES + 1):
-            eng.update(f)
+        eng.narration_done()
+        eng.choose(2)  # "middle" — direct ending
+        _advance_ms(eng, TRANSITION_MS + TICK_MS)
         assert eng.node_id == "middle"
         assert eng.state == ENDING
         assert eng.ending_type == "adventurous"
@@ -344,16 +356,13 @@ class TestEngineBranching:
         for branch_idx in (0, 1):
             eng = StoryEngine()
             eng.load(BRANCHING_STORY)
-            eng.narration_done(frame=0)
-            eng.choose(branch_idx, frame=10)
-            f = 11
-            for f in range(f, f + TRANSITION_FRAMES + 1):
-                eng.update(f)
+            eng.narration_done()
+            eng.choose(branch_idx)
+            _advance_ms(eng, TRANSITION_MS + TICK_MS)
             # Now at left or right
-            eng.narration_done(frame=f + 1)
-            eng.choose(0, frame=f + 2)
-            for f2 in range(f + 3, f + 3 + TRANSITION_FRAMES + 1):
-                eng.update(f2)
+            eng.narration_done()
+            eng.choose(0)
+            _advance_ms(eng, TRANSITION_MS + TICK_MS)
             assert eng.node_id == "merge"
             assert eng.state == ENDING
 
@@ -362,36 +371,31 @@ class TestEngineEnding:
     def test_ending_returns_to_idle(self):
         eng = StoryEngine()
         eng.load(MINIMAL_STORY)
-        eng.narration_done(frame=0)
-        eng.choose(0, frame=10)
-        f = 11
+        eng.narration_done()
+        eng.choose(0)
         # Advance through transition
-        for f in range(f, f + TRANSITION_FRAMES + 1):
-            eng.update(f)
+        _advance_ms(eng, TRANSITION_MS + TICK_MS)
         assert eng.state == ENDING
         # Advance through ending celebration
-        for f2 in range(f + 1, f + 1 + ENDING_FRAMES + 1):
-            eng.update(f2)
+        _advance_ms(eng, ENDING_MS + TICK_MS)
         assert eng.state == IDLE
 
     def test_visited_tracks_path(self):
         eng = StoryEngine()
         eng.load(MINIMAL_STORY)
         assert eng.visited == ["a"]
-        eng.narration_done(frame=0)
-        eng.choose(0, frame=10)
-        for f in range(11, 11 + TRANSITION_FRAMES + 1):
-            eng.update(f)
+        eng.narration_done()
+        eng.choose(0)
+        _advance_ms(eng, TRANSITION_MS + TICK_MS)
         assert eng.visited == ["a", "b"]
 
     def test_progress_counts_visited(self):
         eng = StoryEngine()
         eng.load(MINIMAL_STORY)
         assert eng.progress == 1
-        eng.narration_done(frame=0)
-        eng.choose(0, frame=10)
-        for f in range(11, 11 + TRANSITION_FRAMES + 1):
-            eng.update(f)
+        eng.narration_done()
+        eng.choose(0)
+        _advance_ms(eng, TRANSITION_MS + TICK_MS)
         assert eng.progress == 2
 
 

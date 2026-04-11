@@ -1,5 +1,6 @@
 # bodn/ui/rulefollow.py — Rule Follow game screen
 
+import time
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
@@ -91,6 +92,7 @@ class RuleFollowScreen(Screen):
         self._pause.set_manager(manager)
         self._engine.reset()
         self._brightness.reset()
+        self._last_ms = time.ticks_ms()
         self._dirty = True
         self._full_clear = True
         # Pre-cache RGB565 conversions (avoids theme.rgb() calls per render)
@@ -129,8 +131,11 @@ class RuleFollowScreen(Screen):
                 self._audio.boop()
             btn = -1  # don't feed to engine
 
+        now = time.ticks_ms()
+        dt = time.ticks_diff(now, self._last_ms)
+        self._last_ms = now
         prev_state = self._engine.state
-        self._engine.update(btn, frame)
+        self._engine.update(btn, dt)
 
         # Detect state changes
         state = self._engine.state

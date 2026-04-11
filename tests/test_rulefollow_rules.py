@@ -16,14 +16,40 @@ from bodn.rulefollow_rules import (
     GAME_OVER,
     RULE_MATCH,
     RULE_OPPOSITE,
-    SHOW_RULE_FRAMES,
-    STIMULUS_TIMEOUT,
-    CORRECT_FRAMES,
-    WRONG_FRAMES,
-    RULE_SWITCH_FRAMES,
+    SHOW_RULE_MS,
+    STIMULUS_TIMEOUT_MS,
+    CORRECT_MS,
+    WRONG_MS,
+    RULE_SWITCH_MS,
     NUM_BUTTONS,
     RULE_COLORS,
 )
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+DT = 33  # default tick step in ms (~30 fps)
+
+
+def _tick(eng, dt=DT, btn=-1):
+    """Advance the engine by one tick."""
+    return eng.update(btn, dt)
+
+
+def _advance_ms(eng, ms, btn=-1):
+    """Fast-forward the engine by *ms* milliseconds in DT-sized steps."""
+    elapsed = 0
+    while elapsed < ms:
+        step = min(DT, ms - elapsed)
+        eng.update(btn, step)
+        elapsed += step
+    return eng.state
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
 
 def test_initial_state_is_ready():
@@ -36,17 +62,17 @@ def test_initial_state_is_ready():
 
 def test_any_button_starts_game():
     eng = RuleFollowEngine()
-    eng.update(0, frame=1)
+    _tick(eng, btn=0)
     assert eng.state == SHOW_RULE
     assert eng.current_rule == RULE_MATCH
 
 
 def test_show_rule_transitions_to_stimulus():
     eng = RuleFollowEngine()
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
     assert eng.state == SHOW_RULE
 
-    eng.update(-1, frame=SHOW_RULE_FRAMES + 1)
+    _advance_ms(eng, SHOW_RULE_MS + DT)
     assert eng.state == STIMULUS
     assert 0 <= eng.stimulus_button < NUM_BUTTONS
     assert 0 <= eng.correct_button < NUM_BUTTONS
@@ -54,14 +80,14 @@ def test_show_rule_transitions_to_stimulus():
 
 def test_correct_match_rule():
     eng = RuleFollowEngine()
-    eng.update(0, frame=0)
-    eng.update(-1, frame=SHOW_RULE_FRAMES + 1)
+    _tick(eng, btn=0)
+    _advance_ms(eng, SHOW_RULE_MS + DT)
     assert eng.state == STIMULUS
     assert eng.current_rule == RULE_MATCH
 
     # In match rule, correct = stimulus
     correct = eng.stimulus_button
-    eng.update(correct, frame=SHOW_RULE_FRAMES + 10)
+    _tick(eng, btn=correct)
     assert eng.state == CORRECT
     assert eng.score == 1
     assert eng.total == 1
@@ -70,13 +96,13 @@ def test_correct_match_rule():
 
 def test_wrong_match_rule():
     eng = RuleFollowEngine()
-    eng.update(0, frame=0)
-    eng.update(-1, frame=SHOW_RULE_FRAMES + 1)
+    _tick(eng, btn=0)
+    _advance_ms(eng, SHOW_RULE_MS + DT)
     assert eng.state == STIMULUS
 
     # Press wrong button
     wrong = (eng.stimulus_button + 1) % NUM_BUTTONS
-    eng.update(wrong, frame=SHOW_RULE_FRAMES + 10)
+    _tick(eng, btn=wrong)
     assert eng.state == WRONG
     assert eng.score == 0
     assert eng.total == 1
@@ -95,27 +121,26 @@ def test_opposite_rule_mapping():
 
 def test_correct_opposite_rule():
     eng = RuleFollowEngine()
-    eng.update(0, frame=0)
-    eng.update(-1, frame=SHOW_RULE_FRAMES + 1)
+    _tick(eng, btn=0)
+    _advance_ms(eng, SHOW_RULE_MS + DT)
     # Force opposite rule
     eng.current_rule = RULE_OPPOSITE
     eng.correct_button = eng.get_correct(eng.stimulus_button, RULE_OPPOSITE)
 
     correct = eng.correct_button
-    eng.update(correct, frame=SHOW_RULE_FRAMES + 10)
+    _tick(eng, btn=correct)
     assert eng.state == CORRECT
     assert eng.score == 1
 
 
 def test_stimulus_timeout():
     eng = RuleFollowEngine()
-    eng.update(0, frame=0)
-    f = SHOW_RULE_FRAMES + 1
-    eng.update(-1, frame=f)
+    _tick(eng, btn=0)
+    _advance_ms(eng, SHOW_RULE_MS + DT)
     assert eng.state == STIMULUS
 
     # No button press, wait for timeout
-    eng.update(-1, frame=f + STIMULUS_TIMEOUT + 1)
+    _advance_ms(eng, STIMULUS_TIMEOUT_MS + DT)
     assert eng.state == WRONG
     assert eng.score == 0
     assert eng.total == 1
@@ -123,90 +148,78 @@ def test_stimulus_timeout():
 
 def test_correct_advances_to_next_stimulus():
     eng = RuleFollowEngine(rounds=12)
-    eng.update(0, frame=0)
-    f = SHOW_RULE_FRAMES + 1
-    eng.update(-1, frame=f)
+    _tick(eng, btn=0)
+    _advance_ms(eng, SHOW_RULE_MS + DT)
     assert eng.state == STIMULUS
 
     correct = eng.correct_button
-    f2 = f + 10
-    eng.update(correct, frame=f2)
+    _tick(eng, btn=correct)
     assert eng.state == CORRECT
 
-    # After CORRECT_FRAMES, should advance (stimulus or rule_switch)
-    f3 = f2 + CORRECT_FRAMES + 1
-    eng.update(-1, frame=f3)
+    # After CORRECT_MS, should advance (stimulus or rule_switch)
+    _advance_ms(eng, CORRECT_MS + DT)
     assert eng.state in (STIMULUS, RULE_SWITCH, SHOW_RULE)
 
 
 def test_wrong_advances_to_next_stimulus():
     eng = RuleFollowEngine(rounds=12)
-    eng.update(0, frame=0)
-    f = SHOW_RULE_FRAMES + 1
-    eng.update(-1, frame=f)
+    _tick(eng, btn=0)
+    _advance_ms(eng, SHOW_RULE_MS + DT)
 
     wrong = (eng.correct_button + 1) % NUM_BUTTONS
-    f2 = f + 10
-    eng.update(wrong, frame=f2)
+    _tick(eng, btn=wrong)
     assert eng.state == WRONG
 
-    f3 = f2 + WRONG_FRAMES + 1
-    eng.update(-1, frame=f3)
+    _advance_ms(eng, WRONG_MS + DT)
     assert eng.state in (STIMULUS, RULE_SWITCH, SHOW_RULE)
 
 
-def _play_round(eng, frame, press_correct=True):
-    """Helper: advance through one full stimulus→response cycle.
-    Returns the frame after the response feedback completes."""
-    # Ensure we're in STIMULUS
+def _play_round(eng, press_correct=True):
+    """Helper: advance through one full stimulus->response cycle."""
+    # Wait until we reach STIMULUS
+    safety = 0
     while eng.state != STIMULUS:
-        frame += 1
-        eng.update(-1, frame=frame)
-        if frame > 10000:
+        _tick(eng)
+        safety += 1
+        if safety > 500:
             raise RuntimeError("Stuck waiting for STIMULUS, state={}".format(eng.state))
 
     if press_correct:
         btn = eng.correct_button
     else:
         btn = (eng.correct_button + 1) % NUM_BUTTONS
-    frame += 5
-    eng.update(btn, frame=frame)
+    _tick(eng, btn=btn)
 
     # Wait for feedback to finish
-    wait = CORRECT_FRAMES if eng.state == CORRECT else WRONG_FRAMES
-    frame += wait + 1
-    eng.update(-1, frame=frame)
-    return frame
+    wait = CORRECT_MS if eng.state == CORRECT else WRONG_MS
+    _advance_ms(eng, wait + DT)
 
 
 def test_rule_switch_happens():
     # Use switch_min=switch_max=2 so rule switches after exactly 2 correct
     eng = RuleFollowEngine(rounds=12, switch_min=2, switch_max=2)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
     assert eng.current_rule == RULE_MATCH
 
-    frame = 1
     # Play 2 correct rounds — should trigger rule switch
     for _ in range(2):
-        frame = _play_round(eng, frame, press_correct=True)
+        _play_round(eng, press_correct=True)
 
     assert eng.state == RULE_SWITCH
     old_rule = RULE_MATCH
 
     # Wait for switch to complete
-    frame += RULE_SWITCH_FRAMES + 1
-    eng.update(-1, frame=frame)
+    _advance_ms(eng, RULE_SWITCH_MS + DT)
     assert eng.state == SHOW_RULE
     assert eng.current_rule != old_rule
 
 
 def test_game_over_after_all_rounds():
     eng = RuleFollowEngine(rounds=3, switch_min=99, switch_max=99)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
 
-    frame = 1
     for _ in range(3):
-        frame = _play_round(eng, frame, press_correct=True)
+        _play_round(eng, press_correct=True)
 
     assert eng.state == GAME_OVER
     assert eng.score == 3
@@ -215,46 +228,44 @@ def test_game_over_after_all_rounds():
 
 def test_game_over_restart():
     eng = RuleFollowEngine(rounds=1, switch_min=99, switch_max=99)
-    eng.update(0, frame=0)
-    frame = _play_round(eng, 1, press_correct=True)
+    _tick(eng, btn=0)
+    _play_round(eng, press_correct=True)
     assert eng.state == GAME_OVER
 
-    eng.update(0, frame=frame + 10)
+    _tick(eng, btn=0)
     assert eng.state == SHOW_RULE
     assert eng.score == 0
 
 
 def test_streak_tracking():
     eng = RuleFollowEngine(rounds=6, switch_min=99, switch_max=99)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
 
-    frame = 1
     # 2 correct
-    frame = _play_round(eng, frame, press_correct=True)
-    frame = _play_round(eng, frame, press_correct=True)
+    _play_round(eng, press_correct=True)
+    _play_round(eng, press_correct=True)
     assert eng.streak == 2
     assert eng.best_streak == 2
 
     # 1 wrong
-    frame = _play_round(eng, frame, press_correct=False)
+    _play_round(eng, press_correct=False)
     assert eng.streak == 0
     assert eng.best_streak == 2
 
     # 1 correct
-    frame = _play_round(eng, frame, press_correct=True)
+    _play_round(eng, press_correct=True)
     assert eng.streak == 1
     assert eng.best_streak == 2
 
 
 def test_score_only_counts_correct():
     eng = RuleFollowEngine(rounds=4, switch_min=99, switch_max=99)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
 
-    frame = 1
-    frame = _play_round(eng, frame, press_correct=True)
-    frame = _play_round(eng, frame, press_correct=False)
-    frame = _play_round(eng, frame, press_correct=True)
-    frame = _play_round(eng, frame, press_correct=False)
+    _play_round(eng, press_correct=True)
+    _play_round(eng, press_correct=False)
+    _play_round(eng, press_correct=True)
+    _play_round(eng, press_correct=False)
 
     assert eng.state == GAME_OVER
     assert eng.score == 2
@@ -274,7 +285,7 @@ def test_make_static_leds_correct_is_green():
 
     eng = RuleFollowEngine()
     eng.state = CORRECT
-    eng._state_frame = 0
+    eng._state_ms = 0
     leds = eng.make_static_leds(brightness=200)
     # All stick LEDs should be green-ish
     for i in range(N_STICKS):
@@ -287,7 +298,7 @@ def test_make_static_leds_stimulus_highlights_button():
     eng.state = STIMULUS
     eng.stimulus_button = 1
     eng.current_rule = RULE_MATCH
-    eng._state_frame = 0
+    eng._state_ms = 0
     leds = eng.make_static_leds(brightness=200)
     # Stimulus button LED should be brighter than others
     stim_brightness = sum(leds[1])
@@ -297,7 +308,7 @@ def test_make_static_leds_stimulus_highlights_button():
 
 def test_reset_clears_state():
     eng = RuleFollowEngine()
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
     eng.score = 5
     eng.total = 10
     eng.streak = 3
@@ -312,7 +323,7 @@ def test_reset_clears_state():
 
 def test_no_button_stays_in_ready():
     eng = RuleFollowEngine()
-    eng.update(-1, frame=1)
+    _tick(eng)
     assert eng.state == READY
 
 
@@ -326,10 +337,10 @@ def test_rule_color_property():
 
 def test_buttons_beyond_num_ignored():
     eng = RuleFollowEngine()
-    eng.update(0, frame=0)
-    eng.update(-1, frame=SHOW_RULE_FRAMES + 1)
+    _tick(eng, btn=0)
+    _advance_ms(eng, SHOW_RULE_MS + DT)
     assert eng.state == STIMULUS
 
     # Press button 5 (beyond NUM_BUTTONS=4) — should be ignored
-    eng.update(5, frame=SHOW_RULE_FRAMES + 10)
+    _tick(eng, btn=5)
     assert eng.state == STIMULUS  # still waiting

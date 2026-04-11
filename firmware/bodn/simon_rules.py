@@ -18,11 +18,11 @@ WIN = const(3)  # round complete — celebration
 FAIL = const(4)  # wrong button — gentle cue
 GAME_OVER = const(5)  # optional: after too many fails
 
-# Timing (in frames, ~33 fps)
-SHOW_STEP_FRAMES = const(25)  # how long each step lights up (~0.75s)
-SHOW_GAP_FRAMES = const(10)  # gap between steps (~0.3s)
-WIN_FRAMES = const(60)  # celebration duration (~1.8s)
-FAIL_FRAMES = const(45)  # fail cue duration (~1.4s)
+# Timing (milliseconds, wall-clock, frame-rate independent)
+SHOW_STEP_MS = const(750)  # how long each step lights up
+SHOW_GAP_MS = const(300)  # gap between steps
+WIN_MS = const(1800)  # celebration duration
+FAIL_MS = const(1400)  # fail cue duration
 
 # Game config
 NUM_BUTTONS = const(6)  # use buttons 0–5
@@ -49,7 +49,7 @@ class SimonEngine:
     """Stateful game engine for Pattern Copy.
 
     Pure logic — no hardware imports beyond patterns.
-    Feed it button presses each frame and read back the current state.
+    Feed it button presses each tick with dt (ms) and read back the current state.
     """
 
     def __init__(self, start_length=START_LENGTH):
@@ -64,29 +64,32 @@ class SimonEngine:
         self.high_score = 0
         self._input_pos = 0  # how far the child is in reproducing
         self._show_pos = 0  # which step we're showing
-        self._state_frame = 0  # frame when current state started
+        self._state_ms = 0  # ms accumulated in current state
         self._fail_count = 0
         self._active_btn = -1  # button currently lit during SHOWING
+
+    def _set_state(self, new_state):
+        """Transition to a new state, resetting the state timer."""
+        self.state = new_state
+        self._state_ms = 0
 
     def start_game(self):
         """Begin a new game: generate initial sequence, start showing."""
         self.sequence = [_random_button() for _ in range(self._start_length)]
         self.score = 0
         self._fail_count = 0
-        self._begin_show(frame=0)
+        self._begin_show()
 
-    def _begin_show(self, frame):
+    def _begin_show(self):
         """Start showing the sequence."""
-        self.state = SHOWING
+        self._set_state(SHOWING)
         self._show_pos = 0
-        self._state_frame = frame
         self._active_btn = -1
 
-    def _begin_wait(self, frame):
+    def _begin_wait(self):
         """Start waiting for child input."""
-        self.state = WAITING
+        self._set_state(WAITING)
         self._input_pos = 0
-        self._state_frame = frame
         self._active_btn = -1
 
     @property
@@ -112,41 +115,43 @@ class SimonEngine:
             return 0.0
         return self._input_pos / len(self.sequence)
 
-    def update(self, btn_pressed, frame):
-        """Call every frame. btn_pressed is the just-pressed button index (-1 if none).
+    def update(self, btn_pressed, dt):
+        """Call every tick. btn_pressed is the just-pressed button index (-1 if none).
+
+        Args:
+            btn_pressed -- button index (0–5), -1 if none
+            dt          -- milliseconds since last tick
 
         Returns the current state.
         """
-        elapsed = frame - self._state_frame
+        self._state_ms += dt
 
         if self.state == READY:
             # Any button starts the game
             if btn_pressed >= 0:
                 self.start_game()
-                self._state_frame = frame
             return self.state
 
         elif self.state == SHOWING:
-            return self._update_showing(frame, elapsed)
+            return self._update_showing()
 
         elif self.state == WAITING:
-            return self._update_waiting(btn_pressed, frame)
+            return self._update_waiting(btn_pressed)
 
         elif self.state == WIN:
-            if elapsed >= WIN_FRAMES:
+            if self._state_ms >= WIN_MS:
                 # Grow sequence and show next round
                 self.sequence.append(_random_button())
-                self._begin_show(frame)
+                self._begin_show()
             return self.state
 
         elif self.state == FAIL:
-            if elapsed >= FAIL_FRAMES:
+            if self._state_ms >= FAIL_MS:
                 if self._fail_count >= MAX_FAILS:
-                    self.state = GAME_OVER
-                    self._state_frame = frame
+                    self._set_state(GAME_OVER)
                 else:
                     # Replay the same sequence
-                    self._begin_show(frame)
+                    self._begin_show()
             return self.state
 
         elif self.state == GAME_OVER:
@@ -154,32 +159,31 @@ class SimonEngine:
             if btn_pressed >= 0:
                 self.reset()
                 self.start_game()
-                self._state_frame = frame
             return self.state
 
         return self.state
 
-    def _update_showing(self, frame, elapsed):
-        """Advance through the sequence display."""
-        step_total = SHOW_STEP_FRAMES + SHOW_GAP_FRAMES
-        pos = elapsed // step_total
-        phase = elapsed % step_total
+    def _update_showing(self):
+        """Advance through the sequence display using elapsed ms."""
+        step_total_ms = SHOW_STEP_MS + SHOW_GAP_MS
+        pos = self._state_ms // step_total_ms
+        phase_ms = self._state_ms % step_total_ms
 
         if pos >= len(self.sequence):
             # Done showing — child's turn
             self._active_btn = -1
-            self._begin_wait(frame)
+            self._begin_wait()
             return self.state
 
         self._show_pos = pos
-        if phase < SHOW_STEP_FRAMES:
+        if phase_ms < SHOW_STEP_MS:
             self._active_btn = self.sequence[pos]
         else:
             self._active_btn = -1  # gap
 
         return self.state
 
-    def _update_waiting(self, btn_pressed, frame):
+    def _update_waiting(self, btn_pressed):
         """Check child's button press against the sequence."""
         if btn_pressed < 0:
             return self.state
@@ -193,14 +197,12 @@ class SimonEngine:
                 self.score = len(self.sequence)
                 if self.score > self.high_score:
                     self.high_score = self.score
-                self.state = WIN
-                self._state_frame = frame
+                self._set_state(WIN)
                 self._active_btn = -1
         else:
             # Wrong button
             self._fail_count += 1
-            self.state = FAIL
-            self._state_frame = frame
+            self._set_state(FAIL)
             self._active_btn = btn_pressed
 
         return self.state
@@ -296,7 +298,8 @@ class SimonEngine:
         n = N_STICKS
         black = _BLACK
         _scale = scale
-        elapsed = frame - self._state_frame
+        # Use _state_ms for animation phase in demo mode
+        elapsed = self._state_ms
 
         if self.state == READY:
             phase = (frame * 3) & 0xFF
@@ -329,7 +332,7 @@ class SimonEngine:
             for i in range(NUM_BUTTONS):
                 buf[i] = _scale(BTN_COLORS[i], brightness // 8)
             if self._active_btn >= 0 and self._input_pos > 0:
-                fade = max(0, 255 - elapsed * 20)
+                fade = max(0, 255 - elapsed // 4)
                 if fade > 0:
                     buf[self._active_btn] = _scale(
                         BTN_COLORS[self._active_btn], (fade * brightness) >> 8
@@ -338,7 +341,7 @@ class SimonEngine:
 
         elif self.state == WIN:
             for i in range(n):
-                h = (i * 255 // n + elapsed * 8) & 0xFF
+                h = (i * 255 // n + elapsed // 4) & 0xFF
                 if h < 85:
                     r, g, b = 255 - h * 3, h * 3, 0
                 elif h < 170:
@@ -351,7 +354,7 @@ class SimonEngine:
             return buf
 
         elif self.state == FAIL:
-            phase = (elapsed * 6) & 0xFF
+            phase = (elapsed // 5) & 0xFF
             v = phase if phase < 128 else 255 - phase
             v = (v * brightness) >> 8
             c = (v, 0, 0)
