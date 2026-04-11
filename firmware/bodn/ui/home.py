@@ -1,5 +1,7 @@
 # bodn/ui/home.py — home screen with mode selection
 
+import time
+
 from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.icons import MODE_ICONS
@@ -334,6 +336,8 @@ class HomeScreen(Screen):
         gap = 12
         total_w = n * gap - (gap - dot_r * 2)
         x0 = (w - total_w) // 2
+        # Clear the dots row to avoid stale dot remnants
+        tft.fill_rect(x0 - 1, y - dot_r - 1, total_w + 2, dot_r * 2 + 2, theme.BLACK)
         for i in range(n):
             cx = x0 + i * gap + dot_r
             if i == self._index:
@@ -350,6 +354,9 @@ class HomeScreen(Screen):
         w = theme.width
         h = theme.height
         ox = self._anim_x(w)
+
+        # Debug timing during animation (remove once tuned)
+        _t0 = time.ticks_ms() if ox != 0 else 0
 
         icon_size = self._icon_display_size
         name_y = 40 + icon_size + 12
@@ -391,6 +398,12 @@ class HomeScreen(Screen):
 
         # Carousel dots (cheap — small rects, below the content band)
         self._draw_dots(tft, theme, dots_y, w)
+
+        # Debug: print render time during animation
+        if _t0:
+            dr = tft.dirty_rect
+            _ms = time.ticks_diff(time.ticks_ms(), _t0)
+            print("ANIM f={} render={}ms ox={} dirty={}".format(frame, _ms, ox, dr))
 
     def _render_portrait(self, tft, theme, frame, name, full_clear):
         """Portrait layout: icon centered, stacked vertically."""
