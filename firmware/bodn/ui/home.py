@@ -371,12 +371,13 @@ class HomeScreen(Screen):
             remaining = self._session_mgr.sessions_remaining
             color = theme.GREEN if remaining > 0 else theme.RED
             draw_centered(tft, t("home_plays_left", remaining), h - 20, color, w)
+        elif ox != 0:
+            # Animation frames only: reset dirty so show_dirty() pushes
+            # just the content band. Do NOT reset on full_clear — the
+            # ScreenManager's fill(BLACK) must reach the display.
+            tft.reset_dirty()
 
-        # Reset dirty tracking so show_dirty() pushes only what we touch.
-        tft.reset_dirty()
-
-        # Clear the content band (mark_dirty clamps to screen bounds,
-        # so this contributes at most 320 × band_h to the dirty rect).
+        # Clear the content band
         tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
 
         # Outgoing item (slides out in opposite direction)
