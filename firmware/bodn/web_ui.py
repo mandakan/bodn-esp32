@@ -109,6 +109,7 @@ th{color:#aaa}
 <button class="tab" onclick="show('wifi',this)">WiFi</button>
 <button class="tab" onclick="show('security',this)">Security</button>
 <button class="tab" onclick="show('debug',this)">Debug</button>
+<button class="tab" onclick="show('nfc',this)">NFC</button>
 </div>
 
 <div id="dash" class="panel active">
@@ -189,6 +190,15 @@ th{color:#aaa}
 <div id="boot-log"><p style="font-size:0.8em;color:#666">Open this tab to load.</p></div>
 </div>
 
+<div id="nfc" class="panel">
+<h3 style="color:#e94560;font-size:0.95em;margin-bottom:8px">Card Sets</h3>
+<div id="nfc-sets"><p style="font-size:0.8em;color:#666">Loading...</p></div>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em;margin-bottom:8px">Provisioning</h3>
+<p style="font-size:0.8em;color:#666">Tag provisioning requires NFC reader hardware. See <a href="https://github.com/mandakan/bodn-esp32/issues/121" style="color:#e94560">#121</a>.</p>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em;margin-bottom:8px">UID Cache</h3>
+<div id="nfc-cache"><p style="font-size:0.8em;color:#666">Loading...</p></div>
+</div>
+
 <div id="wifi" class="panel">
 <div class="field"><label>Mode</label><select class="input-field" id="wifi_mode"><option value="ap">Access Point</option><option value="sta">Connect to network</option></select></div>
 <div class="field"><label>SSID</label><input class="input-field" type="text" id="wifi_ssid"></div>
@@ -207,6 +217,7 @@ el.classList.add('active');
 if(id==='history')loadHistory();
 if(id==='stats')loadStats();
 if(id==='debug')loadBootLog();
+if(id==='nfc')loadNFC();
 }
 function updRv(el,id,suf){document.getElementById(id).textContent=el.value+suf}
 function badgeClass(s){
@@ -457,6 +468,32 @@ if(d.hw){var hws=[];for(var k in d.hw){hws.push('<span style="color:'+(d.hw[k]?'
 html+='</tbody></table>';
 el.innerHTML=html;
 }catch(e){el.innerHTML='<p style="font-size:0.8em;color:#e94560">Failed to load boot log.</p>';}
+}
+async function loadNFC(){
+try{
+var r=await fetch('/api/nfc/sets');var sets=await r.json();
+var el=document.getElementById('nfc-sets');
+if(sets.error){el.innerHTML='<p style="color:#e94560">'+sets.error+'</p>';return;}
+if(!sets.length){el.innerHTML='<p style="color:#aaa;font-size:0.8em">No card sets found on SD card.</p>';return;}
+var html='';
+sets.forEach(function(s){
+html+='<div style="background:#16213e;border-radius:8px;padding:10px;margin:6px 0">';
+html+='<strong style="color:#e94560">'+s.mode+'</strong>';
+html+=' <span style="color:#aaa;font-size:0.8em">v'+s.version+' &middot; '+s.card_count+' cards &middot; '+s.dimensions.join(', ')+'</span>';
+html+='</div>';
+});
+el.innerHTML=html;
+}catch(e){document.getElementById('nfc-sets').innerHTML='<p style="color:#e94560;font-size:0.8em">Error loading card sets.</p>';}
+try{
+var cr=await fetch('/api/nfc/cache');var cache=await cr.json();
+var ce=document.getElementById('nfc-cache');
+var keys=Object.keys(cache);
+if(!keys.length){ce.innerHTML='<p style="color:#aaa;font-size:0.8em">Empty (no tags scanned yet).</p>';return;}
+var html='<table style="width:100%;border-collapse:collapse;font-size:0.8em"><thead><tr><th style="text-align:left;padding:4px;color:#aaa">UID</th><th style="text-align:left;padding:4px;color:#aaa">Mode</th><th style="text-align:left;padding:4px;color:#aaa">Card</th></tr></thead><tbody>';
+keys.forEach(function(uid){html+='<tr><td style="font-family:monospace;padding:4px">'+uid+'</td><td style="padding:4px">'+cache[uid].mode+'</td><td style="padding:4px">'+cache[uid].id+'</td></tr>';});
+html+='</tbody></table>';
+ce.innerHTML=html;
+}catch(e){}
 }
 var hnEl=document.getElementById('hostname');
 if(hnEl)hnEl.addEventListener('input',function(){document.getElementById('hostname-preview').textContent=this.value.trim()||'bodn'});

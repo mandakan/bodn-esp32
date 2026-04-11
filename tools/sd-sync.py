@@ -46,6 +46,7 @@ SD_ASSETS = [
     (BUILD_DIR / "tts_converted", "sounds/tts"),
     (BUILD_DIR / "stories", "stories"),
     (BUILD_DIR / "sprites", "sprites"),
+    (REPO_ROOT / "assets" / "nfc", "nfc"),
 ]
 
 

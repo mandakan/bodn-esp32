@@ -31,6 +31,7 @@ STRINGS = {
     "settings_debug": "Debug log",
     "settings_perf": "Perf stats",
     "settings_diag": "Diagnostics",
+    "settings_nfc": "NFC Cards",
     "settings_sleep": "Sleep timer",
     "settings_encoder": "Sensitivity",
     "settings_tz": "Timezone",

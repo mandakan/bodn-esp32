@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "black>=26.3.1",
+    "cairosvg>=2.7.0",
+    "fpdf2>=2.8.0",
     "mpremote>=1.27.0",
     "pathvalidate>=3.3.1",
     "piper-tts>=1.4.1",
