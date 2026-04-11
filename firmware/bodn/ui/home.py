@@ -15,10 +15,10 @@ from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
 
-# Animation: ease-out x-offsets as fraction of screen width (numerator / 8)
-# Smoother slide: 8 steps so both incoming and outgoing are clearly visible
-_ANIM_STEPS = const(8)
-_ANIM_FRAC = (8, 7, 5, 4, 3, 2, 1, 0)  # multiplied by width//8
+# Animation: ease-out x-offsets as fraction of screen width (numerator / 12)
+# 12 steps for smooth sliding with larger emoji icons
+_ANIM_STEPS = const(12)
+_ANIM_FRAC = (12, 11, 10, 9, 7, 6, 5, 4, 3, 2, 1, 0)  # multiplied by width//12
 
 # Loading bar: lives in the free zone between the carousel dots (y≈147) and
 # the "plays left" footer (y≈220).  Values tuned for 320×240 landscape.
@@ -283,7 +283,7 @@ class HomeScreen(Screen):
         if self._anim_step >= _ANIM_STEPS:
             return 0
         frac = _ANIM_FRAC[self._anim_step]
-        return self._anim_dir * (frac * width // 8)
+        return self._anim_dir * (frac * width // 12)
 
     def render(self, tft, theme, frame):
         self._dirty = False
@@ -355,11 +355,10 @@ class HomeScreen(Screen):
         name_y = 40 + icon_size + 12
         dots_y = name_y + 28
 
-        # Content band: from icon top to below dots
+        # During animation, only clear the icon+label band (not dots)
         band_top = 40
-        band_bot = dots_y + 8
+        band_bot = name_y + 20  # label height
 
-        # Clear only the content band during animation, not the whole screen
         if not full_clear:
             tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
 
@@ -389,8 +388,9 @@ class HomeScreen(Screen):
         if ox == 0:
             self._prev_name = None
 
-        # Carousel dots
-        self._draw_dots(tft, theme, dots_y, w)
+        # Carousel dots — only on full clear (they don't move during animation)
+        if full_clear:
+            self._draw_dots(tft, theme, dots_y, w)
 
     def _render_portrait(self, tft, theme, frame, name, full_clear):
         """Portrait layout: icon centered, stacked vertically."""
