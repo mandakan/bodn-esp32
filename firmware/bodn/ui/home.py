@@ -15,10 +15,10 @@ from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
 
-# Animation: ease-out x-offsets as fraction of screen width (numerator / 12)
-# 12 steps for smooth sliding with larger emoji icons
-_ANIM_STEPS = const(12)
-_ANIM_FRAC = (12, 11, 10, 9, 7, 6, 5, 4, 3, 2, 1, 0)  # multiplied by width//12
+# Animation: ease-out x-offsets as fraction of screen width (numerator / 16)
+# 16 steps for smooth sliding with larger emoji icons (~800ms at 20 Hz)
+_ANIM_STEPS = const(16)
+_ANIM_FRAC = (16, 15, 14, 13, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
 
 # Loading bar: lives in the free zone between the carousel dots (y≈147) and
 # the "plays left" footer (y≈220).  Values tuned for 320×240 landscape.
@@ -283,7 +283,7 @@ class HomeScreen(Screen):
         if self._anim_step >= _ANIM_STEPS:
             return 0
         frac = _ANIM_FRAC[self._anim_step]
-        return self._anim_dir * (frac * width // 12)
+        return self._anim_dir * (frac * width // 16)
 
     def render(self, tft, theme, frame):
         self._dirty = False
@@ -355,15 +355,15 @@ class HomeScreen(Screen):
         name_y = 40 + icon_size + 12
         dots_y = name_y + 28
 
-        # During animation, only clear the icon+label band (not dots)
+        # Content band: icon + label rows (dots are below)
         band_top = 40
-        band_bot = name_y + 20  # label height
+        band_bot = name_y + 20
 
         if not full_clear:
+            # During animation, clear only the icon+label band
             tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
-
-        # Static elements — only drawn on full clear
-        if full_clear:
+        else:
+            # Full redraw: title, footer, and dots
             draw_centered(tft, t("home_title"), 8, theme.WHITE, w, scale=2)
             remaining = self._session_mgr.sessions_remaining
             color = theme.GREEN if remaining > 0 else theme.RED
@@ -388,9 +388,8 @@ class HomeScreen(Screen):
         if ox == 0:
             self._prev_name = None
 
-        # Carousel dots — only on full clear (they don't move during animation)
-        if full_clear:
-            self._draw_dots(tft, theme, dots_y, w)
+        # Carousel dots — drawn every frame (below the clear band, cheap)
+        self._draw_dots(tft, theme, dots_y, w)
 
     def _render_portrait(self, tft, theme, frame, name, full_clear):
         """Portrait layout: icon centered, stacked vertically."""
