@@ -99,14 +99,17 @@ def load_card_set(path: Path) -> dict:
 
 
 def find_openmoji_svg(codepoint: str, openmoji_dir: Path) -> Path | None:
-    """Find an OpenMoji SVG file by Unicode codepoint."""
-    svg_path = openmoji_dir / "svg" / "color" / f"{codepoint.upper()}.svg"
-    if svg_path.exists():
-        return svg_path
-    # Try lowercase
-    svg_path = openmoji_dir / "svg" / "color" / f"{codepoint.lower()}.svg"
-    if svg_path.exists():
-        return svg_path
+    """Find an OpenMoji SVG file by Unicode codepoint.
+
+    Checks both possible directory layouts:
+      {openmoji}/color/svg/{CP}.svg  (default clone structure)
+      {openmoji}/svg/color/{CP}.svg  (alternative/older layout)
+    """
+    for variant in (codepoint.upper(), codepoint.lower()):
+        for subpath in ("color/svg", "svg/color"):
+            svg = openmoji_dir / subpath / f"{variant}.svg"
+            if svg.exists():
+                return svg
     return None
 
 

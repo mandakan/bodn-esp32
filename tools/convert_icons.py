@@ -63,11 +63,17 @@ from make_asset import rasterize_image  # noqa: E402
 
 
 def find_svg(codepoint: str, openmoji_dir: Path) -> Path | None:
-    """Find an OpenMoji SVG file by Unicode codepoint."""
+    """Find an OpenMoji SVG file by Unicode codepoint.
+
+    Checks both possible directory layouts:
+      {openmoji}/color/svg/{CP}.svg  (default clone structure)
+      {openmoji}/svg/color/{CP}.svg  (alternative/older layout)
+    """
     for variant in (codepoint.upper(), codepoint.lower()):
-        svg = openmoji_dir / "svg" / "color" / f"{variant}.svg"
-        if svg.exists():
-            return svg
+        for subpath in ("color/svg", "svg/color"):
+            svg = openmoji_dir / subpath / f"{variant}.svg"
+            if svg.exists():
+                return svg
     return None
 
 
