@@ -1,0 +1,19 @@
+{
+  "default_bpp": 4,
+  "default_size": 48,
+  "icons": [
+    {"name": "mystery",    "codepoint": "2753",  "label": "Red Question Mark"},
+    {"name": "simon",      "codepoint": "1F3B6", "label": "Musical Notes"},
+    {"name": "rulefollow", "codepoint": "1F9E0", "label": "Brain"},
+    {"name": "demo",       "codepoint": "2B50",  "label": "Star"},
+    {"name": "clock",      "codepoint": "1F551", "label": "Clock Face Two"},
+    {"name": "settings",   "codepoint": "2699",  "label": "Gear"},
+    {"name": "flode",      "codepoint": "1F30A", "label": "Water Wave"},
+    {"name": "garden",     "codepoint": "1F331", "label": "Seedling"},
+    {"name": "space",      "codepoint": "1F680", "label": "Rocket"},
+    {"name": "story",      "codepoint": "1F4D6", "label": "Open Book"},
+    {"name": "sequencer",  "codepoint": "1F3BC", "label": "Musical Score"},
+    {"name": "highfive",   "codepoint": "270B",  "label": "Raised Hand"},
+    {"name": "soundboard", "codepoint": "1F50A", "label": "Speaker High Volume"}
+  ]
+}

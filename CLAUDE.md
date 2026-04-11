@@ -160,7 +160,8 @@ bodn-esp32/
 │  ├─ generate_story_tts.py  # generate story narration TTS from story scripts
 │  ├─ story_preview.py      # preview story scripts in terminal
 │  ├─ sd-sync.py            # build + sync SD card assets (TTS, sounds, etc.)
-│  └─ generate_cards.py     # NFC card face PDF generator (OpenMoji → A4 PDF)
+│  ├─ generate_cards.py     # NFC card face PDF generator (OpenMoji → A4 PDF)
+│  └─ convert_icons.py      # OpenMoji SVG → BDF sprite conversion for on-screen icons
 ├─ cmodules/                  # native C extensions (compiled into firmware)
 │  ├─ micropython.cmake       # top-level cmake: includes sub-modules
 │  ├─ audiomix/               # native audio mixer (_audiomix module, core 0)
@@ -269,6 +270,12 @@ uv run python tools/sd-sync.py --dry-run           # preview what would happen
 uv run python tools/generate_cards.py --openmoji ~/openmoji  # generate all card PDFs
 uv run python tools/generate_cards.py --set sortera          # specific set
 uv run python tools/generate_cards.py --dry-run              # preview without generating
+
+# OpenMoji on-screen icon conversion (SVG → BDF sprites for home screen)
+# Requires same OpenMoji clone as card generator (see above)
+uv run python tools/convert_icons.py --openmoji ~/openmoji   # convert all emoji icons
+uv run python tools/convert_icons.py --dry-run               # preview without converting
+uv run python tools/convert_icons.py --force                 # force rebuild all
 ```
 
 ## Git hooks

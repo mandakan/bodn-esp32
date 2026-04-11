@@ -8,6 +8,7 @@ from bodn.ui.widgets import (
     make_icon_sprite,
     make_label_sprite,
     blit_sprite,
+    load_emoji,
 )
 from bodn.chord import ChordDetector
 from bodn.i18n import t
@@ -99,6 +100,7 @@ class HomeScreen(Screen):
         # instead of hundreds of fill_rect calls.
         self._icon_sprites = {}
         self._label_sprites = {}
+        self._emoji_assets = {}  # name → (asset, w, h) or None
         self._sprite_color = None  # rebuilt on first render when theme available
 
     def _build_sprites(self, theme):
@@ -107,18 +109,42 @@ class HomeScreen(Screen):
         icon_scale = 4 if theme.width > theme.height else 3
         label_scale = 2
         self._icon_scale = icon_scale
+        emoji_size = 48
         for name in self._names:
-            icon_data = MODE_ICONS.get(name)
-            if icon_data and name not in self._icon_sprites:
-                self._icon_sprites[name] = make_icon_sprite(
-                    icon_data, 16, 16, color, scale=icon_scale
-                )
+            # Try OpenMoji emoji first (full-colour BDF from SD)
+            if name not in self._emoji_assets:
+                self._emoji_assets[name] = load_emoji(name, emoji_size)
+            # Fall back to 1-bit icon sprite
+            if self._emoji_assets.get(name) is None:
+                icon_data = MODE_ICONS.get(name)
+                if icon_data and name not in self._icon_sprites:
+                    self._icon_sprites[name] = make_icon_sprite(
+                        icon_data, 16, 16, color, scale=icon_scale
+                    )
             label_text = t("mode_" + name).upper()
             if name not in self._label_sprites:
                 self._label_sprites[name] = make_label_sprite(
                     label_text, color, scale=label_scale
                 )
         self._sprite_color = color
+
+    def _blit_mode_icon(self, tft, name, screen_w, icon_size, ox, y):
+        """Render a mode icon: emoji (colour BDF) first, 1-bit fallback."""
+        emoji = self._emoji_assets.get(name)
+        if emoji:
+            asset, ew, eh = emoji
+            try:
+                from bodn.ui.draw import sprite
+
+                ix = (screen_w - ew) // 2 + ox
+                iy = y + (icon_size - eh) // 2
+                sprite(tft, ix, iy, asset, 0, 0xFFFF)
+                return
+            except Exception:
+                pass
+        icon_spr = self._icon_sprites.get(name)
+        if icon_spr:
+            blit_sprite(tft, icon_spr, (screen_w - icon_size) // 2 + ox, y)
 
     def needs_redraw(self):
         return self._dirty
@@ -342,17 +368,13 @@ class HomeScreen(Screen):
         # Outgoing item (slides out in opposite direction)
         if self._prev_name and ox != 0:
             out_ox = ox - self._anim_dir * w
-            icon_spr = self._icon_sprites.get(self._prev_name)
-            if icon_spr:
-                blit_sprite(tft, icon_spr, (w - icon_size) // 2 + out_ox, 40)
+            self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, 40)
             label_spr = self._label_sprites.get(self._prev_name)
             if label_spr:
                 blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + out_ox, name_y)
 
         # Incoming item (slides in from the side)
-        icon_spr = self._icon_sprites.get(name)
-        if icon_spr:
-            blit_sprite(tft, icon_spr, (w - icon_size) // 2 + ox, 40)
+        self._blit_mode_icon(tft, name, w, icon_size, ox, 40)
 
         label_spr = self._label_sprites.get(name)
         if label_spr:
@@ -393,17 +415,13 @@ class HomeScreen(Screen):
         # Outgoing item
         if self._prev_name and ox != 0:
             out_ox = ox - self._anim_dir * w
-            icon_spr = self._icon_sprites.get(self._prev_name)
-            if icon_spr:
-                blit_sprite(tft, icon_spr, (w - icon_size) // 2 + out_ox, iy)
+            self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, iy)
             prev_text = t("mode_" + self._prev_name).upper()
             ptx = (w - len(prev_text) * 8) // 2 + out_ox
             tft.text(prev_text, ptx, theme.CENTER_Y + 24, theme.CYAN)
 
         # Incoming item
-        icon_spr = self._icon_sprites.get(name)
-        if icon_spr:
-            blit_sprite(tft, icon_spr, (w - icon_size) // 2 + ox, iy)
+        self._blit_mode_icon(tft, name, w, icon_size, ox, iy)
 
         mode_text = t("mode_" + name).upper()
         mtx = (w - len(mode_text) * 8) // 2 + ox
