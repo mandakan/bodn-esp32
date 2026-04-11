@@ -125,24 +125,9 @@ class ST7735(framebuf.FrameBuffer):
     # Call show_dirty() instead of show() to push only the changed region.
 
     def mark_dirty(self, x, y, w, h):
-        """Expand the dirty bounding box to include (x, y, w, h).
-
-        Clamps to screen bounds so off-screen draws don't inflate the
-        dirty region (critical for smooth slide animations).
-        """
-        # Clamp to screen bounds
-        sw = self.width
-        sh = self.height
-        if x < 0:
-            w += x
-            x = 0
-        if y < 0:
-            h += y
-            y = 0
-        x1 = min(x + w, sw)
-        y1 = min(y + h, sh)
-        if x1 <= x or y1 <= y:
-            return  # entirely off-screen
+        """Expand the dirty bounding box to include (x, y, w, h)."""
+        x1 = x + w
+        y1 = y + h
         if self._drect is None:
             self._drect = [x, y, x1, y1]
         else:
