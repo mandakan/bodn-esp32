@@ -878,15 +878,12 @@ class AudioEngine:
 
     async def start(self):
         """Start the audio engine."""
-        import gc
-
         if self._native:
             print(
                 "AudioEngine started (native, core 0, {} voices)".format(
                     self._num_voices
                 )
             )
-            gc_collect = gc.collect
             sleep_ms = asyncio.sleep_ms
             while True:
                 if self._streaming:
@@ -905,7 +902,6 @@ class AudioEngine:
                         self._buf_refs.pop(sv.idx, None)
                     await sleep_ms(16)
                 else:
-                    gc_collect()
                     await sleep_ms(100)
             return
 
@@ -921,8 +917,6 @@ class AudioEngine:
 
         print("Audio IRQ callback chain started")
 
-        gc_collect = gc.collect
         sleep_ms = asyncio.sleep_ms
         while True:
-            gc_collect()
             await sleep_ms(1000)
