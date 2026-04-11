@@ -359,37 +359,50 @@ class HomeScreen(Screen):
         band_top = 40
         band_bot = name_y + 20
 
-        if not full_clear:
-            # During animation, clear only the icon+label band
-            tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
-        else:
+        if full_clear:
             # Full redraw: title, footer, and dots
             draw_centered(tft, t("home_title"), 8, theme.WHITE, w, scale=2)
             remaining = self._session_mgr.sessions_remaining
             color = theme.GREEN if remaining > 0 else theme.RED
             draw_centered(tft, t("home_plays_left", remaining), h - 20, color, w)
+            self._draw_dots(tft, theme, dots_y, w)
+
+        # --- Animation rendering with narrow dirty region ---
+        # Instead of clearing the full-width band (320 × ~120 px → huge SPI
+        # push), we clear only the centre column where sprites travel and
+        # let blit_sprite overwrite it. This keeps the dirty rect tight.
+
+        # Width of the widest sprite (icon or label) + animation travel
+        spr = self._icon_sprites.get(name)
+        sprite_w = spr[1] if spr else icon_size
+        label_spr = self._label_sprites.get(name)
+        label_w = label_spr[1] if label_spr else 0
+        content_w = max(sprite_w, label_w) + 8  # small margin
+
+        # Clear a narrow vertical strip centred on the content
+        cx = (w - content_w) // 2
+        if not full_clear:
+            tft.fill_rect(cx, band_top, content_w, band_bot - band_top, theme.BLACK)
 
         # Outgoing item (slides out in opposite direction)
         if self._prev_name and ox != 0:
             out_ox = ox - self._anim_dir * w
             self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, 40)
-            label_spr = self._label_sprites.get(self._prev_name)
-            if label_spr:
-                blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + out_ox, name_y)
+            out_label = self._label_sprites.get(self._prev_name)
+            if out_label:
+                blit_sprite(tft, out_label, (w - out_label[1]) // 2 + out_ox, name_y)
 
         # Incoming item (slides in from the side)
         self._blit_mode_icon(tft, name, w, icon_size, ox, 40)
 
-        label_spr = self._label_sprites.get(name)
         if label_spr:
-            blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + ox, name_y)
+            blit_sprite(tft, label_spr, (w - label_w) // 2 + ox, name_y)
 
         # Clear prev_name when animation completes
         if ox == 0:
             self._prev_name = None
-
-        # Carousel dots — drawn every frame (below the clear band, cheap)
-        self._draw_dots(tft, theme, dots_y, w)
+            # Redraw dots after animation (cleared during full_clear only)
+            self._draw_dots(tft, theme, dots_y, w)
 
     def _render_portrait(self, tft, theme, frame, name, full_clear):
         """Portrait layout: icon centered, stacked vertically."""
