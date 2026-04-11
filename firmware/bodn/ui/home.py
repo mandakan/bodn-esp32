@@ -17,10 +17,10 @@ from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
 
-# Animation: ease-out x-offsets as fraction of screen width (numerator / 16)
-# 16 steps for smooth sliding with larger emoji icons (~800ms at 20 Hz)
-_ANIM_STEPS = const(16)
-_ANIM_FRAC = (16, 15, 14, 13, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+# Animation: ease-out x-offsets as fraction of screen width (numerator / 8)
+# 8 steps ≈ 240ms at 30ms/frame — fast enough to complete between encoder ticks
+_ANIM_STEPS = const(8)
+_ANIM_FRAC = (8, 7, 5, 4, 3, 2, 1, 0)  # ease-out curve
 
 # Loading bar: lives in the free zone between the carousel dots (y≈147) and
 # the "plays left" footer (y≈220).  Values tuned for 320×240 landscape.
@@ -236,9 +236,17 @@ class HomeScreen(Screen):
             excess = (abs(units) - 1) * self._dpu
             self._accum += excess * sign
             units = sign
+
+            if self._anim_step < _ANIM_STEPS:
+                # Animation in progress — snap current animation to end,
+                # then start the new one. This prevents the jerky restart
+                # that happens when encoder ticks arrive mid-animation.
+                self._anim_step = _ANIM_STEPS
+                self._prev_name = None
+                self._full_clear = True
+
             self._prev_name = self._names[self._index]
             self._index = (self._index + units) % len(self._names)
-            # Start slide animation: incoming from direction of turn
             self._anim_step = 0
             self._anim_dir = 1 if units > 0 else -1
             self._dirty = True
@@ -285,7 +293,7 @@ class HomeScreen(Screen):
         if self._anim_step >= _ANIM_STEPS:
             return 0
         frac = _ANIM_FRAC[self._anim_step]
-        return self._anim_dir * (frac * width // 16)
+        return self._anim_dir * (frac * width // 8)
 
     def render(self, tft, theme, frame):
         self._dirty = False
