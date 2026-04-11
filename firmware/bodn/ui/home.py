@@ -371,21 +371,17 @@ class HomeScreen(Screen):
             remaining = self._session_mgr.sessions_remaining
             color = theme.GREEN if remaining > 0 else theme.RED
             draw_centered(tft, t("home_plays_left", remaining), h - 20, color, w)
-        else:
-            # Clear just the content band; reset dirty tracking first so
-            # show_dirty() only pushes this band, not the full screen.
-            tft.reset_dirty()
-            tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
 
-        # Outgoing item (slides out in opposite direction)
-        if self._prev_name and ox != 0:
-            out_ox = ox - self._anim_dir * w
-            self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, 40)
-            label_spr = self._label_sprites.get(self._prev_name)
-            if label_spr:
-                blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + out_ox, name_y)
+        # Reset dirty tracking so show_dirty() only pushes what we draw,
+        # not the entire screen from the full_clear fill.
+        tft.reset_dirty()
 
-        # Incoming item (slides in from the side)
+        # Clear the content band
+        tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
+
+        # Draw only the incoming item (no outgoing slide — it was already
+        # cleared by the fill_rect above). This keeps the dirty rect to
+        # ~one sprite width instead of spanning both sprite positions.
         self._blit_mode_icon(tft, name, w, icon_size, ox, 40)
 
         label_spr = self._label_sprites.get(name)
@@ -396,7 +392,7 @@ class HomeScreen(Screen):
         if ox == 0:
             self._prev_name = None
 
-        # Carousel dots (cheap — small rects, below the content band)
+        # Carousel dots
         self._draw_dots(tft, theme, dots_y, w)
 
         # Debug: print render time during animation
