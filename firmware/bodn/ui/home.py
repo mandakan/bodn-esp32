@@ -8,7 +8,7 @@ from bodn.ui.widgets import (
     make_icon_sprite,
     make_label_sprite,
     blit_sprite,
-    load_emoji,
+    make_emoji_sprite,
 )
 from bodn.chord import ChordDetector
 from bodn.i18n import t
@@ -100,7 +100,7 @@ class HomeScreen(Screen):
         # instead of hundreds of fill_rect calls.
         self._icon_sprites = {}
         self._label_sprites = {}
-        self._emoji_assets = {}  # name → (asset, w, h) or None
+        self._icon_display_size = 64  # default, updated in _build_sprites
         self._sprite_color = None  # rebuilt on first render when theme available
 
     def _build_sprites(self, theme):
@@ -111,51 +111,46 @@ class HomeScreen(Screen):
         self._icon_scale = icon_scale
         # Emoji: 96px on landscape primary, 48px on smaller/portrait displays
         emoji_size = 96 if theme.width > theme.height else 48
-        self._emoji_size = emoji_size
+        has_emoji = False
         for name in self._names:
-            # Try OpenMoji emoji first (full-colour BDF from SD)
-            if name not in self._emoji_assets:
-                emoji = load_emoji(name, emoji_size)
-                # Fall back to 48px if 96px not available
-                if emoji is None and emoji_size != 48:
-                    emoji = load_emoji(name, 48)
-                self._emoji_assets[name] = emoji
-            # Fall back to 1-bit icon sprite
-            if self._emoji_assets.get(name) is None:
-                icon_data = MODE_ICONS.get(name)
-                if icon_data and name not in self._icon_sprites:
-                    self._icon_sprites[name] = make_icon_sprite(
-                        icon_data, 16, 16, color, scale=icon_scale
-                    )
+            # Try pre-rendered emoji sprite (with background pad)
+            if name not in self._icon_sprites:
+                spr = make_emoji_sprite(name, emoji_size)
+                if spr is None and emoji_size != 48:
+                    spr = make_emoji_sprite(name, 48)
+                if spr is not None:
+                    self._icon_sprites[name] = spr
+                    has_emoji = True
+                else:
+                    # Fall back to 1-bit icon sprite
+                    icon_data = MODE_ICONS.get(name)
+                    if icon_data:
+                        self._icon_sprites[name] = make_icon_sprite(
+                            icon_data, 16, 16, color, scale=icon_scale
+                        )
+            elif self._icon_sprites.get(name) is not None:
+                # Already cached — check if it's emoji-sized
+                _, pw, _ = self._icon_sprites[name]
+                if pw > 16 * icon_scale:
+                    has_emoji = True
             label_text = t("mode_" + name).upper()
             if name not in self._label_sprites:
                 self._label_sprites[name] = make_label_sprite(
                     label_text, color, scale=label_scale
                 )
+        # Compute icon_size once — used for layout in render
+        if has_emoji:
+            self._icon_display_size = emoji_size + 8  # include pad
+        else:
+            self._icon_display_size = 16 * icon_scale
         self._sprite_color = color
 
     def _blit_mode_icon(self, tft, name, screen_w, icon_size, ox, y):
-        """Render a mode icon: emoji (colour BDF) first, 1-bit fallback."""
-        emoji = self._emoji_assets.get(name)
-        if emoji:
-            asset, ew, eh = emoji
-            try:
-                from bodn.ui.draw import sprite
-
-                ix = (screen_w - ew) // 2 + ox
-                iy = y + (icon_size - eh) // 2
-                # Light background pad so emoji are visible on dark bg
-                pad = 4
-                tft.fill_rect(
-                    ix - pad, iy - pad, ew + pad * 2, eh + pad * 2, 0xEF7D
-                )  # 0xEF7D ≈ RGB(236, 240, 248) light grey-blue
-                sprite(tft, ix, iy, asset, 0, 0xFFFF)
-                return
-            except Exception:
-                pass
-        icon_spr = self._icon_sprites.get(name)
-        if icon_spr:
-            blit_sprite(tft, icon_spr, (screen_w - icon_size) // 2 + ox, y)
+        """Render a mode icon (pre-rendered sprite — emoji or 1-bit)."""
+        spr = self._icon_sprites.get(name)
+        if spr:
+            _, pw, ph = spr
+            blit_sprite(tft, spr, (screen_w - pw) // 2 + ox, y + (icon_size - ph) // 2)
 
     def needs_redraw(self):
         return self._dirty
@@ -356,11 +351,7 @@ class HomeScreen(Screen):
         h = theme.height
         ox = self._anim_x(w)
 
-        icon_scale = self._icon_scale
-        icon_size = getattr(self, "_emoji_size", 16 * icon_scale)
-        # Use emoji size if available, else fallback 1-bit size
-        if not any(self._emoji_assets.get(n) for n in self._names):
-            icon_size = 16 * icon_scale
+        icon_size = self._icon_display_size
         name_y = 40 + icon_size + 12
         dots_y = name_y + 28
 
@@ -406,8 +397,7 @@ class HomeScreen(Screen):
         w = theme.width
         ox = self._anim_x(w)
 
-        icon_scale = 3
-        icon_size = 16 * icon_scale
+        icon_size = self._icon_display_size
         iy = theme.CENTER_Y - icon_size // 2 - 8
         dots_y = theme.CENTER_Y + 44
 
