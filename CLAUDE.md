@@ -133,6 +133,7 @@ bodn-esp32/
 │        ├─ logo.py         # pixel art boot logo (Norse mead vessel)
 │        ├─ mystery.py      # Mystery Box discovery game
 │        ├─ nfc_provision.py # NFC card set viewer + provisioning (stub)
+│        ├─ icon_browser.py # OpenMoji emoji sprite browser (settings)
 │        ├─ overlay.py      # session state overlay
 │        ├─ pause.py        # in-game pause menu (hold-to-open)
 │        ├─ rulefollow.py   # Rule Follow game screen

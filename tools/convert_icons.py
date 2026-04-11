@@ -60,7 +60,7 @@ def convert_icons(
     """Convert all manifest icons to BDF. Returns (converted, skipped, missing)."""
     manifest = load_manifest()
     default_bpp = manifest.get("default_bpp", 4)
-    default_size = manifest.get("default_size", 48)
+    default_sizes = manifest.get("sizes", [manifest.get("default_size", 48)])
 
     converted = 0
     skipped = 0
@@ -71,46 +71,48 @@ def convert_icons(
     for icon in manifest["icons"]:
         name = icon["name"]
         codepoint = icon["codepoint"]
-        size = icon.get("size", default_size)
         bpp = icon.get("bpp", default_bpp)
         label = icon.get("label", "")
+        sizes = icon.get("sizes", default_sizes)
 
-        out_name = f"emoji_{name}_{size}.bdf"
-        out_path = BUILD_DIR / out_name
+        # Find SVG once per icon (shared across sizes)
+        svg_path = None
+        if openmoji_dir is not None:
+            svg_path = find_svg(codepoint, openmoji_dir)
 
-        if dry_run:
-            status = "exists" if out_path.exists() else "new"
-            print(f"  {status:8s}  {out_name:36s}  U+{codepoint:5s}  {label}")
-            continue
+        for size in sizes:
+            out_name = f"emoji_{name}_{size}.bdf"
+            out_path = BUILD_DIR / out_name
 
-        if openmoji_dir is None:
-            missing += 1
-            continue
+            if dry_run:
+                status = "exists" if out_path.exists() else "new"
+                print(f"  {status:8s}  {out_name:36s}  U+{codepoint:5s}  {label}")
+                continue
 
-        svg_path = find_svg(codepoint, openmoji_dir)
-        if svg_path is None:
-            print(f"  missing   {out_name}  (U+{codepoint} not found)")
-            missing += 1
-            continue
+            if svg_path is None:
+                if openmoji_dir is not None:
+                    print(f"  missing   {out_name}  (U+{codepoint} not found)")
+                missing += 1
+                continue
 
-        # Up-to-date check
-        if (
-            not force
-            and out_path.exists()
-            and out_path.stat().st_mtime >= svg_path.stat().st_mtime
-        ):
-            skipped += 1
-            continue
+            # Up-to-date check
+            if (
+                not force
+                and out_path.exists()
+                and out_path.stat().st_mtime >= svg_path.stat().st_mtime
+            ):
+                skipped += 1
+                continue
 
-        # Convert SVG → BDF
-        try:
-            blob = rasterize_image(str(svg_path), size, bpp)
-            out_path.write_bytes(blob)
-            converted += 1
-            print(f"  convert   {out_name} ({len(blob)} bytes)")
-        except Exception as e:
-            print(f"  ERROR     {out_name}: {e}")
-            missing += 1
+            # Convert SVG → BDF
+            try:
+                blob = rasterize_image(str(svg_path), size, bpp)
+                out_path.write_bytes(blob)
+                converted += 1
+                print(f"  convert   {out_name} ({len(blob)} bytes)")
+            except Exception as e:
+                print(f"  ERROR     {out_name}: {e}")
+                missing += 1
 
     return converted, skipped, missing
 
@@ -139,7 +141,9 @@ def main():
 
     manifest = load_manifest()
     icons = manifest["icons"]
-    print(f"Emoji manifest: {len(icons)} icons")
+    sizes = manifest.get("sizes", [manifest.get("default_size", 48)])
+    total = sum(len(i.get("sizes", sizes)) for i in icons)
+    print(f"Emoji manifest: {len(icons)} icons × {len(sizes)} sizes = {total} files")
 
     openmoji_dir = args.openmoji if args.openmoji.exists() else None
     if not openmoji_dir and not args.dry_run:
