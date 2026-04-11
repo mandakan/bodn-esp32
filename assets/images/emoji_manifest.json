@@ -1,0 +1,33 @@
+{
+  "default_bpp": 4,
+  "sizes": [96, 48, 32, 24],
+  "icons": [
+    {"name": "mystery",    "codepoint": "2753",  "label": "Red Question Mark"},
+    {"name": "simon",      "codepoint": "1F3AF", "label": "Bullseye"},
+    {"name": "rulefollow", "codepoint": "1F9E0", "label": "Brain"},
+    {"name": "demo",       "codepoint": "2B50",  "label": "Star"},
+    {"name": "clock",      "codepoint": "1F551", "label": "Clock Face Two"},
+    {"name": "settings",   "codepoint": "2699",  "label": "Gear"},
+    {"name": "flode",      "codepoint": "1F30A", "label": "Water Wave"},
+    {"name": "garden",     "codepoint": "1F331", "label": "Seedling"},
+    {"name": "space",      "codepoint": "1F680", "label": "Rocket"},
+    {"name": "story",      "codepoint": "1F4D6", "label": "Open Book"},
+    {"name": "sequencer",  "codepoint": "1F941", "label": "Drum"},
+    {"name": "highfive",   "codepoint": "270B",  "label": "Raised Hand"},
+    {"name": "soundboard", "codepoint": "1F50A", "label": "Speaker High Volume"},
+
+    {"name": "cat",        "codepoint": "1F431", "label": "Cat Face"},
+    {"name": "dog",        "codepoint": "1F436", "label": "Dog Face"},
+    {"name": "rabbit",     "codepoint": "1F430", "label": "Rabbit Face"},
+    {"name": "bird",       "codepoint": "1F426", "label": "Bird"},
+    {"name": "fish",       "codepoint": "1F41F", "label": "Fish"},
+    {"name": "horse",      "codepoint": "1F434", "label": "Horse Face"},
+    {"name": "cow",        "codepoint": "1F404", "label": "Cow"},
+    {"name": "frog",       "codepoint": "1F438", "label": "Frog"},
+
+    {"name": "abacus",     "codepoint": "1F9EE", "label": "Abacus"},
+    {"name": "plus",       "codepoint": "2795",  "label": "Plus"},
+    {"name": "minus",      "codepoint": "2796",  "label": "Minus"},
+    {"name": "equals",     "codepoint": "1F7F0", "label": "Heavy Equals Sign"}
+  ]
+}

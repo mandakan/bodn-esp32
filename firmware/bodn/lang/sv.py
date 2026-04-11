@@ -32,6 +32,7 @@ STRINGS = {
     "settings_perf": "Perf stats",
     "settings_diag": "Diagnostik",
     "settings_nfc": "NFC-kort",
+    "settings_icons": "Ikoner",
     "settings_sleep": "Vilotimer",
     "settings_encoder": "Känslighet",
     "settings_tz": "Tidszon",

@@ -27,6 +27,7 @@ _ITEMS = [
     ("standby", "settings_standby", "action"),
     ("diag", "settings_diag", "action"),
     ("nfc_provision", "settings_nfc", "action"),
+    ("icon_browser", "settings_icons", "action"),
     ("back", "settings_back", "action"),
 ]
 
@@ -119,6 +120,12 @@ class SettingsScreen(Screen):
                 from bodn.ui.nfc_provision import NFCProvisionScreen
 
                 self._manager.push(NFCProvisionScreen(self._settings))
+            return
+        if key == "icon_browser":
+            if self._manager:
+                from bodn.ui.icon_browser import IconBrowserScreen
+
+                self._manager.push(IconBrowserScreen())
             return
         if key == "standby":
             self._settings["_sleep_now"] = True

@@ -124,31 +124,57 @@ def build_sd_assets(force: bool = False) -> bool:
     ok = True
 
     # Step 1: Generate TTS audio from i18n strings
-    print("\n>>> Step 1/4: Generate TTS audio")
+    print("\n>>> Step 1/5: Generate TTS audio")
     if not run_tool("generate_tts.py"):
         print("WARNING: TTS generation had errors (continuing anyway)")
         ok = False
 
     # Step 2: Generate story TTS audio from story scripts
-    print("\n>>> Step 2/4: Generate story TTS audio")
+    print("\n>>> Step 2/5: Generate story TTS audio")
     if not run_tool("generate_story_tts.py"):
         print("WARNING: Story TTS generation had errors (continuing anyway)")
         ok = False
 
     # Step 3: Convert all audio (includes SD TTS staging → build/tts_converted/)
-    print("\n>>> Step 3/4: Convert audio assets")
+    print("\n>>> Step 3/5: Convert audio assets")
     extra = ["--force"] if force else []
     if not run_tool("convert_audio.py", extra):
         print("WARNING: Audio conversion had errors (continuing anyway)")
         ok = False
 
     # Step 4: Build sprite assets (logo etc.)
-    print("\n>>> Step 4/4: Build sprite assets")
+    print("\n>>> Step 4/5: Build sprite assets")
     if not build_sprites():
         print("WARNING: Sprite build had errors (continuing anyway)")
         ok = False
 
+    # Step 5: Build OpenMoji emoji icons (if OpenMoji SVGs available)
+    print("\n>>> Step 5/5: Build emoji icons")
+    build_emojis(force)
+
     return ok
+
+
+def build_emojis(force: bool = False) -> None:
+    """Convert OpenMoji SVGs to BDF sprites (skips if OpenMoji not available)."""
+    try:
+        from convert_icons import convert_icons, load_manifest, resolve_openmoji_dir
+
+        load_manifest()  # validate manifest exists
+        openmoji_dir = resolve_openmoji_dir()
+        if not openmoji_dir:
+            print("  skip  OpenMoji not found ($OPENMOJI_DIR or ~/openmoji)")
+            print(
+                "         git clone --depth 1"
+                " https://github.com/hfg-gmuend/openmoji.git ~/openmoji"
+            )
+            return
+        converted, skipped, missing = convert_icons(openmoji_dir, force=force)
+        print(
+            f"  emoji: {converted} converted, {skipped} up-to-date, {missing} missing"
+        )
+    except Exception as e:
+        print(f"  skip  emoji build failed: {e}")
 
 
 def sync_to_target(target: Path, dry_run: bool = False) -> int:

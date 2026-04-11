@@ -133,6 +133,7 @@ bodn-esp32/
 │        ├─ logo.py         # pixel art boot logo (Norse mead vessel)
 │        ├─ mystery.py      # Mystery Box discovery game
 │        ├─ nfc_provision.py # NFC card set viewer + provisioning (stub)
+│        ├─ icon_browser.py # OpenMoji emoji sprite browser (settings)
 │        ├─ overlay.py      # session state overlay
 │        ├─ pause.py        # in-game pause menu (hold-to-open)
 │        ├─ rulefollow.py   # Rule Follow game screen
@@ -160,7 +161,8 @@ bodn-esp32/
 │  ├─ generate_story_tts.py  # generate story narration TTS from story scripts
 │  ├─ story_preview.py      # preview story scripts in terminal
 │  ├─ sd-sync.py            # build + sync SD card assets (TTS, sounds, etc.)
-│  └─ generate_cards.py     # NFC card face PDF generator (OpenMoji → A4 PDF)
+│  ├─ generate_cards.py     # NFC card face PDF generator (OpenMoji → A4 PDF)
+│  └─ convert_icons.py      # OpenMoji SVG → BDF sprite conversion for on-screen icons
 ├─ cmodules/                  # native C extensions (compiled into firmware)
 │  ├─ micropython.cmake       # top-level cmake: includes sub-modules
 │  ├─ audiomix/               # native audio mixer (_audiomix module, core 0)
@@ -264,11 +266,21 @@ uv run python tools/sd-sync.py --build-only        # build without copying
 uv run python tools/sd-sync.py --no-build /Volumes/BODN_SD  # copy without rebuilding
 uv run python tools/sd-sync.py --dry-run           # preview what would happen
 
-# NFC card face PDF generator (requires OpenMoji SVGs)
-# One-time: git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji
-uv run python tools/generate_cards.py --openmoji ~/openmoji  # generate all card PDFs
+# OpenMoji setup (one-time, ~200 MB — used by card generator + icon converter)
+# All OpenMoji tools check: --openmoji flag > $OPENMOJI_DIR > ~/openmoji
+git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji
+# Or set env var: export OPENMOJI_DIR=/path/to/openmoji
+
+# NFC card face PDF generator
+uv run python tools/generate_cards.py                        # generate all card PDFs
 uv run python tools/generate_cards.py --set sortera          # specific set
 uv run python tools/generate_cards.py --dry-run              # preview without generating
+
+# OpenMoji on-screen icon conversion (SVG → BDF sprites for home screen)
+# sd-sync.py runs this automatically as step 5 of the build pipeline
+uv run python tools/convert_icons.py                         # convert all emoji icons
+uv run python tools/convert_icons.py --dry-run               # preview without converting
+uv run python tools/convert_icons.py --force                 # force rebuild all
 ```
 
 ## Git hooks

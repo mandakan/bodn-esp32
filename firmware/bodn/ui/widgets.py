@@ -112,6 +112,43 @@ def blit_sprite(tft, sprite, x, y):
     tft.mark_dirty(x, y, pw, ph)
 
 
+# ── Emoji sprite loading (OpenMoji BDF from SD) ──────────────────
+# Pre-converted BDF sprites with full RGB565+alpha, rendered via the
+# native _draw module. Falls back gracefully if _draw or SD not available.
+
+_emoji_cache = {}
+
+
+def load_emoji(name, size=48):
+    """Load an OpenMoji BDF sprite from the SD card.
+
+    Returns (asset_handle, width, height) or None if not available.
+    Results (including None) are cached to avoid repeated file I/O.
+    """
+    key = (name, size)
+    if key in _emoji_cache:
+        return _emoji_cache[key]
+
+    result = None
+    try:
+        from bodn.ui.draw import load, info
+        from bodn.assets import resolve
+
+        path = resolve("/sprites/emoji_{}_{}.bdf".format(name, size))
+        with open(path, "rb") as f:
+            data = f.read()
+        asset = load(data)
+        if asset is not None:
+            meta = info(asset)
+            if meta is not None:
+                result = (asset, meta["max_width"], meta["height"])
+    except (OSError, ImportError):
+        pass
+
+    _emoji_cache[key] = result
+    return result
+
+
 def blit_centered(tft, sprite, y, w):
     """Blit a sprite horizontally centered within width w."""
     _, pw, _ = sprite
