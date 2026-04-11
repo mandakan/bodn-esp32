@@ -422,7 +422,7 @@ class HomeScreen(Screen):
         if right < w:
             tft.fill_rect(right, band_top, w - right, band_bot - band_top, theme.BLACK)
 
-        # Clear the label row (labels are narrower, just clear the full row)
+        # Clear the label row within the visible sprite span
         tft.fill_rect(left, name_y, right - left, 20, theme.BLACK)
 
         # Draw outgoing sprite
