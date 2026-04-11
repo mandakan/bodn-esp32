@@ -294,7 +294,55 @@ engagement with language concepts. Bialystok (2011) documents enhanced executive
 functions in bilingual children. This mode would fill the bilingual exposure gap
 identified in the development matrix.
 
-### 6.6 Free Discovery / Tag Registry (infrastructure + exploration mode)
+### 6.6 Räkna --- Progressive Math with Tangible Numbers (new mode)
+
+**Concept**: NFC cards with dot patterns (1--10, structured like dice faces) serve
+as tangible number tokens. The mode progresses through six levels following
+Bruner's Concrete-Pictorial-Abstract (CPA) progression:
+
+1. **Quantity Discovery** (age 3--4): Scan dot cards freely; device shows matching
+   dots, says the number aloud, LEDs pulse N times. Pure exploration.
+2. **Find the Number** (age 4--5): TTS prompts "Find three!"; child scans matching
+   dot card. Progresses 1--3 → 1--5 → 1--10.
+3. **More or Less** (age 4--5): "What is MORE than 3?" --- child scans any larger
+   card. Builds ordinality and magnitude comparison.
+4. **Put Together** (age 5--6): Two dot groups shown, child scans the total. No
+   symbols --- visual grouping only. Addition within 5, then 10.
+5. **Take Away** (age 5--7): "5 birds, 2 fly away. How many left?" Subtraction
+   as removal.
+6. **Build Numbers** (age 6--7): Scan number + operation + number cards to build
+   equations. Symbols (+, -, =) introduced only after months of concrete experience.
+
+**Developmental targets:**
+- Working Memory (primary) --- hold target number while searching cards
+- Sequential Thinking (primary) --- count sequences, build equations
+- Pattern Recognition (significant) --- dot patterns, number relationships
+- Problem Solving (significant) --- "which card makes the total?"
+- Listening Comprehension (significant) --- TTS number prompts
+- Bilingual Exposure (significant) --- numbers in Swedish and English
+- Fine Motor (significant) --- card manipulation and placement
+
+**Science basis**: Early math skills are the single strongest predictor of later
+academic achievement (Duncan et al., 2007). Subitising (instant recognition of
+small quantities via dot patterns) is foundational to number sense (Clements &
+Sarama, 2014). Linear number paths produced measurable gains in preschoolers'
+number competence after just 1 hour of play, with effects persisting 9 weeks
+(Siegler & Ramani, 2009). Physical manipulatives produce superior mathematical
+improvement compared to virtual-only approaches (Frontiers in Education, 2019).
+The CPA progression (Bruner, 1966) --- concrete tokens → pictorial dot displays →
+abstract numerals --- is consistently validated across cultures and age groups.
+
+**Critical design constraints** (research-backed):
+- **Dots before digits**: subitising is the foundation, not numerals
+- **Linear, not circular**: number path goes left-to-right (Siegler & Ramani)
+- **Self-paced always**: timed tests cause math anxiety even in preschoolers
+  (Boaler; NCTM position statement)
+- **No rote drilling**: frame every interaction as exploration or narrative
+- **No multiplication/division**: requires multiplicative reasoning (age 7--8)
+- **Concreteness fading**: dot-only cards → small numerals added → symbols last
+  (Willingham, 2017)
+
+### 6.7 Free Discovery / Tag Registry (infrastructure + exploration mode)
 
 **Concept**: Any new NFC tag scanned for the first time is assigned a random colour,
 sound, and animation. The child builds a personal "collection" of tagged objects.
@@ -414,5 +462,17 @@ Based on the literature, NFC features should follow these principles:
   early childhood. *The Reading Teacher*, 68(7), 512--516.
 - Zelazo, P.D. (2006). The Dimensional Change Card Sort (DCCS): A method of
   assessing executive function in children. *Nature Protocols*, 1(1), 297--301.
+- Bruner, J. (1966). *Toward a Theory of Instruction*. Harvard University Press.
+- Duncan, G.J. et al. (2007). School readiness and later achievement.
+  *Developmental Psychology*, 43(6), 1428--1446.
+- Gelman, R. & Gallistel, C.R. (1978). *The Child's Understanding of Number*.
+  Harvard University Press.
+- Jordan, N.C. et al. (2009). Early math matters: kindergarten number competence
+  and later mathematics outcomes. *Developmental Psychology*, 45(3), 850--867.
+- Siegler, R.S. & Ramani, G.B. (2009). Playing linear number board games promotes
+  low-income children's numerical development. *Developmental Science*, 11(5),
+  655--661.
+- Willingham, D.T. (2017). Do manipulatives help students learn? *American
+  Educator*, Fall 2017.
 - Zuckerman, O., Arida, S. & Resnick, M. (2005). Extending tangible interfaces for
   education. *CHI '05*.

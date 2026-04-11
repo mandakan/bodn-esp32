@@ -329,6 +329,20 @@ again for English. Quiz mode: device says a word, child scans the right card.
 a personal collection by tagging household objects, toys, and drawings.
 **References:** Bonawitz et al. (2011) exploration-driven discovery
 
+#### NFC-7. Räkna — Progressive Math with Tangible Numbers
+
+**Primary targets:** WM, ST, PR, PS, LC, BL, FM
+**Fills gaps in:** Problem solving (tangible math), fine motor, bilingual exposure
+**Concept:** Dot-pattern NFC cards (1--10) for progressive number sense: subitising
+→ quantity matching → more/less → addition → subtraction → symbolic equations.
+Follows Bruner's CPA progression (concrete tokens → pictorial dots → abstract
+numerals). Six levels spanning ages 3--7. Self-paced, never timed.
+**References:** Duncan et al. (2007) early math as #1 achievement predictor;
+Clements & Sarama (2014) learning trajectories; Siegler & Ramani (2009) linear
+number board games; Jordan et al. (2009) kindergarten number sense; Gelman &
+Gallistel (1978) counting principles; Bruner (1966) CPA; Willingham (2017)
+manipulatives and concreteness fading
+
 ---
 
 ### Other Future Opportunities
