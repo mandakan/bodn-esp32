@@ -9,9 +9,8 @@ mythology — the drink that granted wisdom and poetic inspiration.
 A colourful, tactile device that grows with a child (starting around age 4):
 
 - **Press buttons and turn knobs** → hear sounds, see colours and animations
-- **Play games** → Simon memory game, Mystery Box discovery, Flöde flow puzzles, Rule Follow, Garden of Life, Soundboard
-- **Record and play back** short voice clips *(planned)*
-- **Create sequences** of lights and sounds → first steps into programming concepts *(planned)*
+- **Play games** → Simon memory game, Mystery Box discovery, Flöde flow puzzles, Rule Follow, Garden of Life, Soundboard, Spaceship cockpit, Story Mode, High-Five Friends, Sequencer
+- **NFC card games** *(planned)* → scan physical cards to sort, count, build stories, and learn (PN532 reader + NTAG213 stickers)
 - **Parental controls** → session time limits, break enforcement, quiet hours, lockdown — all configured from a phone via a local web UI
 
 ## Hardware
@@ -61,6 +60,7 @@ firmware/
       sv.py             # Swedish string table (default)
       en.py             # English string table
     mcp23017.py         # MCP23017 I2C GPIO expander driver
+    nfc.py              # NFC tag parsing, card sets, UID cache, reader stub
     patterns.py         # LED animation patterns (shared buffer)
     pca9685.py          # PCA9685 I2C PWM driver (arcade button LEDs)
     power.py            # power management (sleep, wake, master switch)
@@ -101,6 +101,8 @@ firmware/
       pause.py          # in-game pause menu (hold-to-open)
       diag.py           # on-device diagnostics screen
       admin_qr.py       # admin URL screen with QR code
+      nfc_provision.py  # NFC card set viewer + provisioning
+      icon_browser.py   # OpenMoji emoji sprite browser
 ```
 
 ## Getting started
@@ -279,9 +281,10 @@ See [`docs/roadmap.md`](docs/roadmap.md) for detailed milestones.
 
 1. ~~**Hardware bring-up**~~ — display, buttons, encoders ✓
 2. ~~**Audio basics**~~ — tones, WAV playback, volume control ✓
-3. **Kid-facing UI** — six game modes shipped; record/replay and sequencer planned
+3. **Kid-facing UI** — 10 game modes shipped; NFC card games planned
 4. ~~**Parental controls**~~ — web UI, session limits, OTA, FTP sync ✓
 5. **Quality-of-life** — battery indicator, temperature monitoring, i18n (Swedish/English) ✓
+6. **NFC integration** — data layer and card generation ready; PN532 hardware bring-up next
 
 ## Developmental foundations
 
@@ -299,6 +302,77 @@ Build the report PDF (requires a TeX distribution):
 docs/science/build.sh        # render report.pdf
 docs/science/build.sh clean  # remove build artefacts
 ```
+
+## NFC card games
+
+Bodn supports NFC-tagged physical cards as input for classification, math, storytelling,
+and vocabulary games. Cards carry self-describing data (NDEF Text Records) so they work
+across devices and are readable by phones.
+
+See [`docs/nfc.md`](docs/nfc.md) for the tag format specification and
+[`docs/science/nfc_tangible_learning.md`](docs/science/nfc_tangible_learning.md) for the
+research foundations.
+
+### Hardware (not yet wired)
+
+A PN532 NFC reader connects via I2C (address 0x24, shared bus with existing devices).
+See [issue #121](https://github.com/mandakan/bodn-esp32/issues/121) for wiring details.
+
+### Card production
+
+Cards are printed on paper/cardstock with an NFC sticker on the back, then laminated.
+
+```bash
+# One-time: clone OpenMoji icons (CC-BY-SA 4.0, ~200 MB)
+git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji
+
+# Generate printable A4 PDF with card faces (85×54 mm, 2×4 per page)
+uv run python tools/generate_cards.py
+
+# Preview without generating
+uv run python tools/generate_cards.py --dry-run
+```
+
+Output: `build/cards/sortera_cards.pdf` — print, cut, laminate, attach NFC stickers.
+
+The first card set is **Sortera** (16 animal cards in 4 colours) for a classification
+game based on the Dimensional Change Card Sort (DCCS) task.
+
+## OpenMoji icons
+
+On-screen mode icons use [OpenMoji](https://openmoji.org/) (CC-BY-SA 4.0) — colourful
+emoji rendered as BDF sprites via the existing native `_draw` module. The home screen
+carousel loads them automatically from the SD card, falling back to built-in 1-bit icons
+if not available.
+
+### Setup
+
+```bash
+# Clone OpenMoji (one-time, or set OPENMOJI_DIR to an existing checkout)
+git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji
+
+# Convert all icons (25 emoji × 3 sizes = 75 BDF files)
+uv run python tools/convert_icons.py
+
+# Or let sd-sync handle everything automatically:
+uv run python tools/sd-sync.py
+```
+
+All three OpenMoji tools (`convert_icons.py`, `generate_cards.py`, `sd-sync.py`) resolve
+the OpenMoji directory in this order: `--openmoji` flag → `$OPENMOJI_DIR` env var → `~/openmoji`.
+
+### SD card build pipeline
+
+```bash
+# Build and sync all SD card assets (TTS, audio, sprites, emoji, NFC configs)
+uv run python tools/sd-sync.py                      # auto-detect SD card
+uv run python tools/sd-sync.py /Volumes/BODN_SD     # explicit path
+uv run python tools/sd-sync.py --build-only          # build without copying
+uv run python tools/sd-sync.py --dry-run             # preview
+```
+
+The pipeline runs 5 steps: TTS generation → story TTS → audio conversion → sprite
+building → emoji icon conversion. Each step skips up-to-date files automatically.
 
 ## Design goals
 
