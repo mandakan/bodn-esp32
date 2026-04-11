@@ -1,5 +1,6 @@
 # bodn/ui/mystery.py — Mystery Box game screen (Color Alchemy)
 
+import time
 from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
@@ -72,6 +73,7 @@ class MysteryScreen(Screen):
         self._brightness.reset()
         self._hue_acc.reset()
         self._hue = 0
+        self._last_ms = time.ticks_ms()
         self._dirty = True
         self._full_clear = True
         arc = self._arcade
@@ -131,7 +133,10 @@ class MysteryScreen(Screen):
 
         # Find first just-pressed button
         btn = inp.first_btn_pressed()
-        self._engine.update(btn, frame)
+        now = time.ticks_ms()
+        dt = time.ticks_diff(now, self._last_ms)
+        self._last_ms = now
+        self._engine.update(btn, dt)
 
         # Detect state changes that require a redraw
         out_type = self._engine.output_type

@@ -8,6 +8,8 @@
 #   Top ~120px: mood colour wash
 #   Middle ~60px: narration text (word-wrapped, scale 2)
 #   Bottom ~60px: choice labels with arcade button colour dots
+
+import time
 #
 # Arcade buttons 0..N light up during CHOOSING to show available choices.
 
@@ -184,6 +186,7 @@ class StoryScreen(Screen):
         self._pause.set_manager(manager)
         self._engine.reset()
         self._brightness.reset()
+        self._last_ms = time.ticks_ms()
         self._dirty = True
         self._full_clear = True
 
@@ -320,7 +323,6 @@ class StoryScreen(Screen):
         """
         if self._engine.state not in (NARRATING, ENDING):
             return
-        frame = self._manager._frame if self._manager else 0
 
         if self._tts_playing:
             # Check if UI voice is still active
@@ -344,17 +346,17 @@ class StoryScreen(Screen):
                 # No choices TTS or not applicable — done
                 self._tts_phase = 2
                 self._tts_playing = False
-                self._engine.narration_done(frame)
+                self._engine.narration_done()
             elif self._tts_phase == 1:
                 # Choices narration done
                 self._tts_phase = 2
                 self._tts_playing = False
-                self._engine.narration_done(frame)
+                self._engine.narration_done()
         else:
             # Timer-based fallback
             self._narrate_timer += 1
             if self._narrate_timer >= self._narrate_timeout:
-                self._engine.narration_done(frame)
+                self._engine.narration_done()
 
     def exit(self):
         # Stop any TTS still playing
@@ -393,7 +395,10 @@ class StoryScreen(Screen):
 
         # Engine update
         prev_state = self._engine.state
-        self._engine.update(frame)
+        now = time.ticks_ms()
+        dt = time.ticks_diff(now, self._last_ms)
+        self._last_ms = now
+        self._engine.update(dt)
 
         # Handle state transitions (before TTS check so _start_narration
         # resets TTS state before _check_tts_done inspects it)
@@ -455,7 +460,7 @@ class StoryScreen(Screen):
                 btn = inp.first_btn_pressed()
                 if 0 <= btn < self._engine.choice_count:
                     arc = btn
-            if arc >= 0 and self._engine.choose(arc, frame):
+            if arc >= 0 and self._engine.choose(arc):
                 self._dirty = True
                 self._leds_dirty = True
                 if self._audio:

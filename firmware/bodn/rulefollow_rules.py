@@ -25,12 +25,12 @@ GAME_OVER = const(6)  # game finished
 RULE_MATCH = const(0)  # press the same color
 RULE_OPPOSITE = const(1)  # press the opposite color
 
-# Timing (in frames, ~33 fps)
-SHOW_RULE_FRAMES = const(50)  # rule display duration (~1.5s)
-STIMULUS_TIMEOUT = const(100)  # max wait for response (~3s)
-CORRECT_FRAMES = const(33)  # celebration duration (~1s)
-WRONG_FRAMES = const(40)  # gentle feedback (~1.2s)
-RULE_SWITCH_FRAMES = const(66)  # rule change animation (~2s)
+# Timing (milliseconds, wall-clock, frame-rate independent)
+SHOW_RULE_MS = const(1500)  # rule display duration
+STIMULUS_TIMEOUT_MS = const(3000)  # max wait for response
+CORRECT_MS = const(1000)  # celebration duration
+WRONG_MS = const(1200)  # gentle feedback
+RULE_SWITCH_MS = const(2000)  # rule change animation
 
 # Game config
 NUM_BUTTONS = const(4)  # use buttons 0–3
@@ -71,7 +71,7 @@ class RuleFollowEngine:
     """Stateful game engine for Rule Follow.
 
     Pure logic — no hardware imports beyond patterns.
-    Feed it button presses each frame and read back the current state.
+    Feed it button presses each tick with dt (ms) and read back the current state.
     """
 
     def __init__(
@@ -98,10 +98,15 @@ class RuleFollowEngine:
         self.streak = 0  # current consecutive correct
         self.best_streak = 0
         self.round_num = 0
-        self._state_frame = 0
+        self._state_ms = 0
         self._rule_correct_count = 0  # correct on current rule
         self._switch_threshold = 0  # correct needed before switch
         self._pick_switch_threshold()
+
+    def _set_state(self, new_state):
+        """Transition to a new state, resetting the state timer."""
+        self.state = new_state
+        self._state_ms = 0
 
     def _pick_switch_threshold(self):
         """Randomly pick how many correct answers before rule switches."""
@@ -129,52 +134,55 @@ class RuleFollowEngine:
         """RGB color for the current rule."""
         return RULE_COLORS[self.current_rule]
 
-    def update(self, btn_pressed, frame):
-        """Call every frame. btn_pressed is the just-pressed button index (-1 if none).
+    def update(self, btn_pressed, dt):
+        """Call every tick. btn_pressed is the just-pressed button index (-1 if none).
+
+        Args:
+            btn_pressed -- button index (0–3), -1 if none
+            dt          -- milliseconds since last tick
 
         Returns the current state.
         """
-        elapsed = frame - self._state_frame
+        self._state_ms += dt
 
         if self.state == READY:
             if btn_pressed >= 0:
-                self._start_game(frame)
+                self._start_game()
             return self.state
 
         elif self.state == SHOW_RULE:
-            if elapsed >= SHOW_RULE_FRAMES:
-                self._begin_stimulus(frame)
+            if self._state_ms >= SHOW_RULE_MS:
+                self._begin_stimulus()
             return self.state
 
         elif self.state == STIMULUS:
-            return self._update_stimulus(btn_pressed, frame, elapsed)
+            return self._update_stimulus(btn_pressed)
 
         elif self.state == CORRECT:
-            if elapsed >= CORRECT_FRAMES:
-                self._after_response(frame)
+            if self._state_ms >= CORRECT_MS:
+                self._after_response()
             return self.state
 
         elif self.state == WRONG:
-            if elapsed >= WRONG_FRAMES:
-                self._after_response(frame)
+            if self._state_ms >= WRONG_MS:
+                self._after_response()
             return self.state
 
         elif self.state == RULE_SWITCH:
-            if elapsed >= RULE_SWITCH_FRAMES:
+            if self._state_ms >= RULE_SWITCH_MS:
                 # Switch complete — show the new rule
-                self.state = SHOW_RULE
-                self._state_frame = frame
+                self._set_state(SHOW_RULE)
             return self.state
 
         elif self.state == GAME_OVER:
             if btn_pressed >= 0:
                 self.reset()
-                self._start_game(frame)
+                self._start_game()
             return self.state
 
         return self.state
 
-    def _start_game(self, frame):
+    def _start_game(self):
         """Begin a new game."""
         self.current_rule = RULE_MATCH
         self.score = 0
@@ -183,25 +191,22 @@ class RuleFollowEngine:
         self.best_streak = 0
         self.round_num = 0
         self._pick_switch_threshold()
-        self.state = SHOW_RULE
-        self._state_frame = frame
+        self._set_state(SHOW_RULE)
 
-    def _begin_stimulus(self, frame):
+    def _begin_stimulus(self):
         """Pick a stimulus and transition to STIMULUS state."""
         self.stimulus_button = self._pick_stimulus()
         self.correct_button = self.get_correct(self.stimulus_button, self.current_rule)
-        self.state = STIMULUS
-        self._state_frame = frame
+        self._set_state(STIMULUS)
 
-    def _update_stimulus(self, btn_pressed, frame, elapsed):
+    def _update_stimulus(self, btn_pressed):
         """Handle the stimulus phase — waiting for a button press."""
-        if elapsed >= STIMULUS_TIMEOUT:
+        if self._state_ms >= STIMULUS_TIMEOUT_MS:
             # Timeout — count as wrong (no press)
             self.total += 1
             self.round_num += 1
             self.streak = 0
-            self.state = WRONG
-            self._state_frame = frame
+            self._set_state(WRONG)
             return self.state
 
         if btn_pressed < 0 or btn_pressed >= self._num_buttons:
@@ -216,20 +221,17 @@ class RuleFollowEngine:
             if self.streak > self.best_streak:
                 self.best_streak = self.streak
             self._rule_correct_count += 1
-            self.state = CORRECT
-            self._state_frame = frame
+            self._set_state(CORRECT)
         else:
             self.streak = 0
-            self.state = WRONG
-            self._state_frame = frame
+            self._set_state(WRONG)
 
         return self.state
 
-    def _after_response(self, frame):
+    def _after_response(self):
         """Decide what happens after a correct/wrong response."""
         if self.round_num >= self._total_rounds:
-            self.state = GAME_OVER
-            self._state_frame = frame
+            self._set_state(GAME_OVER)
             return
 
         # Check if it's time to switch rules
@@ -238,11 +240,10 @@ class RuleFollowEngine:
                 RULE_OPPOSITE if self.current_rule == RULE_MATCH else RULE_MATCH
             )
             self._pick_switch_threshold()
-            self.state = RULE_SWITCH
-            self._state_frame = frame
+            self._set_state(RULE_SWITCH)
         else:
             # Next stimulus
-            self._begin_stimulus(frame)
+            self._begin_stimulus()
 
     def make_static_leds(self, brightness=128):
         """Generate static LED colors for the current game state.

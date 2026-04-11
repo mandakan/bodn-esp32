@@ -13,13 +13,37 @@ from bodn.simon_rules import (
     WIN,
     FAIL,
     GAME_OVER,
-    SHOW_STEP_FRAMES,
-    SHOW_GAP_FRAMES,
-    WIN_FRAMES,
-    FAIL_FRAMES,
+    SHOW_STEP_MS,
+    SHOW_GAP_MS,
+    WIN_MS,
+    FAIL_MS,
     MAX_FAILS,
     NUM_BUTTONS,
 )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _tick(eng, dt=33, btn=-1):
+    """Advance the engine by one tick (default ~30 fps)."""
+    return eng.update(btn, dt)
+
+
+def _advance_ms(eng, ms, tick_dt=33):
+    """Advance the engine by approximately `ms` milliseconds in tick_dt steps."""
+    elapsed = 0
+    while elapsed < ms:
+        step = min(tick_dt, ms - elapsed)
+        eng.update(-1, step)
+        elapsed += step
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
 
 def test_initial_state_is_ready():
@@ -32,139 +56,132 @@ def test_initial_state_is_ready():
 
 def test_any_button_starts_game():
     eng = SimonEngine()
-    eng.update(0, frame=1)
+    _tick(eng, btn=0)
     assert eng.state == SHOWING
     assert len(eng.sequence) == 2  # default start_length
 
 
 def test_custom_start_length():
     eng = SimonEngine(start_length=3)
-    eng.update(0, frame=1)
+    _tick(eng, btn=0)
     assert len(eng.sequence) == 3
 
 
 def test_sequence_uses_valid_buttons():
     eng = SimonEngine()
-    eng.update(0, frame=1)
+    _tick(eng, btn=0)
     for btn in eng.sequence:
         assert 0 <= btn < NUM_BUTTONS
 
 
 def test_showing_transitions_to_waiting():
     eng = SimonEngine(start_length=1)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
     assert eng.state == SHOWING
 
     # Advance past the single step (show + gap)
-    step_total = SHOW_STEP_FRAMES + SHOW_GAP_FRAMES
-    eng.update(-1, frame=step_total + 1)
+    _advance_ms(eng, SHOW_STEP_MS + SHOW_GAP_MS + 1)
     assert eng.state == WAITING
 
 
 def test_correct_button_advances():
     eng = SimonEngine(start_length=1)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
 
     # Skip through showing phase
-    step_total = SHOW_STEP_FRAMES + SHOW_GAP_FRAMES
-    eng.update(-1, frame=step_total + 1)
+    _advance_ms(eng, SHOW_STEP_MS + SHOW_GAP_MS + 1)
     assert eng.state == WAITING
 
     # Press the correct button
     expected = eng.sequence[0]
-    eng.update(expected, frame=step_total + 10)
+    _tick(eng, btn=expected)
     assert eng.state == WIN
     assert eng.score == 1
 
 
 def test_wrong_button_fails():
     eng = SimonEngine(start_length=1)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
 
-    step_total = SHOW_STEP_FRAMES + SHOW_GAP_FRAMES
-    eng.update(-1, frame=step_total + 1)
+    _advance_ms(eng, SHOW_STEP_MS + SHOW_GAP_MS + 1)
     assert eng.state == WAITING
 
     # Press a wrong button
     expected = eng.sequence[0]
     wrong = (expected + 1) % NUM_BUTTONS
-    eng.update(wrong, frame=step_total + 10)
+    _tick(eng, btn=wrong)
     assert eng.state == FAIL
 
 
 def test_fail_replays_sequence():
     eng = SimonEngine(start_length=1)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
 
-    step_total = SHOW_STEP_FRAMES + SHOW_GAP_FRAMES
-    eng.update(-1, frame=step_total + 1)
+    _advance_ms(eng, SHOW_STEP_MS + SHOW_GAP_MS + 1)
 
     expected = eng.sequence[0]
     wrong = (expected + 1) % NUM_BUTTONS
-    fail_frame = step_total + 10
-    eng.update(wrong, frame=fail_frame)
+    _tick(eng, btn=wrong)
     assert eng.state == FAIL
 
-    # After FAIL_FRAMES, should go back to SHOWING (same sequence)
+    # After FAIL_MS, should go back to SHOWING (same sequence)
     seq_before = list(eng.sequence)
-    eng.update(-1, frame=fail_frame + FAIL_FRAMES + 1)
+    _advance_ms(eng, FAIL_MS + 1)
     assert eng.state == SHOWING
     assert eng.sequence == seq_before  # same sequence replayed
 
 
 def test_win_grows_sequence():
     eng = SimonEngine(start_length=1)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
     orig_len = len(eng.sequence)
 
-    step_total = SHOW_STEP_FRAMES + SHOW_GAP_FRAMES
-    eng.update(-1, frame=step_total + 1)
+    _advance_ms(eng, SHOW_STEP_MS + SHOW_GAP_MS + 1)
 
     expected = eng.sequence[0]
-    win_frame = step_total + 10
-    eng.update(expected, frame=win_frame)
+    _tick(eng, btn=expected)
     assert eng.state == WIN
 
-    # After WIN_FRAMES, sequence should grow and start showing
-    eng.update(-1, frame=win_frame + WIN_FRAMES + 1)
+    # After WIN_MS, sequence should grow and start showing
+    _advance_ms(eng, WIN_MS + 1)
     assert eng.state == SHOWING
     assert len(eng.sequence) == orig_len + 1
 
 
 def test_high_score_tracks_best():
     eng = SimonEngine(start_length=1)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
+
+    step_ms = SHOW_STEP_MS + SHOW_GAP_MS
 
     # Complete first round
-    step_total = SHOW_STEP_FRAMES + SHOW_GAP_FRAMES
-    eng.update(-1, frame=step_total + 1)
-    eng.update(eng.sequence[0], frame=step_total + 10)
+    _advance_ms(eng, step_ms + 1)
+    _tick(eng, btn=eng.sequence[0])
     assert eng.high_score == 1
 
-    # Complete second round
-    f = step_total + 10 + WIN_FRAMES + 1
-    eng.update(-1, frame=f)  # starts showing round 2
-    f2 = f + 2 * step_total + 1
-    eng.update(-1, frame=f2)  # done showing
+    # Advance past WIN into round 2 showing
+    _advance_ms(eng, WIN_MS + 1)
+    assert eng.state == SHOWING
+
+    # Advance past showing of 2-step sequence
+    _advance_ms(eng, 2 * step_ms + 1)
     assert eng.state == WAITING
-    eng.update(eng.sequence[0], frame=f2 + 1)
-    eng.update(eng.sequence[1], frame=f2 + 5)
+
+    _tick(eng, btn=eng.sequence[0])
+    _tick(eng, btn=eng.sequence[1])
     assert eng.high_score == 2
 
 
 def test_max_fails_triggers_game_over():
     eng = SimonEngine(start_length=1)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
 
-    step_total = SHOW_STEP_FRAMES + SHOW_GAP_FRAMES
-    frame = step_total + 1
+    step_ms = SHOW_STEP_MS + SHOW_GAP_MS
 
     for i in range(MAX_FAILS):
         # Advance to WAITING
-        eng.update(-1, frame=frame)
         if eng.state == SHOWING:
-            frame += step_total + 1
-            eng.update(-1, frame=frame)
+            _advance_ms(eng, step_ms + 1)
         assert eng.state == WAITING, (
             f"Expected WAITING on fail #{i + 1}, got {eng.state}"
         )
@@ -172,35 +189,36 @@ def test_max_fails_triggers_game_over():
         # Press wrong button
         expected = eng.sequence[0]
         wrong = (expected + 1) % NUM_BUTTONS
-        eng.update(wrong, frame=frame + 1)
+        _tick(eng, btn=wrong)
         assert eng.state == FAIL
-        frame = frame + 1 + FAIL_FRAMES + 1
 
-    eng.update(-1, frame=frame)
+        # Advance past fail duration
+        _advance_ms(eng, FAIL_MS + 1)
+
     assert eng.state == GAME_OVER
 
 
 def test_game_over_restarts_on_press():
     eng = SimonEngine(start_length=1)
     eng.state = GAME_OVER
-    eng._state_frame = 0
+    eng._state_ms = 0
 
-    eng.update(0, frame=100)
+    _tick(eng, btn=0)
     assert eng.state == SHOWING
     assert len(eng.sequence) == 1
 
 
 def test_active_button_during_showing():
     eng = SimonEngine(start_length=2)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
     assert eng.state == SHOWING
 
     # During the first step, active_button should be sequence[0]
-    eng.update(-1, frame=5)
+    _advance_ms(eng, SHOW_STEP_MS // 2)
     assert eng.active_button == eng.sequence[0]
 
     # During the gap, active_button should be -1
-    eng.update(-1, frame=SHOW_STEP_FRAMES + 2)
+    _advance_ms(eng, SHOW_STEP_MS // 2 + 10)
     assert eng.active_button == -1
 
 
@@ -210,7 +228,7 @@ def test_make_leds_returns_n_leds():
     eng = SimonEngine()
     for state_setup in [
         lambda: None,  # READY
-        lambda: eng.update(0, frame=0),  # SHOWING
+        lambda: _tick(eng, btn=0),  # SHOWING
     ]:
         eng.reset()
         state_setup()
@@ -223,7 +241,7 @@ def test_make_leds_win_is_colorful():
 
     eng = SimonEngine()
     eng.state = WIN
-    eng._state_frame = 0
+    eng._state_ms = 0
     leds = eng.make_leds(frame=10, brightness=200)
     # Stick LEDs should have diverse colors (rainbow)
     unique = set(leds[:N_STICKS])
@@ -232,32 +250,31 @@ def test_make_leds_win_is_colorful():
 
 def test_no_button_press_stays_in_state():
     eng = SimonEngine()
-    eng.update(-1, frame=1)
+    _tick(eng)
     assert eng.state == READY
 
-    eng.update(0, frame=5)
+    _tick(eng, btn=0)
     assert eng.state == SHOWING
-    eng.update(-1, frame=6)
+    _tick(eng)
     assert eng.state == SHOWING
 
 
 def test_input_progress():
     eng = SimonEngine(start_length=2)
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
 
-    step_total = SHOW_STEP_FRAMES + SHOW_GAP_FRAMES
-    frame = 2 * step_total + 1
-    eng.update(-1, frame=frame)
+    step_ms = SHOW_STEP_MS + SHOW_GAP_MS
+    _advance_ms(eng, 2 * step_ms + 1)
     assert eng.state == WAITING
     assert eng.input_progress == 0.0
 
-    eng.update(eng.sequence[0], frame=frame + 5)
+    _tick(eng, btn=eng.sequence[0])
     assert eng.input_progress == 0.5
 
 
 def test_reset_clears_state():
     eng = SimonEngine()
-    eng.update(0, frame=0)
+    _tick(eng, btn=0)
     eng.score = 5
     eng.high_score = 10
 

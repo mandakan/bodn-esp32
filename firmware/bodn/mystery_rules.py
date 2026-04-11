@@ -18,11 +18,10 @@ OUT_SINGLE = const(1)  # single button → solid color
 OUT_MIX = const(2)  # two-button combo → blended color
 OUT_MAGIC = const(3)  # special combo → sparkle animation
 
-# How long a combo window lasts (in frames, ~33 fps)
-COMBO_WINDOW = const(33)  # ~1 second
-# How long an output stays visible
-DISPLAY_HOLD = const(50)  # ~1.5 seconds
-MAGIC_HOLD = const(80)  # ~2.5 seconds for magic combos
+# Timing (milliseconds, wall-clock, frame-rate independent)
+COMBO_WINDOW_MS = const(1000)  # combo detection window
+DISPLAY_HOLD_MS = const(1500)  # how long an output stays visible
+MAGIC_HOLD_MS = const(2500)  # how long magic combos stay visible
 
 
 def mix_rgb(a, b):
@@ -101,8 +100,8 @@ BASE_COLORS = [
 class MysteryEngine:
     """Stateful rule engine that tracks inputs and produces outputs.
 
-    Pure logic — no hardware imports. Feed it button presses each frame
-    and read back the current output state.
+    Pure logic — no hardware imports. Feed it button presses each tick
+    with dt (ms) and read back the current output state.
 
     Modifiers (switches and encoder) transform the output color and
     LED pattern, multiplying the discovery space without adding rules.
@@ -113,10 +112,10 @@ class MysteryEngine:
         self.magic = magic_pairs or COLOR_ALCHEMY_MAGIC
         # State
         self._last_btn = -1
-        self._last_btn_frame = 0
+        self._last_btn_ms = 0  # ms since last button press
         self._output = OUT_IDLE
         self._output_color = (0, 0, 0)
-        self._output_frame = 0
+        self._output_ms = 0  # ms since output was set
         self._discoveries = set()  # tuple keys of combos discovered
         # Modifier state (set by caller each frame)
         self.sw_invert = False
@@ -157,20 +156,27 @@ class MysteryEngine:
             c = _shift_hue(c, self.hue_shift)
         return c
 
-    def update(self, btn_pressed, frame):
-        """Call every frame with the index of a just-pressed button (-1 if none).
+    def update(self, btn_pressed, dt):
+        """Call every tick with the index of a just-pressed button (-1 if none).
+
+        Args:
+            btn_pressed -- button index (0–7), -1 if none
+            dt          -- milliseconds since last tick
 
         Returns (output_type, color_rgb) for the current frame.
         """
-        hold = MAGIC_HOLD if self._output == OUT_MAGIC else DISPLAY_HOLD
+        self._output_ms += dt
+        self._last_btn_ms += dt
+
+        hold = MAGIC_HOLD_MS if self._output == OUT_MAGIC else DISPLAY_HOLD_MS
 
         # Check if current output has expired
-        if self._output != OUT_IDLE and (frame - self._output_frame) > hold:
+        if self._output != OUT_IDLE and self._output_ms > hold:
             self._output = OUT_IDLE
             self._output_color = (0, 0, 0)
 
         # Check if combo window expired (reset last button)
-        if self._last_btn >= 0 and (frame - self._last_btn_frame) > COMBO_WINDOW:
+        if self._last_btn >= 0 and self._last_btn_ms > COMBO_WINDOW_MS:
             self._last_btn = -1
 
         if btn_pressed < 0:
@@ -191,15 +197,15 @@ class MysteryEngine:
                 c2 = self.colors[btn_pressed]
                 self._output = OUT_MIX
                 self._output_color = mix_rgb(c1, c2)
-            self._output_frame = frame
+            self._output_ms = 0
             self._last_btn = -1
         else:
             # First button (or same button again)
             self._output = OUT_SINGLE
             self._output_color = self.colors[btn_pressed]
-            self._output_frame = frame
+            self._output_ms = 0
             self._last_btn = btn_pressed
-            self._last_btn_frame = frame
+            self._last_btn_ms = 0
             # Track single-color discoveries too
             self._discoveries.add((btn_pressed,))
 
@@ -267,10 +273,10 @@ class MysteryEngine:
                 buf[i] = bright_c if v > 200 else glow
 
         elif self._output == OUT_MIX:
-            # Expand from center
-            age = frame - self._output_frame
+            # Expand from center using output age in ms
             mid = n // 2
             c = scale(color, brightness)
+            age = self._output_ms // 33  # rough frame equivalent for animation
             for i in range(n):
                 dist = abs(i - mid)
                 buf[i] = c if dist <= age else black
