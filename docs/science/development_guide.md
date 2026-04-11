@@ -268,6 +268,48 @@ thinking process (Weisberg et al., 2013).
   child creates a pattern, runs it, hears something unexpected, and must figure
   out which step to change.
 
+### Early Mathematics and Number Sense
+
+**What it is:** Understanding quantities, counting, comparing magnitudes, and
+(eventually) basic arithmetic. Number sense encompasses subitising (instant
+recognition of small quantities), counting principles, cardinality ("the last
+number tells how many"), and ordinality (ordering, more/less).
+
+**Why it matters:** Early math skills are the **single strongest predictor of later
+academic achievement** — stronger than reading, stronger than attention skills, and
+far stronger than social-emotional behaviours (Duncan et al., 2007). Kindergarten
+number sense predicts math achievement through at least third grade, with the
+prediction strength not weakening over time (Jordan et al., 2009). This makes
+number sense one of the highest-impact domains to support in early childhood.
+
+**How Böðn will support it:**
+
+- **Räkna** (planned NFC mode): Dot-pattern NFC cards serve as tangible number
+  tokens, following Bruner's Concrete-Pictorial-Abstract (CPA) progression — the
+  child places a physical card (concrete), the screen shows matching dots
+  (pictorial), and optionally the numeral appears (abstract). This three-layer
+  progression is consistently validated in early math education research.
+
+  The mode uses structured dot patterns (like dice faces) rather than numerals,
+  because subitising — instant recognition of small quantities — is the
+  developmental foundation of number sense, not numeral recognition (Clements &
+  Sarama, 2014). Six progressive levels span ages 3–7: from free exploration
+  of quantities, through matching and comparison, to simple addition and
+  subtraction with concrete tokens, and finally symbolic equation building.
+
+  **Critical design constraint:** The mode is always self-paced, never timed.
+  Research shows that timed math exercises cause anxiety even in preschoolers
+  and harm the development of positive mathematical identity. Every interaction
+  is framed as exploration or play, not drill.
+
+- **Linear number path** on the display implements Siegler & Ramani's (2009)
+  finding that just 1 hour of play with a linear number board game measurably
+  improved preschoolers' number competence, with gains persisting 9 weeks.
+  The path runs left-to-right (small to large) — circular layouts do not
+  produce the same benefit.
+
+See `docs/science/nfc_tangible_learning.md` § 6.6 for the full research summary.
+
 ---
 
 ## Language & Communication
