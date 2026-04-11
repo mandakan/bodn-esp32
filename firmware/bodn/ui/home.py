@@ -373,22 +373,66 @@ class HomeScreen(Screen):
             draw_centered(tft, t("home_plays_left", remaining), h - 20, color, w)
         elif ox != 0:
             # Animation frames only: reset dirty so show_dirty() pushes
-            # just the content band. Do NOT reset on full_clear — the
-            # ScreenManager's fill(BLACK) must reach the display.
+            # just the sprites, not the full screen.
             tft.reset_dirty()
 
-        # Clear the content band
-        tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
+        # --- Sprite-only rendering: no full-band clear ---
+        # Both sprites are opaque (solid background pad). We only need
+        # to clear the margins and gap around them, not the full width.
 
-        # Outgoing item (slides out in opposite direction)
-        if self._prev_name and ox != 0:
+        # Compute on-screen bounds of both sprites
+        in_spr = self._icon_sprites.get(name)
+        in_pw = in_spr[1] if in_spr else icon_size
+        in_x = (w - in_pw) // 2 + ox
+
+        # Outgoing sprite position
+        has_out = self._prev_name is not None and ox != 0
+        if has_out:
+            out_spr = self._icon_sprites.get(self._prev_name)
+            out_pw = out_spr[1] if out_spr else icon_size
             out_ox = ox - self._anim_dir * w
-            self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, 40)
-            label_spr = self._label_sprites.get(self._prev_name)
-            if label_spr:
-                blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + out_ox, name_y)
+            out_x = (w - out_pw) // 2 + out_ox
+        else:
+            out_x = in_x
+            out_pw = 0
 
-        # Incoming item (slides in from the side)
+        # Find the visible span of both sprites (clamped to screen)
+        left = max(0, min(in_x, out_x))
+        right = min(w, max(in_x + in_pw, out_x + out_pw))
+
+        # Clear left margin
+        if left > 0:
+            tft.fill_rect(0, band_top, left, band_bot - band_top, theme.BLACK)
+        # Clear gap between sprites (if they don't overlap)
+        if has_out:
+            if self._anim_dir > 0:
+                gap_l = out_x + out_pw
+                gap_r = in_x
+            else:
+                gap_l = in_x + in_pw
+                gap_r = out_x
+            if gap_r > gap_l and gap_l < w and gap_r > 0:
+                gl = max(0, gap_l)
+                gr = min(w, gap_r)
+                if gr > gl:
+                    tft.fill_rect(
+                        gl, band_top, gr - gl, band_bot - band_top, theme.BLACK
+                    )
+        # Clear right margin
+        if right < w:
+            tft.fill_rect(right, band_top, w - right, band_bot - band_top, theme.BLACK)
+
+        # Clear the label row (labels are narrower, just clear the full row)
+        tft.fill_rect(left, name_y, right - left, 20, theme.BLACK)
+
+        # Draw outgoing sprite
+        if has_out:
+            self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, 40)
+            out_label = self._label_sprites.get(self._prev_name)
+            if out_label:
+                blit_sprite(tft, out_label, (w - out_label[1]) // 2 + out_ox, name_y)
+
+        # Draw incoming sprite
         self._blit_mode_icon(tft, name, w, icon_size, ox, 40)
 
         label_spr = self._label_sprites.get(name)
