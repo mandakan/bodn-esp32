@@ -257,17 +257,10 @@ class ScreenManager:
             self._overlay.render(self.tft, self.theme, self._frame)
 
         # Push only the dirty region to the display (auto-tracked by ST7735)
-        if self.debug_perf:
-            import time as _t
-
-            _spi_t0 = _t.ticks_ms()
         self.tft.show_dirty()
 
         self._frames_skipped = 0
         if self.debug_perf:
-            _spi_ms = _t.ticks_diff(_t.ticks_ms(), _spi_t0)
-            if _spi_ms > 2:
-                print("SPI push={}ms".format(_spi_ms))
             self._perf_total += 1
             self._perf_drawn += 1
             self._perf_report()
