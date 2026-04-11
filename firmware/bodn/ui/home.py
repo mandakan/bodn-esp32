@@ -17,10 +17,10 @@ from bodn.i18n import t
 
 NAV = const(0)  # config.ENC_NAV
 
-# Animation: ease-out x-offsets as fraction of screen width (numerator / 8)
-# 8 steps ≈ 240ms at 30ms/frame — fast enough to complete between encoder ticks
-_ANIM_STEPS = const(8)
-_ANIM_FRAC = (8, 7, 5, 4, 3, 2, 1, 0)  # ease-out curve
+# Animation: linear slide over 6 steps ≈ 180ms at 30ms/frame.
+# Short enough to not feel sluggish, enough steps for smooth motion.
+_ANIM_STEPS = const(6)
+_ANIM_FRAC = (6, 5, 4, 3, 2, 1)  # linear, no skips
 
 # Loading bar: lives in the free zone between the carousel dots (y≈147) and
 # the "plays left" footer (y≈220).  Values tuned for 320×240 landscape.
@@ -230,26 +230,23 @@ class HomeScreen(Screen):
         velocity = inp.enc_velocity[NAV]
         units = self._accumulate(delta, velocity)
         if units != 0:
-            # Clamp to ±1 so each frame steps once with its own animation + click.
-            # Put excess back into the accumulator for subsequent frames.
             sign = 1 if units > 0 else -1
             excess = (abs(units) - 1) * self._dpu
             self._accum += excess * sign
             units = sign
 
             if self._anim_step < _ANIM_STEPS:
-                # Animation in progress — snap current animation to end,
-                # then start the new one. This prevents the jerky restart
-                # that happens when encoder ticks arrive mid-animation.
+                # Animation in progress — skip to the end instantly so
+                # the next animation starts from a clean state.
                 self._anim_step = _ANIM_STEPS
                 self._prev_name = None
-                self._full_clear = True
 
             self._prev_name = self._names[self._index]
             self._index = (self._index + units) % len(self._names)
             self._anim_step = 0
             self._anim_dir = 1 if units > 0 else -1
             self._dirty = True
+            self._full_clear = True
             if self._audio:
                 self._audio.play_sound("nav_click")
 
@@ -293,7 +290,7 @@ class HomeScreen(Screen):
         if self._anim_step >= _ANIM_STEPS:
             return 0
         frac = _ANIM_FRAC[self._anim_step]
-        return self._anim_dir * (frac * width // 8)
+        return self._anim_dir * (frac * width // 6)
 
     def render(self, tft, theme, frame):
         self._dirty = False
