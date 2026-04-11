@@ -26,6 +26,7 @@ Setup:
 
 import argparse
 import json
+import os
 import sys
 from io import BytesIO
 from pathlib import Path
@@ -33,6 +34,22 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 ASSETS_DIR = REPO_ROOT / "assets" / "nfc"
 BUILD_DIR = REPO_ROOT / "build" / "cards"
+
+
+def _resolve_openmoji(explicit: Path | None = None) -> Path | None:
+    """Resolve OpenMoji dir from explicit path, $OPENMOJI_DIR, or ~/openmoji."""
+    candidates = []
+    if explicit is not None:
+        candidates.append(explicit)
+    env = os.environ.get("OPENMOJI_DIR")
+    if env:
+        candidates.append(Path(env))
+    candidates.append(Path.home() / "openmoji")
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
 
 # Card dimensions in mm (credit card size)
 CARD_W = 85
@@ -233,8 +250,8 @@ def main():
     parser.add_argument(
         "--openmoji",
         type=Path,
-        default=Path.home() / "openmoji",
-        help="Path to OpenMoji repository (default: ~/openmoji)",
+        default=None,
+        help="Path to OpenMoji repository (default: $OPENMOJI_DIR or ~/openmoji)",
     )
     parser.add_argument(
         "--output",
@@ -267,12 +284,12 @@ def main():
         sys.exit(0)
 
     # Check OpenMoji availability
-    openmoji_dir = args.openmoji if args.openmoji.exists() else None
+    openmoji_dir = _resolve_openmoji(args.openmoji)
     if not openmoji_dir and not args.dry_run:
-        print(f"Warning: OpenMoji directory not found at {args.openmoji}")
-        print("         Cards will show Unicode codepoints instead of emoji.")
+        print("Warning: OpenMoji SVGs not found. Cards will show codepoints instead.")
         print(
-            "         To fix: git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji"
+            "  Set OPENMOJI_DIR or clone once:\n"
+            "    git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji"
         )
         print()
 

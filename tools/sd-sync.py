@@ -158,12 +158,16 @@ def build_sd_assets(force: bool = False) -> bool:
 def build_emojis(force: bool = False) -> None:
     """Convert OpenMoji SVGs to BDF sprites (skips if OpenMoji not available)."""
     try:
-        from convert_icons import convert_icons, load_manifest
+        from convert_icons import convert_icons, load_manifest, resolve_openmoji_dir
 
-        manifest = load_manifest()
-        openmoji_dir = Path.home() / "openmoji"
-        if not openmoji_dir.exists():
-            print("  skip  OpenMoji not found at ~/openmoji")
+        load_manifest()  # validate manifest exists
+        openmoji_dir = resolve_openmoji_dir()
+        if not openmoji_dir:
+            print("  skip  OpenMoji not found ($OPENMOJI_DIR or ~/openmoji)")
+            print(
+                "         git clone --depth 1"
+                " https://github.com/hfg-gmuend/openmoji.git ~/openmoji"
+            )
             return
         converted, skipped, missing = convert_icons(openmoji_dir, force=force)
         print(

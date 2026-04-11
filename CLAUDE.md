@@ -266,15 +266,19 @@ uv run python tools/sd-sync.py --build-only        # build without copying
 uv run python tools/sd-sync.py --no-build /Volumes/BODN_SD  # copy without rebuilding
 uv run python tools/sd-sync.py --dry-run           # preview what would happen
 
-# NFC card face PDF generator (requires OpenMoji SVGs)
-# One-time: git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji
-uv run python tools/generate_cards.py --openmoji ~/openmoji  # generate all card PDFs
+# OpenMoji setup (one-time, ~200 MB — used by card generator + icon converter)
+# All OpenMoji tools check: --openmoji flag > $OPENMOJI_DIR > ~/openmoji
+git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji
+# Or set env var: export OPENMOJI_DIR=/path/to/openmoji
+
+# NFC card face PDF generator
+uv run python tools/generate_cards.py                        # generate all card PDFs
 uv run python tools/generate_cards.py --set sortera          # specific set
 uv run python tools/generate_cards.py --dry-run              # preview without generating
 
 # OpenMoji on-screen icon conversion (SVG → BDF sprites for home screen)
-# Requires same OpenMoji clone as card generator (see above)
-uv run python tools/convert_icons.py --openmoji ~/openmoji   # convert all emoji icons
+# sd-sync.py runs this automatically as step 5 of the build pipeline
+uv run python tools/convert_icons.py                         # convert all emoji icons
 uv run python tools/convert_icons.py --dry-run               # preview without converting
 uv run python tools/convert_icons.py --force                 # force rebuild all
 ```
