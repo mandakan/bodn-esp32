@@ -109,11 +109,17 @@ class HomeScreen(Screen):
         icon_scale = 4 if theme.width > theme.height else 3
         label_scale = 2
         self._icon_scale = icon_scale
-        emoji_size = 48
+        # Emoji: 96px on landscape primary, 48px on smaller/portrait displays
+        emoji_size = 96 if theme.width > theme.height else 48
+        self._emoji_size = emoji_size
         for name in self._names:
             # Try OpenMoji emoji first (full-colour BDF from SD)
             if name not in self._emoji_assets:
-                self._emoji_assets[name] = load_emoji(name, emoji_size)
+                emoji = load_emoji(name, emoji_size)
+                # Fall back to 48px if 96px not available
+                if emoji is None and emoji_size != 48:
+                    emoji = load_emoji(name, 48)
+                self._emoji_assets[name] = emoji
             # Fall back to 1-bit icon sprite
             if self._emoji_assets.get(name) is None:
                 icon_data = MODE_ICONS.get(name)
@@ -138,6 +144,11 @@ class HomeScreen(Screen):
 
                 ix = (screen_w - ew) // 2 + ox
                 iy = y + (icon_size - eh) // 2
+                # Light background pad so emoji are visible on dark bg
+                pad = 4
+                tft.fill_rect(
+                    ix - pad, iy - pad, ew + pad * 2, eh + pad * 2, 0xEF7D
+                )  # 0xEF7D ≈ RGB(236, 240, 248) light grey-blue
                 sprite(tft, ix, iy, asset, 0, 0xFFFF)
                 return
             except Exception:
@@ -346,7 +357,10 @@ class HomeScreen(Screen):
         ox = self._anim_x(w)
 
         icon_scale = self._icon_scale
-        icon_size = 16 * icon_scale
+        icon_size = getattr(self, "_emoji_size", 16 * icon_scale)
+        # Use emoji size if available, else fallback 1-bit size
+        if not any(self._emoji_assets.get(n) for n in self._names):
+            icon_size = 16 * icon_scale
         name_y = 40 + icon_size + 12
         dots_y = name_y + 28
 

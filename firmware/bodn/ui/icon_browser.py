@@ -14,7 +14,7 @@ from bodn.i18n import t
 NAV = const(0)
 ADJ = const(1)
 
-_SIZES = (48, 32, 24)
+_SIZES = (96, 48, 32, 24)
 
 
 class IconBrowserScreen(Screen):
@@ -123,9 +123,12 @@ class IconBrowserScreen(Screen):
                 from bodn.ui.draw import sprite
 
                 ex = (w - ew) // 2
-                ey = 32 + (64 - eh) // 2  # centered in a 64px area below title
-                # Draw a subtle background rect to show icon bounds
-                tft.rect(ex - 2, ey - 2, ew + 4, eh + 4, theme.DIM)
+                # Center in area below title, scaled to icon size
+                area_h = max(eh + 8, 56)
+                ey = 32 + (area_h - eh) // 2
+                # Light background pad
+                pad = 4
+                tft.fill_rect(ex - pad, ey - pad, ew + pad * 2, eh + pad * 2, 0xEF7D)
                 sprite(tft, ex, ey, asset, 0, 0xFFFF)
             except Exception:
                 draw_centered(tft, "[render error]", 60, theme.RED, w)
