@@ -372,16 +372,22 @@ class HomeScreen(Screen):
             color = theme.GREEN if remaining > 0 else theme.RED
             draw_centered(tft, t("home_plays_left", remaining), h - 20, color, w)
 
-        # Reset dirty tracking so show_dirty() only pushes what we draw,
-        # not the entire screen from the full_clear fill.
+        # Reset dirty tracking so show_dirty() pushes only what we touch.
         tft.reset_dirty()
 
-        # Clear the content band
+        # Clear the content band (mark_dirty clamps to screen bounds,
+        # so this contributes at most 320 × band_h to the dirty rect).
         tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
 
-        # Draw only the incoming item (no outgoing slide — it was already
-        # cleared by the fill_rect above). This keeps the dirty rect to
-        # ~one sprite width instead of spanning both sprite positions.
+        # Outgoing item (slides out in opposite direction)
+        if self._prev_name and ox != 0:
+            out_ox = ox - self._anim_dir * w
+            self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, 40)
+            label_spr = self._label_sprites.get(self._prev_name)
+            if label_spr:
+                blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + out_ox, name_y)
+
+        # Incoming item (slides in from the side)
         self._blit_mode_icon(tft, name, w, icon_size, ox, 40)
 
         label_spr = self._label_sprites.get(name)
