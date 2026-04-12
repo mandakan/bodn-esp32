@@ -172,6 +172,57 @@ static mp_obj_t mcpinput_i2c_read(mp_obj_t addr_obj, mp_obj_t reg_obj,
 static MP_DEFINE_CONST_FUN_OBJ_3(mcpinput_i2c_read_obj, mcpinput_i2c_read);
 
 // ---------------------------------------------------------------------------
+// _mcpinput.i2c_raw_write(addr, data)
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_i2c_raw_write(mp_obj_t addr_obj, mp_obj_t data_obj) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+
+    uint8_t addr = (uint8_t)mp_obj_get_int(addr_obj);
+
+    mp_buffer_info_t bufinfo;
+    mp_get_buffer_raise(data_obj, &bufinfo, MP_BUFFER_READ);
+
+    int ret = scanner_i2c_raw_write(mcpinput_state, addr,
+                                     bufinfo.buf, bufinfo.len);
+    if (ret != 0) {
+        mp_raise_msg_varg(&mp_type_OSError,
+                          MP_ERROR_TEXT("I2C raw write failed (%d)"), ret);
+    }
+
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mcpinput_i2c_raw_write_obj, mcpinput_i2c_raw_write);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.i2c_raw_read(addr, nbytes) -> bytes
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_i2c_raw_read(mp_obj_t addr_obj, mp_obj_t nbytes_obj) {
+    if (mcpinput_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+
+    uint8_t addr = (uint8_t)mp_obj_get_int(addr_obj);
+    int nbytes = mp_obj_get_int(nbytes_obj);
+    if (nbytes <= 0 || nbytes > 256) {
+        mp_raise_ValueError(MP_ERROR_TEXT("nbytes must be 1-256"));
+    }
+
+    uint8_t buf[nbytes];
+    int ret = scanner_i2c_raw_read(mcpinput_state, addr, buf, nbytes);
+    if (ret != 0) {
+        mp_raise_msg_varg(&mp_type_OSError,
+                          MP_ERROR_TEXT("I2C raw read failed (%d)"), ret);
+    }
+
+    return mp_obj_new_bytes(buf, nbytes);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mcpinput_i2c_raw_read_obj, mcpinput_i2c_raw_read);
+
+// ---------------------------------------------------------------------------
 // _mcpinput.i2c_scan() -> list of int addresses
 // ---------------------------------------------------------------------------
 
@@ -440,6 +491,8 @@ static const mp_rom_map_elem_t mcpinput_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read_state),  MP_ROM_PTR(&mcpinput_read_state_obj) },
     { MP_ROM_QSTR(MP_QSTR_i2c_write),   MP_ROM_PTR(&mcpinput_i2c_write_obj) },
     { MP_ROM_QSTR(MP_QSTR_i2c_read),    MP_ROM_PTR(&mcpinput_i2c_read_obj) },
+    { MP_ROM_QSTR(MP_QSTR_i2c_raw_write), MP_ROM_PTR(&mcpinput_i2c_raw_write_obj) },
+    { MP_ROM_QSTR(MP_QSTR_i2c_raw_read),  MP_ROM_PTR(&mcpinput_i2c_raw_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_i2c_scan),    MP_ROM_PTR(&mcpinput_i2c_scan_obj) },
     { MP_ROM_QSTR(MP_QSTR_stats),       MP_ROM_PTR(&mcpinput_stats_obj) },
     // LED control

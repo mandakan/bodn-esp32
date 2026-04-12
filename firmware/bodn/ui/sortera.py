@@ -98,6 +98,7 @@ class SorteraScreen(Screen):
         self._full_clear = True
         self._leds_dirty = True
         self._nfc_available = False
+        self._nfc_reader = None
         self._title_sprite = None
         self._rule_emoji = None  # cached emoji for current rule value
 
@@ -126,8 +127,8 @@ class SorteraScreen(Screen):
         self._engine = SorteraEngine(card_set)
 
         # Check NFC hardware availability
-        reader = NFCReader()
-        self._nfc_available = reader.available()
+        self._nfc_reader = NFCReader()
+        self._nfc_available = self._nfc_reader.available()
 
         # Pre-render title sprite
         self._title_sprite = make_label_sprite("SORTERA", 0xFFFF, scale=2)
@@ -163,12 +164,15 @@ class SorteraScreen(Screen):
         if btn >= 0 and btn < len(DEMO_CARDS):
             card_id = DEMO_CARDS[btn]
 
-        # TODO: NFC scan when hardware available (#121)
-        # if self._nfc_available:
-        #     uid, data = nfc_reader.scan()
-        #     if uid:
-        #         parsed = parse_tag_data(data)
-        #         if parsed: card_id = parsed["id"]
+        # NFC scan — real tag overrides demo button
+        if self._nfc_available and card_id is None:
+            from bodn.nfc import parse_tag_data
+
+            uid, data = self._nfc_reader.scan()
+            if uid and data:
+                parsed = parse_tag_data(data)
+                if parsed and parsed["mode"] == "sortera":
+                    card_id = parsed["id"]
 
         now = time.ticks_ms()
         dt = time.ticks_diff(now, self._last_ms)
