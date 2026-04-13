@@ -321,7 +321,7 @@ STRINGS = {
     "sortera_label_train": "tåg, train",
     "sortera_label_taxi": "taxi, taxi",
     # Rakna (NFC math game)
-    "mode_rakna": "rakna",
+    "mode_rakna": "räkna",
     "rakna_welcome": "Blippa ett kort!",
     "rakna_hint_scan": "Blippa ett kort!",
     "rakna_correct": "Bra!",
