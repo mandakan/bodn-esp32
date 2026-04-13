@@ -1,9 +1,13 @@
 # bodn/nfc.py — NFC tag data handling, card set loading, and UID cache
 #
-# Tag data format (NDEF Text Record payload):
-#   BODN:1:sortera:cat_red
-#   ^^^^  ^ ^^^^^^^ ^^^^^^^
-#   prefix version mode   card_id
+# Tag data format (NDEF URI Record):
+#   https://bodn.thias.se/1/sortera/cat_red
+#                          ^ ^       ^
+#                          | mode    card_id (optional)
+#                          version
+#
+# NDEF URI prefix 0x04 = "https://", so the stored payload is:
+#   0x04 + "bodn.thias.se/1/sortera/cat_red"
 #
 # Card set templates live on SD at /sd/nfc/{mode}.json
 # UID cache lives on flash at /data/nfc_cache.json
@@ -15,10 +19,14 @@ try:
 except ImportError:
     import ujson as json
 
-TAG_PREFIX = "BODN"
+TAG_PREFIX = "BODN"  # kept for backward compat with old Text Record tags
 TAG_VERSION = 1
+TAG_BASE_URL = "bodn.thias.se"
 NFC_CACHE_PATH = "/data/nfc_cache.json"
 NFC_DIR = "/nfc"
+
+# NDEF URI prefix codes (NFC Forum spec)
+_URI_HTTPS = 0x04  # "https://"
 
 
 # ---------------------------------------------------------------------------
@@ -29,30 +37,68 @@ NFC_DIR = "/nfc"
 def parse_tag_data(data):
     """Parse a BODN tag identifier from raw NDEF bytes or a plain string.
 
-    Accepts either:
-      - bytes/bytearray (NDEF Text Record: status byte + lang code + text)
-      - str (plain text: "BODN:1:sortera:cat_red")
+    Accepts:
+      - bytes/bytearray starting with 0x04: NDEF URI Record payload
+      - bytes/bytearray starting with 0x02: legacy NDEF Text Record payload
+      - str starting with "https://bodn.thias.se/": URL
+      - str starting with "BODN:": legacy colon format
 
     Returns dict with keys (prefix, version, mode, id) or None on failure.
     """
     if isinstance(data, (bytes, bytearray)):
+        if len(data) < 2:
+            return None
+        if data[0] == _URI_HTTPS:
+            # NDEF URI Record: 0x04 + "bodn.thias.se/..."
+            try:
+                url = "https://" + data[1:].decode("utf-8")
+            except (UnicodeError, ValueError):
+                return None
+            return _parse_url(url)
+        # Legacy: NDEF Text Record (status byte + lang + text)
         text = _decode_ndef_text(data)
         if text is None:
             return None
+        return _parse_legacy(text)
     else:
         text = str(data)
+        if text.startswith("https://"):
+            return _parse_url(text)
+        return _parse_legacy(text)
 
+
+def _parse_url(url):
+    """Parse a bodn.thias.se URL into a tag dict."""
+    prefix = "https://{}/".format(TAG_BASE_URL)
+    if not url.startswith(prefix):
+        return None
+    path = url[len(prefix) :]
+    parts = path.split("/")
+    if len(parts) < 2:
+        return None
+    try:
+        version = int(parts[0])
+    except (ValueError, IndexError):
+        return None
+    return {
+        "prefix": TAG_PREFIX,
+        "version": version,
+        "mode": parts[1],
+        "id": parts[2] if len(parts) >= 3 else None,
+    }
+
+
+def _parse_legacy(text):
+    """Parse a legacy BODN:version:mode:id string."""
     parts = text.split(":")
     if len(parts) < 3:
         return None
     if parts[0] != TAG_PREFIX:
         return None
-
     try:
         version = int(parts[1])
     except (ValueError, IndexError):
         return None
-
     return {
         "prefix": parts[0],
         "version": version,
@@ -62,25 +108,22 @@ def parse_tag_data(data):
 
 
 def encode_tag_data(mode, card_id, version=None):
-    """Create NDEF Text Record payload bytes for writing to a tag.
+    """Create NDEF URI Record payload bytes for writing to a tag.
 
-    Returns bytes: status_byte + b'en' + payload text.
-    The status byte encodes UTF-8 flag (bit 7 = 0) and language code
-    length (bits 5-0 = 2 for 'en').
+    Returns bytes: 0x04 ("https://") + URL path.
+    Phones scanning this tag will open https://bodn.thias.se/...
     """
     if version is None:
         version = TAG_VERSION
     if card_id is not None:
-        text = "{}:{}:{}:{}".format(TAG_PREFIX, version, mode, card_id)
+        path = "{}/{}/{}/{}".format(TAG_BASE_URL, version, mode, card_id)
     else:
-        text = "{}:{}:{}".format(TAG_PREFIX, version, mode)
-    lang = b"en"
-    status = len(lang)  # UTF-8 (bit 7 = 0), lang length = 2
-    return bytes([status]) + lang + text.encode("utf-8")
+        path = "{}/{}/{}".format(TAG_BASE_URL, version, mode)
+    return bytes([_URI_HTTPS]) + path.encode("utf-8")
 
 
 def _decode_ndef_text(data):
-    """Decode an NDEF Text Record payload to a string.
+    """Decode an NDEF Text Record payload to a string (legacy support).
 
     Format: 1 byte status (bit 7 = encoding, bits 5-0 = lang code length)
             N bytes language code
@@ -333,19 +376,25 @@ class NFCReader:
             if tlv_type == 0x03:  # NDEF Message
                 ndef_data = raw[i : i + tlv_len]
                 if tlv_len > len(raw) - i:
-                    # Need more pages
-                    raw2 = self._pn532.ntag_read(8)
-                    if raw2:
-                        ndef_data = (raw + raw2)[i : i + tlv_len]
-                return self._extract_text_record(ndef_data)
+                    # Need more pages — read in 16-byte chunks until we
+                    # have enough data (URI records are ~40 bytes)
+                    page = 8
+                    while len(raw) - i < tlv_len and page < 20:
+                        extra = self._pn532.ntag_read(page)
+                        if not extra:
+                            break
+                        raw = raw + extra
+                        page += 4
+                    ndef_data = raw[i : i + tlv_len]
+                return self._extract_record(ndef_data)
             i += tlv_len
         return None
 
-    def _extract_text_record(self, ndef_msg):
-        """Extract Text Record payload from an NDEF message.
+    def _extract_record(self, ndef_msg):
+        """Extract record payload from an NDEF message.
 
         NDEF record header: flags, type_len, payload_len, type, payload
-        We only support short records (SR=1) with TNF=0x01 (well-known) type "T".
+        Supports TNF=0x01 (well-known) with type "U" (URI) or "T" (Text).
         """
         if len(ndef_msg) < 3:
             return None
@@ -370,15 +419,15 @@ class NFCReader:
             offset = 6
         type_data = ndef_msg[offset : offset + type_len]
         offset += type_len
-        if type_data != b"T":
+        if type_data not in (b"U", b"T"):
             return None
         payload = ndef_msg[offset : offset + payload_len]
         return bytes(payload) if payload else None
 
     def write(self, data):
-        """Write NDEF Text Record to the tag currently in the field.
+        """Write NDEF URI Record to the tag currently in the field.
 
-        *data* should be NDEF Text Record payload bytes (from encode_tag_data).
+        *data* should be NDEF URI Record payload bytes (from encode_tag_data).
         Returns True on success, False on failure or no tag present.
         The tag must be an NTAG213/215 (Mifare Ultralight compatible).
         """
@@ -392,7 +441,7 @@ class NFCReader:
 
         # Build NDEF message: record header + payload
         # Flags: MB=1, ME=1, CF=0, SR=1, IL=0, TNF=0x01 → 0xD1
-        type_field = b"T"
+        type_field = b"U"
         rec_header = bytes([0xD1, len(type_field), len(data)]) + type_field
         ndef_msg = rec_header + data
 
