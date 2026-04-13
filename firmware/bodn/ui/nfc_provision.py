@@ -221,8 +221,10 @@ class NFCProvisionScreen(Screen):
                 self._write_state = _OK
                 self._written_count += 1
             else:
+                print("NFC: write returned False for", card_id)
                 self._write_state = _FAIL
-        except Exception:
+        except Exception as e:
+            print("NFC: write error:", e)
             self._write_state = _FAIL
 
         self._write_ms = time.ticks_ms()

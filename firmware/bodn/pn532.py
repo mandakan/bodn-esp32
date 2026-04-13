@@ -183,18 +183,24 @@ class PN532:
     # High-level commands
     # ------------------------------------------------------------------
 
-    def begin(self):
+    def begin(self, retries=3):
         """Initialise the PN532. Returns True if hardware responds.
 
         Sends a wake-up first in case the chip is still in power-down
-        from a previous session (e.g. after soft reboot).
+        from a previous session (e.g. after soft reboot).  Retries the
+        full wake→version→SAM sequence up to *retries* times because the
+        chip may need multiple wake attempts after power-down or sleep.
         """
-        self.wake_up()
-        fw = self.get_firmware_version()
-        if fw is None:
-            return False
-        # Configure SAM (Security Access Module) for normal mode
-        return self.sam_config()
+        import time
+
+        for attempt in range(retries):
+            self.wake_up()
+            fw = self.get_firmware_version()
+            if fw is not None:
+                if self.sam_config():
+                    return True
+            time.sleep_ms(20)
+        return False
 
     def get_firmware_version(self):
         """Read firmware version. Returns (IC, ver, rev, support) or None."""
@@ -313,14 +319,16 @@ class PN532:
     def wake_up(self):
         """Wake PN532 from power-down by toggling I2C.
 
-        The first write often NACKs while the chip wakes — retry once.
+        The first writes often NACK while the chip wakes — retry several
+        times with increasing delays to handle cold boot, soft reboot,
+        and light-sleep recovery.
         """
         import time
 
-        for _ in range(2):
+        for i in range(4):
             try:
                 self._i2c.writeto(self._addr, b"\x00")
                 break
             except OSError:
-                time.sleep_ms(5)
-        time.sleep_ms(2)
+                time.sleep_ms(5 * (i + 1))
+        time.sleep_ms(5)

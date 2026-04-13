@@ -1124,7 +1124,20 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
             await asyncio.sleep_ms(300)
             continue
 
-        uid, data = reader.scan()
+        try:
+            uid, data = reader.scan()
+        except OSError as e:
+            print("NFC: I2C error during scan:", e)
+            # Attempt to recover the PN532
+            try:
+                if reader._pn532 and reader._pn532.begin():
+                    print("NFC: PN532 recovered")
+                else:
+                    print("NFC: PN532 recovery failed")
+            except Exception:
+                pass
+            await asyncio.sleep_ms(1000)
+            continue
 
         if uid and data and uid != prev_uid:
             parsed = parse_tag_data(data)

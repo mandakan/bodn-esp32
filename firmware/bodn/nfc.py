@@ -424,22 +424,22 @@ class NFCReader:
         payload = ndef_msg[offset : offset + payload_len]
         return bytes(payload) if payload else None
 
-    def write(self, data):
+    def write(self, data, retries=3):
         """Write NDEF URI Record to the tag currently in the field.
 
         *data* should be NDEF URI Record payload bytes (from encode_tag_data).
         Returns True on success, False on failure or no tag present.
         The tag must be an NTAG213/215 (Mifare Ultralight compatible).
+
+        Retries the full detect→write sequence up to *retries* times to
+        handle marginal antenna coupling and brief tag-lift during writes.
         """
+        import time
+
         if not self._available or _shed:
             return False
 
-        # Select the tag first — InListPassiveTarget must succeed before writes
-        uid = self._pn532.read_passive_target(timeout_ms=200)
-        if uid is None:
-            return False
-
-        # Build NDEF message: record header + payload
+        # Build NDEF message once: record header + payload
         # Flags: MB=1, ME=1, CF=0, SR=1, IL=0, TNF=0x01 → 0xD1
         type_field = b"U"
         rec_header = bytes([0xD1, len(type_field), len(data)]) + type_field
@@ -452,11 +452,27 @@ class NFCReader:
         while len(tlv) % 4:
             tlv += b"\x00"
 
-        # Write pages starting at page 4
-        page = 4
-        for i in range(0, len(tlv), 4):
-            chunk = tlv[i : i + 4]
-            if not self._pn532.ntag_write(page, chunk):
-                return False
-            page += 1
-        return True
+        for attempt in range(retries):
+            # Select the tag — longer timeout for weak antenna coupling
+            uid = self._pn532.read_passive_target(timeout_ms=500)
+            if uid is None:
+                time.sleep_ms(50)
+                continue
+
+            # Write pages starting at page 4
+            page = 4
+            ok = True
+            for i in range(0, len(tlv), 4):
+                chunk = tlv[i : i + 4]
+                if not self._pn532.ntag_write(page, chunk):
+                    print("NFC write: page", page, "failed, attempt", attempt + 1)
+                    ok = False
+                    break
+                page += 1
+
+            if ok:
+                return True
+            time.sleep_ms(100)
+
+        print("NFC write: failed after", retries, "attempts")
+        return False

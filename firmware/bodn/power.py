@@ -170,14 +170,15 @@ class PowerManager:
         self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
         self._bl_pin.value(1)
 
-        # Wake PN532 from power-down
+        # Reinitialize PN532 after sleep (wake + SAM config + verify)
         try:
             from bodn import nfc
 
             if nfc._pn532:
-                nfc._pn532.wake_up()
-        except Exception:
-            pass
+                if not nfc._pn532.begin():
+                    print("POWER: PN532 failed to wake")
+        except Exception as e:
+            print("POWER: PN532 wake error:", e)
 
     def master_switch_off(self):
         """Return True if the master switch is in the OFF position.
