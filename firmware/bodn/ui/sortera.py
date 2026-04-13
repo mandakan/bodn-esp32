@@ -72,6 +72,22 @@ _ANIMAL_KEYS = {
     "frog": "sortera_frog",
 }
 
+# Vehicle names for i18n lookup
+_VEHICLE_KEYS = {
+    "car": "sortera_car",
+    "bus": "sortera_bus",
+    "firetruck": "sortera_firetruck",
+    "ambulance": "sortera_ambulance",
+    "train": "sortera_train",
+    "taxi": "sortera_taxi",
+}
+
+# Category names for i18n lookup
+_CATEGORY_KEYS = {
+    "animal": "sortera_animal",
+    "vehicle": "sortera_vehicle",
+}
+
 
 def _card_bilingual_label(card):
     """Build a dual-language label from a card dict, e.g. 'Katt / Cat'."""
@@ -323,12 +339,7 @@ class SorteraScreen(Screen):
                 try:
                     dim = self._engine.rule_dimension
                     val = self._engine.rule_value
-                    if dim == "colour":
-                        key = "sortera_find_colour_{}".format(val)
-                    elif dim == "animal":
-                        key = "sortera_find_animal_{}".format(val)
-                    else:
-                        key = "sortera_find_{}".format(val)
+                    key = "sortera_find_{}_{}".format(dim, val)
                     say(key, audio)
                 except Exception:
                     audio.tone(523, 100)  # fallback beep
@@ -347,11 +358,14 @@ class SorteraScreen(Screen):
         """Cache the emoji sprite for the current rule value."""
         self._rule_emoji = None
         eng = self._engine
-        if eng.rule_dimension == "animal":
+        if eng.rule_dimension in ("animal", "vehicle"):
             self._rule_emoji = load_emoji(eng.rule_value, 48)
-        elif eng.rule_dimension == "colour":
-            # No specific emoji for colours — use colour block
-            pass
+        elif eng.rule_dimension == "category":
+            # Representative emoji for the category
+            if eng.rule_value == "animal":
+                self._rule_emoji = load_emoji("cat", 48)
+            elif eng.rule_value == "vehicle":
+                self._rule_emoji = load_emoji("car", 48)
 
     def render(self, tft, theme, frame):
         # Let pause menu render on top if open
@@ -526,5 +540,17 @@ class SorteraScreen(Screen):
             return t(
                 "sortera_find_animal",
                 t(_ANIMAL_KEYS.get(eng.rule_value, eng.rule_value)),
+            )
+        elif eng.rule_dimension == "vehicle":
+            return t(
+                "sortera_find_vehicle",
+                t(_VEHICLE_KEYS.get(eng.rule_value, eng.rule_value)),
+            )
+        elif eng.rule_dimension == "category":
+            return t(
+                "sortera_find_animal"
+                if eng.rule_value == "animal"
+                else "sortera_find_vehicle",
+                t(_CATEGORY_KEYS.get(eng.rule_value, eng.rule_value)),
             )
         return eng.rule_value

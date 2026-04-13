@@ -26,6 +26,13 @@
     {"name": "cow",        "codepoint": "1F404", "label": "Cow"},
     {"name": "frog",       "codepoint": "1F438", "label": "Frog"},
 
+    {"name": "car",        "codepoint": "1F697", "label": "Automobile"},
+    {"name": "bus",        "codepoint": "1F68C", "label": "Bus"},
+    {"name": "firetruck",  "codepoint": "1F692", "label": "Fire Engine"},
+    {"name": "ambulance",  "codepoint": "1F691", "label": "Ambulance"},
+    {"name": "train",      "codepoint": "1F682", "label": "Locomotive"},
+    {"name": "taxi",       "codepoint": "1F695", "label": "Taxi"},
+
     {"name": "abacus",     "codepoint": "1F9EE", "label": "Abacus"},
     {"name": "plus",       "codepoint": "2795",  "label": "Plus"},
     {"name": "minus",      "codepoint": "2796",  "label": "Minus"},

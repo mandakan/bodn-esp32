@@ -20,16 +20,21 @@ from bodn.sortera_rules import (
 SAMPLE_CARD_SET = {
     "mode": "sortera",
     "version": 1,
-    "dimensions": ["animal", "colour"],
+    "dimensions": ["animal", "vehicle", "colour", "category"],
     "cards": [
-        {"id": "cat_red", "animal": "cat", "colour": "red"},
-        {"id": "cat_blue", "animal": "cat", "colour": "blue"},
-        {"id": "dog_green", "animal": "dog", "colour": "green"},
-        {"id": "dog_yellow", "animal": "dog", "colour": "yellow"},
-        {"id": "fish_red", "animal": "fish", "colour": "red"},
-        {"id": "fish_blue", "animal": "fish", "colour": "blue"},
-        {"id": "cow_green", "animal": "cow", "colour": "green"},
-        {"id": "frog_yellow", "animal": "frog", "colour": "yellow"},
+        {"id": "cat_red", "category": "animal", "animal": "cat", "colour": "red"},
+        {"id": "cat_blue", "category": "animal", "animal": "cat", "colour": "blue"},
+        {"id": "dog_green", "category": "animal", "animal": "dog", "colour": "green"},
+        {"id": "dog_yellow", "category": "animal", "animal": "dog", "colour": "yellow"},
+        {"id": "car_red", "category": "vehicle", "vehicle": "car", "colour": "red"},
+        {"id": "car_blue", "category": "vehicle", "vehicle": "car", "colour": "blue"},
+        {"id": "bus_green", "category": "vehicle", "vehicle": "bus", "colour": "green"},
+        {
+            "id": "bus_yellow",
+            "category": "vehicle",
+            "vehicle": "bus",
+            "colour": "yellow",
+        },
     ],
 }
 
