@@ -49,7 +49,7 @@ class TestInitialState:
         assert engine.state == WELCOME
 
     def test_rule_is_picked_at_start(self, engine):
-        assert engine.rule_dimension in ("animal", "colour")
+        assert engine.rule_dimension in ("animal", "vehicle", "colour", "category")
         assert engine.rule_value != ""
 
     def test_score_is_zero(self, engine):
@@ -280,7 +280,7 @@ class TestReset:
         assert engine.state == WELCOME
         assert engine.score == 0
         assert engine.streak == 0
-        assert engine.rule_dimension in ("animal", "colour")
+        assert engine.rule_dimension in ("animal", "vehicle", "colour", "category")
 
 
 class TestDemoCards:
