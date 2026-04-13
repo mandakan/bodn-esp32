@@ -471,7 +471,7 @@ class TestNFCReaderWrite:
 
         old_pn = nfc_mod._pn532
         old_shed = nfc_mod._shed
-        fake_pn = FakePN532()
+        fake_pn = FakePN532(uid=bytes([0x04, 0xAA, 0xBB, 0xCC]))
         nfc_mod._pn532 = fake_pn
         nfc_mod._shed = False
         try:
