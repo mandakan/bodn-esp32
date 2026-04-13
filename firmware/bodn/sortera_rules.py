@@ -11,7 +11,7 @@
 import os
 
 from micropython import const
-from bodn.patterns import N_STICKS, _led_buf
+from bodn.patterns import N_STICKS, N_LEDS
 
 # Game states
 WELCOME = const(0)  # waiting to start
@@ -226,42 +226,33 @@ class SorteraEngine:
         return self.state
 
     def make_static_leds(self, brightness):
-        """Return LED stick buffer for the current state."""
-        buf = bytearray(len(_led_buf))
+        """Return LED buffer (list of (r,g,b) tuples) for the current state."""
+        buf = [(0, 0, 0)] * N_LEDS
 
         def _sc(val):
             return (val * brightness) >> 8
 
         if self.state == ANNOUNCE_RULE or self.state == WAITING:
             r, g, b = self.rule_colour_rgb
+            c = (_sc(r), _sc(g), _sc(b))
             for i in range(N_STICKS):
-                buf[i * 3] = _sc(g)
-                buf[i * 3 + 1] = _sc(r)
-                buf[i * 3 + 2] = _sc(b)
+                buf[i] = c
 
         elif self.state == CORRECT:
-            g_val = _sc(200)
+            c = (0, _sc(200), 0)
             for i in range(N_STICKS):
-                buf[i * 3] = g_val
-                buf[i * 3 + 1] = 0
-                buf[i * 3 + 2] = 0
+                buf[i] = c
 
         elif self.state == WRONG:
-            r_val = _sc(80)
+            c = (_sc(80), 0, 0)
             for i in range(N_STICKS):
-                buf[i * 3] = 0
-                buf[i * 3 + 1] = r_val
-                buf[i * 3 + 2] = 0
+                buf[i] = c
 
         elif self.state == RULE_SWITCH:
             for i in range(N_STICKS):
                 if i % 2 == 0:
-                    buf[i * 3] = _sc(100)
-                    buf[i * 3 + 1] = _sc(255)
-                    buf[i * 3 + 2] = 0
+                    buf[i] = (_sc(255), _sc(100), 0)
                 else:
-                    buf[i * 3] = _sc(255)
-                    buf[i * 3 + 1] = 0
-                    buf[i * 3 + 2] = _sc(200)
+                    buf[i] = (0, _sc(255), _sc(200))
 
         return buf

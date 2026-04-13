@@ -290,13 +290,14 @@ class TestDemoCards:
 
 
 class TestLEDs:
-    def test_make_static_leds_returns_buffer(self, engine):
+    def test_make_static_leds_returns_list(self, engine):
         buf = engine.make_static_leds(100)
-        assert isinstance(buf, bytearray)
+        assert isinstance(buf, list)
         assert len(buf) > 0
+        assert isinstance(buf[0], tuple)
 
     def test_announce_has_coloured_leds(self, engine):
         engine.update(None, WELCOME_MS)  # advance to ANNOUNCE_RULE
         buf = engine.make_static_leds(100)
         # Should have some non-zero LEDs (rule colour)
-        assert any(b != 0 for b in buf)
+        assert any(t != (0, 0, 0) for t in buf)

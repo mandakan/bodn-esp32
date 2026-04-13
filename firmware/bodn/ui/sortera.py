@@ -433,9 +433,7 @@ class SorteraScreen(Screen):
         # Show scanned card emoji
         if eng.last_card:
             card_name = eng.last_card_id.split("_")[0]  # "cat_red" → "cat"
-            emoji = load_emoji(card_name, 96)
-            if not emoji:
-                emoji = load_emoji(card_name, 48)
+            emoji = load_emoji(card_name, 48)
             if emoji:
                 asset, ew, eh = emoji
                 try:
@@ -448,8 +446,8 @@ class SorteraScreen(Screen):
                         ex - pad, ey - pad, ew + pad * 2, eh + pad * 2, 0xEF7D
                     )
                     sprite(tft, ex, ey, asset, 0, 0xFFFF)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print("Sortera: emoji render error:", e)
 
         # Bilingual card label below emoji
         bilabel = _card_bilingual_label(eng.last_card)
@@ -479,8 +477,8 @@ class SorteraScreen(Screen):
                         ex - pad, ey - pad, ew + pad * 2, eh + pad * 2, 0xEF7D
                     )
                     sprite(tft, ex, ey, asset, 0, 0xFFFF)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print("Sortera: emoji render error:", e)
 
         # Bilingual card label below emoji
         bilabel = _card_bilingual_label(eng.last_card)
