@@ -393,7 +393,7 @@ class HighFiveScreen(Screen):
 
         # Header
         tft.fill_rect(0, 0, w, _HEADER_H, theme.BLACK)
-        title = t("mode_highfive").upper()
+        title = t("mode_highfive").capitalize()
         tft.text(title, 4, 4, theme.WHITE)
         # Round on right
         rd_txt = t("hf_round", eng.round)

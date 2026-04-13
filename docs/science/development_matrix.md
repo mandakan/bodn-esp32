@@ -205,7 +205,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 |--------|---------------|-------------------|
 | **Spatial Reasoning (SR)** | Only Flöde | Building/construction mode; tangram puzzles |
 | **Problem Solving (PS)** | Only Flöde + Sequencer (debugging) | More puzzle types; NFC scavenger hunts |
-| **Bilingual Exposure (BL)** | Story Mode + passive UI labels | NFC vocabulary cards (sv/en); language-switch game |
+| **Bilingual Exposure (BL)** | Story Mode + passive UI labels; NFC cards use dual-language labels (sv/en) | Language-switch game; more card sets with dual labels |
 | **Fine Motor (FM)** | Mostly incidental (Flöde, Sequencer significant) | NFC card manipulation/sorting; tracing mode |
 
 ---

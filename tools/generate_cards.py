@@ -212,24 +212,23 @@ def _draw_card(pdf, card: dict, x: float, y: float, mode: str, openmoji_dir):
         pdf.set_xy(x, y + 8)
         pdf.cell(CARD_W, 20, f"U+{icon_codepoint}", align="C")
 
-    # Swedish label (primary, larger)
-    label_sv = card.get("label_sv", "")
-    label_y = y + 34
-    pdf.set_font("Helvetica", "B", size=14)
+    # Labels — both languages at equal size (dual-language labeling supports
+    # bilingual vocabulary bootstrapping; Tan et al. 2024, Byers-Heinlein 2013)
+    # Title-case: uppercase first letter aids recognition, lowercase body maps
+    # to real text (Piasta, Treiman & Kessler 2006)
+    label_sv = card.get("label_sv", "").capitalize()
+    label_en = card.get("label_en", "").capitalize()
+    label_y = y + 35
+    pdf.set_font("Helvetica", "B", size=12)
     # Use dark text on light backgrounds, white on dark
     brightness = bg[0] * 0.299 + bg[1] * 0.587 + bg[2] * 0.114
     if brightness > 160:
         pdf.set_text_color(*BORDER_COLOUR)
     else:
         pdf.set_text_color(*LABEL_COLOUR)
+    label_text = f"{label_sv}  /  {label_en}" if label_en else label_sv
     pdf.set_xy(x, label_y)
-    pdf.cell(CARD_W, 7, label_sv, align="C")
-
-    # English label (secondary, smaller)
-    label_en = card.get("label_en", "")
-    pdf.set_font("Helvetica", size=9)
-    pdf.set_xy(x, label_y + 7)
-    pdf.cell(CARD_W, 5, label_en, align="C")
+    pdf.cell(CARD_W, 7, label_text, align="C")
 
     # Card ID in small text (bottom-right corner, for parent reference)
     pdf.set_font("Helvetica", size=5)

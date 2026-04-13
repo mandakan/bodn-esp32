@@ -48,7 +48,7 @@ class SoundboardSecondary(Screen):
         # Truncate to fit 8 chars × 2 scale = 128px
         if len(name) > 8:
             name = name[:8]
-        draw_centered(tft, name.upper(), 12, theme.CYAN, w, scale=2)
+        draw_centered(tft, name.capitalize(), 12, theme.CYAN, w, scale=2)
 
         # Musical note indicator — animates during playback
         note_color = theme.YELLOW if self._playing else theme.DIM

@@ -164,22 +164,44 @@ The device should feel offline and toy‑like to the child. WiFi exists mainly f
   - View basic usage info (number of rounds, last session time).
 - Optional: a simple PIN to change settings.
 
-## 7. Visual and audio style
+## 7. Text and typography
 
-### 7.1 Visuals
+### 7.1 Letter case
+
+Use **title case** (first letter uppercase, rest lowercase) for all child-facing labels: mode names, game feedback, card labels. Examples: "Katt", "Din tur!", "Bra jobbat!".
+
+**Do not use ALL CAPS for labels.** Research shows that 4-year-olds recognize uppercase letters first (Piasta, 2014; Treiman & Kessler, 2006), but 95% of printed text is lowercase. Title case gives the child the uppercase anchor they recognize while building familiarity with the lowercase letterforms they will encounter in books. ALL CAPS builds a habit that must be unlearned.
+
+Exceptions where ALL CAPS is acceptable:
+- Single-letter labels (button labels like "A", "B")
+- Very short exclamations used as visual impact, not reading practice (e.g. "GO", "STOP" — but prefer icons over text)
+
+The `mode_*` keys in `lang/sv.py` and `lang/en.py` are stored lowercase; the home screen renders them with `.capitalize()` at display time.
+
+### 7.2 Bilingual labels
+
+On **printed materials** (NFC cards, card faces), show both languages simultaneously: "Katt / Cat". Both labels use equal font size. This is supported by dual-language labeling research: translation equivalents bootstrap vocabulary acquisition in both languages (Tan et al., 2024), and bilingual children distinguish their languages from birth (Byers-Heinlein & Lew-Williams, 2013).
+
+On **device screens**, the UI shows one language at a time (switched via settings). Simultaneous dual-language labels would exceed the 13-character line limit at `font_scale=3` and violate the "1-2 short words" rule. The language switch in settings gives the parent control over which language the child is immersed in during a session.
+
+**Consistency rule:** the same word should always appear in the same case and form across cards, device UI, and TTS audio. If a card says "Katt", the device screen should say "Katt" (not "KATT" or "katt").
+
+## 8. Visual and audio style
+
+### 8.1 Visuals
 
 - Bold, flat colors; avoid gradients and visual noise.
 - Consistent palette across modes (same color always means the same thing when possible).
 - Icons should be **simple silhouettes** recognizable at a glance.
 
-### 7.2 Audio
+### 8.2 Audio
 
 - Use short, distinctive sounds:
   - Click / soft beep for button presses.
   - Rising chime for success; falling or "question" tone for try‑again.
 - Keep volume comfortable and avoid harsh, high‑frequency sounds.
 
-## 8. Accessibility & robustness
+## 9. Accessibility & robustness
 
 - Assume the device will be used with **small hands and limited precision**.
 - Physical controls should tolerate "imprecise" presses and spins.

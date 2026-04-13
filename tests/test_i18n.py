@@ -24,12 +24,12 @@ class TestI18n:
 
     def test_translate_swedish(self):
         init("sv")
-        assert t("pause_title") == "PAUS"
+        assert t("pause_title") == "Paus"
         assert t("pause_resume") == "Fortsätt"
 
     def test_translate_english(self):
         init("en")
-        assert t("pause_title") == "PAUSED"
+        assert t("pause_title") == "Paused"
         assert t("pause_resume") == "Resume"
 
     def test_translate_with_args(self):

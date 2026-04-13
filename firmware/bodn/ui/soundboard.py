@@ -464,7 +464,7 @@ class SoundboardScreen(Screen):
         tft.fill_rect(0, 0, w, 20, theme.BLACK)
         bank_name = self._resolve_bank_name(state)
         bank_label = t("sb_bank", state.bank + 1)
-        draw_centered(tft, bank_name.upper(), 2, theme.CYAN, w, scale=2)
+        draw_centered(tft, bank_name.capitalize(), 2, theme.CYAN, w, scale=2)
         bank_lbl_x = w - len(bank_label) * 8 - 4
         tft.text(bank_label, bank_lbl_x, 4, theme.MUTED)
 
@@ -615,7 +615,7 @@ class SoundboardScreen(Screen):
         # Header (clear first to avoid text-on-text when bank changes)
         tft.fill_rect(0, 0, w, 20, theme.BLACK)
         bank_name = self._resolve_bank_name(state)
-        draw_centered(tft, bank_name[:8].upper(), 2, theme.CYAN, w, scale=2)
+        draw_centered(tft, bank_name[:8].capitalize(), 2, theme.CYAN, w, scale=2)
 
         # Mini button grid: 4×2
         cell_w = (w - 8) // 4

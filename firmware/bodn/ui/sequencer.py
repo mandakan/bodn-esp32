@@ -579,7 +579,7 @@ class SequencerScreen(Screen):
 
         # Header
         tft.fill_rect(0, 0, w, _HEADER_H, theme.BLACK)
-        title = t("mode_sequencer").upper()
+        title = t("mode_sequencer").capitalize()
         tft.text(title, 4, 4, theme.WHITE)
         bpm_str = str(eng.bpm)
         bpm_x = w - len(bpm_str) * 8 - 4

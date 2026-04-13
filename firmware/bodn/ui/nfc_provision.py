@@ -290,7 +290,7 @@ class NFCProvisionScreen(Screen):
         cards = cs.get("cards", [])
         dims = cs.get("dimensions", [])
 
-        draw_centered(tft, mode.upper(), 30, theme.WHITE, w)
+        draw_centered(tft, mode.capitalize(), 30, theme.WHITE, w)
         draw_centered(tft, "{} cards".format(len(cards)), 50, theme.MUTED, w)
         if dims:
             draw_centered(tft, ", ".join(dims), 66, theme.MUTED, w)
@@ -317,7 +317,7 @@ class NFCProvisionScreen(Screen):
         n = len(self._cards)
 
         # Header: mode + progress
-        draw_centered(tft, mode.upper(), 8, theme.MUTED, w)
+        draw_centered(tft, mode.capitalize(), 8, theme.MUTED, w)
         progress = "{}/{}".format(self._card_idx + 1, n)
         draw_centered(tft, progress, 22, theme.DIM, w)
 

@@ -351,6 +351,18 @@ bilingualism.
 - The entire UI supports Swedish (default) and English, switchable in settings.
   All game labels, instructions, and TTS audio exist in both languages.
 
+- **Printed NFC cards** use dual-language labels (e.g. "Katt / Cat") at equal
+  size, leveraging the translation-equivalent bootstrapping effect: knowing a
+  word in one language increases the probability of learning it in the other
+  (Tan et al., 2024). On-device screens show one language at a time to respect
+  display constraints.
+
+- **Title case** (first letter uppercase, rest lowercase) is used on both cards
+  and device UI. Uppercase letters are recognized first by preschoolers (Piasta,
+  2014), but all-caps delays the transition to reading real text where 95% is
+  lowercase (Treiman & Kessler, 2006). Title case gives the child the familiar
+  uppercase anchor while building lowercase familiarity.
+
 - **Story Mode** provides the first truly active bilingual experience: complete
   narration and choice labels in both Swedish and English, requiring the child
   to engage with whichever language is selected. A dedicated language-switching
