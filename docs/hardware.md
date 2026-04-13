@@ -411,8 +411,9 @@ The PCA9685 shares the I2C bus on GPIO 47 (SCL) / GPIO 48 (SDA) with the MCP2301
 
 | Address | Device |
 |---------|--------|
-| 0x23 | MCP1 — MCP23017 (buttons, toggles, power switch, arcade) |
 | 0x21 | MCP2 — MCP23017 (encoder push buttons) |
+| 0x23 | MCP1 — MCP23017 (buttons, toggles, power switch, arcade) |
+| 0x24 | PN532 (NFC reader) |
 | 0x40 | PCA9685 (PWM dimming) |
 
 ### Channel assignments
@@ -440,6 +441,46 @@ GND           ──▶ GND
 GND           ──▶ OE   (active-low: GND = outputs enabled)
 DC-DC 5 V     ──▶ V+   (LED power rail — arcade LEDs + ILI9341 backlight)
 ```
+
+## PN532 NFC reader
+
+**Purpose:** Read and write NFC tags (NTAG213/215) for tangible learning games.
+Children tap physical cards on the reader — each card carries an NDEF payload
+identifying the game mode and card ID.
+
+### Module specs
+
+| Parameter | Value |
+|-----------|-------|
+| Chip | NXP PN532 |
+| Interface | I2C (shared bus with MCP23017 and PCA9685) |
+| I2C address | 0x24 (default, set via DIP switches / solder jumpers) |
+| Tag types | ISO14443A — NTAG213 (144 B), NTAG215 (504 B) |
+| Read latency | ~50–100 ms (UID), ~200 ms (full data pages) |
+| Power | ~100 mA polling, ~10 uA power-down |
+
+### I2C bus connection
+
+The PN532 shares GPIO 47 (SCL) / GPIO 48 (SDA) with the MCP23017 and PCA9685.
+Set the module's DIP switches or solder jumpers for **I2C mode** (varies by board —
+commonly switches 1=OFF, 2=ON).
+
+### Wiring
+
+```
+ESP32-S3          PN532 breakout
+─────────         ──────────────
+GPIO 47 (SCL) ──▶ SCL
+GPIO 48 (SDA) ──▶ SDA
+3V3           ──▶ VCC
+GND           ──▶ GND
+```
+
+### Thermal protection
+
+The PN532 draws ~100 mA during continuous polling. The firmware disables NFC
+polling at ≥ 50 °C (critical thermal threshold) and powers down the module
+during light sleep. See `housekeeping_task()` in `main.py`.
 
 ## Power distribution
 

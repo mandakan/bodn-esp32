@@ -20,6 +20,7 @@ _EXPECTED = {
     config.MCP23017_ADDR: "MCP1 (buttons/switches)",
     config.MCP2_ADDR: "MCP2 (encoder buttons)",
     config.PCA9685_ADDR: "PCA9685 (PWM)",
+    config.PN532_ADDR: "PN532 (NFC reader)",
 }
 
 _POLL_MS = 200

@@ -155,6 +155,11 @@ PWM_CH_ARC4 = const(4)  # Arcade idx 3 — yellow
 PWM_CH_ARC5 = const(5)  # Arcade idx 4 — red (far right)
 PWM_CH_AMP_SD = const(6)  # UNUSED — amp SD moved to GPIO 3 (PCA9685 glitches on boot)
 
+# PN532 NFC reader over I2C (shared bus)
+PN532_ADDR = const(
+    0x24
+)  # default PN532 I2C address (DIP switches / jumpers for I2C mode)
+
 # Mini button colors — physical left-to-right matches electrical index 0–7
 BUTTON_COLORS = ("green", "blue", "white", "yellow", "red", "black", "green", "blue")
 # Arcade button colors — physical left-to-right matches electrical index 0–4

@@ -92,6 +92,15 @@ class PowerManager:
         self._tft._cmd(0x10)
         self._tft2._cmd(0x10)
 
+        # Put PN532 into power-down mode (~10 uA)
+        try:
+            from bodn import nfc
+
+            if nfc._pn532:
+                nfc._pn532.power_down()
+        except Exception:
+            pass
+
     def enter_light_sleep(self):
         """Configure wake sources and enter machine.lightsleep()."""
         import machine
@@ -160,6 +169,15 @@ class PowerManager:
         # Restore backlight
         self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
         self._bl_pin.value(1)
+
+        # Wake PN532 from power-down
+        try:
+            from bodn import nfc
+
+            if nfc._pn532:
+                nfc._pn532.wake_up()
+        except Exception:
+            pass
 
     def master_switch_off(self):
         """Return True if the master switch is in the OFF position.

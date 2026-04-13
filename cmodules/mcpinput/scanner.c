@@ -598,6 +598,46 @@ int scanner_i2c_read(mcpinput_state_t *state, uint8_t addr,
     return (int)err;
 }
 
+int scanner_i2c_raw_write(mcpinput_state_t *state, uint8_t addr,
+                           const uint8_t *data, size_t len) {
+    i2c_device_config_t cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = addr,
+        .scl_speed_hz = 400000,
+    };
+    i2c_master_dev_handle_t dev;
+
+    xSemaphoreTake(state->i2c_mutex, portMAX_DELAY);
+    esp_err_t err = i2c_master_bus_add_device(state->bus, &cfg, &dev);
+    if (err == ESP_OK) {
+        err = i2c_master_transmit(dev, data, len, I2C_TIMEOUT_MS);
+        i2c_master_bus_rm_device(dev);
+    }
+    xSemaphoreGive(state->i2c_mutex);
+
+    return (int)err;
+}
+
+int scanner_i2c_raw_read(mcpinput_state_t *state, uint8_t addr,
+                          uint8_t *buf, size_t len) {
+    i2c_device_config_t cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = addr,
+        .scl_speed_hz = 400000,
+    };
+    i2c_master_dev_handle_t dev;
+
+    xSemaphoreTake(state->i2c_mutex, portMAX_DELAY);
+    esp_err_t err = i2c_master_bus_add_device(state->bus, &cfg, &dev);
+    if (err == ESP_OK) {
+        err = i2c_master_receive(dev, buf, len, I2C_TIMEOUT_MS);
+        i2c_master_bus_rm_device(dev);
+    }
+    xSemaphoreGive(state->i2c_mutex);
+
+    return (int)err;
+}
+
 int scanner_i2c_scan(mcpinput_state_t *state, uint8_t *addrs, size_t addrs_size) {
     int count = 0;
 

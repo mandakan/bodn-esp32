@@ -1,4 +1,4 @@
-"""Tests for bodn.nfc — tag parsing, encoding, card sets, and UID cache."""
+"""Tests for bodn.nfc — tag parsing, encoding, card sets, UID cache, and NFCReader."""
 
 import json
 import os
@@ -322,3 +322,183 @@ class TestUIDCache:
         # Should still be usable
         cache.store("AA:BB:CC:DD", "sortera", "cat_red")
         assert cache.lookup("AA:BB:CC:DD") is not None
+
+
+# ---------------------------------------------------------------------------
+# NFCReader
+# ---------------------------------------------------------------------------
+
+
+class FakePN532:
+    """Minimal PN532 stub for testing NFCReader."""
+
+    def __init__(self, uid=None, pages=None):
+        self._uid = uid
+        self._pages = pages or {}
+
+    def begin(self):
+        return True
+
+    def read_passive_target(self, timeout_ms=100):
+        return self._uid
+
+    def ntag_read(self, page):
+        return self._pages.get(page)
+
+    def ntag_write(self, page, data):
+        self._pages[page] = data
+        return True
+
+    def power_down(self):
+        pass
+
+    def wake_up(self):
+        pass
+
+
+class TestNFCReaderWithoutInit:
+    def test_available_without_init(self):
+        """NFCReader without init() returns unavailable."""
+        import bodn.nfc as nfc_mod
+
+        old_i2c = nfc_mod._i2c
+        old_pn = nfc_mod._pn532
+        nfc_mod._i2c = None
+        nfc_mod._pn532 = None
+        try:
+            from bodn.nfc import NFCReader
+
+            reader = NFCReader()
+            assert reader.available() is False
+            assert reader.scan() == (None, None)
+            assert reader.write(b"test") is False
+        finally:
+            nfc_mod._i2c = old_i2c
+            nfc_mod._pn532 = old_pn
+
+
+class TestNFCReaderScan:
+    def test_scan_with_tag(self):
+        import bodn.nfc as nfc_mod
+
+        old_pn = nfc_mod._pn532
+        old_shed = nfc_mod._shed
+
+        # Build NDEF TLV with a BODN tag payload
+        ndef_payload = encode_tag_data("sortera", "cat_red")
+        # NDEF record: flags=0xD1 (MB+ME+SR, TNF=0x01), type_len=1, payload_len, "T", payload
+        ndef_rec = bytes([0xD1, 0x01, len(ndef_payload)]) + b"T" + ndef_payload
+        # TLV: type=0x03, len, data, terminator=0xFE
+        tlv = bytes([0x03, len(ndef_rec)]) + ndef_rec + b"\xfe"
+        # Pad to 32 bytes (8 pages) and split across two ntag_read calls
+        while len(tlv) < 32:
+            tlv += b"\x00"
+
+        uid = bytes([0x04, 0xA3, 0xB2, 0xC1, 0xD4, 0xE5, 0xF6])
+        fake_pn = FakePN532(uid=uid, pages={4: tlv[:16], 8: tlv[16:32]})
+        nfc_mod._pn532 = fake_pn
+        nfc_mod._shed = False
+
+        try:
+            from bodn.nfc import NFCReader
+
+            reader = NFCReader()
+            assert reader.available() is True
+            uid_str, data = reader.scan()
+            assert uid_str == "04:A3:B2:C1:D4:E5:F6"
+            assert data is not None
+            parsed = parse_tag_data(data)
+            assert parsed is not None
+            assert parsed["mode"] == "sortera"
+            assert parsed["id"] == "cat_red"
+        finally:
+            nfc_mod._pn532 = old_pn
+            nfc_mod._shed = old_shed
+
+    def test_scan_no_tag(self):
+        import bodn.nfc as nfc_mod
+
+        old_pn = nfc_mod._pn532
+        fake_pn = FakePN532(uid=None)
+        nfc_mod._pn532 = fake_pn
+        try:
+            from bodn.nfc import NFCReader
+
+            reader = NFCReader()
+            uid_str, data = reader.scan()
+            assert uid_str is None
+            assert data is None
+        finally:
+            nfc_mod._pn532 = old_pn
+
+
+class TestNFCReaderThermalShed:
+    def test_shed_disables_scan(self):
+        import bodn.nfc as nfc_mod
+
+        old_pn = nfc_mod._pn532
+        old_shed = nfc_mod._shed
+        uid = bytes([0x04, 0xA3, 0xB2, 0xC1])
+        nfc_mod._pn532 = FakePN532(uid=uid)
+        nfc_mod._shed = True
+        try:
+            from bodn.nfc import NFCReader
+
+            reader = NFCReader()
+            assert reader.available() is True
+            uid_str, data = reader.scan()
+            assert uid_str is None  # shed blocks scan
+        finally:
+            nfc_mod._pn532 = old_pn
+            nfc_mod._shed = old_shed
+
+    def test_set_thermal_shed(self):
+        import bodn.nfc as nfc_mod
+
+        old_shed = nfc_mod._shed
+        try:
+            nfc_mod.set_thermal_shed(True)
+            assert nfc_mod._shed is True
+            nfc_mod.set_thermal_shed(False)
+            assert nfc_mod._shed is False
+        finally:
+            nfc_mod._shed = old_shed
+
+
+class TestNFCReaderWrite:
+    def test_write_and_verify(self):
+        import bodn.nfc as nfc_mod
+
+        old_pn = nfc_mod._pn532
+        old_shed = nfc_mod._shed
+        fake_pn = FakePN532(uid=bytes([0x04, 0xAA, 0xBB, 0xCC]))
+        nfc_mod._pn532 = fake_pn
+        nfc_mod._shed = False
+        try:
+            from bodn.nfc import NFCReader
+
+            reader = NFCReader()
+            data = encode_tag_data("sortera", "cat_red")
+            assert reader.write(data) is True
+            # Verify pages were written
+            assert len(fake_pn._pages) > 0
+        finally:
+            nfc_mod._pn532 = old_pn
+            nfc_mod._shed = old_shed
+
+    def test_write_when_shed(self):
+        import bodn.nfc as nfc_mod
+
+        old_pn = nfc_mod._pn532
+        old_shed = nfc_mod._shed
+        nfc_mod._pn532 = FakePN532()
+        nfc_mod._shed = True
+        try:
+            from bodn.nfc import NFCReader
+
+            reader = NFCReader()
+            data = encode_tag_data("sortera", "cat_red")
+            assert reader.write(data) is False
+        finally:
+            nfc_mod._pn532 = old_pn
+            nfc_mod._shed = old_shed

@@ -57,7 +57,13 @@ def create_hardware():
     - AudioEngine missing → audio is None (no sound).
     - SPI displays can't be probed (push-only) so are always assumed present.
     """
-    hw_status = {"mcp": False, "pca": False, "temp": False, "audio": False}
+    hw_status = {
+        "mcp": False,
+        "pca": False,
+        "temp": False,
+        "audio": False,
+        "nfc": False,
+    }
 
     # Shared RST pin (needed for both paths)
     rst = Pin(config.TFT_RST, Pin.OUT)
@@ -264,6 +270,23 @@ def create_hardware():
                 config.PCA9685_ADDR, e
             )
         )
+
+    # PN532 NFC reader (shared I2C bus)
+    try:
+        from bodn import nfc as _nfc_mod
+
+        _nfc_mod.init(i2c)
+        from bodn.nfc import NFCReader as _NFCProbe
+
+        _nfc_probe = _NFCProbe()
+        if _nfc_probe.available():
+            hw_status["nfc"] = True
+            print("PN532 (0x{:02X}) initialised — NFC ready".format(config.PN532_ADDR))
+        else:
+            print("PN532 (0x{:02X}) not found, NFC disabled".format(config.PN532_ADDR))
+        del _nfc_probe
+    except Exception as e:
+        print("NFC init failed:", e)
 
     # Arcade buttons (switch input via MCP23017 + LED output via PCA9685)
     if mcp:
@@ -990,6 +1013,14 @@ async def housekeeping_task(session_mgr, np, settings, audio=None):
                     Pin(config.TFT_BL, Pin.OUT).value(1)
                 except Exception:
                     pass
+
+            # Shed NFC polling at critical+ temperatures
+            try:
+                from bodn import nfc as _nfc_mod
+
+                _nfc_mod.set_thermal_shed(temp_status in ("critical", "emergency"))
+            except Exception:
+                pass
 
             _prev_temp = temp_status
         except Exception as e:
