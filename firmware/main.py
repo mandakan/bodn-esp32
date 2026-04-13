@@ -338,6 +338,9 @@ def create_hardware():
             config.PWM_CH_ARC5,
         ]
         arcade = ArcadeButtons(mcp, config.MCP_ARC_PINS, pwm, pwm_channels)
+        # Restore backlight — C led_init may have cleared all PCA9685 channels
+        if pwm:
+            pwm.set_duty(config.PWM_CH_BACKLIGHT, 4095)
 
     # DS18B20 temperature sensors (1-Wire)
     try:
