@@ -47,6 +47,36 @@ _FRAME_BUDGET_MS = const(33)
 _MIN_RENDER_MS = const(5)  # don't start a render with less than this
 
 
+def _i2c_bus_recover(scl_pin, sda_pin):
+    """Bit-bang 9 SCL clocks to unstick any I2C slave holding SDA low.
+
+    Must be called BEFORE any I2C peripheral is initialised so we can
+    freely toggle the pins as GPIO.  Standard recovery per I2C spec §3.1.16.
+    """
+    import time
+
+    scl = Pin(scl_pin, Pin.OUT, value=1)
+    sda = Pin(sda_pin, Pin.IN, Pin.PULL_UP)
+
+    if sda.value():
+        return  # SDA is high — bus is fine, skip recovery
+
+    print("I2C: SDA stuck low, running bus recovery")
+    for _ in range(9):
+        scl.value(0)
+        time.sleep_us(5)
+        scl.value(1)
+        time.sleep_us(5)
+        if sda.value():
+            break
+
+    # Generate STOP condition: SDA low→high while SCL is high
+    sda_out = Pin(sda_pin, Pin.OUT, value=0)
+    time.sleep_us(5)
+    sda_out.value(1)
+    time.sleep_us(5)
+
+
 def create_hardware():
     """Initialise all hardware peripherals.
 
@@ -183,6 +213,11 @@ def create_hardware():
         print("Secondary logo:", _e)
 
     # Shared I2C bus for MCP23017 and PCA9685
+    # I2C bus recovery — after a soft reboot, the PN532 may be stuck
+    # mid-transaction (SDA held low).  9 SCL clock pulses flush the
+    # slave state machine.  Must run BEFORE any I2C peripheral init.
+    _i2c_bus_recover(config.I2C_SCL, config.I2C_SDA)
+
     # Try native _mcpinput C module first (deterministic input capture on core 0).
     # Falls back to machine.I2C if the C module isn't compiled in.
     _native_input = False
@@ -272,10 +307,13 @@ def create_hardware():
         )
 
     # PN532 NFC reader (shared I2C bus)
+    # MCP2 controls PN532 power via transistor gate — power-cycles
+    # the chip on every boot for reliable recovery after soft reboot.
     try:
         from bodn import nfc as _nfc_mod
 
-        _nfc_mod.init(i2c)
+        _nfc_mod.init(i2c, mcp2=mcp2)
+        _nfc_mod.power_on()
         from bodn.nfc import NFCReader as _NFCProbe
 
         _nfc_probe = _NFCProbe()
@@ -1106,12 +1144,15 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
     from bodn.nfc import NFCReader, parse_tag_data
 
     reader = NFCReader()
-    if not reader.available():
-        return
-
     prev_uid = None
 
     while True:
+        # Retry init if NFC hardware isn't available yet (e.g. after
+        # sleep or soft reboot when PN532 needs time to come up).
+        if not reader.available():
+            await asyncio.sleep_ms(2000)
+            continue
+
         # Skip polling when active screen doesn't use NFC — avoids
         # the ~50 ms I2C block that would hurt button timing in
         # latency-sensitive modes (Simon, sequencer, etc.).
@@ -1128,15 +1169,13 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
             uid, data = reader.scan()
         except OSError as e:
             print("NFC: I2C error during scan:", e)
-            # Attempt to recover the PN532
-            try:
-                if reader._pn532 and reader._pn532.begin():
-                    print("NFC: PN532 recovered")
-                else:
-                    print("NFC: PN532 recovery failed")
-            except Exception:
-                pass
-            await asyncio.sleep_ms(1000)
+            # Mark unavailable so available() will re-probe
+            reader._available = False
+            reader._pn532 = None
+            from bodn import nfc as _nfc_mod
+
+            _nfc_mod._pn532 = None
+            await asyncio.sleep_ms(2000)
             continue
 
         if uid and data and uid != prev_uid:
@@ -1300,8 +1339,8 @@ async def main():
     ]
     if audio:
         tasks.append(audio.start())
-    if hw_status.get("nfc"):
-        tasks.append(nfc_scan_task(manager, mode_screens, session_mgr, audio))
+    # Always start NFC task — it retries init if hardware wasn't ready at boot
+    tasks.append(nfc_scan_task(manager, mode_screens, session_mgr, audio))
     await asyncio.gather(*tasks)
 
 
@@ -1321,7 +1360,14 @@ if not _skip:
         print("FATAL:", e)
         sys.print_exception(e)
     finally:
-        # Release PCNT encoder units
-        pass
+        # Put PN532 into clean power-down (I2C wake) so it recovers
+        # after soft reboot without needing a hardware reset pin.
+        try:
+            from bodn import nfc as _nfc_cleanup
+
+            if _nfc_cleanup._pn532:
+                _nfc_cleanup._pn532.power_down()
+        except Exception:
+            pass
 else:
     print("main.py: skipped — REPL active. Reset to boot normally.")

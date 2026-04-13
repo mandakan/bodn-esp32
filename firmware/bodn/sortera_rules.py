@@ -11,7 +11,7 @@
 import os
 
 from micropython import const
-from bodn.patterns import N_STICKS, _led_buf
+from bodn.patterns import N_STICKS, N_LEDS
 
 # Game states
 WELCOME = const(0)  # waiting to start
@@ -22,7 +22,8 @@ WRONG = const(4)  # wrong card — gentle feedback
 RULE_SWITCH = const(5)  # rule is changing
 
 # Timing (milliseconds)
-ANNOUNCE_MS = const(2500)  # rule announcement duration
+WELCOME_MS = const(3000)  # welcome intro before first rule
+ANNOUNCE_MS = const(5000)  # rule announcement duration
 CORRECT_MS = const(1200)  # celebration duration
 WRONG_MS = const(1500)  # gentle feedback
 SWITCH_MS = const(2000)  # rule switch animation
@@ -73,7 +74,7 @@ class SorteraEngine:
         self.reset()
 
     def reset(self):
-        """Reset to initial state."""
+        """Reset to initial state — welcome then first rule."""
         self.state = WELCOME
         self.score = 0
         self.streak = 0
@@ -88,6 +89,7 @@ class SorteraEngine:
         self._rule_correct_count = 0
         self._switch_threshold = 0
         self._prev_rule = None  # (dimension, value) to avoid repeats
+        self._pick_rule()
 
     def _set_state(self, new_state):
         self.state = new_state
@@ -173,8 +175,7 @@ class SorteraEngine:
         self._state_ms += dt
 
         if self.state == WELCOME:
-            if card_id is not None:
-                self._pick_rule()
+            if self._state_ms >= WELCOME_MS:
                 self._set_state(ANNOUNCE_RULE)
             return self.state
 
@@ -225,42 +226,33 @@ class SorteraEngine:
         return self.state
 
     def make_static_leds(self, brightness):
-        """Return LED stick buffer for the current state."""
-        buf = bytearray(len(_led_buf))
+        """Return LED buffer (list of (r,g,b) tuples) for the current state."""
+        buf = [(0, 0, 0)] * N_LEDS
 
         def _sc(val):
             return (val * brightness) >> 8
 
         if self.state == ANNOUNCE_RULE or self.state == WAITING:
             r, g, b = self.rule_colour_rgb
+            c = (_sc(r), _sc(g), _sc(b))
             for i in range(N_STICKS):
-                buf[i * 3] = _sc(g)
-                buf[i * 3 + 1] = _sc(r)
-                buf[i * 3 + 2] = _sc(b)
+                buf[i] = c
 
         elif self.state == CORRECT:
-            g_val = _sc(200)
+            c = (0, _sc(200), 0)
             for i in range(N_STICKS):
-                buf[i * 3] = g_val
-                buf[i * 3 + 1] = 0
-                buf[i * 3 + 2] = 0
+                buf[i] = c
 
         elif self.state == WRONG:
-            r_val = _sc(80)
+            c = (_sc(80), 0, 0)
             for i in range(N_STICKS):
-                buf[i * 3] = 0
-                buf[i * 3 + 1] = r_val
-                buf[i * 3 + 2] = 0
+                buf[i] = c
 
         elif self.state == RULE_SWITCH:
             for i in range(N_STICKS):
                 if i % 2 == 0:
-                    buf[i * 3] = _sc(100)
-                    buf[i * 3 + 1] = _sc(255)
-                    buf[i * 3 + 2] = 0
+                    buf[i] = (_sc(255), _sc(100), 0)
                 else:
-                    buf[i * 3] = _sc(255)
-                    buf[i * 3 + 1] = 0
-                    buf[i * 3 + 2] = _sc(200)
+                    buf[i] = (0, _sc(255), _sc(200))
 
         return buf

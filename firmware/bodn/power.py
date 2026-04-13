@@ -92,11 +92,15 @@ class PowerManager:
         self._tft._cmd(0x10)
         self._tft2._cmd(0x10)
 
-        # Put PN532 into power-down mode (~10 uA)
+        # Cut PN532 power via MCP2 gate (if available), else software power-down
         try:
             from bodn import nfc
 
-            if nfc._pn532:
+            if nfc._mcp2:
+                from bodn import config
+
+                nfc._mcp2.write_pin(config.MCP2_NFC_PWR, 0)
+            elif nfc._pn532:
                 nfc._pn532.power_down()
         except Exception:
             pass
@@ -170,15 +174,24 @@ class PowerManager:
         self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
         self._bl_pin.value(1)
 
-        # Reinitialize PN532 after sleep (wake + SAM config + verify)
+        # Restore PN532 power and reinitialize
         try:
             from bodn import nfc
 
-            if nfc._pn532:
+            if nfc._mcp2:
+                # Hardware power-cycle via MCP2 gate
+                nfc.power_on()
+                # Force re-probe on next scan
+                nfc._pn532 = None
+            elif nfc._pn532:
                 if not nfc._pn532.begin():
-                    print("POWER: PN532 failed to wake")
+                    print("POWER: PN532 begin() failed, forcing full reinit")
+                    nfc._pn532 = None
+            else:
+                print("POWER: PN532 was None, will re-probe on next scan")
         except Exception as e:
             print("POWER: PN532 wake error:", e)
+            nfc._pn532 = None
 
     def master_switch_off(self):
         """Return True if the master switch is in the OFF position.

@@ -60,9 +60,32 @@ _COLOUR_KEYS = {
     "yellow": "sortera_yellow",
 }
 
+# Animal names for i18n lookup
+_ANIMAL_KEYS = {
+    "cat": "sortera_cat",
+    "dog": "sortera_dog",
+    "rabbit": "sortera_rabbit",
+    "bird": "sortera_bird",
+    "fish": "sortera_fish",
+    "horse": "sortera_horse",
+    "cow": "sortera_cow",
+    "frog": "sortera_frog",
+}
+
+# Vehicle names for i18n lookup
+_VEHICLE_KEYS = {
+    "car": "sortera_car",
+    "bus": "sortera_bus",
+    "firetruck": "sortera_firetruck",
+    "ambulance": "sortera_ambulance",
+    "train": "sortera_train",
+    "taxi": "sortera_taxi",
+}
+
 # Category names for i18n lookup
 _CATEGORY_KEYS = {
     "animal": "sortera_animal",
+    "vehicle": "sortera_vehicle",
 }
 
 
@@ -136,9 +159,14 @@ class SorteraScreen(Screen):
             # Fallback: minimal card set for demo
             card_set = {
                 "mode": "sortera",
-                "dimensions": ["category", "colour"],
+                "dimensions": ["animal", "colour"],
                 "cards": [
-                    {"id": c, "category": "animal", "colour": c.split("_")[-1]}
+                    {
+                        "id": c,
+                        "category": "animal",
+                        "animal": c.split("_")[0],
+                        "colour": c.split("_")[-1],
+                    }
                     for c in DEMO_CARDS
                 ],
             }
@@ -147,7 +175,11 @@ class SorteraScreen(Screen):
 
         # Pre-render title sprite
         self._title_sprite = make_label_sprite("Sortera", 0xFFFF, scale=2)
+
+        # Engine starts in WELCOME — play welcome TTS
         self._rule_emoji = None
+        self._prev_state = WELCOME
+        self._play_audio(None, WELCOME)
 
     def exit(self):
         if self._arcade:
@@ -174,10 +206,13 @@ class SorteraScreen(Screen):
         # Get card input: NFC scan or demo button press
         card_id = None
 
-        # Demo mode: buttons 0-7 map to animals
+        # Demo mode: buttons 0-7 and arcade buttons 0-4 map to animals
         btn = inp.first_btn_pressed()
         if btn >= 0 and btn < len(DEMO_CARDS):
             card_id = DEMO_CARDS[btn]
+        arc = inp.first_arc_pressed()
+        if arc >= 0 and arc < len(DEMO_CARDS):
+            card_id = DEMO_CARDS[arc]
 
         # NFC card delivered by global nfc_scan_task
         if self._pending_card_id is not None:
@@ -304,10 +339,7 @@ class SorteraScreen(Screen):
                 try:
                     dim = self._engine.rule_dimension
                     val = self._engine.rule_value
-                    if dim == "colour":
-                        key = "sortera_find_colour_{}".format(val)
-                    else:
-                        key = "sortera_find_category"
+                    key = "sortera_find_{}_{}".format(dim, val)
                     say(key, audio)
                 except Exception:
                     audio.tone(523, 100)  # fallback beep
@@ -326,12 +358,14 @@ class SorteraScreen(Screen):
         """Cache the emoji sprite for the current rule value."""
         self._rule_emoji = None
         eng = self._engine
-        if eng.rule_dimension == "category":
-            # Show first animal emoji as representative
-            self._rule_emoji = load_emoji("cat", 48)
-        elif eng.rule_dimension == "colour":
-            # No specific emoji for colours — use colour block
-            pass
+        if eng.rule_dimension in ("animal", "vehicle"):
+            self._rule_emoji = load_emoji(eng.rule_value, 48)
+        elif eng.rule_dimension == "category":
+            # Representative emoji for the category
+            if eng.rule_value == "animal":
+                self._rule_emoji = load_emoji("cat", 48)
+            elif eng.rule_value == "vehicle":
+                self._rule_emoji = load_emoji("car", 48)
 
     def render(self, tft, theme, frame):
         # Let pause menu render on top if open
@@ -365,11 +399,8 @@ class SorteraScreen(Screen):
     def _render_welcome(self, tft, theme, w, h):
         if self._title_sprite:
             _, tw, _ = self._title_sprite
-            blit_sprite(tft, self._title_sprite, (w - tw) // 2, 30)
-
-        hint = t("sortera_hint_btn")
-        draw_centered(tft, hint, h // 2 + 10, theme.MUTED, w)
-        draw_centered(tft, t("sortera_welcome"), h // 2 - 10, theme.CYAN, w)
+            blit_sprite(tft, self._title_sprite, (w - tw) // 2, 60)
+        draw_centered(tft, t("sortera_welcome"), h // 2 + 20, theme.CYAN, w)
 
     def _render_announce(self, tft, theme, w, h):
         tft.fill(theme.BLACK)
@@ -416,7 +447,7 @@ class SorteraScreen(Screen):
         # Pulsing hint in the centre
         pulse = (frame % 40) < 20
         hint_col = theme.WHITE if pulse else theme.MUTED
-        hint = t("sortera_hint_btn")
+        hint = t("sortera_hint_scan")
         draw_centered(tft, hint, h // 2, hint_col, w)
 
         # Score at bottom
@@ -429,9 +460,7 @@ class SorteraScreen(Screen):
         # Show scanned card emoji
         if eng.last_card:
             card_name = eng.last_card_id.split("_")[0]  # "cat_red" → "cat"
-            emoji = load_emoji(card_name, 96)
-            if not emoji:
-                emoji = load_emoji(card_name, 48)
+            emoji = load_emoji(card_name, 48)
             if emoji:
                 asset, ew, eh = emoji
                 try:
@@ -444,8 +473,8 @@ class SorteraScreen(Screen):
                         ex - pad, ey - pad, ew + pad * 2, eh + pad * 2, 0xEF7D
                     )
                     sprite(tft, ex, ey, asset, 0, 0xFFFF)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print("Sortera: emoji render error:", e)
 
         # Bilingual card label below emoji
         bilabel = _card_bilingual_label(eng.last_card)
@@ -475,8 +504,8 @@ class SorteraScreen(Screen):
                         ex - pad, ey - pad, ew + pad * 2, eh + pad * 2, 0xEF7D
                     )
                     sprite(tft, ex, ey, asset, 0, 0xFFFF)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print("Sortera: emoji render error:", e)
 
         # Bilingual card label below emoji
         bilabel = _card_bilingual_label(eng.last_card)
@@ -507,6 +536,21 @@ class SorteraScreen(Screen):
                 "sortera_find_colour",
                 t(_COLOUR_KEYS.get(eng.rule_value, eng.rule_value)),
             )
+        elif eng.rule_dimension == "animal":
+            return t(
+                "sortera_find_animal",
+                t(_ANIMAL_KEYS.get(eng.rule_value, eng.rule_value)),
+            )
+        elif eng.rule_dimension == "vehicle":
+            return t(
+                "sortera_find_vehicle",
+                t(_VEHICLE_KEYS.get(eng.rule_value, eng.rule_value)),
+            )
         elif eng.rule_dimension == "category":
-            return t("sortera_find_category")
+            return t(
+                "sortera_find_animal"
+                if eng.rule_value == "animal"
+                else "sortera_find_vehicle",
+                t(_CATEGORY_KEYS.get(eng.rule_value, eng.rule_value)),
+            )
         return eng.rule_value

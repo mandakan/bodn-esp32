@@ -375,9 +375,10 @@ All 16 MCP1 pins are allocated.
 | GPA2 | Toggle switch SW_L (far left) | Active low with internal pull-ups |
 | GPA3 | Toggle switch SW_R (far right) | Active low with internal pull-ups |
 | GPA4–GPA7 | Available | Future use |
-| GPB0–GPB7 | Available | Future use |
+| GPB0–GPB6 | Available | Future use |
+| GPB7 | PN532 NFC power gate | NPN transistor (2N3904) low-side switch |
 
-MCP2 uses 4 of 16 pins; 12 spare I/O pins available for future expansion.
+MCP2 uses 5 of 16 pins; 11 spare I/O pins available for future expansion.
 
 ### Why not put encoder CLK/DT on the expander?
 
@@ -473,14 +474,35 @@ ESP32-S3          PN532 breakout
 GPIO 47 (SCL) ──▶ SCL
 GPIO 48 (SDA) ──▶ SDA
 3V3           ──▶ VCC
-GND           ──▶ GND
+GND (switched) ── via 2N3904 ──▶ GND
 ```
+
+### Power gate (soft-reboot recovery)
+
+The PN532 has no exposed reset pin on the I2C breakout. After a soft reboot
+the chip's I2C state machine can get stuck (NACKs all traffic), and only a
+power cycle recovers it. A low-side NPN transistor switch on the GND line
+lets firmware cut and restore power on demand.
+
+```
+MCP2 GPB7 (pin 15) ── 1kΩ ── 2N3904 Base
+                               │
+GND ──────── 10kΩ ─────────────┘  (pull-down keeps gate off when MCP is reset)
+
+PN532 GND ───────────────── 2N3904 Collector
+Common GND ──────────────── 2N3904 Emitter
+```
+
+**How it works:** MCP2 resets all pins to high-Z inputs on power-up and soft
+reboot. The 10kΩ pull-down holds the base low → transistor off → PN532 loses
+ground. Firmware sets GPB7 as output-high → transistor on → PN532 boots fresh.
+The same gate is used to cut power before light sleep and restore it on wake.
 
 ### Thermal protection
 
 The PN532 draws ~100 mA during continuous polling. The firmware disables NFC
-polling at ≥ 50 °C (critical thermal threshold) and powers down the module
-during light sleep. See `housekeeping_task()` in `main.py`.
+polling at ≥ 50 °C (critical thermal threshold) and cuts power via the MCP2
+gate during light sleep. See `housekeeping_task()` in `main.py`.
 
 ## Power distribution
 
@@ -657,7 +679,7 @@ See `docs/assets.md` for the directory structure.
 | UART console (avoid) | GPIO 43 (TX), 44 (RX) |
 | MCP1 (0x23) in use | 16 (8 buttons + 2 toggles + master switch + 5 arcade) |
 | MCP1 spare | 0 |
-| MCP2 (0x21) in use | 4 (encoder push buttons GPA0–1, extra toggles GPA2–3) |
-| MCP2 spare | 12 (GPA4–7, GPB0–7 — future expansion) |
+| MCP2 (0x21) in use | 5 (encoder push buttons GPA0–1, extra toggles GPA2–3, PN532 power gate GPB7) |
+| MCP2 spare | 11 (GPA4–7, GPB0–6 — future expansion) |
 | PCA9685 in use | 7 (backlight + 5 arcade LEDs + amp mute) |
 | PCA9685 spare | 9 (channels 7–15) |
