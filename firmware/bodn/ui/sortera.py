@@ -257,26 +257,48 @@ class SorteraScreen(Screen):
         if audio is None:
             return
 
-        if new_state == CORRECT:
+        try:
+            from bodn.tts import say
+        except ImportError:
+            say = None
+
+        if new_state == WELCOME:
+            if say:
+                try:
+                    say("sortera_welcome", audio)
+                except Exception:
+                    pass
+        elif new_state == CORRECT:
             audio.tone(_CORRECT_TONE, 150)
+            if say:
+                try:
+                    say("sortera_correct", audio)
+                except Exception:
+                    pass
         elif new_state == WRONG:
             audio.tone(_WRONG_TONE, 200)
         elif new_state == RULE_SWITCH:
             audio.tone(_SWITCH_TONE, 100)
+            if say:
+                try:
+                    say("sortera_new_rule", audio)
+                except Exception:
+                    pass
         elif new_state == ANNOUNCE_RULE:
             # Play TTS rule announcement
-            try:
-                from bodn.tts import say
-
-                dim = self._engine.rule_dimension
-                val = self._engine.rule_value
-                if dim == "colour":
-                    key = "sortera_find_colour_{}".format(val)
-                else:
-                    key = "sortera_find_category"
-                say(key, audio)
-            except Exception:
-                audio.tone(523, 100)  # fallback beep
+            if say:
+                try:
+                    dim = self._engine.rule_dimension
+                    val = self._engine.rule_value
+                    if dim == "colour":
+                        key = "sortera_find_colour_{}".format(val)
+                    else:
+                        key = "sortera_find_category"
+                    say(key, audio)
+                except Exception:
+                    audio.tone(523, 100)  # fallback beep
+            else:
+                audio.tone(523, 100)
 
     def _cache_rule_emoji(self):
         """Cache the emoji sprite for the current rule value."""
