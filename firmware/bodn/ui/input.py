@@ -86,6 +86,7 @@ class BrightnessControl:
         self._min = minimum
         self._max = maximum
         self._step = step
+        self._pwm = settings.get("_pwm") if settings else None
 
     @property
     def value(self):
@@ -97,7 +98,20 @@ class BrightnessControl:
         if units:
             v = self._value + units * self._step
             self._value = min(self._max, max(self._min, v))
+            self._update_backlight()
         return self._value
+
+    def _update_backlight(self):
+        """Sync display backlight to current brightness via PCA9685."""
+        if self._pwm is None:
+            return
+        from bodn import config
+
+        # Map 0–255 → 0–4095 (12-bit PWM)
+        duty = self._value * 16
+        if duty > 4095:
+            duty = 4095
+        self._pwm.set_duty(config.PWM_CH_BACKLIGHT, duty)
 
     def reset(self, value=None):
         """Reset accumulator; optionally set a new brightness value."""

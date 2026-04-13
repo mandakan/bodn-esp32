@@ -1307,6 +1307,9 @@ async def main():
     except Exception as _e:
         print("boot log hw update:", _e)
 
+    # Expose PCA9685 PWM driver so BrightnessControl can dim the backlight
+    settings["_pwm"] = pwm
+
     manager, secondary, inp, mode_screens = create_ui(
         session_mgr,
         settings,
