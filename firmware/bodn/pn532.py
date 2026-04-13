@@ -183,7 +183,7 @@ class PN532:
     # High-level commands
     # ------------------------------------------------------------------
 
-    def begin(self, retries=3):
+    def begin(self, retries=5):
         """Initialise the PN532. Returns True if hardware responds.
 
         Sends a wake-up first in case the chip is still in power-down
@@ -199,7 +199,7 @@ class PN532:
             if fw is not None:
                 if self.sam_config():
                     return True
-            time.sleep_ms(20)
+            time.sleep_ms(50 * (attempt + 1))
         return False
 
     def get_firmware_version(self):
@@ -317,18 +317,30 @@ class PN532:
         self._send_command(_CMD_POWER_DOWN, b"\x20", timeout_ms=200)
 
     def wake_up(self):
-        """Wake PN532 from power-down by toggling I2C.
+        """Wake PN532 from power-down or stuck command state.
 
-        The first writes often NACK while the chip wakes — retry several
-        times with increasing delays to handle cold boot, soft reboot,
-        and light-sleep recovery.
+        After a soft reboot the chip may be waiting for the host to
+        read a pending response (e.g. from an interrupted InListPassive
+        Target).  Sending a write in that state gets NACKed because the
+        chip expects a read.  So we first try to drain any buffered
+        response, then send the wake byte.
         """
         import time
 
-        for i in range(4):
+        # Flush any pending response from a previous interrupted command.
+        # The PN532 NACKs writes while holding unread data — drain it.
+        for _ in range(3):
+            try:
+                self._i2c.readfrom_into(self._addr, self._resp_buf)
+            except OSError:
+                break
+            time.sleep_ms(2)
+
+        # Now send the wake byte (may still NACK on first attempt)
+        for i in range(5):
             try:
                 self._i2c.writeto(self._addr, b"\x00")
-                break
+                time.sleep_ms(5)
+                return
             except OSError:
-                time.sleep_ms(5 * (i + 1))
-        time.sleep_ms(5)
+                time.sleep_ms(10 * (i + 1))

@@ -131,6 +131,7 @@ MCP2_ENC1_SW = const(0)  # GPA0 — ENC1 push button (NAV, was GPIO 17)
 MCP2_ENC2_SW = const(1)  # GPA1 — ENC2 push button (ENC_A, was GPIO 40)
 MCP2_SW_LEFT = const(2)  # GPA2 — toggle switch (far left on lid)
 MCP2_SW_RIGHT = const(3)  # GPA3 — toggle switch (far right on lid)
+MCP2_NFC_PWR = const(15)  # GPB7 — PN532 power gate (NPN base via 1kΩ, 10kΩ pull-down)
 
 # SD card — dedicated SPI3 bus on ILI9341 display breakout SD slot
 # GPIOs 17 and 40 freed by moving encoder buttons to MCP2.

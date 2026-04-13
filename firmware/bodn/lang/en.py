@@ -255,7 +255,7 @@ STRINGS = {
     "hf_final": "Score: {}",
     "hf_best": "Best: {}",
     # Sortera (NFC classification game)
-    "sortera_welcome": "Sort the cards!",
+    "sortera_welcome": "Scan a card!",
     "sortera_find_category": "Find the animals!",
     "sortera_find_colour": "Find all the {}!",
     "sortera_correct": "Yes!",

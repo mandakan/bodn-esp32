@@ -269,16 +269,53 @@ def _ensure_dir(path):
 _i2c = None
 _pn532 = None
 _shed = False
+_mcp2 = None  # MCP23017 for power gate control
 
 
-def init(i2c):
+def init(i2c, mcp2=None):
     """Initialise NFC subsystem with I2C bus. Called once from create_hardware().
 
-    If the I2C object lacks raw writeto/readfrom (e.g. NativeI2C shim),
-    a separate machine.I2C(1) is created on the same pins.
+    Args:
+        i2c: I2C bus instance (machine.I2C or NativeI2C).
+        mcp2: optional MCP23017 instance for PN532 power gate control.
+              When provided, the PN532 is power-cycled via MCP2_NFC_PWR
+              pin before each init attempt, ensuring clean recovery
+              after soft reboot.
     """
-    global _i2c
+    global _i2c, _mcp2
     _i2c = i2c
+    _mcp2 = mcp2
+
+
+def power_on():
+    """Enable PN532 power via MCP2 transistor gate. Called once at boot.
+
+    MCP2 resets to all-inputs on power-up/soft-reboot, so the gate
+    floats low (10kΩ pull-down) and the PN532 is unpowered. This
+    function sets the pin as output-high to turn the transistor on.
+    """
+    if _mcp2 is None:
+        return
+    import time
+    from bodn import config
+
+    _mcp2.set_pin_dir(config.MCP2_NFC_PWR, output=True)
+    _mcp2.write_pin(config.MCP2_NFC_PWR, 1)
+    time.sleep_ms(100)  # PN532 boot time
+
+
+def _nfc_power_cycle():
+    """Power-cycle the PN532 to recover from a stuck state."""
+    if _mcp2 is None:
+        return
+    import time
+    from bodn import config
+
+    _mcp2.set_pin_dir(config.MCP2_NFC_PWR, output=True)
+    _mcp2.write_pin(config.MCP2_NFC_PWR, 0)
+    time.sleep_ms(50)  # let caps discharge
+    _mcp2.write_pin(config.MCP2_NFC_PWR, 1)
+    time.sleep_ms(100)  # PN532 boot time
 
 
 def set_thermal_shed(active):
@@ -303,13 +340,20 @@ class NFCReader:
     def __init__(self):
         self._pn532 = _pn532
         self._available = _pn532 is not None
-        self._init_attempted = _pn532 is not None
 
     def available(self):
-        """Return True if NFC hardware is detected on the I2C bus."""
-        if not self._init_attempted:
-            self._init_attempted = True
-            self._try_init()
+        """Return True if NFC hardware is detected on the I2C bus.
+
+        Re-probes on every call when hardware is not yet available,
+        so the scan task can recover after sleep or soft reboot.
+        """
+        if not self._available:
+            # Sync with module-level state (post_wake may have recovered)
+            if _pn532 is not None and self._pn532 is not _pn532:
+                self._pn532 = _pn532
+                self._available = True
+            else:
+                self._try_init()
         return self._available
 
     def _try_init(self):
@@ -317,6 +361,9 @@ class NFCReader:
         if _i2c is None:
             return
         try:
+            # Power-cycle PN532 via MCP2 transistor gate if available
+            _nfc_power_cycle()
+
             from bodn.pn532 import PN532
 
             pn = PN532(_i2c)

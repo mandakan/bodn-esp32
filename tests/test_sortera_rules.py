@@ -9,6 +9,7 @@ from bodn.sortera_rules import (
     CORRECT,
     WRONG,
     RULE_SWITCH,
+    WELCOME_MS,
     ANNOUNCE_MS,
     CORRECT_MS,
     WRONG_MS,
@@ -42,6 +43,10 @@ class TestInitialState:
     def test_starts_in_welcome(self, engine):
         assert engine.state == WELCOME
 
+    def test_rule_is_picked_at_start(self, engine):
+        assert engine.rule_dimension in ("category", "colour")
+        assert engine.rule_value != ""
+
     def test_score_is_zero(self, engine):
         assert engine.score == 0
         assert engine.streak == 0
@@ -49,36 +54,35 @@ class TestInitialState:
         assert engine.rule_switches == 0
 
 
-class TestWelcomeToPlaying:
-    def test_any_card_starts_game(self, engine):
-        engine.update("cat_red", 0)
+class TestWelcome:
+    def test_auto_advances_to_announce(self, engine):
+        engine.update(None, WELCOME_MS)
         assert engine.state == ANNOUNCE_RULE
 
-    def test_no_input_stays_in_welcome(self, engine):
-        engine.update(None, 100)
+    def test_stays_in_welcome_before_timeout(self, engine):
+        engine.update(None, WELCOME_MS - 1)
         assert engine.state == WELCOME
-
-    def test_rule_is_picked(self, engine):
-        engine.update("cat_red", 0)
-        assert engine.rule_dimension in ("category", "colour")
-        assert engine.rule_value != ""
 
 
 class TestAnnounceRule:
+    def _to_announce(self, engine):
+        engine.update(None, WELCOME_MS)
+        assert engine.state == ANNOUNCE_RULE
+
     def test_waits_for_announce_duration(self, engine):
-        engine.update("cat_red", 0)  # → ANNOUNCE_RULE
+        self._to_announce(engine)
         engine.update(None, ANNOUNCE_MS - 1)
         assert engine.state == ANNOUNCE_RULE
 
     def test_transitions_to_waiting(self, engine):
-        engine.update("cat_red", 0)
+        self._to_announce(engine)
         engine.update(None, ANNOUNCE_MS)
         assert engine.state == WAITING
 
 
 class TestCardChecking:
     def _to_waiting(self, engine):
-        engine.update("cat_red", 0)
+        engine.update(None, WELCOME_MS)
         engine.update(None, ANNOUNCE_MS)
         assert engine.state == WAITING
 
@@ -119,7 +123,7 @@ class TestCardChecking:
 
 class TestFeedbackTimers:
     def _to_waiting(self, engine):
-        engine.update("cat_red", 0)
+        engine.update(None, WELCOME_MS)
         engine.update(None, ANNOUNCE_MS)
 
     def _find_matching(self, engine):
@@ -158,7 +162,7 @@ class TestFeedbackTimers:
 
 class TestRuleSwitching:
     def _to_waiting(self, engine):
-        engine.update("cat_red", 0)
+        engine.update(None, WELCOME_MS)
         engine.update(None, ANNOUNCE_MS)
 
     def _find_matching(self, engine):
@@ -197,7 +201,7 @@ class TestRuleSwitching:
 
 class TestScoring:
     def _to_waiting(self, engine):
-        engine.update("cat_red", 0)
+        engine.update(None, WELCOME_MS)
         engine.update(None, ANNOUNCE_MS)
 
     def _find_matching(self, engine):
@@ -239,7 +243,6 @@ class TestScoring:
 
 class TestMatchingCount:
     def test_matching_count(self, engine):
-        engine.update("cat_red", 0)  # start game, picks a rule
         count = engine.matching_count
         assert count >= 1
         assert count <= len(SAMPLE_CARD_SET["cards"])
@@ -247,7 +250,7 @@ class TestMatchingCount:
 
 class TestCheckCard:
     def test_check_updates_last_card(self, engine):
-        engine.update("cat_red", 0)
+        engine.update(None, WELCOME_MS)
         engine.update(None, ANNOUNCE_MS)
         engine.check_card("cat_red")
         assert engine.last_card_id == "cat_red"
@@ -255,7 +258,7 @@ class TestCheckCard:
         assert engine.last_card["id"] == "cat_red"
 
     def test_check_unknown_card(self, engine):
-        engine.update("cat_red", 0)
+        engine.update(None, WELCOME_MS)
         engine.update(None, ANNOUNCE_MS)
         result = engine.check_card("unknown_xyz")
         assert result is False
@@ -264,7 +267,7 @@ class TestCheckCard:
 
 class TestReset:
     def test_reset_clears_state(self, engine):
-        engine.update("cat_red", 0)
+        engine.update(None, WELCOME_MS)
         engine.update(None, ANNOUNCE_MS)
         engine.score = 10
         engine.streak = 5
@@ -272,6 +275,7 @@ class TestReset:
         assert engine.state == WELCOME
         assert engine.score == 0
         assert engine.streak == 0
+        assert engine.rule_dimension in ("category", "colour")
 
 
 class TestDemoCards:
@@ -291,13 +295,8 @@ class TestLEDs:
         assert isinstance(buf, bytearray)
         assert len(buf) > 0
 
-    def test_different_states_different_leds(self, engine):
-        # WELCOME state
-        buf_welcome = engine.make_static_leds(100)
-
-        # Start game → ANNOUNCE_RULE
-        engine.update("cat_red", 0)
-        buf_announce = engine.make_static_leds(100)
-
-        # The announce buffer should have colour (rule colour), welcome should be black
-        assert buf_welcome != buf_announce or all(b == 0 for b in buf_welcome)
+    def test_announce_has_coloured_leds(self, engine):
+        engine.update(None, WELCOME_MS)  # advance to ANNOUNCE_RULE
+        buf = engine.make_static_leds(100)
+        # Should have some non-zero LEDs (rule colour)
+        assert any(b != 0 for b in buf)

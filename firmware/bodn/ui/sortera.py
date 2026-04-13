@@ -147,7 +147,11 @@ class SorteraScreen(Screen):
 
         # Pre-render title sprite
         self._title_sprite = make_label_sprite("Sortera", 0xFFFF, scale=2)
+
+        # Engine starts in WELCOME — play welcome TTS
         self._rule_emoji = None
+        self._prev_state = WELCOME
+        self._play_audio(None, WELCOME)
 
     def exit(self):
         if self._arcade:
@@ -174,10 +178,13 @@ class SorteraScreen(Screen):
         # Get card input: NFC scan or demo button press
         card_id = None
 
-        # Demo mode: buttons 0-7 map to animals
+        # Demo mode: buttons 0-7 and arcade buttons 0-4 map to animals
         btn = inp.first_btn_pressed()
         if btn >= 0 and btn < len(DEMO_CARDS):
             card_id = DEMO_CARDS[btn]
+        arc = inp.first_arc_pressed()
+        if arc >= 0 and arc < len(DEMO_CARDS):
+            card_id = DEMO_CARDS[arc]
 
         # NFC card delivered by global nfc_scan_task
         if self._pending_card_id is not None:
@@ -365,11 +372,8 @@ class SorteraScreen(Screen):
     def _render_welcome(self, tft, theme, w, h):
         if self._title_sprite:
             _, tw, _ = self._title_sprite
-            blit_sprite(tft, self._title_sprite, (w - tw) // 2, 30)
-
-        hint = t("sortera_hint_btn")
-        draw_centered(tft, hint, h // 2 + 10, theme.MUTED, w)
-        draw_centered(tft, t("sortera_welcome"), h // 2 - 10, theme.CYAN, w)
+            blit_sprite(tft, self._title_sprite, (w - tw) // 2, 60)
+        draw_centered(tft, t("sortera_welcome"), h // 2 + 20, theme.CYAN, w)
 
     def _render_announce(self, tft, theme, w, h):
         tft.fill(theme.BLACK)
@@ -416,7 +420,7 @@ class SorteraScreen(Screen):
         # Pulsing hint in the centre
         pulse = (frame % 40) < 20
         hint_col = theme.WHITE if pulse else theme.MUTED
-        hint = t("sortera_hint_btn")
+        hint = t("sortera_hint_scan")
         draw_centered(tft, hint, h // 2, hint_col, w)
 
         # Score at bottom

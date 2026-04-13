@@ -18,6 +18,8 @@ _INTCAPA = const(0x10)
 _INTCAPB = const(0x11)
 _GPIOA = const(0x12)
 _GPIOB = const(0x13)
+_OLATA = const(0x14)
+_OLATB = const(0x15)
 
 
 class MCP23017:
@@ -77,6 +79,34 @@ class MCP23017:
             return (self._porta >> pin) & 1
         else:
             return (self._portb >> (pin - 8)) & 1
+
+    def set_pin_dir(self, pin, output):
+        """Set pin direction. output=True for output, False for input."""
+        if pin < 8:
+            reg = _IODIRA
+        else:
+            reg = _IODIRB
+            pin -= 8
+        val = self._read_reg(reg)
+        if output:
+            val &= ~(1 << pin)  # 0 = output
+        else:
+            val |= 1 << pin  # 1 = input
+        self._write_reg(reg, val)
+
+    def write_pin(self, pin, value):
+        """Set output latch for a pin (must be configured as output)."""
+        if pin < 8:
+            reg = _OLATA
+        else:
+            reg = _OLATB
+            pin -= 8
+        val = self._read_reg(reg)
+        if value:
+            val |= 1 << pin
+        else:
+            val &= ~(1 << pin)
+        self._write_reg(reg, val)
 
     def enable_interrupts(self):
         """Enable interrupt-on-change for all pins on both ports.

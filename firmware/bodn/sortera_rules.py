@@ -22,7 +22,8 @@ WRONG = const(4)  # wrong card — gentle feedback
 RULE_SWITCH = const(5)  # rule is changing
 
 # Timing (milliseconds)
-ANNOUNCE_MS = const(2500)  # rule announcement duration
+WELCOME_MS = const(3000)  # welcome intro before first rule
+ANNOUNCE_MS = const(5000)  # rule announcement duration
 CORRECT_MS = const(1200)  # celebration duration
 WRONG_MS = const(1500)  # gentle feedback
 SWITCH_MS = const(2000)  # rule switch animation
@@ -73,7 +74,7 @@ class SorteraEngine:
         self.reset()
 
     def reset(self):
-        """Reset to initial state."""
+        """Reset to initial state — welcome then first rule."""
         self.state = WELCOME
         self.score = 0
         self.streak = 0
@@ -88,6 +89,7 @@ class SorteraEngine:
         self._rule_correct_count = 0
         self._switch_threshold = 0
         self._prev_rule = None  # (dimension, value) to avoid repeats
+        self._pick_rule()
 
     def _set_state(self, new_state):
         self.state = new_state
@@ -173,8 +175,7 @@ class SorteraEngine:
         self._state_ms += dt
 
         if self.state == WELCOME:
-            if card_id is not None:
-                self._pick_rule()
+            if self._state_ms >= WELCOME_MS:
                 self._set_state(ANNOUNCE_RULE)
             return self.state
 
