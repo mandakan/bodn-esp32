@@ -16,6 +16,7 @@ from bodn.sortera_rules import (
     SWITCH_MS,
     DEMO_CARDS,
 )
+from bodn.ui.sortera import _filter_by_cache
 
 SAMPLE_CARD_SET = {
     "mode": "sortera",
@@ -306,3 +307,68 @@ class TestLEDs:
         buf = engine.make_static_leds(100)
         # Should have some non-zero LEDs (rule colour)
         assert any(t != (0, 0, 0) for t in buf)
+
+
+class _FakeCache:
+    """Minimal stand-in for nfc.UIDCache with pre-loaded entries."""
+
+    def __init__(self, entries):
+        self._entries = entries
+
+    def entries(self):
+        return dict(self._entries)
+
+
+class TestFilterByCache:
+    def test_empty_cache_returns_full_set(self):
+        result = _filter_by_cache(SAMPLE_CARD_SET, _FakeCache({}))
+        assert result is SAMPLE_CARD_SET
+
+    def test_filters_to_known_cards(self):
+        cache = _FakeCache(
+            {
+                "AA:BB": {"mode": "sortera", "id": "cat_red"},
+                "CC:DD": {"mode": "sortera", "id": "dog_green"},
+            }
+        )
+        result = _filter_by_cache(SAMPLE_CARD_SET, cache)
+        ids = {c["id"] for c in result["cards"]}
+        assert ids == {"cat_red", "dog_green"}
+
+    def test_prunes_dimensions_with_single_value(self):
+        # Both cards are animals — "vehicle" dimension should be pruned
+        cache = _FakeCache(
+            {
+                "AA:BB": {"mode": "sortera", "id": "cat_red"},
+                "CC:DD": {"mode": "sortera", "id": "dog_green"},
+            }
+        )
+        result = _filter_by_cache(SAMPLE_CARD_SET, cache)
+        assert "vehicle" not in result["dimensions"]
+        assert "animal" in result["dimensions"]
+        assert "colour" in result["dimensions"]
+
+    def test_keeps_dimensions_with_two_values(self):
+        cache = _FakeCache(
+            {
+                "AA:BB": {"mode": "sortera", "id": "cat_red"},
+                "CC:DD": {"mode": "sortera", "id": "car_blue"},
+            }
+        )
+        result = _filter_by_cache(SAMPLE_CARD_SET, cache)
+        # category has "animal" + "vehicle" → kept
+        assert "category" in result["dimensions"]
+        assert "colour" in result["dimensions"]
+
+    def test_ignores_non_sortera_cache_entries(self):
+        cache = _FakeCache(
+            {
+                "AA:BB": {"mode": "simon", "id": "start"},
+                "CC:DD": {"mode": "sortera", "id": "cat_red"},
+                "EE:FF": {"mode": "sortera", "id": "dog_green"},
+            }
+        )
+        result = _filter_by_cache(SAMPLE_CARD_SET, cache)
+        ids = {c["id"] for c in result["cards"]}
+        assert "start" not in ids
+        assert ids == {"cat_red", "dog_green"}

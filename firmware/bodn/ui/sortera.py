@@ -89,6 +89,40 @@ _CATEGORY_KEYS = {
 }
 
 
+def _filter_by_cache(card_set, cache):
+    """Filter a card set to only cards with programmed NFC tags.
+
+    If the cache has no sortera entries, returns the full card set
+    unchanged (assume demo/first-time use).  Otherwise, keeps only
+    cards whose IDs appear in the cache, and prunes dimensions that
+    no longer have at least 2 distinct values.
+    """
+    known_ids = set()
+    for entry in cache.entries().values():
+        if entry.get("mode") == "sortera":
+            known_ids.add(entry["id"])
+
+    if not known_ids:
+        return card_set
+
+    cards = [c for c in card_set.get("cards", []) if c["id"] in known_ids]
+    if not cards:
+        return card_set
+
+    # Prune dimensions: keep only those with 2+ distinct values
+    dims = []
+    for dim in card_set.get("dimensions", []):
+        values = set()
+        for card in cards:
+            val = card.get(dim)
+            if val is not None:
+                values.add(val)
+        if len(values) >= 2:
+            dims.append(dim)
+
+    return {"mode": card_set.get("mode", "sortera"), "dimensions": dims, "cards": cards}
+
+
 def _card_bilingual_label(card):
     """Build a dual-language label from a card dict, e.g. 'Katt / Cat'."""
     if card is None:
@@ -152,7 +186,7 @@ class SorteraScreen(Screen):
         self._full_clear = True
 
         # Load card set and create engine
-        from bodn.nfc import load_card_set
+        from bodn.nfc import load_card_set, UIDCache
 
         card_set = load_card_set("sortera")
         if card_set is None:
@@ -170,6 +204,9 @@ class SorteraScreen(Screen):
                     for c in DEMO_CARDS
                 ],
             }
+        else:
+            # Filter card set to only include physically programmed tags
+            card_set = _filter_by_cache(card_set, UIDCache())
         self._engine = SorteraEngine(card_set)
         self._pending_card_id = None
 
