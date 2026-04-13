@@ -1128,6 +1128,10 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
             if parsed:
                 mode = parsed["mode"]
 
+                # Launcher tags: BODN:1:launcher:simon → target is the card_id
+                if mode == "launcher" and parsed["id"]:
+                    mode = parsed["id"]
+
                 # Route to active screen if it subscribes to this tag mode
                 consumed = False
                 if active and mode in active.nfc_modes:

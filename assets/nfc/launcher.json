@@ -1,0 +1,20 @@
+{
+  "mode": "launcher",
+  "version": 1,
+  "dimensions": [],
+  "cards": [
+    {"id": "demo",       "label_sv": "leklåda",       "label_en": "demo",       "icon": "2B50"},
+    {"id": "mystery",    "label_sv": "mysterium",     "label_en": "mystery",    "icon": "2753"},
+    {"id": "simon",      "label_sv": "härmapa",       "label_en": "simon",      "icon": "1F3AF"},
+    {"id": "highfive",   "label_sv": "high-five",     "label_en": "high-five",  "icon": "270B"},
+    {"id": "rulefollow", "label_sv": "regelleken",    "label_en": "rulefollow", "icon": "1F9E0"},
+    {"id": "space",      "label_sv": "rymdskeppet",   "label_en": "starship",   "icon": "1F680"},
+    {"id": "story",      "label_sv": "saga",          "label_en": "story",      "icon": "1F4D6"},
+    {"id": "flode",      "label_sv": "flöde",         "label_en": "flow",       "icon": "1F30A"},
+    {"id": "garden",     "label_sv": "trädgården",    "label_en": "garden",     "icon": "1F331"},
+    {"id": "soundboard", "label_sv": "ljudbräda",     "label_en": "soundboard", "icon": "1F50A"},
+    {"id": "sequencer",  "label_sv": "sekvens",       "label_en": "sequencer",  "icon": "1F941"},
+    {"id": "sortera",    "label_sv": "sortera",       "label_en": "sort it",    "icon": "1F9E9"},
+    {"id": "clock",      "label_sv": "klocka",        "label_en": "clock",      "icon": "1F551"}
+  ]
+}
