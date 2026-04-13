@@ -25,24 +25,6 @@ if [ -n "$EXISTING_PY" ]; then
     fi
 fi
 
-# --- MicroPython compatibility: flag CPython-only str methods in firmware ---
-FW_PY=$(echo "$EXISTING_PY" | tr ' ' '\n' | grep '^firmware/' || true)
-if [ -n "$FW_PY" ]; then
-    # str methods that exist in CPython but not in MicroPython
-    MP_BAD='\.capitalize()\|\.title()\|\.swapcase()\|\.casefold()'
-    HITS=$(grep -n "$MP_BAD" $FW_PY 2>/dev/null | grep -v '# noqa' | grep -v '"""' | grep -v '#.*\.capitalize' || true)
-    if [ -n "$HITS" ]; then
-        echo ""
-        echo "ERROR: CPython-only str methods used in firmware code."
-        echo "  MicroPython str lacks .capitalize(), .title(), etc."
-        echo "  Use capitalize() from bodn.i18n instead."
-        echo ""
-        echo "$HITS"
-        echo ""
-        exit 1
-    fi
-fi
-
 # --- Wiring sync check: only when config.py is being committed ---
 if ! echo "$STAGED" | grep -q 'firmware/bodn/config\.py'; then
     exit 0

@@ -31,7 +31,7 @@ def t(key, *args):
 def capitalize(s):
     """Uppercase first letter, leave the rest unchanged.
 
-    MicroPython str lacks .capitalize(), so this is the portable equivalent.  # noqa
+    MicroPython str lacks .capitalize(), so this is the portable equivalent.
     """
     if not s:
         return s
