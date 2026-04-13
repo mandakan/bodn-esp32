@@ -363,7 +363,14 @@ bilingualism.
   lowercase (Treiman & Kessler, 2006). Title case gives the child the familiar
   uppercase anchor while building lowercase familiarity.
 
-- **Story Mode** provides the first truly active bilingual experience: complete
+- **Sortera** provides active bilingual reinforcement during classification
+  gameplay. On each correct card scan, the screen shows both languages
+  ("Katt / Cat") matching the physical NFC card, and bilingual TTS announces
+  both words — primary language first, then secondary. This leverages the
+  translation-equivalent bootstrapping effect during a cognitively engaging
+  task, making the vocabulary exposure incidental rather than drilled.
+
+- **Story Mode** provides the most immersive bilingual experience: complete
   narration and choice labels in both Swedish and English, requiring the child
   to engage with whichever language is selected. A dedicated language-switching
   game could further strengthen this dimension.

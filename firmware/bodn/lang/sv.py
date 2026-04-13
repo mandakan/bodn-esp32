@@ -273,6 +273,15 @@ STRINGS = {
     "sortera_find_colour_blue": "Hitta alla blåa!",
     "sortera_find_colour_green": "Hitta alla gröna!",
     "sortera_find_colour_yellow": "Hitta alla gula!",
+    # Sortera bilingual card labels (primary lang first, then secondary)
+    "sortera_label_cat": "katt, cat",
+    "sortera_label_dog": "hund, dog",
+    "sortera_label_rabbit": "kanin, rabbit",
+    "sortera_label_bird": "fågel, bird",
+    "sortera_label_fish": "fisk, fish",
+    "sortera_label_horse": "häst, horse",
+    "sortera_label_cow": "ko, cow",
+    "sortera_label_frog": "groda, frog",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_sd": "Kollar SD-kort...",

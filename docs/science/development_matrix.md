@@ -94,6 +94,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | High-Five Friends | ○ | ● | | Resist premature taps (IC); mild WM for tracking score/rhythm |
 | Sequencer | ◉ | | ● | Build and hold patterns in mind (WM), switch between edit/play modes (CF) |
 | *Record & Replay* | ● | | | Remember what to record and play back |
+| Sortera | ○ | ● | ◉ | Remember current rule (WM); resist sorting by previous dimension (IC); rule switches demand flexibility (CF) — tangible DCCS |
 
 ### Cognitive Development
 
@@ -110,6 +111,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | High-Five Friends | ● | | | | | Button → sound/animation (CE); no pattern or spatial element |
 | Sequencer | ● | ◉ | | ◉ | ● | Build patterns step by step; debug sequences |
 | *Record & Replay* | ● | | | ○ | | Voice causes recording; sequential playback |
+| Sortera | ● | ◉ | | | | Card scan → feedback (CE); categorise by matching dimension (PR) |
 
 ### Sensorimotor Development
 
@@ -126,6 +128,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | High-Five Friends | ○ | ◉ | ● | ● | Target-press coordination (HC); celebration/miss sounds (AP); track lit button (VP) |
 | Sequencer | ● | ● | ● | ● | Precise input, visual-audio feedback loop |
 | *Record & Replay* | ○ | | ◉ | | Listen to own voice, discriminate recordings |
+| Sortera | ● | | ● | ● | Card manipulation (FM); bilingual TTS reinforces audio (AP); emoji + label display (VP) |
 
 ### Language & Communication
 
@@ -142,6 +145,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | High-Five Friends | | ○ | Animal names in selected language; UI labels |
 | Sequencer | | ○ | UI labels only |
 | *Record & Replay* | ● | ● | Hear and produce speech in both languages |
+| Sortera | ○ | ● | Bilingual TTS says both languages on correct scan; dual-language labels on screen match physical cards |
 
 ### Social-Emotional Development
 
@@ -193,7 +197,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Cognitive Flexibility (CF) | 2 | 1 | 3 |
 | Inhibitory Control (IC) | 1 | 2 | 3 |
 | Listening Comprehension (LC) | 2 | 0 | 2 |
-| Bilingual Exposure (BL) | 1 | 0 | 1+ |
+| Bilingual Exposure (BL) | 1 | 1 | 2 |
 | Imaginative Play (IP) | 2 | 1 | 3 |
 | Auditory Processing (AP) | 1 | 3 | 4 |
 | Sequential Thinking (ST) | 2 | 2 | 4 |
@@ -205,7 +209,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 |--------|---------------|-------------------|
 | **Spatial Reasoning (SR)** | Only Flöde | Building/construction mode; tangram puzzles |
 | **Problem Solving (PS)** | Only Flöde + Sequencer (debugging) | More puzzle types; NFC scavenger hunts |
-| **Bilingual Exposure (BL)** | Story Mode + passive UI labels; NFC cards use dual-language labels (sv/en) | Language-switch game; more card sets with dual labels |
+| **Bilingual Exposure (BL)** | Story Mode (◉) + Sortera (●, bilingual TTS + dual labels) + passive UI labels | Language-switch game; more card sets with dual labels |
 | **Fine Motor (FM)** | Mostly incidental (Flöde, Sequencer significant) | NFC card manipulation/sorting; tracing mode |
 
 ---

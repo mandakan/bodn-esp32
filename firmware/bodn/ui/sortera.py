@@ -66,6 +66,17 @@ _CATEGORY_KEYS = {
 }
 
 
+def _card_bilingual_label(card):
+    """Build a dual-language label from a card dict, e.g. 'Katt / Cat'."""
+    if card is None:
+        return None
+    sv = card.get("label_sv", "")
+    en = card.get("label_en", "")
+    if sv and en:
+        return "{} / {}".format(sv.capitalize(), en.capitalize())
+    return (sv or en or "").capitalize() or None
+
+
 class SorteraScreen(Screen):
     """Sortera — sort the cards by the announced rule!
 
@@ -131,7 +142,7 @@ class SorteraScreen(Screen):
         self._nfc_available = self._nfc_reader.available()
 
         # Pre-render title sprite
-        self._title_sprite = make_label_sprite("SORTERA", 0xFFFF, scale=2)
+        self._title_sprite = make_label_sprite("Sortera", 0xFFFF, scale=2)
         self._rule_emoji = None
 
     def exit(self):
@@ -272,7 +283,11 @@ class SorteraScreen(Screen):
             audio.tone(_CORRECT_TONE, 150)
             if say:
                 try:
-                    say("sortera_correct", audio)
+                    # Say bilingual animal name (e.g. "katt, cat") instead
+                    # of generic "Rätt!" — reinforces translation equivalents
+                    card_name = self._card_tts_key()
+                    if not card_name or not say(card_name, audio):
+                        say("sortera_correct", audio)
                 except Exception:
                     pass
         elif new_state == WRONG:
@@ -299,6 +314,14 @@ class SorteraScreen(Screen):
                     audio.tone(523, 100)  # fallback beep
             else:
                 audio.tone(523, 100)
+
+    def _card_tts_key(self):
+        """Return the TTS key for the last scanned card's bilingual label."""
+        eng = self._engine
+        if eng.last_card_id:
+            animal = eng.last_card_id.split("_")[0]  # "cat_red" → "cat"
+            return "sortera_label_{}".format(animal)
+        return None
 
     def _cache_rule_emoji(self):
         """Cache the emoji sprite for the current rule value."""
@@ -425,7 +448,12 @@ class SorteraScreen(Screen):
                 except Exception:
                     pass
 
-        draw_centered(tft, t("sortera_correct"), h // 2 + 40, theme.GREEN, w, scale=2)
+        # Bilingual card label below emoji
+        bilabel = _card_bilingual_label(eng.last_card)
+        if bilabel:
+            draw_centered(tft, bilabel, h // 2 + 20, theme.WHITE, w, scale=2)
+
+        draw_centered(tft, t("sortera_correct"), h // 2 + 46, theme.GREEN, w)
         self._render_score(tft, theme, w, h)
 
     def _render_wrong(self, tft, theme, w, h):
@@ -451,7 +479,12 @@ class SorteraScreen(Screen):
                 except Exception:
                     pass
 
-        # Gentle feedback
+        # Bilingual card label below emoji
+        bilabel = _card_bilingual_label(eng.last_card)
+        if bilabel:
+            draw_centered(tft, bilabel, h // 2 + 10, theme.MUTED, w)
+
+        # Gentle feedback — show the rule so child knows what to look for
         rule_text = self._rule_display_text()
         draw_centered(tft, rule_text, h // 2 + 30, theme.MUTED, w)
         self._render_score(tft, theme, w, h)

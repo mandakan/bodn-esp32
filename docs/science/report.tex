@@ -401,6 +401,20 @@ emotional stakes low \citep{dweck2006mindset}. The mode also exercises
 \textbf{auditory processing} (distinct hit/miss sounds) and
 \textbf{self-regulation} (managing the frustration of near-misses).
 
+\subsubsection{Sortera --- NFC Classification Game}
+A tangible implementation of the Dimensional Change Card Sort (DCCS) task
+\citep{zelazo2006dccs}, targeting \textbf{cognitive flexibility} and
+\textbf{inhibitory control}. The device announces a sorting rule (``Find the
+animals!''), and the child scans NFC cards. After several correct matches the
+rule switches to a different dimension (``Find all the red ones!''), requiring
+the child to inhibit the previous sorting strategy. Sortera is the first mode
+to provide \textbf{active bilingual reinforcement}: on each correct scan, the
+screen displays both the Swedish and English word (e.g.\ ``Katt / Cat'')
+matching the physical card, and bilingual TTS announces both words---primary
+language first, then secondary \citep{tan2024translation}. This dual-label
+approach leverages the translation-equivalent bootstrapping effect while keeping
+game instructions in the configured language for clarity.
+
 \subsubsection{Sequencer (Sequenser)}
 A loop-based step sequencer targeting \textbf{working memory},
 \textbf{sequential thinking}, \textbf{pattern recognition}, and
@@ -482,8 +496,9 @@ coordination mode. Remaining areas with limited coverage include:
     tangram or construction mode would add breadth.
   \item \textbf{Problem solving}: Fl\"ode (primary) and Sequencer (debugging)
     address this, but more puzzle types would strengthen the domain.
-  \item \textbf{Bilingual exposure}: Story Mode provides the first active
-    bilingual experience (full narration in both languages), but a dedicated
+  \item \textbf{Bilingual exposure}: Story Mode provides full narration in
+    both languages, and Sortera now offers active bilingual reinforcement
+    (dual-language labels and TTS on each card scan). A dedicated
     language-switching game could further leverage the bilingual advantage for
     EF development \citep{bialystok2011reshaping}.
 \end{enumerate}

@@ -273,6 +273,15 @@ STRINGS = {
     "sortera_find_colour_blue": "Find all the blue ones!",
     "sortera_find_colour_green": "Find all the green ones!",
     "sortera_find_colour_yellow": "Find all the yellow ones!",
+    # Sortera bilingual card labels (primary lang first, then secondary)
+    "sortera_label_cat": "cat, katt",
+    "sortera_label_dog": "dog, hund",
+    "sortera_label_rabbit": "rabbit, kanin",
+    "sortera_label_bird": "bird, fågel",
+    "sortera_label_fish": "fish, fisk",
+    "sortera_label_horse": "horse, häst",
+    "sortera_label_cow": "cow, ko",
+    "sortera_label_frog": "frog, groda",
     # Boot screen
     "boot_cfg": "Waking up...",
     "boot_sd": "Checking SD card...",
