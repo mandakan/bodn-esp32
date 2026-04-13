@@ -12,7 +12,7 @@ from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
 from bodn.ui.widgets import draw_centered, load_emoji, blit_sprite, make_label_sprite
 from bodn.ui.pause import PauseMenu
-from bodn.i18n import t
+from bodn.i18n import t, capitalize
 from bodn.sortera_rules import (
     SorteraEngine,
     WELCOME,
@@ -73,8 +73,8 @@ def _card_bilingual_label(card):
     sv = card.get("label_sv", "")
     en = card.get("label_en", "")
     if sv and en:
-        return "{} / {}".format(sv.capitalize(), en.capitalize())
-    return (sv or en or "").capitalize() or None
+        return "{} / {}".format(capitalize(sv), capitalize(en))
+    return capitalize(sv or en or "") or None
 
 
 class SorteraScreen(Screen):

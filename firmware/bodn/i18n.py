@@ -28,6 +28,16 @@ def t(key, *args):
     return s.format(*args) if args else s
 
 
+def capitalize(s):
+    """Uppercase first letter, leave the rest unchanged.
+
+    MicroPython str lacks .capitalize(), so this is the portable equivalent.
+    """
+    if not s:
+        return s
+    return s[0].upper() + s[1:]
+
+
 def set_language(lang):
     """Switch language at runtime. Re-imports the string table."""
     init(lang)

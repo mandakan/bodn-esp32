@@ -15,7 +15,7 @@ from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.pause import PauseMenu
 from bodn.ui.widgets import draw_centered
-from bodn.i18n import t
+from bodn.i18n import t, capitalize
 from bodn.sequencer_rules import (
     SequencerEngine,
     STOPPED,
@@ -579,7 +579,7 @@ class SequencerScreen(Screen):
 
         # Header
         tft.fill_rect(0, 0, w, _HEADER_H, theme.BLACK)
-        title = t("mode_sequencer").capitalize()
+        title = capitalize(t("mode_sequencer"))
         tft.text(title, 4, 4, theme.WHITE)
         bpm_str = str(eng.bpm)
         bpm_x = w - len(bpm_str) * 8 - 4
