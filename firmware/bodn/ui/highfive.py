@@ -21,7 +21,7 @@ from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.pause import PauseMenu
 from bodn.ui.widgets import draw_centered
-from bodn.i18n import t
+from bodn.i18n import t, capitalize
 from bodn.highfive_rules import (
     HighFiveEngine,
     READY,
@@ -393,7 +393,7 @@ class HighFiveScreen(Screen):
 
         # Header
         tft.fill_rect(0, 0, w, _HEADER_H, theme.BLACK)
-        title = t("mode_highfive").capitalize()
+        title = capitalize(t("mode_highfive"))
         tft.text(title, 4, 4, theme.WHITE)
         # Round on right
         rd_txt = t("hf_round", eng.round)

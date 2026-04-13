@@ -51,17 +51,18 @@ def _resolve_openmoji(explicit: Path | None = None) -> Path | None:
     return None
 
 
-# Card dimensions in mm (credit card size)
-CARD_W = 85
-CARD_H = 54
+# Card dimensions in mm — sized for 54×86 mm lamination pockets.
+# Leave ~3 mm clear plastic on each side for the heat seal.
+CARD_W = 48
+CARD_H = 80
 
 # A4 page dimensions in mm
 PAGE_W = 210
 PAGE_H = 297
 
-# Layout: 2 columns × 4 rows = 8 cards per page
-COLS = 2
-ROWS = 4
+# Layout: 4 columns × 3 rows = 12 cards per page
+COLS = 4
+ROWS = 3
 MARGIN_X = (PAGE_W - COLS * CARD_W) / (COLS + 1)
 MARGIN_Y = (PAGE_H - ROWS * CARD_H) / (ROWS + 1)
 
@@ -82,6 +83,10 @@ COLOUR_MAP = {
 
 # Default background for cards without a colour dimension
 DEFAULT_BG = (236, 240, 241)
+
+# Launcher card frame colour (bold teal frame around white interior)
+LAUNCHER_FRAME = (41, 128, 185)
+LAUNCHER_FRAME_W = 3  # frame thickness in mm
 
 # Border and text colours
 BORDER_COLOUR = (44, 62, 80)
@@ -171,9 +176,13 @@ def generate_pdf(card_set: dict, openmoji_dir: Path | None, output_path: Path):
 
 def _draw_card(pdf, card: dict, x: float, y: float, mode: str, openmoji_dir):
     """Draw a single card face at the given position."""
-    # Background colour
-    colour = card.get("colour", "")
-    bg = COLOUR_MAP.get(colour, DEFAULT_BG)
+    # Background
+    is_launcher = mode == "launcher"
+    if is_launcher:
+        bg = (255, 255, 255)
+    else:
+        colour = card.get("colour", "")
+        bg = COLOUR_MAP.get(colour, DEFAULT_BG)
     pdf.set_fill_color(*bg)
     pdf.rect(x, y, CARD_W, CARD_H, style="F")
 
@@ -181,6 +190,28 @@ def _draw_card(pdf, card: dict, x: float, y: float, mode: str, openmoji_dir):
     pdf.set_draw_color(*BORDER_COLOUR)
     pdf.set_line_width(0.3)
     pdf.rect(x, y, CARD_W, CARD_H, style="D")
+
+    if is_launcher:
+        # Thick coloured frame + dashed inner border
+        fw = LAUNCHER_FRAME_W
+        pdf.set_fill_color(*LAUNCHER_FRAME)
+        # Top
+        pdf.rect(x, y, CARD_W, fw, style="F")
+        # Bottom
+        pdf.rect(x, y + CARD_H - fw, CARD_W, fw, style="F")
+        # Left
+        pdf.rect(x, y, fw, CARD_H, style="F")
+        # Right
+        pdf.rect(x + CARD_W - fw, y, fw, CARD_H, style="F")
+        # Dashed inner border
+        inset = fw + 1.5
+        pdf.set_draw_color(*LAUNCHER_FRAME)
+        pdf.set_line_width(0.4)
+        pdf.set_dash_pattern(dash=2, gap=1.5)
+        pdf.rect(
+            x + inset, y + inset, CARD_W - 2 * inset, CARD_H - 2 * inset, style="D"
+        )
+        pdf.set_dash_pattern()
 
     # Emoji icon
     icon_codepoint = card.get("icon", "")
@@ -191,9 +222,9 @@ def _draw_card(pdf, card: dict, x: float, y: float, mode: str, openmoji_dir):
             try:
                 png_data = render_emoji_png(svg_path, EMOJI_PX)
                 # Place emoji centred in the upper portion of the card
-                emoji_mm = 28  # display size in mm
+                emoji_mm = 32  # display size in mm
                 emoji_x = x + (CARD_W - emoji_mm) / 2
-                emoji_y = y + 3
+                emoji_y = y + 8
                 pdf.image(
                     BytesIO(png_data),
                     x=emoji_x,
@@ -207,9 +238,9 @@ def _draw_card(pdf, card: dict, x: float, y: float, mode: str, openmoji_dir):
 
     if not emoji_placed:
         # Fallback: show codepoint text
-        pdf.set_font("Helvetica", "B", size=24)
+        pdf.set_font("Helvetica", "B", size=20)
         pdf.set_text_color(*BORDER_COLOUR)
-        pdf.set_xy(x, y + 8)
+        pdf.set_xy(x, y + 14)
         pdf.cell(CARD_W, 20, f"U+{icon_codepoint}", align="C")
 
     # Labels — both languages at equal size (dual-language labeling supports
@@ -218,17 +249,20 @@ def _draw_card(pdf, card: dict, x: float, y: float, mode: str, openmoji_dir):
     # to real text (Piasta, Treiman & Kessler 2006)
     label_sv = card.get("label_sv", "").capitalize()
     label_en = card.get("label_en", "").capitalize()
-    label_y = y + 35
-    pdf.set_font("Helvetica", "B", size=12)
-    # Use dark text on light backgrounds, white on dark
     brightness = bg[0] * 0.299 + bg[1] * 0.587 + bg[2] * 0.114
     if brightness > 160:
         pdf.set_text_color(*BORDER_COLOUR)
     else:
         pdf.set_text_color(*LABEL_COLOUR)
-    label_text = f"{label_sv}  /  {label_en}" if label_en else label_sv
-    pdf.set_xy(x, label_y)
-    pdf.cell(CARD_W, 7, label_text, align="C")
+    # Swedish label
+    pdf.set_font("Helvetica", "B", size=10)
+    pdf.set_xy(x, y + 46)
+    pdf.cell(CARD_W, 6, label_sv, align="C")
+    # English label below
+    if label_en:
+        pdf.set_font("Helvetica", size=8)
+        pdf.set_xy(x, y + 54)
+        pdf.cell(CARD_W, 6, label_en, align="C")
 
     # Card ID in small text (bottom-right corner, for parent reference)
     pdf.set_font("Helvetica", size=5)

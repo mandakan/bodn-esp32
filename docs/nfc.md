@@ -9,35 +9,44 @@ behind this feature.
 
 ## Tag Data Format
 
-Tags use **NDEF Text Records** so they're also readable by NFC phone apps.
-
-The payload follows a simple colon-separated format:
+Tags use **NDEF URI Records** — phones scanning them open a URL, while the
+device parses the URL path to extract mode and card data.
 
 ```
-BODN:1:sortera:cat_red
-│    │ │       └─ card ID (unique within the set)
-│    │ └─ mode (matches card set template filename)
-│    └─ schema version
-└─ magic prefix
+https://bodn.thias.se/1/sortera/cat_red
+                       │ │       └─ card ID (optional, unique within the set)
+                       │ └─ mode (matches card set template filename)
+                       └─ schema version
 ```
 
 ### Special tags
 
-| Tag data | Purpose |
-|----------|---------|
-| `BODN:1:admin:unlock` | Admin fob — opens settings without web UI |
+| URL | Purpose |
+|-----|---------|
+| `https://bodn.thias.se/1/admin/unlock` | Admin fob — opens settings without web UI |
+| `https://bodn.thias.se/1/simon` | Launcher tag — starts Simon (no card ID) |
+| `https://bodn.thias.se/1/launcher/simon` | Alternative launcher format |
 
 ### NDEF encoding
 
-The tag stores an NDEF Text Record with language code `en`:
+The tag stores an NDEF URI Record with prefix code `0x04` (`https://`):
 
 ```
-Byte 0:     status (0x02 = UTF-8, lang_len=2)
-Bytes 1-2:  "en"
-Bytes 3+:   "BODN:1:sortera:cat_red"
+Byte 0:     0x04 (NDEF URI prefix for "https://")
+Bytes 1+:   "bodn.thias.se/1/sortera/cat_red"
 ```
 
-Total: ~30 bytes. NTAG213 (144 bytes usable) has plenty of room.
+Total: ~33 bytes. NTAG213 (144 bytes usable) has plenty of room.
+
+NDEF URI prefix compression stores `https://` as a single byte, making
+the tag data shorter than a full URL string. Phones reconstruct the full
+URL automatically when scanning.
+
+### Backward compatibility
+
+Tags written with the old NDEF Text Record format (`\x02enBODN:1:…`) are
+still readable. The device detects the format by the first payload byte:
+`0x04` = URI record (new), `0x02` = Text record (legacy).
 
 ## Card Set Templates
 

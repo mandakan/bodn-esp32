@@ -11,7 +11,7 @@ from bodn.ui.widgets import (
     make_emoji_sprite,
 )
 from bodn.chord import ChordDetector
-from bodn.i18n import t
+from bodn.i18n import t, capitalize
 
 NAV = const(0)  # config.ENC_NAV
 
@@ -133,7 +133,7 @@ class HomeScreen(Screen):
                 _, pw, _ = self._icon_sprites[name]
                 if pw > 16 * icon_scale:
                     has_emoji = True
-            label_text = t("mode_" + name).capitalize()
+            label_text = capitalize(t("mode_" + name))
             if name not in self._label_sprites:
                 self._label_sprites[name] = make_label_sprite(
                     label_text, color, scale=label_scale
@@ -474,14 +474,14 @@ class HomeScreen(Screen):
         if self._prev_name and ox != 0:
             out_ox = ox - self._anim_dir * w
             self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, iy)
-            prev_text = t("mode_" + self._prev_name).capitalize()
+            prev_text = capitalize(t("mode_" + self._prev_name))
             ptx = (w - len(prev_text) * 8) // 2 + out_ox
             tft.text(prev_text, ptx, theme.CENTER_Y + 24, theme.CYAN)
 
         # Incoming item
         self._blit_mode_icon(tft, name, w, icon_size, ox, iy)
 
-        mode_text = t("mode_" + name).capitalize()
+        mode_text = capitalize(t("mode_" + name))
         mtx = (w - len(mode_text) * 8) // 2 + ox
         tft.text(mode_text, mtx, theme.CENTER_Y + 24, theme.WHITE)
 

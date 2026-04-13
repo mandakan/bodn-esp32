@@ -12,7 +12,7 @@ from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
 from bodn.ui.widgets import draw_centered, load_emoji, blit_sprite, make_label_sprite
 from bodn.ui.pause import PauseMenu
-from bodn.i18n import t
+from bodn.i18n import t, capitalize
 from bodn.sortera_rules import (
     SorteraEngine,
     WELCOME,
@@ -73,8 +73,8 @@ def _card_bilingual_label(card):
     sv = card.get("label_sv", "")
     en = card.get("label_en", "")
     if sv and en:
-        return "{} / {}".format(sv.capitalize(), en.capitalize())
-    return (sv or en or "").capitalize() or None
+        return "{} / {}".format(capitalize(sv), capitalize(en))
+    return capitalize(sv or en or "") or None
 
 
 class SorteraScreen(Screen):
@@ -83,6 +83,8 @@ class SorteraScreen(Screen):
     Buttons 0-7 simulate NFC card scans (demo mode).
     Hold nav encoder button to open the pause menu.
     """
+
+    nfc_modes = frozenset({"sortera"})
 
     def __init__(
         self,
@@ -108,10 +110,15 @@ class SorteraScreen(Screen):
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
-        self._nfc_available = False
-        self._nfc_reader = None
+        self._pending_card_id = None
         self._title_sprite = None
         self._rule_emoji = None  # cached emoji for current rule value
+
+    def on_nfc_tag(self, parsed):
+        if parsed["id"] is not None:
+            self._pending_card_id = parsed["id"]
+            return True
+        return False
 
     def enter(self, manager):
         self._manager = manager
@@ -122,7 +129,7 @@ class SorteraScreen(Screen):
         self._full_clear = True
 
         # Load card set and create engine
-        from bodn.nfc import load_card_set, NFCReader
+        from bodn.nfc import load_card_set
 
         card_set = load_card_set("sortera")
         if card_set is None:
@@ -136,10 +143,7 @@ class SorteraScreen(Screen):
                 ],
             }
         self._engine = SorteraEngine(card_set)
-
-        # Check NFC hardware availability
-        self._nfc_reader = NFCReader()
-        self._nfc_available = self._nfc_reader.available()
+        self._pending_card_id = None
 
         # Pre-render title sprite
         self._title_sprite = make_label_sprite("Sortera", 0xFFFF, scale=2)
@@ -175,15 +179,10 @@ class SorteraScreen(Screen):
         if btn >= 0 and btn < len(DEMO_CARDS):
             card_id = DEMO_CARDS[btn]
 
-        # NFC scan — real tag overrides demo button
-        if self._nfc_available and card_id is None:
-            from bodn.nfc import parse_tag_data
-
-            uid, data = self._nfc_reader.scan()
-            if uid and data:
-                parsed = parse_tag_data(data)
-                if parsed and parsed["mode"] == "sortera":
-                    card_id = parsed["id"]
+        # NFC card delivered by global nfc_scan_task
+        if self._pending_card_id is not None:
+            card_id = self._pending_card_id
+            self._pending_card_id = None
 
         now = time.ticks_ms()
         dt = time.ticks_diff(now, self._last_ms)

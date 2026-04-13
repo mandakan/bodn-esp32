@@ -49,6 +49,21 @@ class Screen:
         """
         pass
 
+    # -- NFC tag routing protocol --
+    # Screens that handle NFC cards override nfc_modes with the set of
+    # tag mode strings they subscribe to.  When a tag is scanned whose
+    # mode is in this set, on_nfc_tag() is called instead of switching
+    # game modes.
+    nfc_modes = frozenset()
+
+    def on_nfc_tag(self, parsed):
+        """Handle an NFC tag routed to this screen.
+
+        *parsed* is a dict with keys (prefix, version, mode, id).
+        Return True if consumed, False to fall through to mode switch.
+        """
+        return False
+
 
 class ScreenManager:
     """Stack-based screen manager with optional overlay.

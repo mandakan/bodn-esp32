@@ -7,7 +7,8 @@
 - **Style**: keep modules small and self-contained. Prefer clarity over cleverness.
 - **Hardware**: check `firmware/bodn/config.py` before assigning pins. Non-time-critical I/O (buttons, toggles, status LEDs) should use the MCP23017 I2C expanders; latency-sensitive peripherals (encoder CLK/DT, SPI, I2S) stay on native GPIOs. See `docs/hardware.md` for reserved pins and the GPIO budget.
 - **SD card**: media assets (sound banks, arcade sounds, music, game-mode TTS, space SFX) live on `/sd/`. Only critical audio (UI SFX, battery/goodnight TTS) stays on flash. Use `from bodn.assets import resolve` to look up any asset path — it checks SD first, falls back to flash transparently. `tools/convert_audio.py` routes SD-bound output to `build/sounds/`; `tools/sd-sync.py` copies it to the card. See `docs/assets.md` for the directory structure. The SD card is mounted at boot; the device runs normally without one (soundboard falls back gracefully).
-- **Testing**: pure logic modules (debounce, UI state, audio format) are tested with `pytest` on the host. Hardware wrappers are tested on-device via `mpremote` or in Wokwi.
+- **Testing**: pure logic modules (debounce, UI state, audio format) are tested with `pytest` on the host. Hardware wrappers are tested on-device via `mpremote` or in Wokwi. MicroPython compatibility tests (`tests/test_micropython_compat.py`) import firmware modules under the real MicroPython Unix port to catch CPython-only APIs (e.g. `str.capitalize()`) before they reach the device. These tests are skipped if the Unix port binary hasn't been built — see "MicroPython Unix port" below for setup.
+- **MicroPython portability**: MicroPython `str` lacks `.capitalize()`, `.title()`, `.swapcase()`, and `.casefold()`. Use `from bodn.i18n import capitalize` instead. The compat tests catch this automatically.
 - **Dependencies**: host tools are managed with `uv`. MicroPython libs go directly into `firmware/`.
 - **Pin assignments**: `firmware/bodn/config.py` is the single source of truth. Never hardcode GPIO numbers elsewhere.
 - **Wiring docs**: `docs/wiring.md` is auto-generated. After changing `config.py`, run `uv run python tools/pinout.py --md` and commit both files. A pre-commit hook enforces this.
@@ -183,11 +184,18 @@ bodn-esp32/
 │     └─ sdkconfig.board      # dual-core, I2S ISR safety
 ├─ micropython/                # git submodule → micropython/micropython @ v1.27.0
 ├─ tests/
-│  ├─ conftest.py           # MicroPython hardware stubs
-│  └─ test_*.py             # host-side unit tests
+│  ├─ conftest.py              # MicroPython hardware stubs
+│  ├─ test_micropython_compat.py # import tests under real MicroPython Unix port
+│  └─ test_*.py                # host-side unit tests
+├─ web/                        # bodn.thias.se — NFC card info landing page
+│  ├─ docker-compose.yml      # single-service compose (nginx)
+│  ├─ Dockerfile              # nginx:alpine + static HTML + card set JSONs
+│  ├─ nginx.conf              # SPA routing + /nfc/ JSON serving
+│  └─ public/
+│     └─ index.html           # card viewer (parses URL path, shows emoji + labels)
 ├─ .githooks/
-│  └─ pre-commit            # ensures wiring.md stays in sync
-├─ pyproject.toml            # host-side tooling (mpremote, ruff, black)
+│  └─ pre-commit              # ensures wiring.md stays in sync, checks formatting
+├─ pyproject.toml             # host-side tooling (mpremote, ruff, black)
 └─ README.md
 ```
 
@@ -220,6 +228,14 @@ uv run python tools/pinout.py --md
 
 # Run tests
 uv run pytest
+
+# MicroPython Unix port (one-time build — catches CPython-only APIs in tests)
+# Requires: Xcode command-line tools (macOS) or build-essential (Linux)
+make -C micropython/mpy-cross                     # build the cross-compiler
+make -C micropython/ports/unix submodules          # init Unix port dependencies
+make -C micropython/ports/unix                     # build the Unix port binary
+# After building, `uv run pytest` automatically includes 26 MicroPython
+# import-compatibility tests. If the binary isn't built, they skip gracefully.
 
 # Parental controls web UI
 # On real hardware: connect to Bodn AP, open http://192.168.4.1
@@ -284,6 +300,23 @@ uv run python tools/convert_icons.py                         # convert all emoji
 uv run python tools/convert_icons.py --dry-run               # preview without converting
 uv run python tools/convert_icons.py --force                 # force rebuild all
 ```
+
+## NFC card info site (bodn.thias.se)
+
+```bash
+# Build and run locally
+cd web && docker compose up --build         # serves at http://localhost:8080
+
+# Test card URLs
+open http://localhost:8080/1/sortera/cat_red  # game card
+open http://localhost:8080/1/simon            # launcher card
+open http://localhost:8080/                   # landing page
+```
+
+The site is a single-page app that parses the URL path, fetches card set
+JSONs from `/nfc/*.json`, and displays the card's OpenMoji emoji, bilingual
+labels, and a link to the GitHub project. Card set JSONs from `assets/nfc/`
+are baked into the Docker image at build time.
 
 ## Git hooks
 

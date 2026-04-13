@@ -5,7 +5,7 @@
 from bodn.ui.screen import Screen
 from bodn.ui.secondary import CONTENT_SIZE
 from bodn.ui.widgets import draw_centered, draw_progress_bar
-from bodn.i18n import t
+from bodn.i18n import t, capitalize
 
 
 class SoundboardSecondary(Screen):
@@ -48,7 +48,7 @@ class SoundboardSecondary(Screen):
         # Truncate to fit 8 chars × 2 scale = 128px
         if len(name) > 8:
             name = name[:8]
-        draw_centered(tft, name.capitalize(), 12, theme.CYAN, w, scale=2)
+        draw_centered(tft, capitalize(name), 12, theme.CYAN, w, scale=2)
 
         # Musical note indicator — animates during playback
         note_color = theme.YELLOW if self._playing else theme.DIM

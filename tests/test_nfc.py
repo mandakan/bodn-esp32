@@ -20,8 +20,8 @@ from bodn.nfc import (
 
 
 class TestParseTagData:
-    def test_plain_string(self):
-        result = parse_tag_data("BODN:1:sortera:cat_red")
+    def test_url_string(self):
+        result = parse_tag_data("https://bodn.thias.se/1/sortera/cat_red")
         assert result == {
             "prefix": "BODN",
             "version": 1,
@@ -29,20 +29,36 @@ class TestParseTagData:
             "id": "cat_red",
         }
 
-    def test_ndef_bytes(self):
-        # NDEF Text Record: status=0x02 (UTF-8, lang_len=2), "en", payload
-        payload = b"\x02en" + b"BODN:1:sortera:cat_red"
+    def test_ndef_uri_bytes(self):
+        # NDEF URI Record: 0x04 = "https://" prefix
+        payload = b"\x04" + b"bodn.thias.se/1/sortera/cat_red"
         result = parse_tag_data(payload)
         assert result is not None
         assert result["mode"] == "sortera"
         assert result["id"] == "cat_red"
         assert result["version"] == 1
 
-    def test_wrong_prefix(self):
-        assert parse_tag_data("NOPE:1:sortera:cat_red") is None
+    def test_launcher_url(self):
+        result = parse_tag_data("https://bodn.thias.se/1/simon")
+        assert result == {
+            "prefix": "BODN",
+            "version": 1,
+            "mode": "simon",
+            "id": None,
+        }
 
-    def test_too_few_fields(self):
-        assert parse_tag_data("BODN:1:sortera") is None
+    def test_launcher_uri_bytes(self):
+        payload = b"\x04" + b"bodn.thias.se/1/simon"
+        result = parse_tag_data(payload)
+        assert result is not None
+        assert result["mode"] == "simon"
+        assert result["id"] is None
+
+    def test_wrong_domain(self):
+        assert parse_tag_data("https://example.com/1/sortera/cat") is None
+
+    def test_url_too_few_segments(self):
+        assert parse_tag_data("https://bodn.thias.se/1") is None
 
     def test_empty_string(self):
         assert parse_tag_data("") is None
@@ -51,10 +67,10 @@ class TestParseTagData:
         assert parse_tag_data(b"") is None
 
     def test_short_ndef_bytes(self):
-        assert parse_tag_data(b"\x02") is None
+        assert parse_tag_data(b"\x04") is None
 
     def test_admin_tag(self):
-        result = parse_tag_data("BODN:1:admin:unlock")
+        result = parse_tag_data("https://bodn.thias.se/1/admin/unlock")
         assert result == {
             "prefix": "BODN",
             "version": 1,
@@ -63,12 +79,45 @@ class TestParseTagData:
         }
 
     def test_future_version(self):
-        result = parse_tag_data("BODN:2:future:thing")
+        result = parse_tag_data("https://bodn.thias.se/2/future/thing")
         assert result is not None
         assert result["version"] == 2
 
     def test_non_numeric_version(self):
-        assert parse_tag_data("BODN:abc:sortera:cat") is None
+        assert parse_tag_data("https://bodn.thias.se/abc/sortera/cat") is None
+
+    # -- Backward compatibility with legacy NDEF Text Record tags --
+
+    def test_legacy_text_record_bytes(self):
+        payload = b"\x02en" + b"BODN:1:sortera:cat_red"
+        result = parse_tag_data(payload)
+        assert result is not None
+        assert result["mode"] == "sortera"
+        assert result["id"] == "cat_red"
+
+    def test_legacy_plain_string(self):
+        result = parse_tag_data("BODN:1:sortera:cat_red")
+        assert result == {
+            "prefix": "BODN",
+            "version": 1,
+            "mode": "sortera",
+            "id": "cat_red",
+        }
+
+    def test_legacy_launcher_string(self):
+        result = parse_tag_data("BODN:1:simon")
+        assert result == {
+            "prefix": "BODN",
+            "version": 1,
+            "mode": "simon",
+            "id": None,
+        }
+
+    def test_legacy_wrong_prefix(self):
+        assert parse_tag_data("NOPE:1:sortera:cat_red") is None
+
+    def test_legacy_too_few_fields(self):
+        assert parse_tag_data("BODN:1") is None
 
 
 # ---------------------------------------------------------------------------
@@ -79,12 +128,15 @@ class TestParseTagData:
 class TestEncodeTagData:
     def test_basic_encode(self):
         data = encode_tag_data("sortera", "cat_red")
-        # Status byte: 0x02 (UTF-8, lang_len=2)
-        assert data[0] == 2
-        # Language code: "en"
-        assert data[1:3] == b"en"
-        # Text payload
-        assert data[3:] == b"BODN:1:sortera:cat_red"
+        # URI prefix byte: 0x04 = "https://"
+        assert data[0] == 0x04
+        # URL path after prefix
+        assert data[1:] == b"bodn.thias.se/1/sortera/cat_red"
+
+    def test_launcher_encode(self):
+        data = encode_tag_data("simon", None)
+        assert data[0] == 0x04
+        assert data[1:] == b"bodn.thias.se/1/simon"
 
     def test_round_trip(self):
         original_mode = "sortera"
@@ -95,6 +147,13 @@ class TestEncodeTagData:
         assert parsed["mode"] == original_mode
         assert parsed["id"] == original_id
         assert parsed["version"] == 1
+
+    def test_round_trip_launcher(self):
+        encoded = encode_tag_data("simon", None)
+        parsed = parse_tag_data(encoded)
+        assert parsed is not None
+        assert parsed["mode"] == "simon"
+        assert parsed["id"] is None
 
     def test_custom_version(self):
         data = encode_tag_data("test", "card", version=3)
@@ -386,16 +445,16 @@ class TestNFCReaderScan:
 
         # Build NDEF TLV with a BODN tag payload
         ndef_payload = encode_tag_data("sortera", "cat_red")
-        # NDEF record: flags=0xD1 (MB+ME+SR, TNF=0x01), type_len=1, payload_len, "T", payload
-        ndef_rec = bytes([0xD1, 0x01, len(ndef_payload)]) + b"T" + ndef_payload
+        # NDEF record: flags=0xD1 (MB+ME+SR, TNF=0x01), type_len=1, payload_len, "U", payload
+        ndef_rec = bytes([0xD1, 0x01, len(ndef_payload)]) + b"U" + ndef_payload
         # TLV: type=0x03, len, data, terminator=0xFE
         tlv = bytes([0x03, len(ndef_rec)]) + ndef_rec + b"\xfe"
-        # Pad to 32 bytes (8 pages) and split across two ntag_read calls
-        while len(tlv) < 32:
+        # Pad to 48 bytes (12 pages) and split across page reads
+        while len(tlv) < 48:
             tlv += b"\x00"
 
         uid = bytes([0x04, 0xA3, 0xB2, 0xC1, 0xD4, 0xE5, 0xF6])
-        fake_pn = FakePN532(uid=uid, pages={4: tlv[:16], 8: tlv[16:32]})
+        fake_pn = FakePN532(uid=uid, pages={4: tlv[:16], 8: tlv[16:32], 12: tlv[32:48]})
         nfc_mod._pn532 = fake_pn
         nfc_mod._shed = False
 
