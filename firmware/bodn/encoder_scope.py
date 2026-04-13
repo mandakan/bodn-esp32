@@ -66,7 +66,15 @@ def run(enc=0, sample_ms=2):
         row_offset=config.TFT_ROW_OFFSET,
         madctl=config.TFT_MADCTL,
     )
-    Pin(config.TFT_BL, Pin.OUT, value=1)
+    # Backlight on via PCA9685 channel 0 (I2C PWM driver)
+    try:
+        from machine import SoftI2C
+
+        _bi2c = SoftI2C(scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+        _bi2c.writeto_mem(config.PCA9685_ADDR, 0x06, b"\x00\x10\x00\x00")
+        del _bi2c
+    except Exception:
+        pass
 
     enc1_clk = Pin(config.ENC1_CLK, Pin.IN, Pin.PULL_UP)
     enc1_dt = Pin(config.ENC1_DT, Pin.IN, Pin.PULL_UP)

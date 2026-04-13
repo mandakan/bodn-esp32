@@ -13,6 +13,20 @@ from machine import Pin
 
 Pin(3, Pin.OUT, value=0)  # config.AMP_SD_PIN — LOW = shutdown
 
+# Turn on display backlight via PCA9685 channel 0.
+# The LED input is wired to PCA9685 CH0, not a direct GPIO.
+# Use SoftI2C (bit-banged, no conflict with hardware I2C(0) in main.py)
+# and raw register writes — no driver import needed at this stage.
+try:
+    from machine import SoftI2C
+
+    _bi2c = SoftI2C(scl=Pin(47), sda=Pin(48), freq=400_000)
+    _bi2c.writeto_mem(0x40, 0x00, b"\x20")  # MODE1: wake oscillator, auto-increment
+    _bi2c.writeto_mem(0x40, 0x06, b"\x00\x10\x00\x00")  # CH0: ON_H full-on bit, OFF=0
+    del _bi2c
+except Exception as _e:
+    print("boot: PCA9685 backlight init skipped:", _e)
+
 # Safe-boot window: pause briefly so Ctrl-C can interrupt before heavy init.
 # Also lets the ESP32 task watchdog breathe between reset cycles.
 #
