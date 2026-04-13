@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bodn</title>
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --text: #2c3e50;
+    --muted: #7f8c8d;
+    --accent: #2980b9;
+    --border: #e0e0e0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2.5rem 2rem 2rem;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .emoji {
+    width: 128px;
+    height: 128px;
+    margin: 0 auto 1.5rem;
+  }
+  .emoji img {
+    width: 100%;
+    height: 100%;
+  }
+  .emoji .fallback {
+    font-size: 80px;
+    line-height: 128px;
+  }
+  .label-sv {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+  .label-en {
+    font-size: 1.1rem;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  .mode-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: var(--accent);
+    background: #eaf2f8;
+    border-radius: 999px;
+    padding: 0.2rem 0.75rem;
+    margin-bottom: 1.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+  }
+  .project-info {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .project-info p { margin-bottom: 0.5rem; }
+  .project-info strong { color: var(--text); }
+  .project-info a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .project-info a:hover { text-decoration: underline; }
+  .logo {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
+  .error { color: var(--muted); font-size: 1rem; }
+  .home .card { padding-top: 2rem; }
+  .attribution {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 1rem;
+  }
+  .attribution a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <noscript>
+    <p class="project-info">
+      <strong>Bodn</strong> is an open-source interactive learning box for kids.
+      <br><a href="https://github.com/mandakan/bodn-esp32">View on GitHub</a>
+    </p>
+  </noscript>
+</div>
+
+<script>
+(function() {
+  const OPENMOJI_CDN = 'https://openmoji.org/data/color/svg/';
+  const GITHUB_URL = 'https://github.com/mandakan/bodn-esp32';
+  const card = document.getElementById('card');
+
+  // Parse URL path: /{version}/{mode}/{card_id?}
+  const parts = location.pathname.replace(/^\/+|\/+$/g, '').split('/');
+  const version = parts[0];
+  const mode = parts[1];
+  const cardId = parts[2] || null;
+
+  function capitalize(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+  }
+
+  function renderCard(data) {
+    const icon = data.icon;
+    const labelSv = capitalize(data.label_sv || '');
+    const labelEn = capitalize(data.label_en || '');
+    const modeName = data.mode || mode;
+
+    card.innerHTML = `
+      <div class="emoji">
+        ${icon
+          ? `<img src="${OPENMOJI_CDN}${icon.toUpperCase()}.svg" alt="${labelEn}" onerror="this.parentElement.innerHTML='<div class=fallback>&#x${icon};</div>'">`
+          : ''}
+      </div>
+      <div class="label-sv">${labelSv}</div>
+      ${labelEn ? `<div class="label-en">${labelEn}</div>` : ''}
+      <div class="mode-badge">${modeName}</div>
+      <hr>
+      <div class="project-info">
+        <p><strong>Bodn</strong> is an open-source interactive learning box
+        for kids, built on ESP32.</p>
+        <p><a href="${GITHUB_URL}">View on GitHub</a></p>
+      </div>
+      <p class="attribution">Icons: <a href="https://openmoji.org">OpenMoji</a> (CC BY-SA 4.0)</p>
+    `;
+  }
+
+  function renderHome() {
+    card.classList.add('home');
+    card.innerHTML = `
+      <div class="logo">Bodn</div>
+      <p class="project-info" style="margin-top:0.5rem">
+        An open-source interactive learning box for kids,
+        built on ESP32.
+      </p>
+      <hr>
+      <div class="project-info">
+        <p>This card was scanned from a <strong>Bodn NFC tag</strong>.</p>
+        <p><a href="${GITHUB_URL}">View the project on GitHub</a></p>
+      </div>
+    `;
+  }
+
+  function renderNotFound() {
+    card.innerHTML = `
+      <p class="error">Unknown card</p>
+      <p class="project-info" style="margin-top:1rem">
+        <strong>${mode}${cardId ? '/' + cardId : ''}</strong>
+        doesn't match any known card.
+      </p>
+      <hr>
+      <div class="project-info">
+        <p><strong>Bodn</strong> is an open-source interactive learning box
+        for kids, built on ESP32.</p>
+        <p><a href="${GITHUB_URL}">View on GitHub</a></p>
+      </div>
+    `;
+  }
+
+  // No mode → landing page
+  if (!mode) {
+    renderHome();
+    return;
+  }
+
+  // Fetch both the mode-specific card set and the launcher set in parallel.
+  // The mode set has card details; the launcher set maps mode names to icons.
+  Promise.all([
+    fetch('/nfc/' + mode + '.json').then(r => r.ok ? r.json() : null),
+    fetch('/nfc/launcher.json').then(r => r.ok ? r.json() : null),
+  ])
+    .then(([modeData, launcher]) => {
+      // Look up card in the mode's card set
+      if (modeData && cardId) {
+        const c = modeData.cards.find(c => c.id === cardId);
+        if (c) { renderCard({...c, mode: modeData.mode}); return; }
+      }
+
+      // Look up mode in the launcher set (covers launcher tags and
+      // mode-only URLs like /1/simon)
+      if (launcher) {
+        const c = launcher.cards.find(c => c.id === mode);
+        if (c) { renderCard({...c, mode: mode}); return; }
+      }
+
+      renderNotFound();
+    })
+    .catch(() => renderNotFound());
+})();
+</script>
+</body>
+</html>
