@@ -41,8 +41,17 @@ class TestParseTagData:
     def test_wrong_prefix(self):
         assert parse_tag_data("NOPE:1:sortera:cat_red") is None
 
+    def test_launcher_tag_no_card_id(self):
+        result = parse_tag_data("BODN:1:simon")
+        assert result == {
+            "prefix": "BODN",
+            "version": 1,
+            "mode": "simon",
+            "id": None,
+        }
+
     def test_too_few_fields(self):
-        assert parse_tag_data("BODN:1:sortera") is None
+        assert parse_tag_data("BODN:1") is None
 
     def test_empty_string(self):
         assert parse_tag_data("") is None

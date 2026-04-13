@@ -659,7 +659,7 @@ def create_ui(
         np[i] = (0, 0, 0)
     np.write()
 
-    return manager, secondary, inp
+    return manager, secondary, inp, mode_screens
 
 
 # ---------------------------------------------------------------------------
@@ -1098,6 +1098,66 @@ async def housekeeping_task(session_mgr, np, settings, audio=None):
         await asyncio.sleep_ms(500)
 
 
+async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
+    """Poll NFC reader and route tags to active screen or launch game modes."""
+    from bodn.nfc import NFCReader, parse_tag_data
+
+    reader = NFCReader()
+    if not reader.available():
+        return
+
+    prev_uid = None
+
+    while True:
+        # Skip polling when active screen doesn't use NFC — avoids
+        # the ~50 ms I2C block that would hurt button timing in
+        # latency-sensitive modes (Simon, sequencer, etc.).
+        # Always poll on home screen (stack depth 1) for mode launching.
+        active = manager.active
+        should_poll = len(manager._stack) <= 1 or (active and active.nfc_modes)
+
+        if not should_poll:
+            prev_uid = None
+            await asyncio.sleep_ms(300)
+            continue
+
+        uid, data = reader.scan()
+
+        if uid and data and uid != prev_uid:
+            parsed = parse_tag_data(data)
+            if parsed:
+                mode = parsed["mode"]
+
+                # Route to active screen if it subscribes to this tag mode
+                consumed = False
+                if active and mode in active.nfc_modes:
+                    consumed = active.on_nfc_tag(parsed)
+
+                # Mode switch: launch the game if not consumed
+                if not consumed and mode in mode_screens:
+                    factory = mode_screens[mode]
+                    try:
+                        screen = factory()
+                        if mode != "settings":
+                            session_mgr.try_wake(mode)
+                        if audio:
+                            audio.play_sound("select")
+                        # From home (depth 1): push.  In-game (depth 2+): replace.
+                        if len(manager._stack) <= 1:
+                            manager.push(screen)
+                        else:
+                            manager.replace(screen)
+                    except Exception as e:
+                        print("NFC launch error:", e)
+
+        if uid is None:
+            prev_uid = None
+        else:
+            prev_uid = uid
+
+        await asyncio.sleep_ms(300)
+
+
 async def main():
     """Entry point: start web server + UI loop concurrently."""
     settings = storage.load_settings()
@@ -1171,7 +1231,7 @@ async def main():
     except Exception as _e:
         print("boot log hw update:", _e)
 
-    manager, secondary, inp = create_ui(
+    manager, secondary, inp, mode_screens = create_ui(
         session_mgr,
         settings,
         wifi_ctrl,
@@ -1220,6 +1280,8 @@ async def main():
     ]
     if audio:
         tasks.append(audio.start())
+    if hw_status.get("nfc"):
+        tasks.append(nfc_scan_task(manager, mode_screens, session_mgr, audio))
     await asyncio.gather(*tasks)
 
 

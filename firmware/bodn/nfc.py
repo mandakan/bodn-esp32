@@ -43,7 +43,7 @@ def parse_tag_data(data):
         text = str(data)
 
     parts = text.split(":")
-    if len(parts) < 4:
+    if len(parts) < 3:
         return None
     if parts[0] != TAG_PREFIX:
         return None
@@ -57,7 +57,7 @@ def parse_tag_data(data):
         "prefix": parts[0],
         "version": version,
         "mode": parts[2],
-        "id": parts[3],
+        "id": parts[3] if len(parts) >= 4 else None,
     }
 
 
@@ -70,7 +70,10 @@ def encode_tag_data(mode, card_id, version=None):
     """
     if version is None:
         version = TAG_VERSION
-    text = "{}:{}:{}:{}".format(TAG_PREFIX, version, mode, card_id)
+    if card_id is not None:
+        text = "{}:{}:{}:{}".format(TAG_PREFIX, version, mode, card_id)
+    else:
+        text = "{}:{}:{}".format(TAG_PREFIX, version, mode)
     lang = b"en"
     status = len(lang)  # UTF-8 (bit 7 = 0), lang length = 2
     return bytes([status]) + lang + text.encode("utf-8")
