@@ -528,6 +528,20 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_rakna():
+        from bodn.ui.rakna import RaknaScreen
+
+        _reset_secondary()
+        return RaknaScreen(
+            np,
+            overlay,
+            arcade=arcade,
+            audio=audio,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
+        )
+
     def _make_flode():
         from bodn.ui.flode import FlodeScreen
 
@@ -658,6 +672,7 @@ def create_ui(
         "sequencer": _make_sequencer,
         "highfive": _make_highfive,
         "sortera": _make_sortera,
+        "rakna": _make_rakna,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, arcade=arcade, settings=settings),
@@ -678,6 +693,7 @@ def create_ui(
         "soundboard",
         "sequencer",
         "sortera",
+        "rakna",
         "clock",
         "settings",
     ]
