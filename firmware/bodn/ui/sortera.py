@@ -60,9 +60,16 @@ _COLOUR_KEYS = {
     "yellow": "sortera_yellow",
 }
 
-# Category names for i18n lookup
-_CATEGORY_KEYS = {
-    "animal": "sortera_animal",
+# Animal names for i18n lookup
+_ANIMAL_KEYS = {
+    "cat": "sortera_cat",
+    "dog": "sortera_dog",
+    "rabbit": "sortera_rabbit",
+    "bird": "sortera_bird",
+    "fish": "sortera_fish",
+    "horse": "sortera_horse",
+    "cow": "sortera_cow",
+    "frog": "sortera_frog",
 }
 
 
@@ -136,9 +143,14 @@ class SorteraScreen(Screen):
             # Fallback: minimal card set for demo
             card_set = {
                 "mode": "sortera",
-                "dimensions": ["category", "colour"],
+                "dimensions": ["animal", "colour"],
                 "cards": [
-                    {"id": c, "category": "animal", "colour": c.split("_")[-1]}
+                    {
+                        "id": c,
+                        "category": "animal",
+                        "animal": c.split("_")[0],
+                        "colour": c.split("_")[-1],
+                    }
                     for c in DEMO_CARDS
                 ],
             }
@@ -313,8 +325,10 @@ class SorteraScreen(Screen):
                     val = self._engine.rule_value
                     if dim == "colour":
                         key = "sortera_find_colour_{}".format(val)
+                    elif dim == "animal":
+                        key = "sortera_find_animal_{}".format(val)
                     else:
-                        key = "sortera_find_category"
+                        key = "sortera_find_{}".format(val)
                     say(key, audio)
                 except Exception:
                     audio.tone(523, 100)  # fallback beep
@@ -333,9 +347,8 @@ class SorteraScreen(Screen):
         """Cache the emoji sprite for the current rule value."""
         self._rule_emoji = None
         eng = self._engine
-        if eng.rule_dimension == "category":
-            # Show first animal emoji as representative
-            self._rule_emoji = load_emoji("cat", 48)
+        if eng.rule_dimension == "animal":
+            self._rule_emoji = load_emoji(eng.rule_value, 48)
         elif eng.rule_dimension == "colour":
             # No specific emoji for colours — use colour block
             pass
@@ -509,6 +522,9 @@ class SorteraScreen(Screen):
                 "sortera_find_colour",
                 t(_COLOUR_KEYS.get(eng.rule_value, eng.rule_value)),
             )
-        elif eng.rule_dimension == "category":
-            return t("sortera_find_category")
+        elif eng.rule_dimension == "animal":
+            return t(
+                "sortera_find_animal",
+                t(_ANIMAL_KEYS.get(eng.rule_value, eng.rule_value)),
+            )
         return eng.rule_value

@@ -20,16 +20,16 @@ from bodn.sortera_rules import (
 SAMPLE_CARD_SET = {
     "mode": "sortera",
     "version": 1,
-    "dimensions": ["category", "colour"],
+    "dimensions": ["animal", "colour"],
     "cards": [
-        {"id": "cat_red", "category": "animal", "colour": "red"},
-        {"id": "cat_blue", "category": "animal", "colour": "blue"},
-        {"id": "dog_green", "category": "animal", "colour": "green"},
-        {"id": "dog_yellow", "category": "animal", "colour": "yellow"},
-        {"id": "fish_red", "category": "animal", "colour": "red"},
-        {"id": "fish_blue", "category": "animal", "colour": "blue"},
-        {"id": "cow_green", "category": "animal", "colour": "green"},
-        {"id": "frog_yellow", "category": "animal", "colour": "yellow"},
+        {"id": "cat_red", "animal": "cat", "colour": "red"},
+        {"id": "cat_blue", "animal": "cat", "colour": "blue"},
+        {"id": "dog_green", "animal": "dog", "colour": "green"},
+        {"id": "dog_yellow", "animal": "dog", "colour": "yellow"},
+        {"id": "fish_red", "animal": "fish", "colour": "red"},
+        {"id": "fish_blue", "animal": "fish", "colour": "blue"},
+        {"id": "cow_green", "animal": "cow", "colour": "green"},
+        {"id": "frog_yellow", "animal": "frog", "colour": "yellow"},
     ],
 }
 
@@ -44,7 +44,7 @@ class TestInitialState:
         assert engine.state == WELCOME
 
     def test_rule_is_picked_at_start(self, engine):
-        assert engine.rule_dimension in ("category", "colour")
+        assert engine.rule_dimension in ("animal", "colour")
         assert engine.rule_value != ""
 
     def test_score_is_zero(self, engine):
@@ -275,7 +275,7 @@ class TestReset:
         assert engine.state == WELCOME
         assert engine.score == 0
         assert engine.streak == 0
-        assert engine.rule_dimension in ("category", "colour")
+        assert engine.rule_dimension in ("animal", "colour")
 
 
 class TestDemoCards:
