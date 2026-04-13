@@ -415,6 +415,20 @@ class InputState:
             gr[off + i] = ebjr[i]
         self.gestures.update(gh, gp, gr, now)
 
+    def resync_encoders(self):
+        """Resync encoder baselines to current positions, discarding any delta.
+
+        Call after waking from sleep — the PCNT hardware keeps counting
+        during light sleep, producing a spurious delta on the first scan.
+        """
+        for i, enc in enumerate(self._encoders):
+            pos = enc.value
+            self._prev_enc_pos[i] = pos
+            self.enc_pos[i] = pos
+            self._pend_enc_delta[i] = 0
+            self.enc_delta[i] = 0
+            self.enc_velocity[i] = 0
+
     def has_activity(self):
         """Return True if any input changed this frame (for idle tracking)."""
         if any(self.btn_just_pressed) or any(self.btn_just_released):

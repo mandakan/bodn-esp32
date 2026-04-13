@@ -830,17 +830,20 @@ async def primary_task(
             if power_mgr.master_switch_off():
                 power_mgr.sleep_until_master_on()
                 idle_tracker.wake()
+                inp.resync_encoders()
                 manager.invalidate()
             # Menu standby request
             elif settings.get("_sleep_now"):
                 settings["_sleep_now"] = False
                 power_mgr.sleep_and_wake()
                 idle_tracker.wake()
+                inp.resync_encoders()
                 manager.invalidate()
             # Idle timeout
             elif idle_tracker.tick():
                 power_mgr.sleep_and_wake()
                 idle_tracker.wake()
+                inp.resync_encoders()
                 manager.invalidate()
         except Exception as e:
             errors += 1
