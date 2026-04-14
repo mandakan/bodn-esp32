@@ -411,10 +411,9 @@ class RaknaScreen(Screen):
         if eng.level >= 2 and eng.target > 0:
             self._draw_dots(tft, theme, eng.target, w // 2, h // 2, 10, theme.CYAN)
 
-        # Number path
-        self._draw_number_path(
-            tft, theme, w, highlight=eng.target if eng.level >= 2 else 0
-        )
+        # Number path (levels 2-3 only — level 1 is free exploration)
+        if eng.level >= 2:
+            self._draw_number_path(tft, theme, w, highlight=eng.target)
 
         # Level indicator
         draw_centered(tft, t("rakna_level", eng.level), h - 16, theme.MUTED, w)
@@ -432,10 +431,9 @@ class RaknaScreen(Screen):
         hint_col = theme.WHITE if pulse else theme.MUTED
         draw_centered(tft, t("rakna_hint_scan"), h // 2, hint_col, w)
 
-        # Number path with target highlighted
-        self._draw_number_path(
-            tft, theme, w, highlight=eng.target if eng.level >= 2 else 0
-        )
+        # Number path with target highlighted (levels 2-3 only)
+        if eng.level >= 2:
+            self._draw_number_path(tft, theme, w, highlight=eng.target)
 
         # Score at bottom
         self._render_score(tft, theme, w, h)
@@ -456,8 +454,9 @@ class RaknaScreen(Screen):
 
         draw_centered(tft, t("rakna_correct"), h // 2 + 56, theme.GREEN, w)
 
-        # Number path with scanned position lit
-        self._draw_number_path(tft, theme, w, highlight=qty, colour=theme.GREEN)
+        # Number path with scanned position lit (levels 2-3 only)
+        if eng.level >= 2:
+            self._draw_number_path(tft, theme, w, highlight=qty, colour=theme.GREEN)
 
         self._render_score(tft, theme, w, h)
 
