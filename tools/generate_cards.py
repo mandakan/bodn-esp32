@@ -129,12 +129,149 @@ def render_emoji_png(svg_path: Path, size_px: int) -> bytes:
     )
 
 
+def _has_quantity_cards(cards: list[dict]) -> bool:
+    """Check if any cards have a quantity field (need dot-pattern backs)."""
+    return any("quantity" in c for c in cards)
+
+
+# Dot positions for each quantity (1-10), normalised to a 0-1 square.
+# 1-6 follow standard dice face layouts; 7-10 use structured extensions.
+_DOT_POSITIONS: dict[int, list[tuple[float, float]]] = {
+    1: [(0.5, 0.5)],
+    2: [(0.25, 0.25), (0.75, 0.75)],
+    3: [(0.25, 0.25), (0.5, 0.5), (0.75, 0.75)],
+    4: [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)],
+    5: [(0.25, 0.25), (0.75, 0.25), (0.5, 0.5), (0.25, 0.75), (0.75, 0.75)],
+    6: [
+        (0.25, 0.2),
+        (0.25, 0.5),
+        (0.25, 0.8),
+        (0.75, 0.2),
+        (0.75, 0.5),
+        (0.75, 0.8),
+    ],
+    7: [
+        (0.25, 0.2),
+        (0.25, 0.5),
+        (0.25, 0.8),
+        (0.5, 0.5),
+        (0.75, 0.2),
+        (0.75, 0.5),
+        (0.75, 0.8),
+    ],
+    8: [
+        (0.25, 0.15),
+        (0.25, 0.38),
+        (0.25, 0.62),
+        (0.25, 0.85),
+        (0.75, 0.15),
+        (0.75, 0.38),
+        (0.75, 0.62),
+        (0.75, 0.85),
+    ],
+    9: [
+        (0.2, 0.2),
+        (0.2, 0.5),
+        (0.2, 0.8),
+        (0.5, 0.2),
+        (0.5, 0.5),
+        (0.5, 0.8),
+        (0.8, 0.2),
+        (0.8, 0.5),
+        (0.8, 0.8),
+    ],
+    10: [
+        # Ten-frame: two rows of 5
+        (0.15, 0.35),
+        (0.325, 0.35),
+        (0.5, 0.35),
+        (0.675, 0.35),
+        (0.85, 0.35),
+        (0.15, 0.65),
+        (0.325, 0.65),
+        (0.5, 0.65),
+        (0.675, 0.65),
+        (0.85, 0.65),
+    ],
+}
+
+# Dot radius scales down for higher quantities to keep patterns readable
+_DOT_RADIUS = {
+    1: 4.0,
+    2: 3.5,
+    3: 3.0,
+    4: 2.8,
+    5: 2.8,
+    6: 2.5,
+    7: 2.3,
+    8: 2.2,
+    9: 2.0,
+    10: 1.9,
+}
+
+
+def _draw_dot_pattern(pdf, quantity: int, x: float, y: float, w: float, h: float):
+    """Draw a dice-style dot pattern for the given quantity within a rectangle."""
+    positions = _DOT_POSITIONS.get(quantity)
+    if not positions:
+        return
+
+    # Draw dots as filled circles in a padded square area
+    pad = 6  # mm padding inside the card area
+    area_x = x + pad
+    area_y = y + pad
+    area_w = w - 2 * pad
+    area_h = h - 2 * pad
+
+    r = _DOT_RADIUS.get(quantity, 2.0)
+    pdf.set_fill_color(44, 62, 80)  # dark dots
+
+    for dx, dy in positions:
+        cx = area_x + dx * area_w
+        cy = area_y + dy * area_h
+        pdf.ellipse(cx - r, cy - r, 2 * r, 2 * r, style="F")
+
+
+def _draw_dot_card_back(pdf, card: dict, x: float, y: float):
+    """Draw the back face of a quantity card (dot pattern)."""
+    quantity = card.get("quantity", 0)
+    if quantity < 1:
+        return
+
+    # Soft white background
+    pdf.set_fill_color(245, 245, 240)
+    pdf.rect(x, y, CARD_W, CARD_H, style="F")
+
+    # Border (cutting guide)
+    pdf.set_draw_color(*BORDER_COLOUR)
+    pdf.set_line_width(0.3)
+    pdf.rect(x, y, CARD_W, CARD_H, style="D")
+
+    # Dot pattern in a square area centred in the card
+    side = CARD_W - 8  # square side = card width minus padding
+    dot_x = x + (CARD_W - side) / 2
+    dot_y = y + (CARD_H - side) / 2 - 2  # nudge up slightly for label room
+    _draw_dot_pattern(pdf, quantity, dot_x, dot_y, side, side)
+
+    # Quantity as subtle small text at bottom
+    pdf.set_font("Helvetica", size=7)
+    pdf.set_text_color(180, 180, 180)
+    pdf.set_xy(x, y + CARD_H - 10)
+    pdf.cell(CARD_W, 5, str(quantity), align="C")
+
+
 def generate_pdf(card_set: dict, openmoji_dir: Path | None, output_path: Path):
-    """Generate an A4 PDF with card faces laid out in a grid."""
+    """Generate an A4 PDF with card faces laid out in a grid.
+
+    For card sets with quantity cards (e.g. räkna), generates double-sided
+    pages: front (emoji/numeral) then back (dot pattern), with mirrored
+    column order on the back for correct alignment when printed duplex.
+    """
     from fpdf import FPDF
 
     cards = card_set["cards"]
     mode = card_set["mode"]
+    double_sided = _has_quantity_cards(cards)
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=False)
@@ -146,6 +283,7 @@ def generate_pdf(card_set: dict, openmoji_dir: Path | None, output_path: Path):
     total_pages = (len(cards) + cards_per_page - 1) // cards_per_page
 
     for page_idx in range(total_pages):
+        # --- Front page (emoji / numeral) ---
         pdf.add_page()
         start = page_idx * cards_per_page
         page_cards = cards[start : start + cards_per_page]
@@ -158,6 +296,24 @@ def generate_pdf(card_set: dict, openmoji_dir: Path | None, output_path: Path):
             y = MARGIN_Y + row * (CARD_H + MARGIN_Y)
 
             _draw_card(pdf, card, x, y, mode, openmoji_dir)
+
+        # --- Back page (dot patterns, mirrored columns) ---
+        if double_sided:
+            quantity_cards = [c for c in page_cards if "quantity" in c]
+            if quantity_cards:
+                pdf.add_page()
+                for i, card in enumerate(page_cards):
+                    if "quantity" not in card:
+                        continue
+                    col = i % COLS
+                    row = i // COLS
+
+                    # Mirror columns for duplex printing (flip along long edge)
+                    mirrored_col = (COLS - 1) - col
+                    x = MARGIN_X + mirrored_col * (CARD_W + MARGIN_X)
+                    y = MARGIN_Y + row * (CARD_H + MARGIN_Y)
+
+                    _draw_dot_card_back(pdf, card, x, y)
 
     # Footer with attribution
     pdf.set_y(-15)
