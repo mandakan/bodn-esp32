@@ -374,6 +374,10 @@ STRINGS = {
     "rakna_number_8": "eight",
     "rakna_number_9": "nine",
     "rakna_number_10": "ten",
+    # Level 4-5 (addition / subtraction)
+    "rakna_add": "How many together?",
+    "rakna_sub": "How many left?",
+    "rakna_sub_hint": "{} went away!",
     # Boot screen
     "boot_cfg": "Waking up...",
     "boot_sd": "Checking SD card...",

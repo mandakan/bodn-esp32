@@ -109,6 +109,8 @@
     "rakna_less_8":            { "storage": "sd" },
     "rakna_less_9":            { "storage": "sd" },
     "rakna_less_10":           { "storage": "sd" },
+    "rakna_add":               { "storage": "sd" },
+    "rakna_sub":               { "storage": "sd" },
     "bat_critical":       { "storage": "flash" },
     "bat_low":            { "storage": "flash" },
     "overlay_goodnight":  { "storage": "flash" }

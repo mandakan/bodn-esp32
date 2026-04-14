@@ -16,11 +16,14 @@ from bodn.rakna_rules import (
     LEVEL_UP_MS,
     DISCOVER_THRESHOLD,
     FIND_THRESHOLD,
+    ADD_THRESHOLD,
     DEMO_CARDS,
     CHALLENGE_DISCOVER,
     CHALLENGE_FIND,
     CHALLENGE_MORE,
     CHALLENGE_LESS,
+    CHALLENGE_ADD,
+    CHALLENGE_SUB,
 )
 
 SAMPLE_CARD_SET = {
@@ -61,6 +64,18 @@ def engine_l3():
     return RaknaEngine(SAMPLE_CARD_SET, level=3)
 
 
+@pytest.fixture
+def engine_l4():
+    """Engine starting at level 4."""
+    return RaknaEngine(SAMPLE_CARD_SET, level=4)
+
+
+@pytest.fixture
+def engine_l5():
+    """Engine starting at level 5."""
+    return RaknaEngine(SAMPLE_CARD_SET, level=5)
+
+
 def _to_waiting(engine):
     """Advance engine through WELCOME -> ANNOUNCE -> WAITING."""
     engine.update(None, WELCOME_MS)
@@ -86,7 +101,7 @@ class TestInitialState:
 
     def test_level_clamped(self):
         eng = RaknaEngine(SAMPLE_CARD_SET, level=99)
-        assert eng.level == 3
+        assert eng.level == 5
         eng = RaknaEngine(SAMPLE_CARD_SET, level=0)
         assert eng.level == 1
 
@@ -260,9 +275,11 @@ class TestLevel3MoreOrLess:
         engine_l3.update("dots_{}".format(ref), 0)
         assert engine_l3.state == WRONG
 
-    def test_level_3_is_endless(self, engine_l3):
-        """Level 3 never triggers LEVEL_UP (levels 4-6 are future)."""
-        for _ in range(20):
+    def test_level_3_advances_to_4(self, engine_l3):
+        """Level 3 advances to level 4 after COMPARE_THRESHOLD correct."""
+        from bodn.rakna_rules import COMPARE_THRESHOLD
+
+        for _ in range(COMPARE_THRESHOLD):
             _to_waiting(engine_l3)
             ct = engine_l3.challenge_type
             ref = engine_l3.target
@@ -273,8 +290,7 @@ class TestLevel3MoreOrLess:
             engine_l3.update("dots_{}".format(answer), 0)
             assert engine_l3.state == CORRECT
             engine_l3.update(None, CORRECT_MS)
-        assert engine_l3.level == 3
-        assert engine_l3.state != LEVEL_UP
+        assert engine_l3.state == LEVEL_UP
 
 
 class TestFeedbackTimers:
@@ -436,3 +452,105 @@ class TestTargetRangeExpansion:
             engine_l2.update("dots_{}".format(t), 0)
             engine_l2.update(None, CORRECT_MS)
         assert engine_l2._target_range == 10
+
+
+class TestLevel4Addition:
+    def test_initial_state(self, engine_l4):
+        assert engine_l4.level == 4
+        engine_l4.update(None, WELCOME_MS)
+        assert engine_l4.challenge_type == CHALLENGE_ADD
+
+    def test_addends_valid(self, engine_l4):
+        """Addends must be >= 1 and sum to target."""
+        _to_waiting(engine_l4)
+        assert engine_l4.addend_a >= 1
+        assert engine_l4.addend_b >= 1
+        assert engine_l4.addend_a + engine_l4.addend_b == engine_l4.target
+
+    def test_target_within_range(self, engine_l4):
+        """Target starts within 5, expands to 10."""
+        _to_waiting(engine_l4)
+        assert engine_l4.target <= 5
+
+    def test_correct_answer_is_total(self, engine_l4):
+        """Scanning the total of the two addends is correct."""
+        _to_waiting(engine_l4)
+        total = engine_l4.target
+        engine_l4.update("dots_{}".format(total), 0)
+        assert engine_l4.state == CORRECT
+
+    def test_wrong_answer(self, engine_l4):
+        """Scanning a non-total is wrong."""
+        _to_waiting(engine_l4)
+        total = engine_l4.target
+        wrong = (total % 10) + 1  # different from total
+        if wrong == total:
+            wrong = (total % 10) + 2
+            if wrong > 10:
+                wrong = 1
+        engine_l4.update("dots_{}".format(wrong), 0)
+        assert engine_l4.state == WRONG
+
+    def test_advances_to_level_5(self, engine_l4):
+        """Level 4 advances to 5 after ADD_THRESHOLD correct."""
+        for _ in range(ADD_THRESHOLD):
+            _to_waiting(engine_l4)
+            total = engine_l4.target
+            engine_l4.update("dots_{}".format(total), 0)
+            assert engine_l4.state == CORRECT
+            engine_l4.update(None, CORRECT_MS)
+        assert engine_l4.state == LEVEL_UP
+
+    def test_add_range_expands(self, engine_l4):
+        """Add range expands from 5 to 10 after 3 correct."""
+        assert engine_l4._add_range == 5
+        for _ in range(3):
+            _to_waiting(engine_l4)
+            total = engine_l4.target
+            engine_l4.update("dots_{}".format(total), 0)
+            engine_l4.update(None, CORRECT_MS)
+        assert engine_l4._add_range == 10
+
+
+class TestLevel5Subtraction:
+    def test_initial_state(self, engine_l5):
+        assert engine_l5.level == 5
+        engine_l5.update(None, WELCOME_MS)
+        assert engine_l5.challenge_type == CHALLENGE_SUB
+
+    def test_subtraction_valid(self, engine_l5):
+        """Start > removal, remainder >= 1."""
+        _to_waiting(engine_l5)
+        a = engine_l5.addend_a
+        b = engine_l5.addend_b
+        assert a >= 3
+        assert b >= 1
+        assert a > b
+        assert engine_l5.target == a - b
+
+    def test_correct_answer_is_remainder(self, engine_l5):
+        """Scanning the remainder is correct."""
+        _to_waiting(engine_l5)
+        remainder = engine_l5.target
+        engine_l5.update("dots_{}".format(remainder), 0)
+        assert engine_l5.state == CORRECT
+
+    def test_wrong_answer(self, engine_l5):
+        """Scanning the start quantity is wrong."""
+        _to_waiting(engine_l5)
+        start = engine_l5.addend_a
+        remainder = engine_l5.target
+        if start != remainder:
+            engine_l5.update("dots_{}".format(start), 0)
+            assert engine_l5.state == WRONG
+
+    def test_level_5_is_endless(self, engine_l5):
+        """Level 5 never triggers LEVEL_UP (level 6 is future work)."""
+        for _ in range(20):
+            _to_waiting(engine_l5)
+            remainder = engine_l5.target
+            engine_l5.update("dots_{}".format(remainder), 0)
+            assert engine_l5.state == CORRECT
+            engine_l5.update(None, CORRECT_MS)
+        assert engine_l5.level == 5
+        assert engine_l5.state != LEVEL_UP

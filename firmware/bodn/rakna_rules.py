@@ -4,9 +4,11 @@
 # Level 1: Quantity Discovery — scan cards, see dots, hear the number.
 # Level 2: Find the Number — TTS asks for a number, child scans it.
 # Level 3: More or Less — comparison challenges ("find more than 3!").
+# Level 4: Put Together — visual addition (two dot groups, scan total).
+# Level 5: Take Away — subtraction as removal (dots fade, scan remainder).
 #
 # Self-paced, never timed.  No game-over state.
-# Levels 4-6 (addition, subtraction, symbolic) are future work.
+# Level 6 (symbolic equations with operator cards) is future work.
 
 import os
 
@@ -31,13 +33,17 @@ LEVEL_UP_MS = const(3000)
 # Level progression thresholds
 DISCOVER_THRESHOLD = const(6)  # unique cards scanned before level 2
 FIND_THRESHOLD = const(5)  # correct answers before level 3
-COMPARE_THRESHOLD = const(6)  # correct answers to "complete" level 3
+COMPARE_THRESHOLD = const(6)  # correct answers before level 4
+ADD_THRESHOLD = const(6)  # correct answers before level 5
+SUB_THRESHOLD = const(6)  # correct answers to "complete" level 5
 
 # Challenge types
 CHALLENGE_DISCOVER = "discover"
 CHALLENGE_FIND = "find"
 CHALLENGE_MORE = "more"
 CHALLENGE_LESS = "less"
+CHALLENGE_ADD = "add"
+CHALLENGE_SUB = "sub"
 
 # Demo mode: button index -> card ID mapping (buttons 0-7 -> dots_1..dots_8)
 DEMO_CARDS = [
@@ -58,6 +64,8 @@ _NUMBER_KEY_PREFIX = "rakna_number_"
 _COLOUR_DISCOVER = (255, 180, 50)
 _COLOUR_FIND = (100, 200, 255)
 _COLOUR_COMPARE = (200, 150, 255)
+_COLOUR_ADD = (100, 230, 150)
+_COLOUR_SUB = (255, 150, 100)
 
 
 def _rand_int(lo, hi):
@@ -84,11 +92,13 @@ class RaknaEngine:
     def reset(self, level=1):
         """Reset to initial state at the given level."""
         self.state = WELCOME
-        self.level = max(1, min(level, 3))
+        self.level = max(1, min(level, 5))
         self.score = 0
         self.streak = 0
         self.best_streak = 0
         self.target = 0  # target number (level 2) or reference (level 3)
+        self.addend_a = 0  # first group (level 4) or start (level 5)
+        self.addend_b = 0  # second group (level 4) or removed (level 5)
         self.challenge_type = CHALLENGE_DISCOVER
         self.last_card_id = None
         self.last_card = None
@@ -97,6 +107,7 @@ class RaknaEngine:
         self._state_ms = 0
         self._level_correct = 0  # correct answers in current level
         self._target_range = 5  # level 2 starts with 1-5
+        self._add_range = 5  # level 4 starts with totals within 5
 
     def _set_state(self, new_state):
         self.state = new_state
@@ -112,6 +123,10 @@ class RaknaEngine:
             self.target = _rand_int(1, self._target_range)
         elif self.level == 3:
             self._pick_comparison()
+        elif self.level == 4:
+            self._pick_addition()
+        elif self.level == 5:
+            self._pick_subtraction()
 
     def _pick_comparison(self):
         """Pick a comparison challenge with guaranteed valid answers."""
@@ -123,6 +138,24 @@ class RaknaEngine:
             # "less than" — reference must be > 1 (so some card is smaller)
             self.challenge_type = CHALLENGE_LESS
             self.target = _rand_int(2, 10)
+
+    def _pick_addition(self):
+        """Pick a visual addition challenge (a + b = ?)."""
+        self.challenge_type = CHALLENGE_ADD
+        # Total must be within range and ≤ 10; both addends ≥ 1
+        max_total = min(self._add_range, 10)
+        total = _rand_int(2, max_total)
+        self.addend_a = _rand_int(1, total - 1)
+        self.addend_b = total - self.addend_a
+        self.target = total
+
+    def _pick_subtraction(self):
+        """Pick a subtraction challenge (a - b = ?)."""
+        self.challenge_type = CHALLENGE_SUB
+        # Start ≥ 2, removal ≥ 1, remainder ≥ 1
+        self.addend_a = _rand_int(3, 10)  # start quantity
+        self.addend_b = _rand_int(1, self.addend_a - 1)  # removed
+        self.target = self.addend_a - self.addend_b  # remainder
 
     def check_card(self, card_id):
         """Look up a card and update last_card state.
@@ -163,6 +196,12 @@ class RaknaEngine:
                 return qty > self.target
             else:  # CHALLENGE_LESS
                 return qty < self.target
+        elif self.level == 4:
+            # Addition: scan the total
+            return qty == self.target
+        elif self.level == 5:
+            # Subtraction: scan the remainder
+            return qty == self.target
 
         return False
 
@@ -187,7 +226,13 @@ class RaknaEngine:
             return _COLOUR_DISCOVER
         elif self.level == 2:
             return _COLOUR_FIND
-        return _COLOUR_COMPARE
+        elif self.level == 3:
+            return _COLOUR_COMPARE
+        elif self.level == 4:
+            return _COLOUR_ADD
+        elif self.level == 5:
+            return _COLOUR_SUB
+        return _COLOUR_DISCOVER
 
     def update(self, card_id, dt):
         """Advance engine state.
@@ -240,10 +285,12 @@ class RaknaEngine:
 
         elif self.state == LEVEL_UP:
             if self._state_ms >= LEVEL_UP_MS:
-                self.level = min(self.level + 1, 3)
+                self.level = min(self.level + 1, 5)
                 self._level_correct = 0
                 if self.level == 2:
                     self._target_range = 5
+                elif self.level == 4:
+                    self._add_range = 5
                 self._pick_challenge()
                 self._set_state(ANNOUNCE)
             return self.state
@@ -260,9 +307,11 @@ class RaknaEngine:
             self._level_correct += 1
             if self.level == 1:
                 self.discovered.add(self.last_card_quantity)
-            # Expand target range in level 2 after some success
+            # Expand ranges after some success
             if self.level == 2 and self._level_correct == 3 and self._target_range < 10:
                 self._target_range = 10
+            if self.level == 4 and self._level_correct == 3 and self._add_range < 10:
+                self._add_range = 10
             self._set_state(CORRECT)
         else:
             self.streak = 0
@@ -276,7 +325,11 @@ class RaknaEngine:
         elif self.level == 2:
             return self._level_correct >= FIND_THRESHOLD
         elif self.level == 3:
-            # Level 3 is endless — no level up (levels 4-6 are future work)
+            return self._level_correct >= COMPARE_THRESHOLD
+        elif self.level == 4:
+            return self._level_correct >= ADD_THRESHOLD
+        elif self.level == 5:
+            # Level 5 is endless — no level up (level 6 is future work)
             return False
         return False
 

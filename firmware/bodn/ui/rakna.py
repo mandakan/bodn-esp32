@@ -29,6 +29,8 @@ from bodn.rakna_rules import (
     CHALLENGE_FIND,
     CHALLENGE_MORE,
     CHALLENGE_LESS,
+    CHALLENGE_ADD,
+    CHALLENGE_SUB,
 )
 from bodn.patterns import (
     N_LEDS,
@@ -358,6 +360,10 @@ class RaknaScreen(Screen):
                     elif ct == CHALLENGE_LESS:
                         key = "rakna_less_{}".format(eng.target)
                         say(key, audio)
+                    elif ct == CHALLENGE_ADD:
+                        say("rakna_add", audio)
+                    elif ct == CHALLENGE_SUB:
+                        say("rakna_sub", audio)
                 except Exception:
                     audio.tone(523, 100)
             else:
@@ -407,12 +413,14 @@ class RaknaScreen(Screen):
         challenge_text = self._challenge_display_text()
         draw_centered(tft, challenge_text, 8, theme.WHITE, w, scale=2)
 
-        # Number path below text (levels 2-3 only)
+        # Number path below text (levels 2+ only)
         if eng.level >= 2:
             self._draw_number_path(tft, theme, w, highlight=eng.target)
 
-        # Show target as dot pattern for levels 2-3
-        if eng.level >= 2 and eng.target > 0:
+        # Visual challenge content
+        if eng.level in (4, 5):
+            self._render_addend_dots(tft, theme, w, h)
+        elif eng.level >= 2 and eng.target > 0:
             self._draw_dots(tft, theme, eng.target, w // 2, h // 2 + 20, 12, theme.CYAN)
 
         # Level indicator
@@ -426,14 +434,18 @@ class RaknaScreen(Screen):
         challenge_text = self._challenge_display_text()
         draw_centered(tft, challenge_text, 12, theme.CYAN, w)
 
-        # Pulsing scan hint
-        pulse = (frame % 40) < 20
-        hint_col = theme.WHITE if pulse else theme.MUTED
-        draw_centered(tft, t("rakna_hint_scan"), h // 2, hint_col, w)
-
-        # Number path with target highlighted (levels 2-3 only)
+        # Number path with target highlighted (levels 2+ only)
         if eng.level >= 2:
             self._draw_number_path(tft, theme, w, highlight=eng.target)
+
+        # Visual challenge content for levels 4-5
+        if eng.level in (4, 5):
+            self._render_addend_dots(tft, theme, w, h)
+        else:
+            # Pulsing scan hint
+            pulse = (frame % 40) < 20
+            hint_col = theme.WHITE if pulse else theme.MUTED
+            draw_centered(tft, t("rakna_hint_scan"), h // 2, hint_col, w)
 
         # Score at bottom
         self._render_score(tft, theme, w, h)
@@ -494,6 +506,49 @@ class RaknaScreen(Screen):
             scale=2,
         )
 
+    def _render_addend_dots(self, tft, theme, w, h):
+        """Draw two dot groups for levels 4-5 (addition/subtraction)."""
+        eng = self._engine
+        a = eng.addend_a
+        b = eng.addend_b
+        cy = h // 2 + 10
+        dot_r = 10
+
+        if eng.challenge_type == CHALLENGE_ADD:
+            # Two groups side by side
+            self._draw_dots(tft, theme, a, w // 4, cy, dot_r, theme.CYAN)
+            self._draw_dots(tft, theme, b, w * 3 // 4, cy, dot_r, theme.CYAN)
+            # "?" below
+            draw_centered(tft, "?", h - 40, theme.WHITE, w, scale=2)
+        elif eng.challenge_type == CHALLENGE_SUB:
+            # Show full group: first (a-b) dots bright, last b dots faded
+            remain = a - b
+            self._draw_dots_split(
+                tft, theme, a, remain, w // 2, cy, dot_r, theme.CYAN, theme.MUTED
+            )
+            # Narrative hint below
+            nk_b = "{}{}".format("rakna_number_", b)
+            draw_centered(tft, t("rakna_sub_hint", t(nk_b)), h - 40, theme.MUTED, w)
+
+    def _draw_dots_split(
+        self, tft, theme, total, bright_n, cx, cy, dot_r, col_bright, col_faded
+    ):
+        """Draw a dot pattern with first bright_n dots bright and the rest faded."""
+        pattern = _DOT_PATTERNS.get(total)
+        if not pattern:
+            return
+
+        grid = (dot_r * 5) // 2
+        total_px = grid * 5
+        ox = cx - total_px // 2
+        oy = cy - total_px // 2
+
+        for i, (dx, dy) in enumerate(pattern):
+            px = ox + dx * grid + grid // 2
+            py = oy + dy * grid + grid // 2
+            col = col_bright if i < bright_n else col_faded
+            tft.ellipse(px, py, dot_r, dot_r, col, True)
+
     def _render_score(self, tft, theme, w, h):
         """Draw score and streak at the bottom."""
         score_text = t("rakna_score", self._engine.score)
@@ -513,6 +568,10 @@ class RaknaScreen(Screen):
             return t("rakna_more", t(eng.target_number_key))
         elif ct == CHALLENGE_LESS:
             return t("rakna_less", t(eng.target_number_key))
+        elif ct == CHALLENGE_ADD:
+            return t("rakna_add")
+        elif ct == CHALLENGE_SUB:
+            return t("rakna_sub")
         return ""
 
     def _draw_number_path(self, tft, theme, w, highlight=0, colour=None):

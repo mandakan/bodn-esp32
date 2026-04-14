@@ -374,6 +374,10 @@ STRINGS = {
     "rakna_number_8": "åtta",
     "rakna_number_9": "nio",
     "rakna_number_10": "tio",
+    # Level 4-5 (addition / subtraction)
+    "rakna_add": "Hur många ihop?",
+    "rakna_sub": "Hur många kvar?",
+    "rakna_sub_hint": "{} försvann!",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_sd": "Kollar SD-kort...",
