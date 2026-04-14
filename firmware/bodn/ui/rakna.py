@@ -523,19 +523,12 @@ class RaknaScreen(Screen):
 
         for n in range(1, 11):
             cx = x0 + (n - 1) * _PATH_SPACING
+            r = _PATH_R
             if n == highlight:
                 col = colour or theme.CYAN
-                # Filled circle approximation (filled rect + cross)
-                r = _PATH_R
-                tft.fill_rect(cx - r, y - r, r * 2, r * 2, col)
+                tft.ellipse(cx, y, r, r, col, True)
             else:
-                # Outline: draw border pixels
-                r = _PATH_R
-                col = theme.MUTED
-                tft.fill_rect(cx - r, y - r, r * 2, 1, col)  # top
-                tft.fill_rect(cx - r, y + r - 1, r * 2, 1, col)  # bottom
-                tft.fill_rect(cx - r, y - r, 1, r * 2, col)  # left
-                tft.fill_rect(cx + r - 1, y - r, 1, r * 2, col)  # right
+                tft.ellipse(cx, y, r, r, theme.MUTED, False)
 
     def _draw_dots(self, tft, theme, quantity, cx, cy, dot_r, colour):
         """Draw a dot pattern for the given quantity, centred at (cx, cy)."""
@@ -550,6 +543,6 @@ class RaknaScreen(Screen):
         oy = cy - total // 2
 
         for dx, dy in pattern:
-            px = ox + dx * grid + grid // 2 - dot_r
-            py = oy + dy * grid + grid // 2 - dot_r
-            tft.fill_rect(px, py, dot_r * 2, dot_r * 2, colour)
+            px = ox + dx * grid + grid // 2
+            py = oy + dy * grid + grid // 2
+            tft.ellipse(px, py, dot_r, dot_r, colour, True)
