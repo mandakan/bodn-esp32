@@ -83,6 +83,10 @@ _VEHICLE_KEYS = {
 }
 
 # Category names for i18n lookup
+# NOTE: "category" dimension disabled in sortera.json — matching sets are
+# too large (16 cards for "all animals") for a 4-year-old. The DCCS task
+# exercises flexibility via animal↔colour and vehicle↔colour switches.
+# Revisit when we add difficulty scaling or subset selection.
 _CATEGORY_KEYS = {
     "animal": "sortera_animal",
     "vehicle": "sortera_vehicle",
