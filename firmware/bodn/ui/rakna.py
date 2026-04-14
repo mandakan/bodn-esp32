@@ -82,8 +82,8 @@ _DOT_PATTERNS = {
     ],
 }
 
-# Number path: 10 positions across the top of the screen
-_PATH_Y = const(8)
+# Number path: 10 positions below the challenge text
+_PATH_Y = const(30)
 _PATH_R = const(8)  # circle radius
 _PATH_SPACING = const(23)  # centre-to-centre
 
@@ -403,17 +403,17 @@ class RaknaScreen(Screen):
         tft.fill(theme.BLACK)
         eng = self._engine
 
-        # Challenge text
+        # Challenge text at top
         challenge_text = self._challenge_display_text()
-        draw_centered(tft, challenge_text, 30, theme.WHITE, w, scale=2)
+        draw_centered(tft, challenge_text, 8, theme.WHITE, w, scale=2)
+
+        # Number path below text (levels 2-3 only)
+        if eng.level >= 2:
+            self._draw_number_path(tft, theme, w, highlight=eng.target)
 
         # Show target as dot pattern for levels 2-3
         if eng.level >= 2 and eng.target > 0:
-            self._draw_dots(tft, theme, eng.target, w // 2, h // 2, 10, theme.CYAN)
-
-        # Number path (levels 2-3 only — level 1 is free exploration)
-        if eng.level >= 2:
-            self._draw_number_path(tft, theme, w, highlight=eng.target)
+            self._draw_dots(tft, theme, eng.target, w // 2, h // 2 + 20, 12, theme.CYAN)
 
         # Level indicator
         draw_centered(tft, t("rakna_level", eng.level), h - 16, theme.MUTED, w)
