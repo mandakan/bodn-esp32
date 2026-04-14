@@ -470,9 +470,8 @@ class SorteraScreen(Screen):
                 except Exception:
                     pass
 
-        # Matching count hint
-        count = eng.matching_count
-        draw_centered(tft, "{} kort".format(count), h - 30, theme.MUTED, w)
+        # Progress dots (all empty at start of rule)
+        self._render_progress_dots(tft, theme, w, h - 30)
 
     def _render_waiting(self, tft, theme, w, h, frame):
         tft.fill(theme.BLACK)
@@ -480,6 +479,9 @@ class SorteraScreen(Screen):
         # Current rule at top
         rule_text = self._rule_display_text()
         draw_centered(tft, rule_text, 12, theme.CYAN, w)
+
+        # Progress dots below rule
+        self._render_progress_dots(tft, theme, w, 32)
 
         # Pulsing hint in the centre
         pulse = (frame % 40) < 20
@@ -519,6 +521,7 @@ class SorteraScreen(Screen):
             draw_centered(tft, bilabel, h // 2 + 20, theme.WHITE, w, scale=2)
 
         draw_centered(tft, t("sortera_correct"), h // 2 + 46, theme.GREEN, w)
+        self._render_progress_dots(tft, theme, w, h // 2 + 66)
         self._render_score(tft, theme, w, h)
 
     def _render_wrong(self, tft, theme, w, h):
@@ -552,11 +555,37 @@ class SorteraScreen(Screen):
         # Gentle feedback — show the rule so child knows what to look for
         rule_text = self._rule_display_text()
         draw_centered(tft, rule_text, h // 2 + 30, theme.MUTED, w)
+        self._render_progress_dots(tft, theme, w, h // 2 + 50)
         self._render_score(tft, theme, w, h)
 
     def _render_switch(self, tft, theme, w, h):
         tft.fill(theme.BLACK)
         draw_centered(tft, t("sortera_new_rule"), h // 2 - 8, theme.AMBER, w, scale=2)
+
+    def _render_progress_dots(self, tft, theme, w, y):
+        """Draw filled/empty dots showing how many unique cards have been found."""
+        eng = self._engine
+        total = eng._switch_threshold
+        found = eng._rule_correct_count
+        if total <= 0:
+            return
+
+        # Dot sizing: 8px filled, 4px gap — scales down for many dots
+        dot_sz = 8 if total <= 8 else 6
+        gap = 4 if total <= 8 else 3
+        row_w = total * dot_sz + (total - 1) * gap
+        x0 = (w - row_w) // 2
+
+        filled_col = theme.GREEN
+        empty_col = theme.MUTED
+
+        for i in range(total):
+            dx = x0 + i * (dot_sz + gap)
+            if i < found:
+                tft.fill_rect(dx, y, dot_sz, dot_sz, filled_col)
+            else:
+                # Outline only
+                tft.rect(dx, y, dot_sz, dot_sz, empty_col)
 
     def _render_score(self, tft, theme, w, h):
         """Draw score and streak at the bottom of the screen."""
