@@ -207,6 +207,10 @@ class RaknaEngine:
             return self.state
 
         elif self.state == ANNOUNCE:
+            if card_id is not None:
+                # Card scanned during announce — skip ahead and process it
+                self._set_state(WAITING)
+                return self._handle_scan(card_id)
             if self._state_ms >= ANNOUNCE_MS:
                 self._set_state(WAITING)
             return self.state
