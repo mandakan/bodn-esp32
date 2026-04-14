@@ -28,9 +28,6 @@ CORRECT_MS = const(1200)  # celebration duration
 WRONG_MS = const(1500)  # gentle feedback
 SWITCH_MS = const(2000)  # rule switch animation
 
-# Rule switching config
-SWITCH_AFTER_MIN = const(4)  # min correct before rule switch
-SWITCH_AFTER_MAX = const(6)  # max correct before rule switch
 
 # Colour palette for rule feedback (RGB)
 COLOUR_MAP = {
@@ -88,6 +85,7 @@ class SorteraEngine:
         self._state_ms = 0
         self._rule_correct_count = 0
         self._switch_threshold = 0
+        self._found_ids = set()
         self._prev_rule = None  # (dimension, value) to avoid repeats
         self._pick_rule()
 
@@ -96,8 +94,9 @@ class SorteraEngine:
         self._state_ms = 0
 
     def _pick_switch_threshold(self):
-        self._switch_threshold = _rand_int(SWITCH_AFTER_MIN, SWITCH_AFTER_MAX)
+        self._switch_threshold = self.matching_count
         self._rule_correct_count = 0
+        self._found_ids = set()
 
     def _pick_rule(self):
         """Pick a random rule (dimension + value), avoiding the previous one."""
@@ -218,7 +217,10 @@ class SorteraEngine:
             self.streak += 1
             if self.streak > self.best_streak:
                 self.best_streak = self.streak
-            self._rule_correct_count += 1
+            # Only count each unique matching card once toward the threshold
+            if card_id not in self._found_ids:
+                self._found_ids.add(card_id)
+                self._rule_correct_count += 1
             self._set_state(CORRECT)
         else:
             self.streak = 0

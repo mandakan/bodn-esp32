@@ -171,28 +171,28 @@ class TestRuleSwitching:
         engine.update(None, WELCOME_MS)
         engine.update(None, ANNOUNCE_MS)
 
-    def _find_matching(self, engine):
-        for card in SAMPLE_CARD_SET["cards"]:
-            if card.get(engine.rule_dimension) == engine.rule_value:
-                return card["id"]
-        return None
+    def _find_all_matching(self, engine):
+        return [
+            card["id"]
+            for card in SAMPLE_CARD_SET["cards"]
+            if card.get(engine.rule_dimension) == engine.rule_value
+        ]
 
-    def test_switches_after_threshold(self, engine):
-        """After enough correct answers, rule should switch."""
+    def test_switches_after_all_unique_found(self, engine):
+        """After finding all unique matching cards, rule should switch."""
         self._to_waiting(engine)
-        old_dim = engine.rule_dimension
-        old_val = engine.rule_value
-        threshold = engine._switch_threshold
+        matches = self._find_all_matching(engine)
+        if not matches:
+            pytest.skip("No matches found")
 
-        for _ in range(threshold):
-            match = self._find_matching(engine)
-            if match is None:
-                pytest.skip("No match found")
-            engine.update(match, 0)
+        assert engine._switch_threshold == len(matches)
+
+        for card_id in matches:
+            engine.update(card_id, 0)
             assert engine.state == CORRECT
             engine.update(None, CORRECT_MS)
 
-        # After threshold correct, should be in RULE_SWITCH
+        # After all unique matches found, should be in RULE_SWITCH
         assert engine.state == RULE_SWITCH
         assert engine.rule_switches == 1
 
@@ -203,6 +203,25 @@ class TestRuleSwitching:
         # New rule should be different (with high probability)
         # Note: with small card sets it could randomly pick the same,
         # so we just check the engine didn't crash
+
+    def test_duplicate_scan_does_not_advance_threshold(self, engine):
+        """Scanning the same card twice should not count double."""
+        self._to_waiting(engine)
+        matches = self._find_all_matching(engine)
+        if len(matches) < 2:
+            pytest.skip("Need at least 2 matches")
+
+        # Scan first card twice
+        engine.update(matches[0], 0)
+        assert engine.state == CORRECT
+        engine.update(None, CORRECT_MS)
+        engine.update(matches[0], 0)
+        assert engine.state == CORRECT
+        engine.update(None, CORRECT_MS)
+
+        # Only 1 unique found, not at threshold yet
+        assert engine._rule_correct_count == 1
+        assert engine.state == WAITING
 
 
 class TestScoring:
