@@ -1,7 +1,7 @@
 {
   "mode": "sortera",
   "version": 1,
-  "dimensions": ["animal", "vehicle", "colour", "category"],
+  "dimensions": ["animal", "vehicle", "colour"],
   "cards": [
     {"id": "cat_red",      "category": "animal",  "animal": "cat",    "colour": "red",    "label_sv": "katt",      "label_en": "cat",       "icon": "1F431"},
     {"id": "cat_blue",     "category": "animal",  "animal": "cat",    "colour": "blue",   "label_sv": "katt",      "label_en": "cat",       "icon": "1F431"},

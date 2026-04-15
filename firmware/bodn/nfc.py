@@ -270,6 +270,7 @@ _i2c = None
 _pn532 = None
 _shed = False
 _mcp2 = None  # MCP23017 for power gate control
+_power_on_ms = 0  # ticks_ms when power was last turned on
 
 
 def init(i2c, mcp2=None):
@@ -288,12 +289,15 @@ def init(i2c, mcp2=None):
 
 
 def power_on():
-    """Enable PN532 power via MCP2 transistor gate. Called once at boot.
+    """Enable PN532 power via MCP2 transistor gate.
 
-    MCP2 resets to all-inputs on power-up/soft-reboot, so the gate
-    floats low (10kΩ pull-down) and the PN532 is unpowered. This
-    function sets the pin as output-high to turn the transistor on.
+    Called at boot and after wake from sleep.  MCP2 resets to all-inputs
+    on power-up/soft-reboot, so the gate floats low (10kΩ pull-down) and
+    the PN532 is unpowered.  This sets the pin output-high to turn on
+    the transistor and records the timestamp so _try_init() can skip a
+    redundant power cycle if called shortly after.
     """
+    global _power_on_ms
     if _mcp2 is None:
         return
     import time
@@ -301,21 +305,33 @@ def power_on():
 
     _mcp2.set_pin_dir(config.MCP2_NFC_PWR, output=True)
     _mcp2.write_pin(config.MCP2_NFC_PWR, 1)
-    time.sleep_ms(100)  # PN532 boot time
+    _power_on_ms = time.ticks_ms()
+    time.sleep_ms(300)  # PN532 cold-boot time (needs ~250-400 ms)
 
 
 def _nfc_power_cycle():
-    """Power-cycle the PN532 to recover from a stuck state."""
+    """Power-cycle the PN532 to recover from a stuck state.
+
+    Skips the cycle if power was recently turned on (within 2 s) by
+    power_on() — avoids a redundant off/on that cuts the boot short.
+    """
+    global _power_on_ms
     if _mcp2 is None:
         return
     import time
     from bodn import config
+
+    # Skip if power was turned on recently (e.g. by post_wake → power_on)
+    if _power_on_ms and time.ticks_diff(time.ticks_ms(), _power_on_ms) < 2000:
+        _power_on_ms = 0  # consumed — next call will power-cycle normally
+        return
 
     _mcp2.set_pin_dir(config.MCP2_NFC_PWR, output=True)
     _mcp2.write_pin(config.MCP2_NFC_PWR, 0)
     time.sleep_ms(50)  # let caps discharge
     _mcp2.write_pin(config.MCP2_NFC_PWR, 1)
-    time.sleep_ms(100)  # PN532 boot time
+    _power_on_ms = time.ticks_ms()
+    time.sleep_ms(300)  # PN532 cold-boot time
 
 
 def set_thermal_shed(active):
@@ -361,16 +377,20 @@ class NFCReader:
         if _i2c is None:
             return
         try:
-            # Power-cycle PN532 via MCP2 transistor gate if available
+            # Power-cycle PN532 via MCP2 transistor gate if available.
+            # Skipped if power_on() was called recently (e.g. post_wake).
             _nfc_power_cycle()
 
             from bodn.pn532 import PN532
 
             pn = PN532(_i2c)
             if pn.begin():
+                print("NFC: PN532 ready")
                 self._pn532 = pn
                 _pn532 = pn
                 self._available = True
+            else:
+                print("NFC: PN532 begin() failed")
         except Exception as e:
             print("NFC: PN532 init failed:", e)
 

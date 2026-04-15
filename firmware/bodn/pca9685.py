@@ -48,12 +48,15 @@ class PCA9685:
 
     def reset(self):
         """Reset the PCA9685 to a known state: all outputs off, auto-increment on."""
+        import time
+
         self._write_reg(_MODE1, _MODE1_SLEEP | _MODE1_AI)
         self._write_reg(_MODE2, 0x04)  # totem-pole outputs (default)
         # Turn off all channels
         self._write_block(_ALL_LED_ON_L, 0, 0, 0, 0x10)  # full-off bit
-        # Wake up (clear sleep bit)
+        # Wake up (clear sleep bit) — oscillator needs 500 µs to stabilise
         self._write_reg(_MODE1, _MODE1_AI)
+        time.sleep_ms(1)
 
     def _write_reg(self, reg, value):
         self._i2c.writeto_mem(self._addr, reg, bytes([value]))
@@ -74,14 +77,19 @@ class PCA9685:
         """Set PWM frequency in Hz (24–1526).
 
         The prescaler can only be changed while the oscillator is stopped,
-        so this briefly puts the chip to sleep.
+        so this briefly puts the chip to sleep.  Per datasheet §7.3.1.1,
+        SLEEP must be low for ≥500 µs before RESTART is asserted.
         """
+        import time
+
         prescale = _prescale(freq_hz)
         old_mode = self._read_reg(_MODE1)
         # Sleep (stop oscillator)
         self._write_reg(_MODE1, (old_mode & 0x7F) | _MODE1_SLEEP)
         self._write_reg(_PRE_SCALE, prescale)
-        # Wake up and restart
+        # Clear SLEEP first, wait for oscillator, then assert RESTART
+        self._write_reg(_MODE1, (old_mode & 0x7F) & ~_MODE1_SLEEP)
+        time.sleep_ms(1)
         self._write_reg(_MODE1, old_mode | _MODE1_RESTART)
 
     def set_pwm(self, channel, on, off):

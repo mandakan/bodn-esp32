@@ -522,9 +522,11 @@ int scanner_led_init(mcpinput_state_t *state, uint8_t pca_addr,
     cmd[0] = PCA_PRE_SCALE; cmd[1] = 5;
     i2c_master_transmit(state->pca_dev, cmd, 2, I2C_TIMEOUT_MS);
 
-    // 4. All LEDs off
-    uint8_t all_off[5] = { PCA_ALL_LED_ON_L, 0, 0, 0, 0x10 };
-    i2c_master_transmit(state->pca_dev, all_off, 5, I2C_TIMEOUT_MS);
+    // 4. Turn off only our channels (not all — CH0 is the display backlight)
+    for (uint8_t ch = start_ch; ch < start_ch + n_ch; ch++) {
+        uint8_t ch_off[5] = { (uint8_t)(PCA_LED0_ON_L + 4 * ch), 0, 0, 0, 0x10 };
+        i2c_master_transmit(state->pca_dev, ch_off, 5, I2C_TIMEOUT_MS);
+    }
 
     // 5. Wake up (clear sleep, enable auto-increment)
     cmd[0] = PCA_MODE1; cmd[1] = PCA_MODE1_AI;

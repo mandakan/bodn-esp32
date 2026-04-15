@@ -15,6 +15,7 @@
     {"id": "soundboard", "label_sv": "ljudbräda",     "label_en": "soundboard", "icon": "1F50A"},
     {"id": "sequencer",  "label_sv": "sekvens",       "label_en": "sequencer",  "icon": "1F941"},
     {"id": "sortera",    "label_sv": "sortera",       "label_en": "sort it",    "icon": "1F9E9"},
+    {"id": "rakna",      "label_sv": "räkna",         "label_en": "count",      "icon": "1F9EE"},
     {"id": "clock",      "label_sv": "klocka",        "label_en": "clock",      "icon": "1F551"}
   ]
 }

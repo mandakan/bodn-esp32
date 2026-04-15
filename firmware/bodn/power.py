@@ -66,17 +66,16 @@ class PowerManager:
     Hardware-facing — not testable on host without stubs.
     """
 
-    def __init__(self, tft, tft2, np, mcp):
+    def __init__(self, tft, tft2, np, mcp, pwm=None):
         self._tft = tft
         self._tft2 = tft2
         self._np = np
         self._mcp = mcp
-        self._bl_pin = None
+        self._pwm = pwm
         self._master_sw_seen = False  # only sleep after switch toggled ON first
 
     def pre_sleep(self):
         """Turn off power-hungry peripherals before entering light sleep."""
-        from machine import Pin
         from bodn import config
 
         # Turn off NeoPixels
@@ -84,9 +83,9 @@ class PowerManager:
             self._np[i] = (0, 0, 0)
         self._np.write()
 
-        # Turn off display backlight
-        self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
-        self._bl_pin.value(0)
+        # Turn off display backlight via PCA9685 PWM channel
+        if self._pwm:
+            self._pwm.set_duty(config.PWM_CH_BACKLIGHT, 0)
 
         # Put displays into sleep mode (SLPIN saves ~5 mA each)
         self._tft._cmd(0x10)
@@ -158,7 +157,6 @@ class PowerManager:
 
     def post_wake(self):
         """Restore peripherals after waking from light sleep."""
-        from machine import Pin
         from bodn import config
 
         # Clear MCP23017 interrupt state and disable interrupts
@@ -170,9 +168,9 @@ class PowerManager:
         self._tft._init_display(skip_reset=False)
         self._tft2._init_display(skip_reset=True)
 
-        # Restore backlight
-        self._bl_pin = Pin(config.TFT_BL, Pin.OUT)
-        self._bl_pin.value(1)
+        # Restore backlight via PCA9685 PWM channel
+        if self._pwm:
+            self._pwm.set_duty(config.PWM_CH_BACKLIGHT, 4095)
 
         # Restore PN532 power and reinitialize
         try:

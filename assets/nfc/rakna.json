@@ -1,0 +1,20 @@
+{
+  "mode": "rakna",
+  "version": 1,
+  "cards": [
+    {"id": "dots_1",  "quantity": 1,  "type": "number", "label_sv": "ett",   "label_en": "one",    "icon": "0031-FE0F-20E3"},
+    {"id": "dots_2",  "quantity": 2,  "type": "number", "label_sv": "tva",   "label_en": "two",    "icon": "0032-FE0F-20E3"},
+    {"id": "dots_3",  "quantity": 3,  "type": "number", "label_sv": "tre",   "label_en": "three",  "icon": "0033-FE0F-20E3"},
+    {"id": "dots_4",  "quantity": 4,  "type": "number", "label_sv": "fyra",  "label_en": "four",   "icon": "0034-FE0F-20E3"},
+    {"id": "dots_5",  "quantity": 5,  "type": "number", "label_sv": "fem",   "label_en": "five",   "icon": "0035-FE0F-20E3"},
+    {"id": "dots_6",  "quantity": 6,  "type": "number", "label_sv": "sex",   "label_en": "six",    "icon": "0036-FE0F-20E3"},
+    {"id": "dots_7",  "quantity": 7,  "type": "number", "label_sv": "sju",   "label_en": "seven",  "icon": "0037-FE0F-20E3"},
+    {"id": "dots_8",  "quantity": 8,  "type": "number", "label_sv": "atta",  "label_en": "eight",  "icon": "0038-FE0F-20E3"},
+    {"id": "dots_9",  "quantity": 9,  "type": "number", "label_sv": "nio",   "label_en": "nine",   "icon": "0039-FE0F-20E3"},
+    {"id": "dots_10", "quantity": 10, "type": "number", "label_sv": "tio",   "label_en": "ten",    "icon": "1F51F"},
+
+    {"id": "op_plus",   "type": "operator", "operator": "+", "label_sv": "plus",     "label_en": "plus",   "icon": "2795"},
+    {"id": "op_minus",  "type": "operator", "operator": "-", "label_sv": "minus",    "label_en": "minus",  "icon": "2796"},
+    {"id": "op_equals", "type": "operator", "operator": "=", "label_sv": "lika med", "label_en": "equals", "icon": "1F7F0"}
+  ]
+}

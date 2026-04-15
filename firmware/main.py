@@ -295,6 +295,8 @@ def create_hardware():
     try:
         pwm = PCA9685(i2c, config.PCA9685_ADDR)
         pwm.set_freq(1000)
+        # Restore backlight — PCA9685.reset() turned all channels off
+        pwm.set_duty(config.PWM_CH_BACKLIGHT, 4095)
         hw_status["pca"] = True
         print(
             "PCA9685 (0x{:02X}) initialised — PWM @ 1 kHz".format(config.PCA9685_ADDR)
@@ -336,6 +338,9 @@ def create_hardware():
             config.PWM_CH_ARC5,
         ]
         arcade = ArcadeButtons(mcp, config.MCP_ARC_PINS, pwm, pwm_channels)
+        # Restore backlight — C led_init may have cleared all PCA9685 channels
+        if pwm:
+            pwm.set_duty(config.PWM_CH_BACKLIGHT, 4095)
 
     # DS18B20 temperature sensors (1-Wire)
     try:
@@ -528,6 +533,20 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_rakna():
+        from bodn.ui.rakna import RaknaScreen
+
+        _reset_secondary()
+        return RaknaScreen(
+            np,
+            overlay,
+            arcade=arcade,
+            audio=audio,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
+        )
+
     def _make_flode():
         from bodn.ui.flode import FlodeScreen
 
@@ -658,6 +677,7 @@ def create_ui(
         "sequencer": _make_sequencer,
         "highfive": _make_highfive,
         "sortera": _make_sortera,
+        "rakna": _make_rakna,
         "demo": lambda: (
             _reset_secondary(),
             DemoScreen(np, overlay, arcade=arcade, settings=settings),
@@ -678,6 +698,7 @@ def create_ui(
         "soundboard",
         "sequencer",
         "sortera",
+        "rakna",
         "clock",
         "settings",
     ]
@@ -953,7 +974,7 @@ async def secondary_task(secondary):
         await asyncio.sleep_ms(_interval)
 
 
-async def housekeeping_task(session_mgr, np, settings, audio=None):
+async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
     """Session management, temperature + battery monitoring: ~500 ms tick.
 
     Temperature overwatch (thresholds in config.py):
@@ -1011,9 +1032,10 @@ async def housekeeping_task(session_mgr, np, settings, audio=None):
                     np[i] = (0, 0, 0)
                 np.write()
                 try:
-                    from machine import Pin, deepsleep
+                    from machine import deepsleep
 
-                    Pin(config.TFT_BL, Pin.OUT).value(0)
+                    if pwm:
+                        pwm.set_duty(config.PWM_CH_BACKLIGHT, 0)
                     # Deep sleep for 5 minutes, then wake to re-check
                     deepsleep(300_000)
                 except Exception:
@@ -1031,12 +1053,11 @@ async def housekeeping_task(session_mgr, np, settings, audio=None):
                     np[i] = (0, 0, 0)
                 np.write()
                 # Dim display backlight to minimum
-                try:
-                    from machine import Pin
-
-                    Pin(config.TFT_BL, Pin.OUT).value(0)
-                except Exception:
-                    pass
+                if pwm:
+                    try:
+                        pwm.set_duty(config.PWM_CH_BACKLIGHT, 0)
+                    except Exception:
+                        pass
 
             elif temp_status == "warn" and _prev_temp == "ok":
                 print(
@@ -1048,12 +1069,11 @@ async def housekeeping_task(session_mgr, np, settings, audio=None):
             elif temp_status == "ok" and _prev_temp != "ok":
                 print("TEMP OK ({}C): resumed normal operation".format(int(t_max)))
                 # Restore backlight
-                try:
-                    from machine import Pin
-
-                    Pin(config.TFT_BL, Pin.OUT).value(1)
-                except Exception:
-                    pass
+                if pwm:
+                    try:
+                        pwm.set_duty(config.PWM_CH_BACKLIGHT, 4095)
+                    except Exception:
+                        pass
 
             # Shed NFC polling at critical+ temperatures
             try:
@@ -1086,10 +1106,10 @@ async def housekeeping_task(session_mgr, np, settings, audio=None):
                     np[i] = (0, 0, 0)
                 np.write()
                 try:
-                    from machine import Pin
                     import machine as _machine
 
-                    Pin(config.TFT_BL, Pin.OUT).value(0)
+                    if pwm:
+                        pwm.set_duty(config.PWM_CH_BACKLIGHT, 0)
                     # Light sleep (not deep) — preserves RAM, wakes on
                     # USB plug (PWR_SENS goes low) or button press.
                     import esp32
@@ -1290,6 +1310,9 @@ async def main():
     except Exception as _e:
         print("boot log hw update:", _e)
 
+    # Expose PCA9685 PWM driver so BrightnessControl can dim the backlight
+    settings["_pwm"] = pwm
+
     manager, secondary, inp, mode_screens = create_ui(
         session_mgr,
         settings,
@@ -1315,7 +1338,7 @@ async def main():
         timeout_s=settings.get("sleep_timeout_s", config.SLEEP_TIMEOUT_S),
         time_fn=time.time,
     )
-    power_mgr = PowerManager(tft, tft2, np, mcp)
+    power_mgr = PowerManager(tft, tft2, np, mcp, pwm=pwm)
 
     # Startup sound disabled — re-enable when tuned:
     # if audio and settings.get("audio_enabled", True):
@@ -1335,7 +1358,7 @@ async def main():
             power_mgr,
         ),
         secondary_task(secondary),
-        housekeeping_task(session_mgr, np, settings, audio=audio),
+        housekeeping_task(session_mgr, np, settings, audio=audio, pwm=pwm),
     ]
     if audio:
         tasks.append(audio.start())
