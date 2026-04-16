@@ -25,21 +25,8 @@ from bodn.sequencer_rules import (
     BPM_STEP,
 )
 
-# Try to import native audio mixer for sample-accurate step clock
-try:
-    import _audiomix
-
-    _has_clock = True
-except ImportError:
-    _has_clock = False
-
-# Try to import native input module for C-driven LED beat sync
-try:
-    import _mcpinput
-
-    _has_led_sync = hasattr(_mcpinput, "led_init")
-except ImportError:
-    _has_led_sync = False
+import _audiomix
+import _mcpinput
 
 ENC_A = const(1)  # config.ENC_A — BPM control
 
@@ -102,7 +89,6 @@ class SequencerScreen(Screen):
         self._prev_sw0 = None
         self._prev_sw1 = None
         self._prev_sw2 = None
-        self._last_ms = 0
         self._dirty = True
         self._full_clear = True
         self._marker_dirty = False  # playhead marker needs redraw (cheap)
@@ -151,39 +137,33 @@ class SequencerScreen(Screen):
                 print("seq: drum preload error:", e)
                 self._drum_bufs = [None] * NUM_PERC_TRACKS
 
-        self._last_ms = time.ticks_ms()
-
         # Register drum buffers with C clock for sample-accurate triggering
-        if _has_clock:
-            _audiomix.clock_clear_grid()
-            if self._drum_bufs:
-                for ti in range(min(NUM_PERC_TRACKS, len(self._drum_bufs))):
-                    buf = self._drum_bufs[ti]
-                    if buf:
-                        _audiomix.clock_set_perc_buffer(ti, buf, len(buf))
+        _audiomix.clock_clear_grid()
+        if self._drum_bufs:
+            for ti in range(min(NUM_PERC_TRACKS, len(self._drum_bufs))):
+                buf = self._drum_bufs[ti]
+                if buf:
+                    _audiomix.clock_set_perc_buffer(ti, buf, len(buf))
 
-            # Melody tone track (track 0, voice 5)
-            _audiomix.clock_set_tone_track(0, 5, 0)  # mask filled by _sync_all
+        # Melody tone track (track 0, voice 5)
+        _audiomix.clock_set_tone_track(0, 5, 0)  # mask filled by _sync_all
 
-            # Metronome tone track (track 1, voice 7)
-            # Pre-fill step data for all 16 possible steps
-            for s in range(16):
-                freq = _METRO_HI if (s % 4 == 0) else _METRO_LO
-                _audiomix.clock_set_tone_step(
-                    1, s, freq, 30, _audiomix.WAVE_SQUARE, 0, 5, 100
-                )
-            metro_mask = self._metro_mask() if self._engine.metronome else 0
-            _audiomix.clock_set_tone_track(1, _METRO_VOICE, metro_mask)
+        # Metronome tone track (track 1, voice 7)
+        # Pre-fill step data for all 16 possible steps
+        for s in range(16):
+            freq = _METRO_HI if (s % 4 == 0) else _METRO_LO
+            _audiomix.clock_set_tone_step(
+                1, s, freq, 30, _audiomix.WAVE_SQUARE, 0, 5, 100
+            )
+        metro_mask = self._metro_mask() if self._engine.metronome else 0
+        _audiomix.clock_set_tone_track(1, _METRO_VOICE, metro_mask)
 
-        # Enable C-driven beat-sync LEDs if available
+        # Enable C-driven beat-sync LEDs
         self._c_leds = False
-        if _has_led_sync and _has_clock and self._arcade:
-            try:
-                if _mcpinput.led_init():
-                    _mcpinput.led_mode(_mcpinput.LED_BEAT_SYNC)
-                    self._c_leds = True
-            except Exception as e:
-                print("seq: C LED init failed:", e)
+        if self._arcade:
+            _mcpinput.led_init()
+            _mcpinput.led_mode(_mcpinput.LED_BEAT_SYNC)
+            self._c_leds = True
 
         # Compute grid geometry
         w = manager.tft.width if hasattr(manager.tft, "width") else 320
@@ -206,13 +186,9 @@ class SequencerScreen(Screen):
     def exit(self):
         # Restore default LED mode before cleanup
         if self._c_leds:
-            try:
-                _mcpinput.led_mode(_mcpinput.LED_PYTHON)
-            except Exception:
-                pass
+            _mcpinput.led_mode(_mcpinput.LED_PYTHON)
             self._c_leds = False
-        if _has_clock:
-            _audiomix.clock_stop()
+        _audiomix.clock_stop()
         self._drum_bufs = None
         if self._audio:
             self._audio.stop("sfx")
@@ -243,10 +219,7 @@ class SequencerScreen(Screen):
         if self._pause.is_open or self._pause.is_holding:
             return
 
-        # Timing
         now = time.ticks_ms()
-        delta = time.ticks_diff(now, self._last_ms)
-        self._last_ms = now
 
         eng = self._engine
 
@@ -258,25 +231,22 @@ class SequencerScreen(Screen):
         if self._prev_sw0 is not None and sw0 != self._prev_sw0:
             if eng.state == PLAYING:
                 eng.stop()
-                if _has_clock:
-                    _audiomix.clock_stop()
+                _audiomix.clock_stop()
             else:
                 eng.start()
-                if _has_clock:
-                    self._sync_all_to_clock()
-                    _audiomix.clock_start(eng.bpm, eng.n_steps)
+                self._sync_all_to_clock()
+                _audiomix.clock_start(eng.bpm, eng.n_steps)
             self._dirty = True
         self._prev_sw0 = sw0
 
         if self._prev_sw1 is not None and sw1 != self._prev_sw1:
             new_steps = 16 if sw1 else 8
             eng.set_steps(new_steps)
-            if _has_clock:
-                _audiomix.clock_set_steps(new_steps)
-                self._sync_all_to_clock()
-                # Update metronome mask for new step count
-                if eng.metronome:
-                    _audiomix.clock_set_tone_track(1, _METRO_VOICE, self._metro_mask())
+            _audiomix.clock_set_steps(new_steps)
+            self._sync_all_to_clock()
+            # Update metronome mask for new step count
+            if eng.metronome:
+                _audiomix.clock_set_tone_track(1, _METRO_VOICE, self._metro_mask())
             self._recompute_grid()
             self._dirty = True
             self._full_clear = True
@@ -286,9 +256,8 @@ class SequencerScreen(Screen):
         sw2 = sw[2] if len(sw) > 2 else False
         if self._prev_sw2 is not None and sw2 != self._prev_sw2:
             eng.toggle_metronome()
-            if _has_clock:
-                mask = self._metro_mask() if eng.metronome else 0
-                _audiomix.clock_set_tone_track(1, _METRO_VOICE, mask)
+            mask = self._metro_mask() if eng.metronome else 0
+            _audiomix.clock_set_tone_track(1, _METRO_VOICE, mask)
             self._dirty = True
         self._prev_sw2 = sw2
 
@@ -296,26 +265,24 @@ class SequencerScreen(Screen):
         enc_delta = inp.enc_delta[ENC_A]
         if enc_delta:
             eng.set_bpm(eng.bpm + enc_delta * BPM_STEP)
-            if _has_clock:
-                _audiomix.clock_set_bpm(eng.bpm)
+            _audiomix.clock_set_bpm(eng.bpm)
             self._dirty = True
 
         # --- Encoder A long-press: clear all ---
         enc_a_ch = inp.gesture_enc(config.ENC_A)
         if inp.gestures.long_press[enc_a_ch]:
             eng.clear_all()
-            if _has_clock:
-                _audiomix.clock_clear_grid()
-                # Re-setup tone tracks (clear_grid zeros them)
-                _audiomix.clock_set_tone_track(0, 5, 0)  # melody
-                # Re-fill metronome step data and restore mask if active
-                for s in range(16):
-                    freq = _METRO_HI if (s % 4 == 0) else _METRO_LO
-                    _audiomix.clock_set_tone_step(
-                        1, s, freq, 30, _audiomix.WAVE_SQUARE, 0, 5, 100
-                    )
-                metro_mask = self._metro_mask() if eng.metronome else 0
-                _audiomix.clock_set_tone_track(1, _METRO_VOICE, metro_mask)
+            _audiomix.clock_clear_grid()
+            # Re-setup tone tracks (clear_grid zeros them)
+            _audiomix.clock_set_tone_track(0, 5, 0)  # melody
+            # Re-fill metronome step data and restore mask if active
+            for s in range(16):
+                freq = _METRO_HI if (s % 4 == 0) else _METRO_LO
+                _audiomix.clock_set_tone_step(
+                    1, s, freq, 30, _audiomix.WAVE_SQUARE, 0, 5, 100
+                )
+            metro_mask = self._metro_mask() if eng.metronome else 0
+            _audiomix.clock_set_tone_track(1, _METRO_VOICE, metro_mask)
             if self._c_leds:
                 self._sync_track_active()
             self._dirty = True
@@ -330,8 +297,7 @@ class SequencerScreen(Screen):
             if i < len(inp.arc_just_pressed) and inp.arc_just_pressed[i]:
                 step, val = eng.toggle_perc(i)
                 perc_changed = True
-                if _has_clock:
-                    self._sync_step_to_clock(step)
+                self._sync_step_to_clock(step)
                 if val:
                     any_toggled_on = True
                     self._play_drum(i)
@@ -343,8 +309,7 @@ class SequencerScreen(Screen):
         for i in range(8):
             if i < len(inp.btn_just_pressed) and inp.btn_just_pressed[i]:
                 step, val = eng.set_melody(i)
-                if _has_clock:
-                    self._sync_step_to_clock(step)
+                self._sync_step_to_clock(step)
                 if val:
                     any_toggled_on = True
                     self._play_melody_note(i)
@@ -353,35 +318,18 @@ class SequencerScreen(Screen):
         # Auto-start on first interaction
         if any_toggled_on and eng.state == STOPPED:
             eng.start()
-            if _has_clock:
-                self._sync_all_to_clock()
-                _audiomix.clock_start(eng.bpm, eng.n_steps)
+            self._sync_all_to_clock()
+            _audiomix.clock_start(eng.bpm, eng.n_steps)
             if self._c_leds:
                 self._sync_track_active()
             self._dirty = True
 
-        # --- Advance playhead ---
-        if _has_clock and eng.state == PLAYING:
-            # C clock drives timing — read current step for UI + quantization
+        # --- Advance playhead (C clock drives timing) ---
+        if eng.state == PLAYING:
             c_step = _audiomix.clock_get_step()
             eng.step = c_step
             eng._frac = float(c_step)  # keep nearest_step() in sync
             eng.step_advanced = c_step != self._prev_step
-        else:
-            # Fallback: Python-driven timing
-            eng.advance(delta)
-            if eng.step_advanced:
-                self._trigger_step_sounds(eng.step)
-
-        # --- Metronome click on beat (fallback: no C clock) ---
-        if (
-            not _has_clock
-            and eng.metronome
-            and eng.state == PLAYING
-            and eng.step_advanced
-        ):
-            if eng.is_beat(eng.step):
-                self._play_metronome(eng.is_downbeat(eng.step))
 
         # Update prev_step in update() so step_advanced is frame-accurate
         self._prev_step = eng.step
@@ -396,7 +344,7 @@ class SequencerScreen(Screen):
                 eng.bpm, eng.state == PLAYING, eng.n_steps, eng.metronome
             )
 
-        # Arcade LEDs: C handles beat-sync, Python fallback otherwise
+        # Arcade LEDs: C handles beat-sync; Python fallback for non-C-LED mode
         arc = self._arcade
         if arc and not self._c_leds:
             step = eng.step
@@ -421,8 +369,6 @@ class SequencerScreen(Screen):
 
     def _sync_step_to_clock(self, step):
         """Push one grid step's perc + melody data to the C clock."""
-        if not _has_clock:
-            return
         eng = self._engine
         mask = 0
         for ti in range(NUM_PERC_TRACKS):
@@ -441,8 +387,6 @@ class SequencerScreen(Screen):
 
     def _sync_all_to_clock(self):
         """Push entire grid to C clock."""
-        if not _has_clock:
-            return
         mel_mask = 0
         for s in range(self._engine.n_steps):
             self._sync_step_to_clock(s)
@@ -478,8 +422,7 @@ class SequencerScreen(Screen):
         buf = self._drum_bufs[track] if track < len(self._drum_bufs) else None
         if not buf:
             return
-        if _has_clock:
-            _audiomix.clock_preview(track)  # suppress clock trigger for this track
+        _audiomix.clock_preview(track)  # suppress clock trigger for this track
         self._audio.play_buffer(buf, voice=_PREVIEW_VOICE)
 
     def _play_melody_note(self, btn_idx):
@@ -487,9 +430,8 @@ class SequencerScreen(Screen):
         if not self._audio or btn_idx >= len(MELODY_FREQS):
             return
         freq = MELODY_FREQS[btn_idx]
-        if _has_clock:
-            _audiomix.clock_tone_preview(0)  # suppress clock trigger for melody
-            self._update_melody_mask()
+        _audiomix.clock_tone_preview(0)  # suppress clock trigger for melody
+        self._update_melody_mask()
         self._audio.tone(freq, 150, "sine", voice=_PREVIEW_VOICE)
 
     def _update_melody_mask(self):
@@ -500,26 +442,6 @@ class SequencerScreen(Screen):
             if eng.melody[s] > 0:
                 mel_mask |= 1 << s
         _audiomix.clock_set_tone_track(0, 5, mel_mask)
-
-    def _play_metronome(self, downbeat):
-        """Play a short metronome click. Accented on downbeats."""
-        if not self._audio:
-            return
-        freq = _METRO_HI if downbeat else _METRO_LO
-        self._audio.tone(freq, 30, "square", voice=_METRO_VOICE)
-
-    def _trigger_step_sounds(self, step):
-        """Trigger all active sounds at a grid step (called on step tick)."""
-        if not self._audio:
-            return
-        eng = self._engine
-        for t_idx in range(NUM_PERC_TRACKS):
-            if eng.perc[t_idx][step]:
-                self._play_drum(t_idx)
-        mel = eng.melody[step]
-        if mel > 0:
-            freq = MELODY_FREQS[mel - 1]
-            self._audio.tone(freq, 150, "sine", channel="music")
 
     # ------------------------------------------------------------------
     # Rendering

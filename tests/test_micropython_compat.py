@@ -45,11 +45,9 @@ IMPORTABLE_MODULES = [
     "bodn.ui.icons",
     "bodn.ui.font_ext",
     "bodn.ui.home",
-    "bodn.ui.sequencer",
     "bodn.ui.sortera",
     "bodn.ui.soundboard",
     "bodn.ui.soundboard_secondary",
-    "bodn.ui.highfive",
     "bodn.ui.nfc_provision",
 ]
 

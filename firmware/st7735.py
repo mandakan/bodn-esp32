@@ -1,14 +1,8 @@
 # st7735.py — minimal framebuf-based ST7735 driver for MicroPython
 #
-# Supports two backends:
-#   - machine.SPI (blocking) — pass SPI object as first arg
-#   - _spidma DMA (non-blocking) — pass slot ID (int) as first arg
+# Uses _spidma DMA (non-blocking) — pass slot ID (int) as first arg.
 #
-# Usage (blocking):
-#   spi = SPI(1, baudrate=26_000_000, sck=Pin(12), mosi=Pin(11))
-#   tft = ST7735(spi, cs=Pin(10, Pin.OUT), dc=Pin(8, Pin.OUT), rst=Pin(9, Pin.OUT))
-#
-# Usage (DMA):
+# Usage:
 #   import _spidma
 #   _spidma.init(sck=12, mosi=11, baudrate=26_000_000)
 #   _spidma.add_display(slot=0, cs=10, dc=8, width=320, height=240)
@@ -17,10 +11,7 @@
 import framebuf
 import time
 
-try:
-    import _spidma
-except ImportError:
-    _spidma = None
+import _spidma
 
 # Reusable 8×8 glyph buffer for extended character blit
 _glyph_buf = bytearray(8 * 8 * 2)
@@ -49,9 +40,7 @@ class ST7735(framebuf.FrameBuffer):
 
     def __init__(
         self,
-        spi_or_slot,
-        cs=None,
-        dc=None,
+        slot,
         rst=None,
         width=128,
         height=160,
@@ -60,20 +49,7 @@ class ST7735(framebuf.FrameBuffer):
         madctl=0x00,
         skip_reset=False,
     ):
-        if _spidma is not None and isinstance(spi_or_slot, int):
-            # Native DMA mode — slot ID from _spidma.add_display()
-            self._slot = spi_or_slot
-            self._native = True
-            self.spi = None
-            self.cs = None
-            self.dc = None
-        else:
-            # Legacy blocking mode — machine.SPI object
-            self._slot = -1
-            self._native = False
-            self.spi = spi_or_slot
-            self.cs = cs
-            self.dc = dc
+        self._slot = slot
         self.rst = rst
         self.width = width
         self.height = height
@@ -88,16 +64,7 @@ class ST7735(framebuf.FrameBuffer):
         self._init_display(skip_reset=skip_reset)
 
     def _cmd(self, cmd, data=None):
-        if self._native:
-            _spidma.cmd(self._slot, cmd, data or b"")
-            return
-        self.cs.value(0)
-        self.dc.value(0)
-        self.spi.write(bytes([cmd]))
-        if data:
-            self.dc.value(1)
-            self.spi.write(data)
-        self.cs.value(1)
+        _spidma.cmd(self._slot, cmd, data or b"")
 
     def _init_display(self, skip_reset=False):
         if not skip_reset:
@@ -254,33 +221,16 @@ class ST7735(framebuf.FrameBuffer):
             super().text("".join(ascii_buf), ascii_start, y, color)
 
     def busy(self):
-        """True if a DMA transfer is in progress (native mode only)."""
-        if self._native:
-            return _spidma.busy(self._slot)
-        return False
+        """True if a DMA transfer is in progress."""
+        return _spidma.busy(self._slot)
 
     def wait(self):
         """Block until any in-progress DMA transfer completes."""
-        if self._native:
-            _spidma.wait(self._slot)
+        _spidma.wait(self._slot)
 
     def show(self):
         """Push the framebuffer to the display."""
-        if self._native:
-            _spidma.push(self._slot, self._buf)
-            return
-        x0 = self._col_offset
-        x1 = x0 + self.width - 1
-        y0 = self._row_offset
-        y1 = y0 + self.height - 1
-        self._cmd(_CASET, bytes([x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF]))
-        self._cmd(_RASET, bytes([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF]))
-        self.cs.value(0)
-        self.dc.value(0)
-        self.spi.write(bytes([_RAMWR]))
-        self.dc.value(1)
-        self.spi.write(self._buf)
-        self.cs.value(1)
+        _spidma.push(self._slot, self._buf)
 
     def show_rect(self, x, y, w, h):
         """Push a sub-rectangle of the framebuffer to the display.
@@ -302,35 +252,7 @@ class ST7735(framebuf.FrameBuffer):
             h = self.height - y
         if w <= 0 or h <= 0:
             return
-        if self._native:
-            _spidma.push_rect(self._slot, self._buf, x, y, w, h)
-            return
-        # Set address window
-        x0 = self._col_offset + x
-        x1 = x0 + w - 1
-        y0 = self._row_offset + y
-        y1 = y0 + h - 1
-        self._cmd(_CASET, bytes([x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF]))
-        self._cmd(_RASET, bytes([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF]))
-        # Begin RAMWR
-        self.cs.value(0)
-        self.dc.value(0)
-        self.spi.write(bytes([_RAMWR]))
-        self.dc.value(1)
-        # Push pixel data from framebuffer
-        mv = memoryview(self._buf)
-        stride = self.width * 2
-        if w == self.width:
-            # Full-width: contiguous slice, single write
-            start = y * stride
-            self.spi.write(mv[start : start + h * stride])
-        else:
-            # Partial-width: one write per row
-            row_bytes = w * 2
-            for row in range(h):
-                start = (y + row) * stride + x * 2
-                self.spi.write(mv[start : start + row_bytes])
-        self.cs.value(1)
+        _spidma.push_rect(self._slot, self._buf, x, y, w, h)
 
     @staticmethod
     def rgb(r, g, b):

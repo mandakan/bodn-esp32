@@ -34,13 +34,7 @@ from bodn.highfive_rules import (
 from bodn.neo import neo
 from bodn.assets import preload_sounds
 
-# Try native LED driver for C-level hit detection
-try:
-    import _mcpinput
-
-    _has_whack = hasattr(_mcpinput, "led_set_whack_target")
-except ImportError:
-    _has_whack = False
+import _mcpinput
 
 # Arcade button colors (RGB) for NeoPixel feedback
 _ARC_RGB = (
@@ -158,14 +152,11 @@ class HighFiveScreen(Screen):
 
         # Init C LED driver for whack mode (hit detection at 500Hz)
         self._c_leds = False
-        if _has_whack and self._arcade:
-            try:
-                if _mcpinput.led_init():
-                    _mcpinput.led_set_whack_pins(config.MCP_ARC_PINS)
-                    _mcpinput.led_mode(_mcpinput.LED_WHACK)
-                    self._c_leds = True
-            except Exception as e:
-                print("highfive: C LED init failed:", e)
+        if self._arcade:
+            _mcpinput.led_init()
+            _mcpinput.led_set_whack_pins(config.MCP_ARC_PINS)
+            _mcpinput.led_mode(_mcpinput.LED_WHACK)
+            self._c_leds = True
 
         # Register scan-time audio callback for immediate button tones
         if self._audio:
@@ -173,11 +164,8 @@ class HighFiveScreen(Screen):
 
     def exit(self):
         if self._c_leds:
-            try:
-                _mcpinput.led_set_whack_target(0xFF, 0)
-                _mcpinput.led_mode(_mcpinput.LED_PYTHON)
-            except Exception:
-                pass
+            _mcpinput.led_set_whack_target(0xFF, 0)
+            _mcpinput.led_mode(_mcpinput.LED_PYTHON)
             self._c_leds = False
 
         # Free sound buffers (PSRAM)
@@ -254,18 +242,7 @@ class HighFiveScreen(Screen):
         hit = False
         miss = False
         if self._c_leds:
-            try:
-                hit, miss = _mcpinput.led_get_whack_result()
-            except Exception:
-                pass
-        else:
-            # Fallback: check arcade button presses from Python input
-            if eng.state == SHOWING and eng.target >= 0:
-                for i in range(NUM_BUTTONS):
-                    if i < len(inp.arc_just_pressed) and inp.arc_just_pressed[i]:
-                        if i == eng.target:
-                            hit = True
-                        break
+            hit, miss = _mcpinput.led_get_whack_result()
 
         # Wrong button sound (any non-target arcade press during SHOWING)
         if eng.state == SHOWING and self._audio and eng.target >= 0:
@@ -308,34 +285,9 @@ class HighFiveScreen(Screen):
                 deadline = now_ms + eng.window_ms
                 _mcpinput.led_set_whack_target(eng.target, deadline, eng.pulse_speed)
 
-        # Python-fallback arcade LED control (when C not available)
-        if self._arcade and not self._c_leds:
-            self._update_arcade_leds(eng, frame)
-
         # NeoPixel strip (every 3rd frame)
         if frame % 3 == 0:
             self._update_neopixels(eng, frame)
-
-    def _update_arcade_leds(self, eng, frame):
-        """Python fallback: drive arcade LEDs from game state."""
-        arc = self._arcade
-        if eng.state == SHOWING and eng.target >= 0:
-            for i in range(NUM_BUTTONS):
-                if i == eng.target:
-                    arc.pulse(i, frame, speed=eng.pulse_speed)
-                else:
-                    arc.off(i)
-        elif eng.state == HIT_FLASH:
-            arc.all_off()
-            if eng.target >= 0:
-                arc.flash(eng.target)
-            arc.tick_flash()
-        elif eng.state == MISS_FLASH:
-            for i in range(NUM_BUTTONS):
-                arc.blink(i, frame, speed=6)
-        else:
-            arc.all_off()
-        arc.flush()
 
     def _update_neopixels(self, eng, frame):
         """Update NeoPixel strip based on game state."""

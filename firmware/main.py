@@ -7,7 +7,7 @@ except ImportError:
 
 import time
 import micropython
-from machine import Pin, SPI, I2C
+from machine import Pin
 from bodn.neo import neo
 from micropython import const
 from bodn import config
@@ -93,98 +93,58 @@ def create_hardware():
         "nfc": False,
     }
 
-    # Shared RST pin (needed for both paths)
+    # Shared RST pin
     rst = Pin(config.TFT_RST, Pin.OUT)
 
-    # Try DMA SPI path first, fall back to blocking machine.SPI
-    try:
-        import _spidma
+    import _spidma
 
-        _spidma.init(
-            sck=config.TFT_SCK,
-            mosi=config.TFT_MOSI,
-            baudrate=config.TFT_SPI_BAUDRATE,
-        )
-        _spidma.add_display(
-            slot=0,
-            cs=config.TFT_CS,
-            dc=config.TFT_DC,
-            width=config.TFT_WIDTH,
-            height=config.TFT_HEIGHT,
-            col_off=config.TFT_COL_OFFSET,
-            row_off=config.TFT_ROW_OFFSET,
-        )
-        _spidma.add_display(
-            slot=1,
-            cs=config.TFT2_CS,
-            dc=config.TFT_DC,
-            width=config.TFT2_WIDTH,
-            height=config.TFT2_HEIGHT,
-            col_off=config.TFT2_COL_OFFSET,
-            row_off=config.TFT2_ROW_OFFSET,
-        )
+    _spidma.init(
+        sck=config.TFT_SCK,
+        mosi=config.TFT_MOSI,
+        baudrate=config.TFT_SPI_BAUDRATE,
+    )
+    _spidma.add_display(
+        slot=0,
+        cs=config.TFT_CS,
+        dc=config.TFT_DC,
+        width=config.TFT_WIDTH,
+        height=config.TFT_HEIGHT,
+        col_off=config.TFT_COL_OFFSET,
+        row_off=config.TFT_ROW_OFFSET,
+    )
+    _spidma.add_display(
+        slot=1,
+        cs=config.TFT2_CS,
+        dc=config.TFT_DC,
+        width=config.TFT2_WIDTH,
+        height=config.TFT2_HEIGHT,
+        col_off=config.TFT2_COL_OFFSET,
+        row_off=config.TFT2_ROW_OFFSET,
+    )
 
-        # Primary display (ILI9341 240×320, DMA slot 0)
-        tft = ST7735(
-            0,
-            rst=rst,
-            width=config.TFT_WIDTH,
-            height=config.TFT_HEIGHT,
-            col_offset=config.TFT_COL_OFFSET,
-            row_offset=config.TFT_ROW_OFFSET,
-            madctl=config.TFT_MADCTL,
-        )
+    # Primary display (ILI9341 240×320, DMA slot 0)
+    tft = ST7735(
+        0,
+        rst=rst,
+        width=config.TFT_WIDTH,
+        height=config.TFT_HEIGHT,
+        col_offset=config.TFT_COL_OFFSET,
+        row_offset=config.TFT_ROW_OFFSET,
+        madctl=config.TFT_MADCTL,
+    )
 
-        # Secondary display (ST7735 128×160, DMA slot 1)
-        tft2 = ST7735(
-            1,
-            rst=rst,
-            width=config.TFT2_WIDTH,
-            height=config.TFT2_HEIGHT,
-            col_offset=config.TFT2_COL_OFFSET,
-            row_offset=config.TFT2_ROW_OFFSET,
-            madctl=config.TFT2_MADCTL,
-            skip_reset=True,
-        )
-        print("SPI: DMA")
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print("SPI DMA failed:", e, "— blocking fallback")
-        dc = Pin(config.TFT_DC, Pin.OUT)
-        spi = SPI(
-            1,
-            baudrate=config.TFT_SPI_BAUDRATE,
-            sck=Pin(config.TFT_SCK),
-            mosi=Pin(config.TFT_MOSI),
-        )
-
-        # Primary display (ILI9341 240×320)
-        tft = ST7735(
-            spi,
-            cs=Pin(config.TFT_CS, Pin.OUT),
-            dc=dc,
-            rst=rst,
-            width=config.TFT_WIDTH,
-            height=config.TFT_HEIGHT,
-            col_offset=config.TFT_COL_OFFSET,
-            row_offset=config.TFT_ROW_OFFSET,
-            madctl=config.TFT_MADCTL,
-        )
-
-        # Secondary display (ST7735 128×160, shared bus)
-        tft2 = ST7735(
-            spi,
-            cs=Pin(config.TFT2_CS, Pin.OUT),
-            dc=dc,
-            rst=rst,
-            width=config.TFT2_WIDTH,
-            height=config.TFT2_HEIGHT,
-            col_offset=config.TFT2_COL_OFFSET,
-            row_offset=config.TFT2_ROW_OFFSET,
-            madctl=config.TFT2_MADCTL,
-            skip_reset=True,
-        )
+    # Secondary display (ST7735 128×160, DMA slot 1)
+    tft2 = ST7735(
+        1,
+        rst=rst,
+        width=config.TFT2_WIDTH,
+        height=config.TFT2_HEIGHT,
+        col_offset=config.TFT2_COL_OFFSET,
+        row_offset=config.TFT2_ROW_OFFSET,
+        madctl=config.TFT2_MADCTL,
+        skip_reset=True,
+    )
+    print("SPI: DMA")
 
     # Show logo on secondary display while the rest of init runs
     try:
@@ -216,31 +176,22 @@ def create_hardware():
     # slave state machine.  Must run BEFORE any I2C peripheral init.
     _i2c_bus_recover(config.I2C_SCL, config.I2C_SDA)
 
-    # Try native _mcpinput C module first (deterministic input capture on core 0).
-    # Falls back to machine.I2C if the C module isn't compiled in.
-    _native_input = False
-    try:
-        import _mcpinput
+    # Native _mcpinput C module — deterministic input capture on core 0.
+    import _mcpinput
 
-        # boot.py uses SoftI2C so I2C_NUM_0 is free for us.
-        _mcpinput.init(
-            sda=config.I2C_SDA,
-            scl=config.I2C_SCL,
-            freq=400_000,
-            mcp_addr=config.MCP23017_ADDR,
-            debounce_ms=12,
-            int_pin=-1,
-        )
-        from bodn.native_i2c import NativeI2C
+    # boot.py uses SoftI2C so I2C_NUM_0 is free for us.
+    _mcpinput.init(
+        sda=config.I2C_SDA,
+        scl=config.I2C_SCL,
+        freq=400_000,
+        mcp_addr=config.MCP23017_ADDR,
+        debounce_ms=12,
+        int_pin=-1,
+    )
+    from bodn.native_i2c import NativeI2C
 
-        i2c = NativeI2C()
-        _native_input = True
-        print("_mcpinput: native I2C + MCP1 scan task on core 0")
-    except ImportError:
-        i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
-    except Exception as e:
-        print("_mcpinput init failed, falling back to machine.I2C:", e)
-        i2c = I2C(0, scl=Pin(config.I2C_SCL), sda=Pin(config.I2C_SDA), freq=400_000)
+    i2c = NativeI2C()
+    print("_mcpinput: native I2C + MCP1 scan task on core 0")
 
     # I2C bus scan — show all devices for diagnostics
     i2c_devs = i2c.scan()
@@ -373,48 +324,19 @@ def create_hardware():
         Encoder(config.ENC2_CLK, config.ENC2_DT, enc2_sw),
     ]
 
-    # I2S audio output (MAX98357A)
+    # I2S audio output (MAX98357A) — native _audiomix C mixer on core 0
     audio = None
     try:
         from bodn.audio import AudioEngine
 
-        try:
-            import _audiomix  # noqa: F401 — presence check
-
-            # Native backend: C mixer on core 1 owns I2S + amp
-            audio = AudioEngine(
-                native=True,
-                bck=config.I2S_SPK_BCK,
-                ws=config.I2S_SPK_WS,
-                din=config.I2S_SPK_DIN,
-                amp=config.AMP_SD_PIN,
-            )
-            hw_status["audio"] = True
-            print("AudioEngine initialised (native, core 1)")
-        except Exception as native_err:
-            print("Native audio failed:", native_err, "— falling back")
-            # Fallback: Python-driven I2S on core 0
-            from machine import I2S
-
-            i2s = I2S(
-                0,
-                sck=Pin(config.I2S_SPK_BCK),
-                ws=Pin(config.I2S_SPK_WS),
-                sd=Pin(config.I2S_SPK_DIN),
-                mode=I2S.TX,
-                bits=16,
-                format=I2S.STEREO,
-                rate=16000,
-                ibuf=16384,
-            )
-            _amp_sd = Pin(config.AMP_SD_PIN, Pin.OUT, value=0)
-
-            def _enable_amp():
-                _amp_sd.value(1)
-
-            audio = AudioEngine(i2s, amp_enable=_enable_amp)
-            hw_status["audio"] = True
-            print("AudioEngine initialised (fallback, I2S TX)")
+        audio = AudioEngine(
+            bck=config.I2S_SPK_BCK,
+            ws=config.I2S_SPK_WS,
+            din=config.I2S_SPK_DIN,
+            amp=config.AMP_SD_PIN,
+        )
+        hw_status["audio"] = True
+        print("AudioEngine initialised (native, core 0)")
     except Exception as e:
         print("Audio init failed:", e)
 
@@ -430,7 +352,6 @@ def create_hardware():
         arcade,
         audio,
         hw_status,
-        _native_input,
     )
 
 
@@ -712,73 +633,59 @@ def create_ui(
 # ---------------------------------------------------------------------------
 
 
-async def input_scan_task(mcp, mcp2, inp, native_input=False, switches=None):
+async def input_scan_task(mcp, mcp2, inp, switches=None):
     """Fast input scanning at ~200 Hz.
 
-    Two paths:
-    - Native: MCP1 buttons/arcade are debounced by the _mcpinput C task
-      on core 0.  Python drains events and scans MCP2 + encoders only.
-    - Fallback: reads MCP23017 port caches, debounce/edge detection in Python.
+    MCP1 buttons/arcade are debounced by the _mcpinput C task on core 0.
+    Python drains events and scans MCP2 + encoders only.
 
     Edges are latched until the display task calls inp.consume().
     """
-    if native_input:
-        import _mcpinput
+    import _mcpinput
 
-        # Build MCP1 pin → (kind, index) lookup from config
-        _pin_map = {}
-        for i, p in enumerate(config.MCP_BTN_PINS):
-            _pin_map[p] = ("btn", i)
-        for i, p in enumerate(config.MCP_ARC_PINS):
-            _pin_map[p] = ("arc", i)
-        # MCP1 toggle switch pins (read from bitmask, not events)
-        _sw_pins = config.MCP_SW_PINS
-        # Number of MCP1 switches (sw[0], sw[1])
-        _n_mcp1_sw = len(_sw_pins)
-        _sw = switches or []
+    # Build MCP1 pin → (kind, index) lookup from config
+    _pin_map = {}
+    for i, p in enumerate(config.MCP_BTN_PINS):
+        _pin_map[p] = ("btn", i)
+    for i, p in enumerate(config.MCP_ARC_PINS):
+        _pin_map[p] = ("arc", i)
+    # MCP1 toggle switch pins (read from bitmask, not events)
+    _sw_pins = config.MCP_SW_PINS
+    # Number of MCP1 switches (sw[0], sw[1])
+    _n_mcp1_sw = len(_sw_pins)
+    _sw = switches or []
 
-        while True:
-            try:
-                # Drain debounced events from C module
-                events = _mcpinput.get_events()
-                for ev_type, pin, _t in events:
-                    mapping = _pin_map.get(pin)
-                    if mapping:
-                        kind, idx = mapping
-                        if ev_type == _mcpinput.PRESS:
-                            inp.native_press(kind, idx)
-                        else:
-                            inp.native_release(kind, idx)
+    while True:
+        try:
+            # Drain debounced events from C module
+            events = _mcpinput.get_events()
+            for ev_type, pin, _t in events:
+                mapping = _pin_map.get(pin)
+                if mapping:
+                    kind, idx = mapping
+                    if ev_type == _mcpinput.PRESS:
+                        inp.native_press(kind, idx)
+                    else:
+                        inp.native_release(kind, idx)
 
-                # Read MCP1 toggle switch state from bitmask
-                port_state = _mcpinput.read_state()
-                for i in range(_n_mcp1_sw):
-                    inp.sw[i] = bool(port_state & (1 << _sw_pins[i]))
+            # Read MCP1 toggle switch state from bitmask
+            port_state = _mcpinput.read_state()
+            for i in range(_n_mcp1_sw):
+                inp.sw[i] = bool(port_state & (1 << _sw_pins[i]))
 
-                # Read MCP2 toggle switches (sw[2], sw[3], etc.) via Python
-                for i in range(_n_mcp1_sw, len(_sw)):
-                    inp.sw[i] = _sw[i].value() == 0
+            # Read MCP2 toggle switches (sw[2], sw[3], etc.) via Python
+            for i in range(_n_mcp1_sw, len(_sw)):
+                inp.sw[i] = _sw[i].value() == 0
 
-                # MCP2 refresh for encoder buttons
-                if mcp2:
-                    mcp2.refresh()
+            # MCP2 refresh for encoder buttons
+            if mcp2:
+                mcp2.refresh()
 
-                # Encoders + encoder buttons (PCNT + MCP2)
-                inp.scan_encoders()
-            except Exception:
-                pass
-            await asyncio.sleep_ms(5)
-    else:
-        while True:
-            try:
-                if mcp:
-                    mcp.refresh()
-                if mcp2:
-                    mcp2.refresh()
-                inp.scan()
-            except Exception:
-                pass  # I2C glitches — next scan will recover
-            await asyncio.sleep_ms(5)
+            # Encoders + encoder buttons (PCNT + MCP2)
+            inp.scan_encoders()
+        except Exception:
+            pass
+        await asyncio.sleep_ms(5)
 
 
 async def primary_task(
@@ -1260,7 +1167,6 @@ async def main():
         arcade,
         audio,
         hw_status,
-        _native_input,
     ) = create_hardware()
 
     # Publish hardware status for diagnostics
@@ -1320,7 +1226,7 @@ async def main():
     #         audio.play_sound("start")
 
     tasks = [
-        input_scan_task(mcp, mcp2, inp, _native_input, switches),
+        input_scan_task(mcp, mcp2, inp, switches),
         primary_task(
             manager,
             settings,

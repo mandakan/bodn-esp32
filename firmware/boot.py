@@ -71,68 +71,36 @@ if not _fast_boot:
 settings = None
 ip = "0.0.0.0"
 
-# --- Init display + LEDs early so we can show progress ---
+# --- Init display early so we can show progress ---
 tft = None
-np = None
 try:
-    from machine import Pin, SPI
-    import neopixel
+    from machine import Pin
     from bodn import config
     from st7735 import ST7735
+    import _spidma
 
-    # Use _spidma DMA if available (also cleans up stale state from
-    # previous soft-reboot), otherwise fall back to blocking machine.SPI.
-    spi = None
-    try:
-        import _spidma
-
-        _spidma.init(
-            sck=config.TFT_SCK,
-            mosi=config.TFT_MOSI,
-            baudrate=config.TFT_SPI_BAUDRATE,
-        )
-        _spidma.add_display(
-            slot=0,
-            cs=config.TFT_CS,
-            dc=config.TFT_DC,
-            width=config.TFT_WIDTH,
-            height=config.TFT_HEIGHT,
-            col_off=config.TFT_COL_OFFSET,
-            row_off=config.TFT_ROW_OFFSET,
-        )
-        tft = ST7735(
-            0,
-            rst=Pin(config.TFT_RST, Pin.OUT),
-            width=config.TFT_WIDTH,
-            height=config.TFT_HEIGHT,
-            col_offset=config.TFT_COL_OFFSET,
-            row_offset=config.TFT_ROW_OFFSET,
-            madctl=config.TFT_MADCTL,
-        )
-    except KeyboardInterrupt:
-        _abort_boot()
-    except Exception:
-        spi = SPI(
-            1,
-            baudrate=config.TFT_SPI_BAUDRATE,
-            sck=Pin(config.TFT_SCK),
-            mosi=Pin(config.TFT_MOSI),
-        )
-        tft = ST7735(
-            spi,
-            cs=Pin(config.TFT_CS, Pin.OUT),
-            dc=Pin(config.TFT_DC, Pin.OUT),
-            rst=Pin(config.TFT_RST, Pin.OUT),
-            width=config.TFT_WIDTH,
-            height=config.TFT_HEIGHT,
-            col_offset=config.TFT_COL_OFFSET,
-            row_offset=config.TFT_ROW_OFFSET,
-            madctl=config.TFT_MADCTL,
-        )
-    np = neopixel.NeoPixel(
-        Pin(config.NEOPIXEL_PIN, Pin.OUT),
-        config.NEOPIXEL_COUNT,
-        timing=1,
+    _spidma.init(
+        sck=config.TFT_SCK,
+        mosi=config.TFT_MOSI,
+        baudrate=config.TFT_SPI_BAUDRATE,
+    )
+    _spidma.add_display(
+        slot=0,
+        cs=config.TFT_CS,
+        dc=config.TFT_DC,
+        width=config.TFT_WIDTH,
+        height=config.TFT_HEIGHT,
+        col_off=config.TFT_COL_OFFSET,
+        row_off=config.TFT_ROW_OFFSET,
+    )
+    tft = ST7735(
+        0,
+        rst=Pin(config.TFT_RST, Pin.OUT),
+        width=config.TFT_WIDTH,
+        height=config.TFT_HEIGHT,
+        col_offset=config.TFT_COL_OFFSET,
+        row_offset=config.TFT_ROW_OFFSET,
+        madctl=config.TFT_MADCTL,
     )
 except KeyboardInterrupt:
     _abort_boot()
@@ -166,7 +134,6 @@ BAR_W = _w * 3 // 4
 BAR_X = (_w - BAR_W) // 2
 BAR_Y = _h * 5 // 8
 BAR_H = max(10, _h // 16)
-N_LEDS = config.NEOPIXEL_COUNT if tft else 0
 
 # Boot steps: (label, message_key, LED colour)
 # message_key is used with i18n.t() after settings are loaded;
@@ -356,16 +323,6 @@ def _show_progress(step, message_key, led_rgb, detail=None, detail_col=None):
         tft.text(detail, dx, h * 7 // 8, detail_col or COL_WHITE)
 
     tft.show()
-
-    # Light LEDs proportionally
-    if np:
-        lit = N_LEDS * step // total
-        for i in range(N_LEDS):
-            if i < lit:
-                np[i] = tuple(c // 4 for c in led_rgb)
-            else:
-                np[i] = (0, 0, 0)
-        np.write()
 
 
 # --- Step 0: Load settings ---
@@ -646,10 +603,6 @@ except KeyboardInterrupt:
     _abort_boot()
 except Exception:
     pass
-if spi:
-    spi.deinit()
-spi = None
-np = None
 gc.threshold(gc.mem_free() // 4)
 gc.collect()
 print("BOOT done, free={}".format(gc.mem_free()))
