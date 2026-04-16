@@ -10,6 +10,7 @@ from bodn.ui.pause import PauseMenu
 from bodn.mystery_rules import MysteryEngine, OUT_IDLE, OUT_MIX, OUT_MAGIC
 from bodn.i18n import t
 from bodn.patterns import N_LEDS, zone_pulse, zone_chase, ZONE_LID_RING
+from bodn.neo import neo
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = const(0)  # config.ENC_NAV
@@ -81,6 +82,8 @@ class MysteryScreen(Screen):
             arc.wave(0, speed=1)
             arc.flush()
         manager.inp.set_on_press(self._on_immediate_press)
+        if neo.active:
+            neo.clear_all_overrides()
 
     def exit(self):
         if self._manager:
@@ -89,6 +92,9 @@ class MysteryScreen(Screen):
         if arc:
             arc.all_off()
             arc.flush()
+        if neo.active:
+            neo.all_off()
+            neo.clear_all_overrides()
         if self._on_exit:
             self._on_exit()
 
@@ -175,21 +181,54 @@ class MysteryScreen(Screen):
             # Lid ring: ambient glow matching output color
             out_type = self._engine.output_type
             out_color = self._engine.display_color
-            if out_type == OUT_MAGIC:
-                zone_chase(ZONE_LID_RING, frame, 3, out_color, lid_bright)
-            elif out_type != OUT_IDLE:
-                zone_pulse(ZONE_LID_RING, frame, 1, out_color, lid_bright)
+
+            if neo.active:
+                # C NeoPixel engine — set stick pixels as overrides
+                for i in range(16):
+                    r, g, b = leds[i]
+                    neo.set_pixel(i, r, g, b)
+                # Lid ring pattern
+                if out_type == OUT_MAGIC:
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_CHASE,
+                        speed=3,
+                        colour=out_color,
+                        brightness=lid_bright,
+                    )
+                elif out_type != OUT_IDLE:
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_PULSE,
+                        speed=1,
+                        colour=out_color,
+                        brightness=lid_bright,
+                    )
+                else:
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_PULSE,
+                        speed=1,
+                        colour=(60, 20, 80),
+                        brightness=lid_bright // 2,
+                    )
             else:
-                zone_pulse(ZONE_LID_RING, frame, 1, (60, 20, 80), lid_bright // 2)
+                # Python fallback path
+                if out_type == OUT_MAGIC:
+                    zone_chase(ZONE_LID_RING, frame, 3, out_color, lid_bright)
+                elif out_type != OUT_IDLE:
+                    zone_pulse(ZONE_LID_RING, frame, 1, out_color, lid_bright)
+                else:
+                    zone_pulse(ZONE_LID_RING, frame, 1, (60, 20, 80), lid_bright // 2)
 
-            ses_state = self._overlay.session_mgr.state
-            leds = self._overlay.static_led_override(ses_state, leds, brightness)
+                ses_state = self._overlay.session_mgr.state
+                leds = self._overlay.static_led_override(ses_state, leds, brightness)
 
-            np = self._np
-            n = N_LEDS
-            for i in range(n):
-                np[i] = leds[i]
-            np.write()
+                np = self._np
+                n = N_LEDS
+                for i in range(n):
+                    np[i] = leds[i]
+                np.write()
 
         # Arcade LEDs — ambient effects matching game state
         arc = self._arcade

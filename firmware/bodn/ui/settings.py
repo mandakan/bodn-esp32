@@ -5,6 +5,7 @@ from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_label, make_label_sprite, blit_sprite
 from bodn.i18n import t, get_language, set_language, available
+from bodn.neo import neo
 
 NAV = const(0)  # config.ENC_NAV
 ADJ = const(1)  # config.ENC_A — value adjustment encoder
@@ -226,9 +227,12 @@ class SettingsScreen(Screen):
         elif key == "leds":
             self._leds_on = not self._leds_on
             if not self._leds_on:
-                for i in range(config.NEOPIXEL_COUNT):
-                    self._np[i] = (0, 0, 0)
-                self._np.write()
+                if neo.active:
+                    neo.all_off()
+                else:
+                    for i in range(config.NEOPIXEL_COUNT):
+                        self._np[i] = (0, 0, 0)
+                    self._np.write()
         elif key == "audio_enabled":
             self._settings["audio_enabled"] = not self._settings.get(
                 "audio_enabled", True

@@ -31,6 +31,7 @@ from bodn.patterns import (
     zone_clear,
     ZONE_LID_RING,
 )
+from bodn.neo import neo
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = const(0)
@@ -214,6 +215,9 @@ class SorteraScreen(Screen):
         self._engine = SorteraEngine(card_set)
         self._pending_card_id = None
 
+        if neo.active:
+            neo.clear_all_overrides()
+
         # Pre-render title sprite
         self._title_sprite = make_label_sprite("Sortera", 0xFFFF, scale=2)
 
@@ -223,6 +227,9 @@ class SorteraScreen(Screen):
         self._play_audio(None, WELCOME)
 
     def exit(self):
+        if neo.active:
+            neo.all_off()
+            neo.clear_all_overrides()
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
@@ -302,27 +309,70 @@ class SorteraScreen(Screen):
             brightness = self._brightness.value
             lid_bright = min(brightness, config.NEOPIXEL_LID_BRIGHTNESS)
 
-            leds = self._engine.make_static_leds(brightness)
+            if neo.active:
+                # --- C NeoPixel engine path ---
+                leds = self._engine.make_static_leds(brightness)
+                for i in range(16):
+                    r, g, b = leds[i]
+                    neo.set_pixel(i, r, g, b)
 
-            eng = self._engine
-            if eng.state == CORRECT:
-                zone_pulse(ZONE_LID_RING, frame, 3, (0, 255, 0), lid_bright)
-            elif eng.state == WRONG:
-                zone_pulse(ZONE_LID_RING, frame, 2, (255, 0, 0), lid_bright)
-            elif eng.state == RULE_SWITCH:
-                zone_chase(ZONE_LID_RING, frame, 4, eng.rule_colour_rgb, lid_bright)
-            elif eng.state in (ANNOUNCE_RULE, WAITING):
-                zone_fill(ZONE_LID_RING, eng.rule_colour_rgb, lid_bright)
+                eng = self._engine
+                if eng.state == CORRECT:
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_PULSE,
+                        speed=3,
+                        colour=(0, 255, 0),
+                        brightness=lid_bright,
+                    )
+                elif eng.state == WRONG:
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_PULSE,
+                        speed=2,
+                        colour=(255, 0, 0),
+                        brightness=lid_bright,
+                    )
+                elif eng.state == RULE_SWITCH:
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_CHASE,
+                        speed=4,
+                        colour=eng.rule_colour_rgb,
+                        brightness=lid_bright,
+                    )
+                elif eng.state in (ANNOUNCE_RULE, WAITING):
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_SOLID,
+                        colour=eng.rule_colour_rgb,
+                        brightness=lid_bright,
+                    )
+                else:
+                    neo.zone_off(neo.ZONE_LID_RING)
             else:
-                zone_clear(ZONE_LID_RING)
+                # --- Python fallback path ---
+                leds = self._engine.make_static_leds(brightness)
 
-            ses_state = self._overlay.session_mgr.state
-            leds = self._overlay.static_led_override(ses_state, leds, brightness)
+                eng = self._engine
+                if eng.state == CORRECT:
+                    zone_pulse(ZONE_LID_RING, frame, 3, (0, 255, 0), lid_bright)
+                elif eng.state == WRONG:
+                    zone_pulse(ZONE_LID_RING, frame, 2, (255, 0, 0), lid_bright)
+                elif eng.state == RULE_SWITCH:
+                    zone_chase(ZONE_LID_RING, frame, 4, eng.rule_colour_rgb, lid_bright)
+                elif eng.state in (ANNOUNCE_RULE, WAITING):
+                    zone_fill(ZONE_LID_RING, eng.rule_colour_rgb, lid_bright)
+                else:
+                    zone_clear(ZONE_LID_RING)
 
-            np = self._np
-            for i in range(N_LEDS):
-                np[i] = leds[i]
-            np.write()
+                ses_state = self._overlay.session_mgr.state
+                leds = self._overlay.static_led_override(ses_state, leds, brightness)
+
+                np = self._np
+                for i in range(N_LEDS):
+                    np[i] = leds[i]
+                np.write()
 
         # Arcade LEDs
         arc = self._arcade

@@ -9,6 +9,7 @@ import time
 import micropython
 import neopixel
 from machine import Pin, SPI, I2C
+from bodn.neo import neo
 from micropython import const
 from bodn import config
 from bodn.encoder import Encoder
@@ -355,7 +356,17 @@ def create_hardware():
     except Exception as e:
         print("DS18B20 init failed:", e)
 
-    np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
+    # NeoPixel init: prefer C engine (_neopixel), fall back to Python
+    if neo.available:
+        try:
+            neo.init()
+            np = None  # C engine owns the pin; np not used
+            print("NeoPixel: C engine on GPIO", config.NEOPIXEL_PIN)
+        except Exception as e:
+            print("NeoPixel C engine failed:", e, "— falling back")
+            np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
+    else:
+        np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
 
     # Encoder push buttons are on MCP2. If MCP2 is unavailable, the sw
     # attribute falls back to a stub that always reads 1 (not pressed).
@@ -714,9 +725,12 @@ def create_ui(
     manager.push(home)
 
     # Clear LEDs
-    for i in range(N_LEDS):
-        np[i] = (0, 0, 0)
-    np.write()
+    if neo.active:
+        neo.all_off()
+    elif np:
+        for i in range(N_LEDS):
+            np[i] = (0, 0, 0)
+        np.write()
 
     return manager, secondary, inp, mode_screens
 
@@ -1028,9 +1042,12 @@ async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
                     )
                 )
                 # Kill everything before sleeping
-                for i in range(N_LEDS):
-                    np[i] = (0, 0, 0)
-                np.write()
+                if neo.active:
+                    neo.set_override(neo.OVERRIDE_BLACK)
+                elif np:
+                    for i in range(N_LEDS):
+                        np[i] = (0, 0, 0)
+                    np.write()
                 try:
                     from machine import deepsleep
 
@@ -1049,9 +1066,12 @@ async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
                     )
                 )
                 # Kill NeoPixels — biggest heat contributor
-                for i in range(N_LEDS):
-                    np[i] = (0, 0, 0)
-                np.write()
+                if neo.active:
+                    neo.set_override(neo.OVERRIDE_BLACK)
+                elif np:
+                    for i in range(N_LEDS):
+                        np[i] = (0, 0, 0)
+                    np.write()
                 # Dim display backlight to minimum
                 if pwm:
                     try:
@@ -1102,9 +1122,12 @@ async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
                     )
                 )
                 # Kill LEDs + backlight, then sleep
-                for i in range(N_LEDS):
-                    np[i] = (0, 0, 0)
-                np.write()
+                if neo.active:
+                    neo.set_override(neo.OVERRIDE_BLACK)
+                elif np:
+                    for i in range(N_LEDS):
+                        np[i] = (0, 0, 0)
+                    np.write()
                 try:
                     import machine as _machine
 
@@ -1127,9 +1150,12 @@ async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
                         mv, config.BAT_CRIT_MV
                     )
                 )
-                for i in range(N_LEDS):
-                    np[i] = (0, 0, 0)
-                np.write()
+                if neo.active:
+                    neo.set_override(neo.OVERRIDE_BLACK)
+                elif np:
+                    for i in range(N_LEDS):
+                        np[i] = (0, 0, 0)
+                    np.write()
 
             elif bat_status == "warn" and _prev_bat == "ok":
                 mv = battery.voltage_mv()

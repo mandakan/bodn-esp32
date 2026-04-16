@@ -36,6 +36,7 @@ from bodn.life_rules import (
     toggle,
 )
 from bodn.i18n import t
+from bodn.neo import neo
 from bodn.patterns import (
     N_LEDS,
     _led_buf,
@@ -166,12 +167,17 @@ class GardenScreen(Screen):
         self._running = False
         self._plant_count = 0
         self._last_step_ms = time.ticks_ms()
+        if neo.active:
+            neo.clear_all_overrides()
         arc = self._arcade
         if arc:
             arc.wave(0, speed=1)
             arc.flush()
 
     def exit(self):
+        if neo.active:
+            neo.all_off()
+            neo.clear_all_overrides()
         arc = self._arcade
         if arc:
             arc.all_off()
@@ -331,38 +337,80 @@ class GardenScreen(Screen):
         pop = self._population
         total = GRID_W * GRID_H
 
-        # Sticks: heartbeat pulse synced to generation tick
-        if self._running and pop > 0:
-            pulse_color = (0, 200, 100)
-            phase = (frame * 3) & 0xFF
-            v = phase if phase < 128 else 255 - phase
-            v = (v * brightness) >> 7
-            c = scale(pulse_color, v)
-            buf = _led_buf
-            for i in range(16):
-                buf[i] = c
+        if neo.active:
+            # --- C NeoPixel engine path ---
+            # Sticks: heartbeat pulse synced to generation tick
+            if self._running and pop > 0:
+                pulse_color = (0, 200, 100)
+                phase = (frame * 3) & 0xFF
+                v = phase if phase < 128 else 255 - phase
+                v = (v * brightness) >> 7
+                r = pulse_color[0] * v >> 8
+                g = pulse_color[1] * v >> 8
+                b = pulse_color[2] * v >> 8
+                for i in range(16):
+                    neo.set_pixel(i, r, g, b)
+            else:
+                neo.sticks_pattern(
+                    neo.PAT_SOLID, colour=(30, 10, 40), brightness=brightness // 4
+                )
+
+            # Lid ring: density mapped to lit LEDs
+            if pop > 0:
+                lit = max(1, pop * 92 // total)
+                dom_color = self._dominant_grid_color()
+                cr = dom_color[0] * lid_bright >> 8
+                cg = dom_color[1] * lid_bright >> 8
+                cb = dom_color[2] * lid_bright >> 8
+                dr = dom_color[0] * (lid_bright // 6) >> 8
+                dg = dom_color[1] * (lid_bright // 6) >> 8
+                db = dom_color[2] * (lid_bright // 6) >> 8
+                for i in range(92):
+                    if i < lit:
+                        neo.set_pixel(16 + i, cr, cg, cb)
+                    else:
+                        neo.set_pixel(16 + i, dr, dg, db)
+            else:
+                neo.zone_pattern(
+                    neo.ZONE_LID_RING,
+                    neo.PAT_SOLID,
+                    colour=(10, 5, 20),
+                    brightness=lid_bright // 3,
+                )
         else:
-            zone_fill(ZONE_STICKS, (30, 10, 40), brightness // 4)
+            # --- Python fallback path ---
+            # Sticks: heartbeat pulse synced to generation tick
+            if self._running and pop > 0:
+                pulse_color = (0, 200, 100)
+                phase = (frame * 3) & 0xFF
+                v = phase if phase < 128 else 255 - phase
+                v = (v * brightness) >> 7
+                c = scale(pulse_color, v)
+                buf = _led_buf
+                for i in range(16):
+                    buf[i] = c
+            else:
+                zone_fill(ZONE_STICKS, (30, 10, 40), brightness // 4)
 
-        # Lid ring: density mapped to lit LEDs
-        if pop > 0:
-            lit = max(1, pop * 92 // total)
-            dom_color = self._dominant_grid_color()
-            c = scale(dom_color, lid_bright)
-            dim = scale(dom_color, lid_bright // 6)
-            buf = _led_buf
-            for i in range(92):
-                buf[16 + i] = c if i < lit else dim
-        else:
-            zone_fill(ZONE_LID_RING, (10, 5, 20), lid_bright // 3)
+            # Lid ring: density mapped to lit LEDs
+            if pop > 0:
+                lit = max(1, pop * 92 // total)
+                dom_color = self._dominant_grid_color()
+                c = scale(dom_color, lid_bright)
+                dim = scale(dom_color, lid_bright // 6)
+                buf = _led_buf
+                for i in range(92):
+                    buf[16 + i] = c if i < lit else dim
+            else:
+                zone_fill(ZONE_LID_RING, (10, 5, 20), lid_bright // 3)
 
-        ses_state = self._overlay.session_mgr.state
-        leds = self._overlay.static_led_override(ses_state, _led_buf, brightness)
+            ses_state = self._overlay.session_mgr.state
+            leds = self._overlay.static_led_override(ses_state, _led_buf, brightness)
 
-        np = self._np
-        for i in range(N_LEDS):
-            np[i] = leds[i]
-        np.write()
+            np = self._np
+            for i in range(N_LEDS):
+                np[i] = leds[i]
+            np.write()
 
         # Arcade LEDs — reflect garden state
         arc = self._arcade

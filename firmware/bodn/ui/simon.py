@@ -19,6 +19,7 @@ from bodn.simon_rules import (
     NUM_BUTTONS,
 )
 from bodn.patterns import N_LEDS, zone_pulse, zone_rainbow, zone_clear, ZONE_LID_RING
+from bodn.neo import neo
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = const(0)  # config.ENC_NAV
@@ -88,11 +89,16 @@ class SimonScreen(Screen):
         self._last_ms = time.ticks_ms()
         self._dirty = True
         self._full_clear = True
+        if neo.active:
+            neo.clear_all_overrides()
         manager.inp.set_on_press(self._on_immediate_press)
 
     def exit(self):
         if self._manager:
             self._manager.inp.set_on_press(None)
+        if neo.active:
+            neo.all_off()
+            neo.clear_all_overrides()
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
@@ -171,31 +177,71 @@ class SimonScreen(Screen):
             brightness = self._brightness.value
             lid_bright = min(brightness, config.NEOPIXEL_LID_BRIGHTNESS)
 
-            # Sticks: game feedback (engine writes indices 0–15)
-            leds = self._engine.make_static_leds(brightness)
+            if neo.active:
+                # --- C NeoPixel engine path ---
+                # Sticks: game feedback as pixel overrides
+                leds = self._engine.make_static_leds(brightness)
+                for i in range(16):
+                    r, g, b = leds[i]
+                    neo.set_pixel(i, r, g, b)
 
-            # Lid ring: ambient effect matching game state
-            state = self._engine.state
-            if state == WIN:
-                zone_rainbow(ZONE_LID_RING, frame, 2, 0, lid_bright)
-            elif state == FAIL:
-                zone_pulse(ZONE_LID_RING, frame, 3, (255, 0, 0), lid_bright)
-            elif state == SHOWING and self._engine.active_button >= 0:
-                from bodn.simon_rules import BTN_COLORS
+                # Lid ring: ambient effect matching game state
+                state = self._engine.state
+                if state == WIN:
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_RAINBOW,
+                        speed=2,
+                        brightness=lid_bright,
+                    )
+                elif state == FAIL:
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_PULSE,
+                        speed=3,
+                        colour=(255, 0, 0),
+                        brightness=lid_bright,
+                    )
+                elif state == SHOWING and self._engine.active_button >= 0:
+                    from bodn.simon_rules import BTN_COLORS
 
-                c = BTN_COLORS[self._engine.active_button]
-                zone_pulse(ZONE_LID_RING, frame, 1, c, lid_bright)
+                    c = BTN_COLORS[self._engine.active_button]
+                    neo.zone_pattern(
+                        neo.ZONE_LID_RING,
+                        neo.PAT_PULSE,
+                        speed=1,
+                        colour=c,
+                        brightness=lid_bright,
+                    )
+                else:
+                    neo.zone_off(neo.ZONE_LID_RING)
             else:
-                zone_clear(ZONE_LID_RING)
+                # --- Python fallback path ---
+                # Sticks: game feedback (engine writes indices 0–15)
+                leds = self._engine.make_static_leds(brightness)
 
-            ses_state = self._overlay.session_mgr.state
-            leds = self._overlay.static_led_override(ses_state, leds, brightness)
+                # Lid ring: ambient effect matching game state
+                state = self._engine.state
+                if state == WIN:
+                    zone_rainbow(ZONE_LID_RING, frame, 2, 0, lid_bright)
+                elif state == FAIL:
+                    zone_pulse(ZONE_LID_RING, frame, 3, (255, 0, 0), lid_bright)
+                elif state == SHOWING and self._engine.active_button >= 0:
+                    from bodn.simon_rules import BTN_COLORS
 
-            np = self._np
-            n = N_LEDS
-            for i in range(n):
-                np[i] = leds[i]
-            np.write()
+                    c = BTN_COLORS[self._engine.active_button]
+                    zone_pulse(ZONE_LID_RING, frame, 1, c, lid_bright)
+                else:
+                    zone_clear(ZONE_LID_RING)
+
+                ses_state = self._overlay.session_mgr.state
+                leds = self._overlay.static_led_override(ses_state, leds, brightness)
+
+                np = self._np
+                n = N_LEDS
+                for i in range(n):
+                    np[i] = leds[i]
+                np.write()
 
         # Arcade LEDs: animated per-state (runs every frame)
         arc = self._arcade

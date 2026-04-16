@@ -12,10 +12,23 @@ from bodn.ui.widgets import draw_progress_bar
 from bodn.ui.pause import PauseMenu
 from bodn.patterns import PATTERNS, PATTERN_NAMES, N_LEDS, ZONE_LID_RING
 from bodn.i18n import t
+from bodn.neo import neo
 
 NAV = config.ENC_NAV
 ENC_A = config.ENC_A
 ENC_B = config.ENC_B
+
+# Map Python PATTERNS index → C _neopixel pattern ID
+_PAT_MAP = [
+    neo.PAT_RAINBOW,  # 0: Rainbow
+    neo.PAT_PULSE,  # 1: Pulse
+    neo.PAT_CHASE,  # 2: Chase
+    neo.PAT_SPARKLE,  # 3: Sparkle
+    neo.PAT_BOUNCE,  # 4: Bounce
+    neo.PAT_WAVE,  # 5: Wave
+    neo.PAT_SPLIT,  # 6: Split
+    neo.PAT_FILL,  # 7: Fill
+]
 
 # Dirty section flags (bitmask)
 _D_HEADER = const(1)
@@ -104,6 +117,7 @@ class DemoScreen(Screen):
         self._prev_arc = []
         self._prev_sw = []
         self._prev_enc_btn = [False, False, False]
+        self._neo_dirty = True  # push pattern to C engine on enter
 
     def enter(self, manager):
         self._manager = manager
@@ -111,12 +125,21 @@ class DemoScreen(Screen):
         self._brightness.reset()
         self._dirty_sections = _D_ALL
         self._full_clear = True
+        self._neo_dirty = True
+        if neo.active:
+            neo.clear_all_overrides()
+            self._apply_neo_pattern()
 
     def on_reveal(self):
         self._dirty_sections = _D_ALL
         self._full_clear = True
+        self._neo_dirty = True
+        if neo.active:
+            self._apply_neo_pattern()
 
     def exit(self):
+        if neo.active:
+            neo.all_off()
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
@@ -145,6 +168,7 @@ class DemoScreen(Screen):
             if g.tap[i]:
                 self._active_pattern = i % len(PATTERNS)
                 ds |= _D_HEADER
+                self._neo_dirty = True
                 break
 
         # Arcade button tap → flash that button's color on all LEDs
@@ -165,18 +189,21 @@ class DemoScreen(Screen):
         if inp.enc_btn_pressed[ENC_A]:
             self._active_pattern = (self._active_pattern + 1) % len(PATTERNS)
             ds |= _D_HEADER
+            self._neo_dirty = True
 
         # Update brightness from encoder A (velocity-aware)
         prev_bri = self._brightness.value
         self._brightness.update(inp.enc_delta[ENC_A], inp.enc_velocity[ENC_A])
         if self._brightness.value != prev_bri:
             ds |= _D_HEADER | _D_ENCODERS
+            self._neo_dirty = True
 
         # NAV/ENC_B rotation adjusts speed
         delta_b = inp.enc_delta[ENC_B]
         if delta_b != 0:
             self._speed = max(1, min(10, self._speed + delta_b))
             ds |= _D_HEADER | _D_ENCODERS
+            self._neo_dirty = True
 
         # Dirty detection for display: encoders
         if inp.enc_pos[ENC_A] != self._prev_enc[ENC_A]:
@@ -226,11 +253,51 @@ class DemoScreen(Screen):
         # Arcade button LEDs update every frame (cheap I2C)
         self._update_arcade_leds(inp, frame)
 
-        # NeoPixel strip updates every 3rd frame (expensive bit-bang)
-        if frame % 3 == 0:
-            self._update_leds(inp, frame)
+        # NeoPixel strip: C engine handles rendering, only push on change
+        if neo.active:
+            if self._neo_dirty:
+                self._neo_dirty = False
+                self._apply_neo_pattern()
+            # Arcade flash override via C engine
+            if self._arc_flash >= 0 and self._arc_flash < len(_ARC_RGB):
+                cr, cg, cb = _ARC_RGB[self._arc_flash]
+                fade = self._arc_flash_ttl * self._brightness.value // 9
+                neo.set_override(
+                    neo.OVERRIDE_SOLID,
+                    (cr * fade) >> 8,
+                    (cg * fade) >> 8,
+                    (cb * fade) >> 8,
+                )
+            elif self._arc_flash == -1 and self._arc_flash_ttl == 0:
+                pass  # no flash, session overlay handles overrides
+        else:
+            # Fallback: Python NeoPixel path (every 3rd frame)
+            if frame % 3 == 0:
+                self._update_leds_fallback(inp, frame)
 
-    def _update_leds(self, inp, frame):
+    def _apply_neo_pattern(self):
+        """Push current pattern/speed/brightness to C engine (no per-frame cost)."""
+        pat_idx = self._active_pattern
+        pat_id = _PAT_MAP[pat_idx]
+        speed = self._speed
+        brightness = self._brightness.value
+        colour = _COLOUR_RGB[pat_idx] if pat_idx > 0 else (255, 255, 255)
+        neo.zone_pattern(
+            neo.ZONE_STICK_A, pat_id, speed=speed, colour=colour, brightness=brightness
+        )
+        neo.zone_pattern(
+            neo.ZONE_STICK_B, pat_id, speed=speed, colour=colour, brightness=brightness
+        )
+        neo.zone_pattern(
+            neo.ZONE_LID_RING,
+            pat_id,
+            speed=speed,
+            colour=colour,
+            brightness=config.NEOPIXEL_LID_BRIGHTNESS,
+        )
+
+    def _update_leds_fallback(self, inp, frame):
+        """Legacy Python NeoPixel path (used when C engine is not available)."""
         brightness = self._brightness.value
         speed = self._speed
 
@@ -254,23 +321,18 @@ class DemoScreen(Screen):
         sw = inp.sw
         n = N_LEDS
         if len(sw) > 0 and sw[0]:
-            # SW0: Reverse direction
             half = n // 2
             for i in range(half):
                 j = n - 1 - i
                 leds[i], leds[j] = leds[j], leds[i]
         if len(sw) > 1 and sw[1]:
-            # SW1: Mirror (copy first half to second)
             half = n // 2
             for i in range(half):
                 leds[n - 1 - i] = leds[i]
         if len(sw) > 2 and sw[2]:
-            # SW_L: Color rotate (shift R→G→B→R)
             for i in range(n):
                 r, g, b = leds[i]
                 leds[i] = (g, b, r)
-        # SW_R strobe removed — was unreliable due to uneven frame timing.
-        # SW_R now only controls arcade button wave (see _update_arcade_leds).
 
         # Dim the lid ring relative to the sticks
         lid_ratio = config.NEOPIXEL_LID_BRIGHTNESS
