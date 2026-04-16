@@ -7,7 +7,6 @@ except ImportError:
 
 import time
 import micropython
-import neopixel
 from machine import Pin, SPI, I2C
 from bodn.neo import neo
 from micropython import const
@@ -37,8 +36,6 @@ from bodn import i18n
 
 # Ensure Ctrl-C (0x03) always raises KeyboardInterrupt, even under async load.
 micropython.kbd_intr(3)
-
-N_LEDS = const(108)  # config.NEOPIXEL_COUNT
 
 # Frame budget for the priority-ordered main loop.
 # Graphics are opportunistic: render only when time remains after
@@ -81,7 +78,7 @@ def _i2c_bus_recover(scl_pin, sda_pin):
 def create_hardware():
     """Initialise all hardware peripherals.
 
-    Returns (tft, tft2, buttons, switches, encoders, np, mcp, pwm, arcade, audio, hw_status).
+    Returns (tft, tft2, buttons, switches, encoders, mcp, pwm, arcade, audio, hw_status).
     Components that fail to initialise degrade gracefully:
     - MCP23017 missing → buttons/switches are empty lists, mcp is None.
     - PCA9685 missing → pwm is None (no LED dimming), arcade LEDs disabled.
@@ -356,17 +353,9 @@ def create_hardware():
     except Exception as e:
         print("DS18B20 init failed:", e)
 
-    # NeoPixel init: prefer C engine (_neopixel), fall back to Python
-    if neo.available:
-        try:
-            neo.init()
-            np = None  # C engine owns the pin; np not used
-            print("NeoPixel: C engine on GPIO", config.NEOPIXEL_PIN)
-        except Exception as e:
-            print("NeoPixel C engine failed:", e, "— falling back")
-            np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
-    else:
-        np = neopixel.NeoPixel(Pin(config.NEOPIXEL_PIN, Pin.OUT), N_LEDS, timing=1)
+    # NeoPixel init (C engine)
+    neo.init()
+    print("NeoPixel: C engine on GPIO", config.NEOPIXEL_PIN)
 
     # Encoder push buttons are on MCP2. If MCP2 is unavailable, the sw
     # attribute falls back to a stub that always reads 1 (not pressed).
@@ -435,7 +424,6 @@ def create_hardware():
         buttons,
         switches,
         encoders,
-        np,
         mcp,
         mcp2,
         pwm,
@@ -455,7 +443,6 @@ def create_ui(
     buttons,
     switches,
     encoders,
-    np,
     arcade=None,
     audio=None,
 ):
@@ -493,7 +480,6 @@ def create_ui(
 
         _reset_secondary()
         return MysteryScreen(
-            np,
             overlay,
             arcade=arcade,
             audio=audio,
@@ -507,7 +493,6 @@ def create_ui(
 
         _reset_secondary()
         return SimonScreen(
-            np,
             overlay,
             arcade=arcade,
             audio=audio,
@@ -521,7 +506,6 @@ def create_ui(
 
         _reset_secondary()
         return RuleFollowScreen(
-            np,
             overlay,
             arcade=arcade,
             audio=audio,
@@ -535,7 +519,6 @@ def create_ui(
 
         _reset_secondary()
         return SorteraScreen(
-            np,
             overlay,
             arcade=arcade,
             audio=audio,
@@ -549,7 +532,6 @@ def create_ui(
 
         _reset_secondary()
         return RaknaScreen(
-            np,
             overlay,
             arcade=arcade,
             audio=audio,
@@ -563,7 +545,6 @@ def create_ui(
 
         _reset_secondary()
         return FlodeScreen(
-            np,
             overlay,
             arcade=arcade,
             audio=audio,
@@ -579,7 +560,6 @@ def create_ui(
         garden_sec = GardenSecondary()
         secondary.set_content(garden_sec)
         return GardenScreen(
-            np,
             overlay,
             arcade=arcade,
             settings=settings,
@@ -594,7 +574,6 @@ def create_ui(
         sb_sec = SoundboardSecondary()
         secondary.set_content(sb_sec)
         return SoundboardScreen(
-            np,
             overlay,
             audio=audio,
             arcade=arcade,
@@ -612,7 +591,6 @@ def create_ui(
         seq_sec = SequencerSecondary()
         secondary.set_content(seq_sec)
         return SequencerScreen(
-            np,
             overlay,
             audio=audio,
             arcade=arcade,
@@ -630,7 +608,6 @@ def create_ui(
         stellar = AndroidFaceScreen()
         secondary.set_content(stellar)
         return SpaceScreen(
-            np,
             overlay,
             audio=audio,
             arcade=arcade,
@@ -645,7 +622,6 @@ def create_ui(
 
         _reset_secondary()
         return StoryScreen(
-            np,
             overlay,
             audio=audio,
             arcade=arcade,
@@ -660,7 +636,6 @@ def create_ui(
         sound_bufs = preload_highfive_assets(on_progress=on_progress)
         _reset_secondary()
         return HighFiveScreen(
-            np,
             overlay,
             arcade=arcade,
             audio=audio,
@@ -674,7 +649,7 @@ def create_ui(
         from bodn.ui.settings import SettingsScreen
 
         _reset_secondary()
-        return SettingsScreen(settings, np, wifi_ctrl)
+        return SettingsScreen(settings, wifi_ctrl)
 
     mode_screens = {
         "mystery": _make_mystery,
@@ -691,7 +666,7 @@ def create_ui(
         "rakna": _make_rakna,
         "demo": lambda: (
             _reset_secondary(),
-            DemoScreen(np, overlay, arcade=arcade, settings=settings),
+            DemoScreen(overlay, arcade=arcade, settings=settings),
         )[1],
         "clock": lambda: (_reset_secondary(), ClockScreen(settings=settings))[1],
         "settings": _make_settings,
@@ -725,12 +700,7 @@ def create_ui(
     manager.push(home)
 
     # Clear LEDs
-    if neo.active:
-        neo.all_off()
-    elif np:
-        for i in range(N_LEDS):
-            np[i] = (0, 0, 0)
-        np.write()
+    neo.all_off()
 
     return manager, secondary, inp, mode_screens
 
@@ -988,7 +958,7 @@ async def secondary_task(secondary):
         await asyncio.sleep_ms(_interval)
 
 
-async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
+async def housekeeping_task(session_mgr, settings, audio=None, pwm=None):
     """Session management, temperature + battery monitoring: ~500 ms tick.
 
     Temperature overwatch (thresholds in config.py):
@@ -1042,12 +1012,7 @@ async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
                     )
                 )
                 # Kill everything before sleeping
-                if neo.active:
-                    neo.set_override(neo.OVERRIDE_BLACK)
-                elif np:
-                    for i in range(N_LEDS):
-                        np[i] = (0, 0, 0)
-                    np.write()
+                neo.set_override(neo.OVERRIDE_BLACK)
                 try:
                     from machine import deepsleep
 
@@ -1066,12 +1031,7 @@ async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
                     )
                 )
                 # Kill NeoPixels — biggest heat contributor
-                if neo.active:
-                    neo.set_override(neo.OVERRIDE_BLACK)
-                elif np:
-                    for i in range(N_LEDS):
-                        np[i] = (0, 0, 0)
-                    np.write()
+                neo.set_override(neo.OVERRIDE_BLACK)
                 # Dim display backlight to minimum
                 if pwm:
                     try:
@@ -1122,12 +1082,7 @@ async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
                     )
                 )
                 # Kill LEDs + backlight, then sleep
-                if neo.active:
-                    neo.set_override(neo.OVERRIDE_BLACK)
-                elif np:
-                    for i in range(N_LEDS):
-                        np[i] = (0, 0, 0)
-                    np.write()
+                neo.set_override(neo.OVERRIDE_BLACK)
                 try:
                     import machine as _machine
 
@@ -1150,12 +1105,7 @@ async def housekeeping_task(session_mgr, np, settings, audio=None, pwm=None):
                         mv, config.BAT_CRIT_MV
                     )
                 )
-                if neo.active:
-                    neo.set_override(neo.OVERRIDE_BLACK)
-                elif np:
-                    for i in range(N_LEDS):
-                        np[i] = (0, 0, 0)
-                    np.write()
+                neo.set_override(neo.OVERRIDE_BLACK)
 
             elif bat_status == "warn" and _prev_bat == "ok":
                 mv = battery.voltage_mv()
@@ -1304,7 +1254,6 @@ async def main():
         buttons,
         switches,
         encoders,
-        np,
         mcp,
         mcp2,
         pwm,
@@ -1348,7 +1297,6 @@ async def main():
         buttons,
         switches,
         encoders,
-        np,
         arcade=arcade,
         audio=audio,
     )
@@ -1364,7 +1312,7 @@ async def main():
         timeout_s=settings.get("sleep_timeout_s", config.SLEEP_TIMEOUT_S),
         time_fn=time.time,
     )
-    power_mgr = PowerManager(tft, tft2, np, mcp, pwm=pwm)
+    power_mgr = PowerManager(tft, tft2, mcp, pwm=pwm)
 
     # Startup sound disabled — re-enable when tuned:
     # if audio and settings.get("audio_enabled", True):
@@ -1384,7 +1332,7 @@ async def main():
             power_mgr,
         ),
         secondary_task(secondary),
-        housekeeping_task(session_mgr, np, settings, audio=audio, pwm=pwm),
+        housekeeping_task(session_mgr, settings, audio=audio, pwm=pwm),
     ]
     if audio:
         tasks.append(audio.start())

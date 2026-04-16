@@ -340,3 +340,48 @@ class FakeDS18X20:
 
 _ds18x20.DS18X20 = FakeDS18X20
 sys.modules["ds18x20"] = _ds18x20
+
+# Stub '_neopixel' C module for host tests
+_neopixel_stub = types.ModuleType("_neopixel")
+_noop = lambda *a, **kw: None
+for _fn in (
+    "init",
+    "deinit",
+    "zone_pattern",
+    "zone_off",
+    "zone_brightness",
+    "set_pixel",
+    "set_pixels",
+    "clear_pixel",
+    "clear_pixels",
+    "clear_all_overrides",
+    "set_override",
+    "clear_override",
+    "pause",
+    "resume",
+):
+    setattr(_neopixel_stub, _fn, _noop)
+_neopixel_stub.frame = lambda: 0
+_neopixel_stub.stats = lambda: {}
+for _name, _val in (
+    ("PAT_OFF", 0),
+    ("PAT_SOLID", 1),
+    ("PAT_RAINBOW", 2),
+    ("PAT_PULSE", 3),
+    ("PAT_CHASE", 4),
+    ("PAT_SPARKLE", 5),
+    ("PAT_BOUNCE", 6),
+    ("PAT_WAVE", 7),
+    ("PAT_SPLIT", 8),
+    ("PAT_FILL", 9),
+    ("ZONE_STICK_A", 0),
+    ("ZONE_STICK_B", 1),
+    ("ZONE_LID_RING", 2),
+    ("OVERRIDE_NONE", 0),
+    ("OVERRIDE_BLACK", 1),
+    ("OVERRIDE_SOLID", 2),
+    ("OVERRIDE_PULSE", 3),
+    ("OVERRIDE_FADE", 4),
+):
+    setattr(_neopixel_stub, _name, _val)
+sys.modules["_neopixel"] = _neopixel_stub

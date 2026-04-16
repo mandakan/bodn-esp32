@@ -45,9 +45,8 @@ class SettingsScreen(Screen):
     Adjustment encoder (ENC_A) changes the selected value directly.
     """
 
-    def __init__(self, settings, np, wifi_ctrl):
+    def __init__(self, settings, wifi_ctrl):
         self._settings = settings
-        self._np = np
         self._wifi_ctrl = wifi_ctrl
         self._index = 0
         self._manager = None
@@ -227,12 +226,7 @@ class SettingsScreen(Screen):
         elif key == "leds":
             self._leds_on = not self._leds_on
             if not self._leds_on:
-                if neo.active:
-                    neo.all_off()
-                else:
-                    for i in range(config.NEOPIXEL_COUNT):
-                        self._np[i] = (0, 0, 0)
-                    self._np.write()
+                neo.all_off()
         elif key == "audio_enabled":
             self._settings["audio_enabled"] = not self._settings.get(
                 "audio_enabled", True

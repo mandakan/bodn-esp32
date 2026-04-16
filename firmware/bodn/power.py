@@ -66,10 +66,9 @@ class PowerManager:
     Hardware-facing — not testable on host without stubs.
     """
 
-    def __init__(self, tft, tft2, np, mcp, pwm=None):
+    def __init__(self, tft, tft2, mcp, pwm=None):
         self._tft = tft
         self._tft2 = tft2
-        self._np = np
         self._mcp = mcp
         self._pwm = pwm
         self._master_sw_seen = False  # only sleep after switch toggled ON first
@@ -79,9 +78,9 @@ class PowerManager:
         from bodn import config
 
         # Turn off NeoPixels
-        for i in range(config.NEOPIXEL_COUNT):
-            self._np[i] = (0, 0, 0)
-        self._np.write()
+        from bodn.neo import neo
+
+        neo.all_off()
 
         # Turn off display backlight via PCA9685 PWM channel
         if self._pwm:

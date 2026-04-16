@@ -9,7 +9,6 @@ from bodn.ui.input import BrightnessControl, EncoderAccumulator
 from bodn.i18n import t
 from bodn.neo import neo
 from bodn.flode_rules import FlodeEngine, PLAYING, COMPLETE, FLOWING, CELEBRATE
-from bodn.patterns import N_LEDS, zone_fill, zone_pulse, zone_clear, ZONE_LID_RING
 from bodn.ui.catface import CURIOUS, HAPPY
 
 ENC_A = config.ENC_A  # select segment
@@ -54,7 +53,6 @@ class FlodeScreen(Screen):
 
     def __init__(
         self,
-        np,
         overlay,
         arcade=None,
         audio=None,
@@ -62,7 +60,6 @@ class FlodeScreen(Screen):
         secondary_screen=None,
         on_exit=None,
     ):
-        self._np = np
         self._overlay = overlay
         self._arcade = arcade
         self._audio = audio
@@ -74,9 +71,6 @@ class FlodeScreen(Screen):
         self._dirty = True
         self._full_clear = True  # only clear on state transitions, not every frame
         self._leds_dirty = True
-        self._led_buf = [
-            (0, 0, 0)
-        ] * N_LEDS  # reusable LED buffer (avoids per-frame alloc)
 
         # Game engine — use a simple RNG based on frame counter
         self._seed = 0
@@ -130,8 +124,7 @@ class FlodeScreen(Screen):
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
-        if neo.active:
-            neo.clear_all_overrides()
+        neo.clear_all_overrides()
         if self._secondary:
             self._secondary.set_emotion(CURIOUS)
         arc = self._arcade
@@ -141,14 +134,8 @@ class FlodeScreen(Screen):
 
     def exit(self):
         # Clear LEDs
-        if neo.active:
-            neo.all_off()
-            neo.clear_all_overrides()
-        else:
-            np = self._np
-            for i in range(N_LEDS):
-                np[i] = (0, 0, 0)
-            np.write()
+        neo.all_off()
+        neo.clear_all_overrides()
         arc = self._arcade
         if arc:
             arc.all_off()
@@ -369,72 +356,35 @@ class FlodeScreen(Screen):
         brightness = self._brightness.value
         lid_bright = min(brightness, config.NEOPIXEL_LID_BRIGHTNESS)
 
-        if neo.active:
-            # --- C NeoPixel engine path ---
-            if eng.state == CELEBRATE:
-                neo.zone_pattern(
-                    neo.ZONE_LID_RING,
-                    neo.PAT_PULSE,
-                    speed=3,
-                    colour=(0, 255, 100),
-                    brightness=lid_bright,
-                )
-            elif eng.state == PLAYING:
-                # Show flow progress on sticks as pixel overrides
-                reaches = eng.flow_reaches()
-                flow_r, flow_g, flow_b = _FLOW_COLOR
-                r = flow_r * brightness // 255
-                g = flow_g * brightness // 255
-                b = flow_b * brightness // 255
-                for i in range(16):
-                    seg_for_led = i * eng.num_segments // 16
-                    if seg_for_led < reaches:
-                        neo.set_pixel(i, r, g, b)
-                    else:
-                        neo.set_pixel(i, 0, 0, 0)
-                neo.zone_pattern(
-                    neo.ZONE_LID_RING,
-                    neo.PAT_SOLID,
-                    colour=_FLOW_COLOR,
-                    brightness=lid_bright,
-                )
-            else:
-                neo.zone_off(neo.ZONE_LID_RING)
-        else:
-            # --- Python fallback path ---
-            np = self._np
-
-            if eng.state == CELEBRATE:
-                zone_pulse(ZONE_LID_RING, frame, 3, (0, 255, 100), lid_bright)
-            elif eng.state == PLAYING:
-                # Show flow progress on sticks
-                reaches = eng.flow_reaches()
-                flow_r, flow_g, flow_b = _FLOW_COLOR
-                for i in range(16):
-                    seg_for_led = i * eng.num_segments // 16
-                    if seg_for_led < reaches:
-                        np[i] = (
-                            flow_r * brightness // 255,
-                            flow_g * brightness // 255,
-                            flow_b * brightness // 255,
-                        )
-                    else:
-                        np[i] = (0, 0, 0)
-                zone_fill(ZONE_LID_RING, _FLOW_COLOR, lid_bright)
-            else:
-                zone_clear(ZONE_LID_RING)
-
-            ses_state = self._overlay.session_mgr.state
-            led_buf = self._led_buf
+        if eng.state == CELEBRATE:
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_PULSE,
+                speed=3,
+                colour=(0, 255, 100),
+                brightness=lid_bright,
+            )
+        elif eng.state == PLAYING:
+            # Show flow progress on sticks as pixel overrides
+            reaches = eng.flow_reaches()
+            flow_r, flow_g, flow_b = _FLOW_COLOR
+            r = flow_r * brightness // 255
+            g = flow_g * brightness // 255
+            b = flow_b * brightness // 255
             for i in range(16):
-                led_buf[i] = (np[i][0], np[i][1], np[i][2])
-            _z = (0, 0, 0)
-            for i in range(16, N_LEDS):
-                led_buf[i] = _z
-            leds = self._overlay.static_led_override(ses_state, led_buf, brightness)
-            for i in range(N_LEDS):
-                np[i] = leds[i]
-            np.write()
+                seg_for_led = i * eng.num_segments // 16
+                if seg_for_led < reaches:
+                    neo.set_pixel(i, r, g, b)
+                else:
+                    neo.set_pixel(i, 0, 0, 0)
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_SOLID,
+                colour=_FLOW_COLOR,
+                brightness=lid_bright,
+            )
+        else:
+            neo.zone_off(neo.ZONE_LID_RING)
 
         # Arcade LEDs
         arc = self._arcade

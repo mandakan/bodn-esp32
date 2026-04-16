@@ -28,14 +28,6 @@ from bodn.space_rules import (
     SC_LANDING,
     ARC_COLORS,
 )
-from bodn.patterns import (
-    N_LEDS,
-    zone_pulse,
-    zone_rainbow,
-    zone_chase,
-    zone_clear,
-    ZONE_LID_RING,
-)
 from bodn.ui.android import NEUTRAL, CURIOUS, HAPPY, SURPRISED
 from bodn.neo import neo
 
@@ -203,7 +195,6 @@ class SpaceScreen(Screen):
 
     def __init__(
         self,
-        np,
         overlay,
         audio=None,
         arcade=None,
@@ -212,7 +203,6 @@ class SpaceScreen(Screen):
         on_exit=None,
         preloaded_bufs=None,
     ):
-        self._np = np
         self._overlay = overlay
         self._audio = audio
         self._arcade = arcade
@@ -271,8 +261,7 @@ class SpaceScreen(Screen):
             self._alarm_bufs = _preload(self._ALARM_WAV_NAMES)
             bufs = _preload(["bridge_loop"])
             self._bridge_buf = bufs[0] if bufs else None
-        if neo.active:
-            neo.clear_all_overrides()
+        neo.clear_all_overrides()
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
@@ -286,9 +275,8 @@ class SpaceScreen(Screen):
                 pass
 
     def exit(self):
-        if neo.active:
-            neo.all_off()
-            neo.clear_all_overrides()
+        neo.all_off()
+        neo.clear_all_overrides()
         if self._audio:
             self._audio.stop("music")
             self._audio.stop("sfx")
@@ -619,104 +607,70 @@ class SpaceScreen(Screen):
 
         leds = self._engine.make_static_leds(brightness)
 
-        if neo.active:
-            # Stick LEDs as pixel overrides (indices 0–15)
-            for i in range(16):
-                r, g, b = leds[i]
-                neo.set_pixel(i, r, g, b)
+        # Stick LEDs as pixel overrides (indices 0–15)
+        for i in range(16):
+            r, g, b = leds[i]
+            neo.set_pixel(i, r, g, b)
 
-            # Lid ring: state-appropriate effect via C engine
-            LR = neo.ZONE_LID_RING
-            if state == SUCCESS:
-                neo.zone_pattern(LR, neo.PAT_RAINBOW, speed=3, brightness=lid_bright)
-            elif state in (ACTIVE, HINT):
-                sc = self._engine.scenario_type
-                if sc == SC_ASTEROID:
-                    neo.zone_pattern(
-                        LR,
-                        neo.PAT_CHASE,
-                        speed=3,
-                        colour=(255, 80, 0),
-                        brightness=lid_bright,
-                    )
-                elif sc == SC_SHIELD:
-                    neo.zone_pattern(
-                        LR,
-                        neo.PAT_PULSE,
-                        speed=4,
-                        colour=(255, 0, 0),
-                        brightness=lid_bright,
-                    )
-                elif sc == SC_ENGINE:
-                    neo.zone_pattern(
-                        LR,
-                        neo.PAT_PULSE,
-                        speed=2,
-                        colour=(255, 140, 0),
-                        brightness=lid_bright,
-                    )
-                elif sc == SC_COURSE:
-                    col = self._engine.target_color or (255, 200, 0)
-                    neo.zone_pattern(
-                        LR, neo.PAT_PULSE, speed=2, colour=col, brightness=lid_bright
-                    )
-                elif sc == SC_LANDING:
-                    col = self._engine.target_color or (0, 200, 60)
-                    neo.zone_pattern(
-                        LR, neo.PAT_PULSE, speed=2, colour=col, brightness=lid_bright
-                    )
-                else:
-                    neo.zone_off(LR)
-            elif state == ANNOUNCE:
-                neo.zone_pattern(
-                    LR,
-                    neo.PAT_PULSE,
-                    speed=3,
-                    colour=(200, 50, 255),
-                    brightness=lid_bright,
-                )
-            else:
-                # CRUISING: slow blue sweep
+        # Lid ring: state-appropriate effect via C engine
+        LR = neo.ZONE_LID_RING
+        if state == SUCCESS:
+            neo.zone_pattern(LR, neo.PAT_RAINBOW, speed=3, brightness=lid_bright)
+        elif state in (ACTIVE, HINT):
+            sc = self._engine.scenario_type
+            if sc == SC_ASTEROID:
                 neo.zone_pattern(
                     LR,
                     neo.PAT_CHASE,
-                    speed=1,
-                    colour=(0, 40, 160),
-                    brightness=lid_bright // 2,
+                    speed=3,
+                    colour=(255, 80, 0),
+                    brightness=lid_bright,
                 )
-        else:
-            # Lid ring: state-appropriate effect (Python fallback)
-            if state == SUCCESS:
-                zone_rainbow(ZONE_LID_RING, frame, 3, 0, lid_bright)
-            elif state in (ACTIVE, HINT):
-                sc = self._engine.scenario_type
-                if sc == SC_ASTEROID:
-                    zone_chase(ZONE_LID_RING, frame, 3, (255, 80, 0), lid_bright)
-                elif sc == SC_SHIELD:
-                    zone_pulse(ZONE_LID_RING, frame, 4, (255, 0, 0), lid_bright)
-                elif sc == SC_ENGINE:
-                    zone_pulse(ZONE_LID_RING, frame, 2, (255, 140, 0), lid_bright)
-                elif sc == SC_COURSE:
-                    col = self._engine.target_color or (255, 200, 0)
-                    zone_pulse(ZONE_LID_RING, frame, 2, col, lid_bright)
-                elif sc == SC_LANDING:
-                    col = self._engine.target_color or (0, 200, 60)
-                    zone_pulse(ZONE_LID_RING, frame, 2, col, lid_bright)
-                else:
-                    zone_clear(ZONE_LID_RING)
-            elif state == ANNOUNCE:
-                zone_pulse(ZONE_LID_RING, frame, 3, (200, 50, 255), lid_bright)
+            elif sc == SC_SHIELD:
+                neo.zone_pattern(
+                    LR,
+                    neo.PAT_PULSE,
+                    speed=4,
+                    colour=(255, 0, 0),
+                    brightness=lid_bright,
+                )
+            elif sc == SC_ENGINE:
+                neo.zone_pattern(
+                    LR,
+                    neo.PAT_PULSE,
+                    speed=2,
+                    colour=(255, 140, 0),
+                    brightness=lid_bright,
+                )
+            elif sc == SC_COURSE:
+                col = self._engine.target_color or (255, 200, 0)
+                neo.zone_pattern(
+                    LR, neo.PAT_PULSE, speed=2, colour=col, brightness=lid_bright
+                )
+            elif sc == SC_LANDING:
+                col = self._engine.target_color or (0, 200, 60)
+                neo.zone_pattern(
+                    LR, neo.PAT_PULSE, speed=2, colour=col, brightness=lid_bright
+                )
             else:
-                # CRUISING: slow blue sweep
-                zone_chase(ZONE_LID_RING, frame, 1, (0, 40, 160), lid_bright // 2)
-
-            ses_state = self._overlay.session_mgr.state
-            leds = self._overlay.static_led_override(ses_state, leds, brightness)
-
-            np = self._np
-            for i in range(N_LEDS):
-                np[i] = leds[i]
-            np.write()
+                neo.zone_off(LR)
+        elif state == ANNOUNCE:
+            neo.zone_pattern(
+                LR,
+                neo.PAT_PULSE,
+                speed=3,
+                colour=(200, 50, 255),
+                brightness=lid_bright,
+            )
+        else:
+            # CRUISING: slow blue sweep
+            neo.zone_pattern(
+                LR,
+                neo.PAT_CHASE,
+                speed=1,
+                colour=(0, 40, 160),
+                brightness=lid_bright // 2,
+            )
 
     # ------------------------------------------------------------------
     # Rendering

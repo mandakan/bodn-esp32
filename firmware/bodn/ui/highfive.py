@@ -32,7 +32,6 @@ from bodn.highfive_rules import (
     NUM_BUTTONS,
 )
 from bodn.neo import neo
-from bodn.patterns import N_LEDS, ZONE_LID_RING, zone_pulse, zone_rainbow, zone_clear
 from bodn.assets import preload_sounds
 
 # Try native LED driver for C-level hit detection
@@ -100,7 +99,6 @@ class HighFiveScreen(Screen):
 
     def __init__(
         self,
-        np,
         overlay,
         arcade=None,
         audio=None,
@@ -109,7 +107,6 @@ class HighFiveScreen(Screen):
         on_exit=None,
         sound_bufs=None,
     ):
-        self._np = np
         self._overlay = overlay
         self._arcade = arcade
         self._audio = audio
@@ -142,8 +139,7 @@ class HighFiveScreen(Screen):
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
-        if neo.active:
-            neo.clear_all_overrides()
+        neo.clear_all_overrides()
 
         # Split preloaded sound buffers into event groups
         bufs = self._snd_bufs or [None] * len(_ALL_SND_NAMES)
@@ -202,14 +198,8 @@ class HighFiveScreen(Screen):
             self._manager.inp.set_on_press(None)
 
         # Clear NeoPixels
-        if neo.active:
-            neo.all_off()
-            neo.clear_all_overrides()
-        else:
-            np = self._np
-            for i in range(N_LEDS):
-                np[i] = (0, 0, 0)
-            np.write()
+        neo.all_off()
+        neo.clear_all_overrides()
 
         if self._on_exit:
             self._on_exit()
@@ -351,63 +341,41 @@ class HighFiveScreen(Screen):
         """Update NeoPixel strip based on game state."""
         brightness = 80
 
-        if neo.active:
-            # --- C NeoPixel engine path ---
-            if eng.state == SHOWING and eng.target >= 0:
-                color = _ARC_RGB[eng.target]
+        if eng.state == SHOWING and eng.target >= 0:
+            color = _ARC_RGB[eng.target]
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_PULSE,
+                speed=2,
+                colour=color,
+                brightness=brightness,
+            )
+        elif eng.state == HIT_FLASH:
+            if eng.streak >= 3:
                 neo.zone_pattern(
                     neo.ZONE_LID_RING,
-                    neo.PAT_PULSE,
-                    speed=2,
-                    colour=color,
-                    brightness=brightness,
-                )
-            elif eng.state == HIT_FLASH:
-                if eng.streak >= 3:
-                    neo.zone_pattern(
-                        neo.ZONE_LID_RING,
-                        neo.PAT_RAINBOW,
-                        speed=3,
-                        brightness=brightness,
-                    )
-                else:
-                    neo.zone_pattern(
-                        neo.ZONE_LID_RING,
-                        neo.PAT_PULSE,
-                        speed=4,
-                        colour=(60, 255, 60),
-                        brightness=brightness,
-                    )
-            elif eng.state == MISS_FLASH:
-                neo.zone_pattern(
-                    neo.ZONE_LID_RING,
-                    neo.PAT_PULSE,
-                    speed=6,
-                    colour=(255, 40, 40),
+                    neo.PAT_RAINBOW,
+                    speed=3,
                     brightness=brightness,
                 )
             else:
-                neo.zone_off(neo.ZONE_LID_RING)
+                neo.zone_pattern(
+                    neo.ZONE_LID_RING,
+                    neo.PAT_PULSE,
+                    speed=4,
+                    colour=(60, 255, 60),
+                    brightness=brightness,
+                )
+        elif eng.state == MISS_FLASH:
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_PULSE,
+                speed=6,
+                colour=(255, 40, 40),
+                brightness=brightness,
+            )
         else:
-            # --- Python fallback path ---
-            np = self._np
-
-            if eng.state == SHOWING and eng.target >= 0:
-                color = _ARC_RGB[eng.target]
-                zone_pulse(ZONE_LID_RING, frame, 2, color, brightness)
-            elif eng.state == HIT_FLASH:
-                if eng.streak >= 3:
-                    zone_rainbow(ZONE_LID_RING, frame, 3, 0, brightness)
-                else:
-                    zone_pulse(ZONE_LID_RING, frame, 4, (60, 255, 60), brightness)
-            elif eng.state == MISS_FLASH:
-                zone_pulse(ZONE_LID_RING, frame, 6, (255, 40, 40), brightness)
-            else:
-                zone_clear(ZONE_LID_RING)
-
-            for i in range(N_LEDS):
-                np[i] = np[i]  # force buffer sync
-            np.write()
+            neo.zone_off(neo.ZONE_LID_RING)
 
     # ------------------------------------------------------------------
     # Render

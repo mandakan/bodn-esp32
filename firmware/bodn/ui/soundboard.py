@@ -18,15 +18,7 @@ from bodn.soundboard_rules import (
     NUM_MINI_BUTTONS,
     NUM_ARCADE_BUTTONS,
 )
-from bodn.patterns import (
-    N_LEDS,
-    ZONE_STICK_B,
-    ZONE_LID_RING,
-    zone_fill,
-    zone_pulse,
-    zone_clear,
-    scale as led_scale,
-)
+from bodn.patterns import scale as led_scale
 from bodn.neo import neo
 
 NAV = const(0)  # config.ENC_NAV
@@ -70,7 +62,6 @@ class SoundboardScreen(Screen):
 
     def __init__(
         self,
-        np,
         overlay,
         audio,
         arcade=None,
@@ -79,7 +70,6 @@ class SoundboardScreen(Screen):
         on_exit=None,
         on_progress=None,
     ):
-        self._np = np
         self._overlay = overlay
         self._arcade = arcade
         self._audio = audio
@@ -129,14 +119,11 @@ class SoundboardScreen(Screen):
         self._prev_muted = None
         self._flash = None
         self._prev_flash = None
-        if neo.active:
-            neo.clear_all_overrides()
-        pass  # burst auto-scales — no override needed
+        neo.clear_all_overrides()
 
     def exit(self):
-        if neo.active:
-            neo.all_off()
-            neo.clear_all_overrides()
+        neo.all_off()
+        neo.clear_all_overrides()
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
@@ -270,93 +257,49 @@ class SoundboardScreen(Screen):
         lid_bright = config.NEOPIXEL_LID_BRIGHTNESS
         playing_any = bool(state.playing_slots or state.playing_arcades)
 
-        if neo.active:
-            # --- C NeoPixel engine path ---
-            # Stick A: one LED per mini button (indices 0-7) as pixel overrides
-            for i in range(8):
-                if self._flash and self._flash[0] == "mini" and self._flash[1] == i:
-                    c = led_scale(_SLOT_COLORS_RGB[i], brightness)
-                elif i in state.playing_slots:
-                    phase = (frame * 4) & 0xFF
-                    v = phase if phase < 128 else 255 - phase
-                    v = (v * brightness) >> 8
-                    c = led_scale(_SLOT_COLORS_RGB[i], max(v, 30))
-                elif state.slots_present[i]:
-                    c = led_scale(_SLOT_COLORS_RGB[i], brightness >> 2)
-                else:
-                    c = led_scale(bank_color, brightness >> 5)
-                neo.set_pixel(i, c[0], c[1], c[2])
-
-            # Stick B: ambient pulse in bank color during playback
-            if playing_any:
-                neo.zone_pattern(
-                    neo.ZONE_STICK_B,
-                    neo.PAT_PULSE,
-                    speed=2,
-                    colour=bank_color,
-                    brightness=brightness,
-                )
+        # Stick A: one LED per mini button (indices 0-7) as pixel overrides
+        for i in range(8):
+            if self._flash and self._flash[0] == "mini" and self._flash[1] == i:
+                c = led_scale(_SLOT_COLORS_RGB[i], brightness)
+            elif i in state.playing_slots:
+                phase = (frame * 4) & 0xFF
+                v = phase if phase < 128 else 255 - phase
+                v = (v * brightness) >> 8
+                c = led_scale(_SLOT_COLORS_RGB[i], max(v, 30))
+            elif state.slots_present[i]:
+                c = led_scale(_SLOT_COLORS_RGB[i], brightness >> 2)
             else:
-                neo.zone_pattern(
-                    neo.ZONE_STICK_B,
-                    neo.PAT_FILL,
-                    colour=bank_color,
-                    brightness=brightness >> 4,
-                )
+                c = led_scale(bank_color, brightness >> 5)
+            neo.set_pixel(i, c[0], c[1], c[2])
 
-            # Lid ring
-            if playing_any:
-                neo.zone_pattern(
-                    neo.ZONE_LID_RING,
-                    neo.PAT_PULSE,
-                    speed=1,
-                    colour=bank_color,
-                    brightness=lid_bright,
-                )
-            else:
-                neo.zone_off(neo.ZONE_LID_RING)
+        # Stick B: ambient pulse in bank color during playback
+        if playing_any:
+            neo.zone_pattern(
+                neo.ZONE_STICK_B,
+                neo.PAT_PULSE,
+                speed=2,
+                colour=bank_color,
+                brightness=brightness,
+            )
         else:
-            # --- Python fallback path ---
-            from bodn.patterns import _led_buf as leds
-
-            np = self._np
-
-            # Stick A: one LED per mini button (indices 0–7)
-            for i in range(8):
-                if self._flash and self._flash[0] == "mini" and self._flash[1] == i:
-                    leds[i] = led_scale(_SLOT_COLORS_RGB[i], brightness)
-                elif i in state.playing_slots:
-                    phase = (frame * 4) & 0xFF
-                    v = phase if phase < 128 else 255 - phase
-                    v = (v * brightness) >> 8
-                    leds[i] = led_scale(_SLOT_COLORS_RGB[i], max(v, 30))
-                elif state.slots_present[i]:
-                    leds[i] = led_scale(_SLOT_COLORS_RGB[i], brightness >> 2)
-                else:
-                    leds[i] = led_scale(bank_color, brightness >> 5)
-
-            # Stick B: ambient pulse in bank color during playback
-            if playing_any:
-                zone_pulse(ZONE_STICK_B, frame, 2, bank_color, brightness)
-            else:
-                zone_fill(ZONE_STICK_B, bank_color, brightness >> 4)
-
-            # Lid ring
-            if playing_any:
-                zone_pulse(ZONE_LID_RING, frame, 1, bank_color, lid_bright)
-            else:
-                zone_clear(ZONE_LID_RING)
-
-            # Session overlay
-            ses_state = self._overlay.session_mgr.state
-            leds_list = leds  # _led_buf is a list, compatible with static_led_override
-            leds_list = self._overlay.static_led_override(
-                ses_state, leds_list, brightness
+            neo.zone_pattern(
+                neo.ZONE_STICK_B,
+                neo.PAT_FILL,
+                colour=bank_color,
+                brightness=brightness >> 4,
             )
 
-            for i in range(N_LEDS):
-                np[i] = leds_list[i]
-            np.write()
+        # Lid ring
+        if playing_any:
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_PULSE,
+                speed=1,
+                colour=bank_color,
+                brightness=lid_bright,
+            )
+        else:
+            neo.zone_off(neo.ZONE_LID_RING)
 
         # Arcade button LEDs via PCA9685
         arc = self._arcade

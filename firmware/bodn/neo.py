@@ -1,24 +1,18 @@
 # bodn/neo.py — NeoPixel pattern engine wrapper
 #
-# Wraps the _neopixel C module with a convenience API.  If the C module
-# is not available (stock MicroPython firmware), the module provides a
-# minimal stub that returns False for `available`, letting callers
-# fall back to the legacy Python NeoPixel path.
+# Wraps the _neopixel C module with a convenience API.
 #
 # Usage:
 #   from bodn.neo import neo
-#   if neo.available:
-#       neo.init()
-#       neo.zone_pattern(neo.ZONE_LID_RING, neo.PAT_RAINBOW, speed=3, brightness=32)
+#   neo.init()
+#   neo.zone_pattern(neo.ZONE_LID_RING, neo.PAT_RAINBOW, speed=3, brightness=32)
 
 from bodn import config
 
 try:
     import _neopixel
-
-    _HAS_NATIVE = True
 except ImportError:
-    _HAS_NATIVE = False
+    _neopixel = None
 
 
 class NeoEngine:
@@ -52,18 +46,13 @@ class NeoEngine:
         self._active = False
 
     @property
-    def available(self):
-        """True if the C engine is compiled into the firmware."""
-        return _HAS_NATIVE
-
-    @property
     def active(self):
         """True if init() has been called and the engine is running."""
         return self._active
 
     def init(self, pin=None):
         """Start the C pattern engine.  Call once at boot."""
-        if not _HAS_NATIVE:
+        if _neopixel is None:
             return
         if pin is None:
             pin = config.NEOPIXEL_PIN

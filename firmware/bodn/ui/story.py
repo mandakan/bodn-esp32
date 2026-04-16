@@ -38,14 +38,6 @@ from bodn.story_rules import (
     MOOD_COLORS,
     ARC_COLORS,
 )
-from bodn.patterns import (
-    N_LEDS,
-    zone_pulse,
-    zone_rainbow,
-    zone_clear,
-    zone_fill,
-    ZONE_LID_RING,
-)
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 from bodn.neo import neo
 
@@ -142,7 +134,6 @@ class StoryScreen(Screen):
 
     def __init__(
         self,
-        np,
         overlay,
         audio=None,
         arcade=None,
@@ -150,7 +141,6 @@ class StoryScreen(Screen):
         secondary_screen=None,
         on_exit=None,
     ):
-        self._np = np
         self._overlay = overlay
         self._audio = audio
         self._arcade = arcade
@@ -190,8 +180,7 @@ class StoryScreen(Screen):
         self._last_ms = time.ticks_ms()
         self._dirty = True
         self._full_clear = True
-        if neo.active:
-            neo.clear_all_overrides()
+        neo.clear_all_overrides()
 
         # Init 565 colour caches
         global _MOOD_565, _ARC_565
@@ -365,9 +354,8 @@ class StoryScreen(Screen):
         # Stop any TTS still playing
         if self._audio:
             self._audio.stop("ui")
-        if neo.active:
-            neo.all_off()
-            neo.clear_all_overrides()
+        neo.all_off()
+        neo.clear_all_overrides()
         # Turn off arcade LEDs
         if self._arcade:
             self._arcade.all_off()
@@ -540,29 +528,12 @@ class StoryScreen(Screen):
         if self._leds_dirty:
             self._leds_dirty = False
             brightness = self._brightness.value
-            if neo.active:
-                # C NeoPixel engine: set stick pixels as overrides, lid off
-                from bodn.patterns import N_STICKS, scale as _s
+            from bodn.patterns import N_STICKS, scale as _s
 
-                c = _s((180, 120, 40), brightness // 4)
-                for i in range(N_STICKS):
-                    neo.set_pixel(i, c[0], c[1], c[2])
-                neo.zone_off(neo.ZONE_LID_RING)
-            else:
-                np = self._np
-                from bodn.patterns import scale as _s, _led_buf, N_STICKS
-
-                c = _s((180, 120, 40), brightness // 4)
-                for i in range(N_STICKS):
-                    _led_buf[i] = c
-                zone_clear(ZONE_LID_RING)
-                ses_state = self._overlay.session_mgr.state
-                leds = self._overlay.static_led_override(
-                    ses_state, _led_buf, brightness
-                )
-                for i in range(N_LEDS):
-                    np[i] = leds[i]
-                np.write()
+            c = _s((180, 120, 40), brightness // 4)
+            for i in range(N_STICKS):
+                neo.set_pixel(i, c[0], c[1], c[2])
+            neo.zone_off(neo.ZONE_LID_RING)
 
         if self._arcade:
             n_options = 3 if len(self._stories) > 1 else 2
@@ -582,61 +553,34 @@ class StoryScreen(Screen):
         mood = self._engine.mood
         mood_rgb = MOOD_COLORS.get(mood, MOOD_COLORS["calm"])
 
-        if neo.active:
-            # --- C NeoPixel engine path ---
-            # Sticks: game feedback as pixel overrides
-            leds = self._engine.make_static_leds(brightness)
-            for i in range(16):
-                r, g, b = leds[i]
-                neo.set_pixel(i, r, g, b)
+        # Sticks: game feedback as pixel overrides
+        leds = self._engine.make_static_leds(brightness)
+        for i in range(16):
+            r, g, b = leds[i]
+            neo.set_pixel(i, r, g, b)
 
-            # Lid ring: mood-based ambient
-            if state == ENDING:
-                neo.zone_pattern(
-                    neo.ZONE_LID_RING, neo.PAT_RAINBOW, speed=2, brightness=lid_bright
-                )
-            elif state == CHOOSING:
-                neo.zone_pattern(
-                    neo.ZONE_LID_RING,
-                    neo.PAT_PULSE,
-                    speed=1,
-                    colour=mood_rgb,
-                    brightness=lid_bright,
-                )
-            elif state == NARRATING:
-                neo.zone_pattern(
-                    neo.ZONE_LID_RING,
-                    neo.PAT_FILL,
-                    colour=mood_rgb,
-                    brightness=lid_bright,
-                )
-            else:
-                neo.zone_off(neo.ZONE_LID_RING)
+        # Lid ring: mood-based ambient
+        if state == ENDING:
+            neo.zone_pattern(
+                neo.ZONE_LID_RING, neo.PAT_RAINBOW, speed=2, brightness=lid_bright
+            )
+        elif state == CHOOSING:
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_PULSE,
+                speed=1,
+                colour=mood_rgb,
+                brightness=lid_bright,
+            )
+        elif state == NARRATING:
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_FILL,
+                colour=mood_rgb,
+                brightness=lid_bright,
+            )
         else:
-            # --- Python fallback path ---
-            # Sticks: from engine
-            leds = self._engine.make_static_leds(brightness)
-
-            # Lid ring: mood-based ambient
-            if state == ENDING:
-                zone_rainbow(ZONE_LID_RING, frame, 2, 0, lid_bright)
-            elif state == CHOOSING:
-                zone_pulse(ZONE_LID_RING, frame, 1, mood_rgb, lid_bright)
-            elif state == NARRATING:
-                zone_fill(ZONE_LID_RING, mood_rgb, lid_bright)
-            else:
-                zone_clear(ZONE_LID_RING)
-
-            # Session overlay
-            ses_state = self._overlay.session_mgr.state
-            leds = self._overlay.static_led_override(ses_state, leds, brightness)
-
-            # Write NeoPixels
-            np = self._np
-            n = N_LEDS
-            for i in range(n):
-                np[i] = leds[i]
-            np.write()
+            neo.zone_off(neo.ZONE_LID_RING)
 
         # Arcade LEDs (animated — also called standalone between dirty frames)
         if self._arcade:
