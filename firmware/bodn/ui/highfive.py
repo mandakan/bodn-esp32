@@ -31,16 +31,10 @@ from bodn.highfive_rules import (
     GAME_OVER,
     NUM_BUTTONS,
 )
-from bodn.patterns import N_LEDS, ZONE_LID_RING, zone_pulse, zone_rainbow, zone_clear
+from bodn.neo import neo
 from bodn.assets import preload_sounds
 
-# Try native LED driver for C-level hit detection
-try:
-    import _mcpinput
-
-    _has_whack = hasattr(_mcpinput, "led_set_whack_target")
-except ImportError:
-    _has_whack = False
+import _mcpinput
 
 # Arcade button colors (RGB) for NeoPixel feedback
 _ARC_RGB = (
@@ -99,7 +93,6 @@ class HighFiveScreen(Screen):
 
     def __init__(
         self,
-        np,
         overlay,
         arcade=None,
         audio=None,
@@ -108,7 +101,6 @@ class HighFiveScreen(Screen):
         on_exit=None,
         sound_bufs=None,
     ):
-        self._np = np
         self._overlay = overlay
         self._arcade = arcade
         self._audio = audio
@@ -141,6 +133,7 @@ class HighFiveScreen(Screen):
         self._dirty = True
         self._full_clear = True
         self._leds_dirty = True
+        neo.clear_all_overrides()
 
         # Split preloaded sound buffers into event groups
         bufs = self._snd_bufs or [None] * len(_ALL_SND_NAMES)
@@ -159,14 +152,11 @@ class HighFiveScreen(Screen):
 
         # Init C LED driver for whack mode (hit detection at 500Hz)
         self._c_leds = False
-        if _has_whack and self._arcade:
-            try:
-                if _mcpinput.led_init():
-                    _mcpinput.led_set_whack_pins(config.MCP_ARC_PINS)
-                    _mcpinput.led_mode(_mcpinput.LED_WHACK)
-                    self._c_leds = True
-            except Exception as e:
-                print("highfive: C LED init failed:", e)
+        if self._arcade:
+            _mcpinput.led_init()
+            _mcpinput.led_set_whack_pins(config.MCP_ARC_PINS)
+            _mcpinput.led_mode(_mcpinput.LED_WHACK)
+            self._c_leds = True
 
         # Register scan-time audio callback for immediate button tones
         if self._audio:
@@ -174,11 +164,8 @@ class HighFiveScreen(Screen):
 
     def exit(self):
         if self._c_leds:
-            try:
-                _mcpinput.led_set_whack_target(0xFF, 0)
-                _mcpinput.led_mode(_mcpinput.LED_PYTHON)
-            except Exception:
-                pass
+            _mcpinput.led_set_whack_target(0xFF, 0)
+            _mcpinput.led_mode(_mcpinput.LED_PYTHON)
             self._c_leds = False
 
         # Free sound buffers (PSRAM)
@@ -199,10 +186,8 @@ class HighFiveScreen(Screen):
             self._manager.inp.set_on_press(None)
 
         # Clear NeoPixels
-        np = self._np
-        for i in range(N_LEDS):
-            np[i] = (0, 0, 0)
-        np.write()
+        neo.all_off()
+        neo.clear_all_overrides()
 
         if self._on_exit:
             self._on_exit()
@@ -257,18 +242,7 @@ class HighFiveScreen(Screen):
         hit = False
         miss = False
         if self._c_leds:
-            try:
-                hit, miss = _mcpinput.led_get_whack_result()
-            except Exception:
-                pass
-        else:
-            # Fallback: check arcade button presses from Python input
-            if eng.state == SHOWING and eng.target >= 0:
-                for i in range(NUM_BUTTONS):
-                    if i < len(inp.arc_just_pressed) and inp.arc_just_pressed[i]:
-                        if i == eng.target:
-                            hit = True
-                        break
+            hit, miss = _mcpinput.led_get_whack_result()
 
         # Wrong button sound (any non-target arcade press during SHOWING)
         if eng.state == SHOWING and self._audio and eng.target >= 0:
@@ -311,56 +285,49 @@ class HighFiveScreen(Screen):
                 deadline = now_ms + eng.window_ms
                 _mcpinput.led_set_whack_target(eng.target, deadline, eng.pulse_speed)
 
-        # Python-fallback arcade LED control (when C not available)
-        if self._arcade and not self._c_leds:
-            self._update_arcade_leds(eng, frame)
-
         # NeoPixel strip (every 3rd frame)
         if frame % 3 == 0:
             self._update_neopixels(eng, frame)
 
-    def _update_arcade_leds(self, eng, frame):
-        """Python fallback: drive arcade LEDs from game state."""
-        arc = self._arcade
-        if eng.state == SHOWING and eng.target >= 0:
-            for i in range(NUM_BUTTONS):
-                if i == eng.target:
-                    arc.pulse(i, frame, speed=eng.pulse_speed)
-                else:
-                    arc.off(i)
-        elif eng.state == HIT_FLASH:
-            arc.all_off()
-            if eng.target >= 0:
-                arc.flash(eng.target)
-            arc.tick_flash()
-        elif eng.state == MISS_FLASH:
-            for i in range(NUM_BUTTONS):
-                arc.blink(i, frame, speed=6)
-        else:
-            arc.all_off()
-        arc.flush()
-
     def _update_neopixels(self, eng, frame):
         """Update NeoPixel strip based on game state."""
-        np = self._np
         brightness = 80
 
         if eng.state == SHOWING and eng.target >= 0:
             color = _ARC_RGB[eng.target]
-            zone_pulse(ZONE_LID_RING, frame, 2, color, brightness)
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_PULSE,
+                speed=2,
+                colour=color,
+                brightness=brightness,
+            )
         elif eng.state == HIT_FLASH:
             if eng.streak >= 3:
-                zone_rainbow(ZONE_LID_RING, frame, 3, 0, brightness)
+                neo.zone_pattern(
+                    neo.ZONE_LID_RING,
+                    neo.PAT_RAINBOW,
+                    speed=3,
+                    brightness=brightness,
+                )
             else:
-                zone_pulse(ZONE_LID_RING, frame, 4, (60, 255, 60), brightness)
+                neo.zone_pattern(
+                    neo.ZONE_LID_RING,
+                    neo.PAT_PULSE,
+                    speed=4,
+                    colour=(60, 255, 60),
+                    brightness=brightness,
+                )
         elif eng.state == MISS_FLASH:
-            zone_pulse(ZONE_LID_RING, frame, 6, (255, 40, 40), brightness)
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_PULSE,
+                speed=6,
+                colour=(255, 40, 40),
+                brightness=brightness,
+            )
         else:
-            zone_clear(ZONE_LID_RING)
-
-        for i in range(N_LEDS):
-            np[i] = np[i]  # force buffer sync
-        np.write()
+            neo.zone_off(neo.ZONE_LID_RING)
 
     # ------------------------------------------------------------------
     # Render

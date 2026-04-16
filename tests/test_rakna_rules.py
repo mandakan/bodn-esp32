@@ -338,7 +338,9 @@ class TestScoring:
         assert engine_l2.streak == 1
         assert engine_l2.best_streak == 1
 
-        wrong = (target % 10) + 1
+        # Compute wrong answer from the CURRENT target (new challenge was picked)
+        current_target = engine_l2.target
+        wrong = (current_target % 10) + 1
         engine_l2.update("dots_{}".format(wrong), 0)
         engine_l2.update(None, WRONG_MS)
 

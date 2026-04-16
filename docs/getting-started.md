@@ -269,13 +269,17 @@ np.write()
 ### Test display
 
 ```python
-from machine import Pin, SPI
+from machine import Pin
+import _spidma
 from bodn import config
 from st7735 import ST7735
-spi = SPI(2, baudrate=26_000_000, sck=Pin(config.TFT_SCK), mosi=Pin(config.TFT_MOSI))
-tft = ST7735(spi, cs=Pin(config.TFT_CS, Pin.OUT), dc=Pin(config.TFT_DC, Pin.OUT),
-    rst=Pin(config.TFT_RST, Pin.OUT), width=config.TFT_WIDTH, height=config.TFT_HEIGHT,
-    col_offset=config.TFT_COL_OFFSET, row_offset=config.TFT_ROW_OFFSET, madctl=config.TFT_MADCTL)
+_spidma.init(sck=config.TFT_SCK, mosi=config.TFT_MOSI, baudrate=config.TFT_SPI_BAUDRATE)
+_spidma.add_display(slot=0, cs=config.TFT_CS, dc=config.TFT_DC,
+    width=config.TFT_WIDTH, height=config.TFT_HEIGHT,
+    col_off=config.TFT_COL_OFFSET, row_off=config.TFT_ROW_OFFSET)
+tft = ST7735(0, rst=Pin(config.TFT_RST, Pin.OUT), width=config.TFT_WIDTH,
+    height=config.TFT_HEIGHT, col_offset=config.TFT_COL_OFFSET,
+    row_offset=config.TFT_ROW_OFFSET, madctl=config.TFT_MADCTL)
 tft.fill(ST7735.rgb(0, 0, 255))
 tft.show()
 ```

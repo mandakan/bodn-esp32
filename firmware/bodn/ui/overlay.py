@@ -12,6 +12,7 @@ from bodn.session import (
 from bodn.patterns import scale, N_LEDS, _BLACK
 from bodn.ui.screen import Screen
 from bodn.i18n import t
+from bodn.neo import neo
 
 
 class SessionOverlay(Screen):
@@ -44,6 +45,22 @@ class SessionOverlay(Screen):
     def needs_redraw(self):
         return self._dirty
 
+    def sync_led_override(self):
+        """Push session LED state to the C NeoPixel engine."""
+        if not neo.active:
+            return
+        state = self.session_mgr.state
+        if state in (SLEEPING, COOLDOWN, LOCKDOWN):
+            neo.set_override(neo.OVERRIDE_BLACK)
+        elif state == WARN_5:
+            neo.set_override(neo.OVERRIDE_SOLID, 255, 191, 0)
+        elif state == WARN_2:
+            neo.set_override(neo.OVERRIDE_PULSE, 255, 100, 0)
+        elif state == WINDDOWN:
+            neo.set_override(neo.OVERRIDE_FADE, 40, 40, 80)
+        else:
+            neo.clear_override()
+
     def update(self, inp, frame):
         state = self.session_mgr.state
         # Wake from IDLE on any button press
@@ -55,6 +72,7 @@ class SessionOverlay(Screen):
             self._prev_state = state
             self._dirty = True
             self._full_clear = True
+            self.sync_led_override()
 
         # Track temperature status changes
         temp_status = self._settings.get("_temp_status", "ok")

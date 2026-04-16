@@ -32,13 +32,7 @@ from bodn.rakna_rules import (
     CHALLENGE_ADD,
     CHALLENGE_SUB,
 )
-from bodn.patterns import (
-    N_LEDS,
-    zone_fill,
-    zone_pulse,
-    zone_clear,
-    ZONE_LID_RING,
-)
+from bodn.neo import neo
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = const(0)
@@ -121,7 +115,6 @@ class RaknaScreen(Screen):
 
     def __init__(
         self,
-        np,
         overlay,
         arcade=None,
         audio=None,
@@ -129,7 +122,6 @@ class RaknaScreen(Screen):
         secondary_screen=None,
         on_exit=None,
     ):
-        self._np = np
         self._overlay = overlay
         self._arcade = arcade
         self._audio = audio
@@ -186,6 +178,8 @@ class RaknaScreen(Screen):
         self._engine = RaknaEngine(card_set, level=level)
         self._pending_card_id = None
 
+        neo.clear_all_overrides()
+
         # Pre-render title sprite
         self._title_sprite = make_label_sprite("Rakna", 0xFFFF, scale=2)
 
@@ -203,6 +197,8 @@ class RaknaScreen(Screen):
                 save_settings(self._settings)
             except Exception:
                 pass
+        neo.all_off()
+        neo.clear_all_overrides()
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
@@ -275,26 +271,44 @@ class RaknaScreen(Screen):
             lid_bright = min(brightness, config.NEOPIXEL_LID_BRIGHTNESS)
 
             leds = self._engine.make_static_leds(brightness)
+            for i in range(16):
+                r, g, b = leds[i]
+                neo.set_pixel(i, r, g, b)
 
             eng = self._engine
             if eng.state == CORRECT:
-                zone_pulse(ZONE_LID_RING, frame, 3, (0, 255, 0), lid_bright)
+                neo.zone_pattern(
+                    neo.ZONE_LID_RING,
+                    neo.PAT_PULSE,
+                    speed=3,
+                    colour=(0, 255, 0),
+                    brightness=lid_bright,
+                )
             elif eng.state == WRONG:
-                zone_pulse(ZONE_LID_RING, frame, 2, (255, 140, 0), lid_bright)
+                neo.zone_pattern(
+                    neo.ZONE_LID_RING,
+                    neo.PAT_PULSE,
+                    speed=2,
+                    colour=(255, 140, 0),
+                    brightness=lid_bright,
+                )
             elif eng.state == LEVEL_UP:
-                zone_pulse(ZONE_LID_RING, frame, 4, (255, 200, 0), lid_bright)
+                neo.zone_pattern(
+                    neo.ZONE_LID_RING,
+                    neo.PAT_PULSE,
+                    speed=4,
+                    colour=(255, 200, 0),
+                    brightness=lid_bright,
+                )
             elif eng.state in (ANNOUNCE, WAITING):
-                zone_fill(ZONE_LID_RING, eng.rule_colour_rgb, lid_bright)
+                neo.zone_pattern(
+                    neo.ZONE_LID_RING,
+                    neo.PAT_SOLID,
+                    colour=eng.rule_colour_rgb,
+                    brightness=lid_bright,
+                )
             else:
-                zone_clear(ZONE_LID_RING)
-
-            ses_state = self._overlay.session_mgr.state
-            leds = self._overlay.static_led_override(ses_state, leds, brightness)
-
-            np = self._np
-            for i in range(N_LEDS):
-                np[i] = leds[i]
-            np.write()
+                neo.zone_off(neo.ZONE_LID_RING)
 
         # Arcade LEDs
         arc = self._arcade

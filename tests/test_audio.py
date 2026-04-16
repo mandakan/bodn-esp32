@@ -1,15 +1,11 @@
 """Tests for bodn.audio — AudioEngine multi-voice mixing."""
 
 import struct
-
+import sys
 
 from bodn.audio import (
     AudioEngine,
     ToneSource,
-    V_MUSIC,
-    V_SFX_BASE,
-    V_SFX_END,
-    V_UI,
     _GAIN_MUSIC,
     _GAIN_MUSIC_DUCKED,
     _GAIN_SFX,
@@ -17,20 +13,8 @@ from bodn.audio import (
     _apply_volume_py,
 )
 
-
-class FakeI2S:
-    """I2S stub that records all writes."""
-
-    RX = 0
-    TX = 1
-    MONO = 0
-
-    def __init__(self):
-        self.writes = []
-
-    def write(self, buf):
-        self.writes.append(bytes(buf))
-        return len(buf)
+# Access the fake audiomix backend for test assertions
+_audiomix = sys.modules["_audiomix"]
 
 
 class TestToneSource:
@@ -65,71 +49,67 @@ class TestToneSource:
 
 class TestAudioEngine:
     def _make_engine(self):
-        i2s = FakeI2S()
-        engine = AudioEngine(i2s)
-        return engine, i2s
+        engine = AudioEngine()
+        return engine
 
     def test_initial_state(self):
-        engine, _ = self._make_engine()
+        engine = self._make_engine()
         assert not engine.playing
         assert engine.volume == 10
 
     def test_tone_activates(self):
-        engine, _ = self._make_engine()
+        engine = self._make_engine()
         engine.tone(440, 100)
         assert engine.playing
 
     def test_stop_channel(self):
-        engine, _ = self._make_engine()
+        engine = self._make_engine()
         engine.tone(440, 100, channel="sfx")
         engine.stop("sfx")
         assert not engine.playing
 
     def test_stop_all(self):
-        engine, _ = self._make_engine()
+        engine = self._make_engine()
         engine.tone(440, 100, channel="sfx")
         engine.tone(880, 100, channel="ui")
         engine.stop()
         assert not engine.playing
 
     def test_boop(self):
-        engine, _ = self._make_engine()
+        engine = self._make_engine()
         engine.boop()
         assert engine.playing
-        # Boop should use ui voice
-        assert engine._voices[V_UI].source is not None
 
     def test_music_and_sfx_coexist(self):
         """Both music and SFX voices can be active simultaneously."""
-        engine, _ = self._make_engine()
+        engine = self._make_engine()
         engine.tone(440, 500, channel="music")
         engine.tone(880, 500, channel="sfx")
-        assert engine._voices[V_MUSIC].source is not None
-        assert engine._voices[V_SFX_BASE].source is not None
+        assert engine.channel_active("music")
+        assert engine.channel_active("sfx")
 
     def test_all_voice_types_coexist(self):
         """Music, SFX, and UI can all be active at once."""
-        engine, _ = self._make_engine()
+        engine = self._make_engine()
         engine.tone(440, 500, channel="music")
         engine.tone(880, 500, channel="sfx")
         engine.tone(1000, 500, channel="ui")
-        assert engine._voices[V_MUSIC].source is not None
-        assert engine._voices[V_SFX_BASE].source is not None
-        assert engine._voices[V_UI].source is not None
+        assert engine.channel_active("music")
+        assert engine.channel_active("sfx")
+        assert engine.channel_active("ui")
 
     def test_stop_sfx_leaves_music(self):
-        engine, _ = self._make_engine()
+        engine = self._make_engine()
         engine.tone(440, 500, channel="music")
         engine.tone(880, 500, channel="sfx")
         engine.stop("sfx")
-        assert engine._voices[V_MUSIC].source is not None
+        assert engine.channel_active("music")
         assert engine.playing
 
 
 class TestSFXPool:
     def _make_engine(self):
-        i2s = FakeI2S()
-        return AudioEngine(i2s)
+        return AudioEngine()
 
     def test_multiple_sfx_voices(self):
         """Multiple SFX sounds can play simultaneously."""
@@ -137,50 +117,7 @@ class TestSFXPool:
         engine.tone(440, 500, channel="sfx")
         engine.tone(880, 500, channel="sfx")
         engine.tone(660, 500, channel="sfx")
-        # Should have 3 different SFX slots active
-        active_sfx = sum(
-            1
-            for i in range(V_SFX_BASE, V_SFX_END)
-            if engine._voices[i].source is not None
-        )
-        assert active_sfx == 3
-
-    def test_pool_fills_four(self):
-        """SFX pool holds 4 voices."""
-        engine = self._make_engine()
-        for freq in [440, 880, 660, 550]:
-            engine.tone(freq, 500, channel="sfx")
-        active_sfx = sum(
-            1
-            for i in range(V_SFX_BASE, V_SFX_END)
-            if engine._voices[i].source is not None
-        )
-        assert active_sfx == 4
-
-    def test_oldest_voice_stealing(self):
-        """When SFX pool is full, the oldest voice is stolen."""
-        engine = self._make_engine()
-        # Fill all 4 SFX slots
-        for freq in [440, 880, 660, 550]:
-            engine.tone(freq, 500, channel="sfx")
-        # Record which voice was started first (lowest _start_seq)
-        oldest_seq = min(
-            engine._voices[i]._start_seq for i in range(V_SFX_BASE, V_SFX_END)
-        )
-        # Play one more — should steal the oldest
-        engine.tone(1000, 500, channel="sfx")
-        # The oldest seq should no longer be present
-        current_seqs = [
-            engine._voices[i]._start_seq for i in range(V_SFX_BASE, V_SFX_END)
-        ]
-        assert oldest_seq not in current_seqs
-        # Still 4 active
-        active_sfx = sum(
-            1
-            for i in range(V_SFX_BASE, V_SFX_END)
-            if engine._voices[i].source is not None
-        )
-        assert active_sfx == 4
+        assert engine.sfx_active == 3
 
     def test_stop_sfx_clears_pool(self):
         """Stopping 'sfx' channel clears all pool voices."""
@@ -188,12 +125,7 @@ class TestSFXPool:
         engine.tone(440, 500, channel="sfx")
         engine.tone(880, 500, channel="sfx")
         engine.stop("sfx")
-        active_sfx = sum(
-            1
-            for i in range(V_SFX_BASE, V_SFX_END)
-            if engine._voices[i].source is not None
-        )
-        assert active_sfx == 0
+        assert engine.sfx_active == 0
 
 
 class TestMixAdd:
@@ -282,53 +214,19 @@ class TestGainStaging:
         duck = struct.unpack_from("<h", buf_duck, 0)[0]
         assert solo > duck * 2  # solo is ~2.8x louder than ducked
 
-    def test_uniform_gain(self):
-        """All voices are created with the same default gain."""
-        engine = AudioEngine(FakeI2S())
-        for v in engine._voices:
-            assert v.gain_mult == _GAIN_SFX  # all uniform now
-
 
 class TestVolume:
     def test_set_volume(self):
-        engine, _ = TestAudioEngine()._make_engine()
+        engine = AudioEngine()
         engine.volume = 50
         assert engine.volume == 50
 
     def test_clamp_volume(self):
-        engine, _ = TestAudioEngine()._make_engine()
+        engine = AudioEngine()
         engine.volume = 150
         assert engine.volume == 100
         engine.volume = -10
         assert engine.volume == 0
-
-    def test_volume_scaling(self):
-        engine, _ = TestAudioEngine()._make_engine()
-        engine.volume = 50
-
-        # Create a buffer with known samples
-        buf = bytearray(4)
-        struct.pack_into("<h", buf, 0, 10000)
-        struct.pack_into("<h", buf, 2, -10000)
-
-        engine._apply_volume(buf, 4)
-
-        s0 = struct.unpack_from("<h", buf, 0)[0]
-        s1 = struct.unpack_from("<h", buf, 2)[0]
-        # At 50% volume, samples should be roughly halved
-        assert 4000 < s0 < 6000
-        assert -6000 < s1 < -4000
-
-    def test_full_volume_no_change(self):
-        engine, _ = TestAudioEngine()._make_engine()
-        engine.volume = 100
-
-        buf = bytearray(4)
-        struct.pack_into("<h", buf, 0, 20000)
-        original = bytes(buf)
-
-        engine._apply_volume(buf, 4)
-        assert buf[:4] == original[:4]
 
 
 class TestPlayWav:
@@ -347,6 +245,6 @@ class TestPlayWav:
 
     def test_play_invalid_path(self):
         """Playing a non-existent file should not crash."""
-        engine, _ = TestAudioEngine()._make_engine()
+        engine = AudioEngine()
         engine.play("/nonexistent/file.wav")
         assert not engine.playing

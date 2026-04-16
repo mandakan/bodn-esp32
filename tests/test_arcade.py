@@ -57,134 +57,38 @@ class TestArcadeButtons:
         mcp._portb = 0xFF  # all high = not pressed
         assert arc.pin(0).value() == 1
 
-    def test_set_led_brightness(self):
-        i2c = FakeI2C()
-        arc, _, pwm, _ = _make_arcade(i2c)
-        i2c.writes.clear()
-        arc.set_led(0, 255)  # full brightness
-        assert arc.get_led_duty(0) == 4095
-
-    def test_set_led_off(self):
+    def test_flush_is_noop(self):
+        """flush() is a no-op since C engine handles I2C writes."""
         arc, _, _, _ = _make_arcade()
-        arc.set_led(0, 0)
-        assert arc.get_led_duty(0) == 0
+        arc.flush()  # should not raise
 
-    def test_set_led_half(self):
+    def test_semantic_methods_dont_raise(self):
+        """All semantic LED methods delegate to C stub without errors."""
         arc, _, _, _ = _make_arcade()
-        arc.set_led(2, 128)
-        duty = arc.get_led_duty(2)
-        # 128/255 * 4095 ≈ 2056
-        assert 2040 <= duty <= 2060
-
-    def test_set_all_leds(self):
-        arc, _, _, _ = _make_arcade()
-        arc.set_all_leds(100)
-        for i in range(5):
-            assert arc.get_led_duty(i) > 0
-
-    def test_all_off(self):
-        arc, _, _, _ = _make_arcade()
-        arc.set_all_leds(200)
+        arc.off(0)
         arc.all_off()
-        for i in range(5):
-            assert arc.get_led_duty(i) == 0
-
-    def test_set_led_duty_raw(self):
-        arc, _, _, _ = _make_arcade()
-        arc.set_led_duty(3, 2048)
-        assert arc.get_led_duty(3) == 2048
-
-    def test_pulse_led_varies(self):
-        arc, _, _, _ = _make_arcade()
-        duties = []
-        for frame in range(0, 256, 32):
-            arc.pulse_led(0, frame, speed=2)
-            duties.append(arc.get_led_duty(0))
-        # Pulse should produce varying values
-        assert len(set(duties)) > 1
+        arc.glow(0)
+        arc.all_glow()
+        arc.on(0)
+        arc.all_on()
+        arc.pulse(0, 10, speed=2)
+        arc.all_pulse(10, speed=2)
+        arc.blink(0, 10, speed=4)
+        arc.all_blink(10, speed=4)
+        arc.wave(10, speed=2, spacing=32)
+        arc.flash(0, duration=9)
+        arc.tick_flash()
+        arc.pulse_led(0, 10, speed=2)
 
     def test_no_pwm_graceful(self):
-        """ArcadeButtons works without PCA9685 (LEDs just don't light up)."""
+        """ArcadeButtons works without PCA9685."""
         i2c = FakeI2C()
         mcp = MCP23017(i2c, 0x20)
         arc = ArcadeButtons(mcp, [10, 11, 13, 14, 15], pwm=None, pwm_channels=[])
         # Should not raise
-        arc.set_led(0, 128)
-        arc.set_all_leds(255)
-        arc.all_off()
-        assert arc.get_led_duty(0) == 0
-
-    def test_flush_writes_only_changed(self):
-        """flush() skips I2C when target matches current duty."""
-        i2c = FakeI2C()
-        arc, _, pwm, _ = _make_arcade(i2c)
-        arc.set_led(0, 255)
-        i2c.writes.clear()
-        arc.flush()
-        # First flush should write (target != duty)
-        assert len(i2c.writes) > 0
-
-        i2c.writes.clear()
-        arc.flush()
-        # Second flush with no changes — should NOT write
-        assert len(i2c.writes) == 0
-
-    def test_flush_batch_uniform(self):
-        """flush() uses batch write when all targets are the same."""
-        i2c = FakeI2C()
-        arc, _, pwm, _ = _make_arcade(i2c)
-        arc.all_on()
-        i2c.writes.clear()
-        arc.flush()
-        # Should be a single batch write (1 I2C transaction)
-        assert len(i2c.writes) == 1
-
-    def test_pulse_starts_from_zero(self):
-        """Each button starts its pulse from brightness 0 when first called."""
-        arc, _, _, _ = _make_arcade()
-        # Start pulsing button 0 at frame 100
-        arc.pulse(0, 100, speed=2)
-        duty_at_start = arc.get_led_duty(0)
-        # Phase = (100-100)*2 = 0 → brightness 0
-        assert duty_at_start == 0
-
-    def test_pulse_per_button_offset(self):
-        """Two buttons started at different frames pulse out of sync."""
-        arc, _, _, _ = _make_arcade()
-        # Start button 0 at frame 0, button 1 at frame 20
-        arc.pulse(0, 0, speed=2)
-        arc.pulse(1, 20, speed=2)
-        # Now at frame 40, button 0 has been pulsing for 40 frames,
-        # button 1 for 20 frames — different phase
-        arc.pulse(0, 40, speed=2)
-        arc.pulse(1, 40, speed=2)
-        assert arc.get_led_duty(0) != arc.get_led_duty(1)
-
-    def test_pulse_resets_on_off(self):
-        """Pulse offset resets when button goes through a non-pulse state."""
-        arc, _, _, _ = _make_arcade()
-        arc.pulse(0, 10, speed=2)
         arc.off(0)
-        # Restart pulsing at frame 50 — should start from zero again
-        arc.pulse(0, 50, speed=2)
-        # Phase = (50-50)*2 = 0
-        assert arc.get_led_duty(0) == 0
-
-    def test_wave_produces_different_duties(self):
-        """wave() gives each button a different brightness."""
-        arc, _, _, _ = _make_arcade()
-        arc.wave(64, speed=2, spacing=32)
-        duties = [arc.get_led_duty(i) for i in range(5)]
-        # With spacing=32 and 5 buttons, there should be variation
-        assert len(set(duties)) > 1
-
-    def test_flush_no_pwm_safe(self):
-        """flush() is a no-op without PCA9685."""
-        i2c = FakeI2C()
-        mcp = MCP23017(i2c, 0x20)
-        arc = ArcadeButtons(mcp, [10, 11, 13, 14, 15], pwm=None, pwm_channels=[])
-        arc.set_led(0, 255)
-        arc.flush()  # should not raise
+        arc.all_off()
+        arc.flush()
 
 
 class TestInputStateArcade:

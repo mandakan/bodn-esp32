@@ -36,14 +36,7 @@ from bodn.life_rules import (
     toggle,
 )
 from bodn.i18n import t
-from bodn.patterns import (
-    N_LEDS,
-    _led_buf,
-    scale,
-    zone_fill,
-    ZONE_STICKS,
-    ZONE_LID_RING,
-)
+from bodn.neo import neo
 
 import time
 
@@ -84,14 +77,12 @@ class GardenScreen(Screen):
 
     def __init__(
         self,
-        np,
         overlay,
         arcade=None,
         settings=None,
         secondary_screen=None,
         on_exit=None,
     ):
-        self._np = np
         self._overlay = overlay
         self._arcade = arcade
         self._secondary = secondary_screen
@@ -166,12 +157,15 @@ class GardenScreen(Screen):
         self._running = False
         self._plant_count = 0
         self._last_step_ms = time.ticks_ms()
+        neo.clear_all_overrides()
         arc = self._arcade
         if arc:
             arc.wave(0, speed=1)
             arc.flush()
 
     def exit(self):
+        neo.all_off()
+        neo.clear_all_overrides()
         arc = self._arcade
         if arc:
             arc.all_off()
@@ -337,32 +331,38 @@ class GardenScreen(Screen):
             phase = (frame * 3) & 0xFF
             v = phase if phase < 128 else 255 - phase
             v = (v * brightness) >> 7
-            c = scale(pulse_color, v)
-            buf = _led_buf
+            r = pulse_color[0] * v >> 8
+            g = pulse_color[1] * v >> 8
+            b = pulse_color[2] * v >> 8
             for i in range(16):
-                buf[i] = c
+                neo.set_pixel(i, r, g, b)
         else:
-            zone_fill(ZONE_STICKS, (30, 10, 40), brightness // 4)
+            neo.sticks_pattern(
+                neo.PAT_SOLID, colour=(30, 10, 40), brightness=brightness // 4
+            )
 
         # Lid ring: density mapped to lit LEDs
         if pop > 0:
             lit = max(1, pop * 92 // total)
             dom_color = self._dominant_grid_color()
-            c = scale(dom_color, lid_bright)
-            dim = scale(dom_color, lid_bright // 6)
-            buf = _led_buf
+            cr = dom_color[0] * lid_bright >> 8
+            cg = dom_color[1] * lid_bright >> 8
+            cb = dom_color[2] * lid_bright >> 8
+            dr = dom_color[0] * (lid_bright // 6) >> 8
+            dg = dom_color[1] * (lid_bright // 6) >> 8
+            db = dom_color[2] * (lid_bright // 6) >> 8
             for i in range(92):
-                buf[16 + i] = c if i < lit else dim
+                if i < lit:
+                    neo.set_pixel(16 + i, cr, cg, cb)
+                else:
+                    neo.set_pixel(16 + i, dr, dg, db)
         else:
-            zone_fill(ZONE_LID_RING, (10, 5, 20), lid_bright // 3)
-
-        ses_state = self._overlay.session_mgr.state
-        leds = self._overlay.static_led_override(ses_state, _led_buf, brightness)
-
-        np = self._np
-        for i in range(N_LEDS):
-            np[i] = leds[i]
-        np.write()
+            neo.zone_pattern(
+                neo.ZONE_LID_RING,
+                neo.PAT_SOLID,
+                colour=(10, 5, 20),
+                brightness=lid_bright // 3,
+            )
 
         # Arcade LEDs — reflect garden state
         arc = self._arcade

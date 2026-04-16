@@ -340,3 +340,210 @@ class FakeDS18X20:
 
 _ds18x20.DS18X20 = FakeDS18X20
 sys.modules["ds18x20"] = _ds18x20
+
+# Stub '_neopixel' C module for host tests
+_neopixel_stub = types.ModuleType("_neopixel")
+
+
+def _noop(*a, **kw):
+    pass
+
+
+for _fn in (
+    "init",
+    "deinit",
+    "zone_pattern",
+    "zone_off",
+    "zone_brightness",
+    "set_pixel",
+    "set_pixels",
+    "clear_pixel",
+    "clear_pixels",
+    "clear_all_overrides",
+    "set_override",
+    "clear_override",
+    "pause",
+    "resume",
+):
+    setattr(_neopixel_stub, _fn, _noop)
+_neopixel_stub.frame = lambda: 0
+_neopixel_stub.stats = lambda: {}
+for _name, _val in (
+    ("PAT_OFF", 0),
+    ("PAT_SOLID", 1),
+    ("PAT_RAINBOW", 2),
+    ("PAT_PULSE", 3),
+    ("PAT_CHASE", 4),
+    ("PAT_SPARKLE", 5),
+    ("PAT_BOUNCE", 6),
+    ("PAT_WAVE", 7),
+    ("PAT_SPLIT", 8),
+    ("PAT_FILL", 9),
+    ("ZONE_STICK_A", 0),
+    ("ZONE_STICK_B", 1),
+    ("ZONE_LID_RING", 2),
+    ("OVERRIDE_NONE", 0),
+    ("OVERRIDE_BLACK", 1),
+    ("OVERRIDE_SOLID", 2),
+    ("OVERRIDE_PULSE", 3),
+    ("OVERRIDE_FADE", 4),
+):
+    setattr(_neopixel_stub, _name, _val)
+sys.modules["_neopixel"] = _neopixel_stub
+
+# Stub '_audiomix' C module for host tests
+_audiomix_stub = types.ModuleType("_audiomix")
+_audiomix_stub.NUM_VOICES = 16
+_audiomix_stub.WAVE_SQUARE = 0
+_audiomix_stub.WAVE_SINE = 1
+_audiomix_stub.WAVE_SAWTOOTH = 2
+_audiomix_stub.WAVE_NOISE = 3
+
+
+class _FakeAudiomix:
+    """Tracks voice state for test assertions."""
+
+    def __init__(self):
+        self._voices = {}  # idx -> {"active": bool, ...}
+        self._volume = 10
+
+    def init(self, **kwargs):
+        self._voices.clear()
+        self._volume = 10
+
+    def set_volume(self, vol):
+        self._volume = max(0, min(100, vol))
+
+    def get_volume(self):
+        return self._volume
+
+    def voice_active(self, idx):
+        return self._voices.get(idx, {}).get("active", False)
+
+    def voice_stop(self, idx):
+        if idx in self._voices:
+            self._voices[idx]["active"] = False
+
+    def voice_tone(self, idx, freq, duration_ms, wave_id):
+        self._voices[idx] = {"active": True, "type": "tone", "freq": freq}
+
+    def voice_play_buffer(self, idx, data, length, loop):
+        self._voices[idx] = {"active": True, "type": "buffer"}
+
+    def voice_start_stream(self, idx, loop):
+        self._voices[idx] = {"active": True, "type": "stream"}
+
+    def voice_feed(self, idx, buf, n):
+        pass
+
+    def voice_eof(self, idx):
+        pass
+
+    def voice_sequence(self, idx, packed):
+        self._voices[idx] = {"active": True, "type": "sequence"}
+
+    def ringbuf_space(self, idx):
+        return 0  # no space — prevents infinite feed loops in tests
+
+    def clock_start(self, bpm, steps):
+        pass
+
+    def clock_stop(self):
+        pass
+
+    def clock_get_step(self):
+        return 0
+
+    def clock_clear_grid(self):
+        pass
+
+    def clock_set_perc(self, step, mask):
+        pass
+
+    def clock_set_perc_buffer(self, track, buf, length):
+        pass
+
+    def clock_set_steps(self, n):
+        pass
+
+    def clock_set_bpm(self, bpm):
+        pass
+
+    def clock_set_tone_track(self, track, voice, mask):
+        pass
+
+    def clock_set_tone_step(self, track, step, freq, dur, wave, *args):
+        pass
+
+    def clock_preview(self, track):
+        pass
+
+    def clock_tone_preview(self, track):
+        pass
+
+
+_fake_audiomix = _FakeAudiomix()
+for _attr in (
+    "init",
+    "set_volume",
+    "get_volume",
+    "voice_active",
+    "voice_stop",
+    "voice_tone",
+    "voice_play_buffer",
+    "voice_start_stream",
+    "voice_feed",
+    "voice_eof",
+    "voice_sequence",
+    "ringbuf_space",
+    "clock_start",
+    "clock_stop",
+    "clock_get_step",
+    "clock_clear_grid",
+    "clock_set_perc",
+    "clock_set_perc_buffer",
+    "clock_set_steps",
+    "clock_set_bpm",
+    "clock_set_tone_track",
+    "clock_set_tone_step",
+    "clock_preview",
+    "clock_tone_preview",
+):
+    setattr(_audiomix_stub, _attr, getattr(_fake_audiomix, _attr))
+sys.modules["_audiomix"] = _audiomix_stub
+
+# Stub '_mcpinput' C module (native MCP23017 scan + LED engine on core 0)
+_mcpinput_stub = types.ModuleType("_mcpinput")
+
+
+def _mcpinput_noop(*a, **kw):
+    pass
+
+
+_mcpinput_stub.init = _mcpinput_noop
+_mcpinput_stub.get_events = lambda: []
+_mcpinput_stub.read_state = lambda: 0xFFFF
+_mcpinput_stub.led_init = lambda **kw: True
+_mcpinput_stub.led_anim = _mcpinput_noop
+_mcpinput_stub.led_anim_all = _mcpinput_noop
+_mcpinput_stub.led_flash = _mcpinput_noop
+_mcpinput_stub.led_tick_flash = lambda: False
+_mcpinput_stub.led_mode = _mcpinput_noop
+_mcpinput_stub.led_set_whack_pins = _mcpinput_noop
+_mcpinput_stub.led_set_whack_target = _mcpinput_noop
+_mcpinput_stub.led_get_whack_result = lambda: (False, False)
+for _name, _val in (
+    ("PRESS", 1),
+    ("RELEASE", 2),
+    ("ANIM_OFF", 0),
+    ("ANIM_GLOW", 1),
+    ("ANIM_ON", 2),
+    ("ANIM_PULSE", 3),
+    ("ANIM_BLINK", 4),
+    ("ANIM_WAVE", 5),
+    ("LED_PYTHON", 0),
+    ("LED_BEAT_SYNC", 1),
+    ("LED_WHACK", 2),
+):
+    setattr(_mcpinput_stub, _name, _val)
+sys.modules["_mcpinput"] = _mcpinput_stub

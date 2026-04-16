@@ -220,6 +220,8 @@ Brightness is capped in software per zone: sticks at 25% (64/255), lid ring at 1
 
 NeoPixel VDD is powered from the DC-DC converter's 5V output (see [Power distribution](#power-distribution) below), ensuring stable voltage on both USB and battery.
 
+**Bulk capacitor (required):** solder a 470–1000 µF electrolytic capacitor (≥ 6.3 V) across VDD and GND at the strip's power input. The combined capacitance of 108 WS2812 LEDs causes a large inrush current spike when power is first applied, which can brownout the ESP32 and cause freezes or reboots. The capacitor absorbs this inrush.
+
 ## Display architecture
 
 The two displays serve different purposes:
