@@ -269,11 +269,8 @@ class DemoScreen(Screen):
             for i in range(n):
                 r, g, b = leds[i]
                 leds[i] = (g, b, r)
-        if len(sw) > 3 and sw[3]:
-            # SW_R: Strobe (blank every other NeoPixel-write frame)
-            if (frame // 3) & 1:
-                for i in range(n):
-                    leds[i] = (0, 0, 0)
+        # SW_R strobe removed — was unreliable due to uneven frame timing.
+        # SW_R now only controls arcade button wave (see _update_arcade_leds).
 
         # Dim the lid ring relative to the sticks
         lid_ratio = config.NEOPIXEL_LID_BRIGHTNESS
