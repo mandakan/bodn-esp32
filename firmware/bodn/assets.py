@@ -4,9 +4,12 @@
 # One os.stat() per call (~0.1 ms) — negligible vs file I/O.
 #
 # Usage:
-#   from bodn.assets import resolve, resolve_sounds, preload_sounds
+#   from bodn.assets import resolve, resolve_voice, resolve_sounds, preload_sounds
 #   path = resolve("/sounds/bank_0/0.wav")
 #   # Returns "/sd/sounds/bank_0/0.wav" if present on SD, else the original path.
+#
+#   path = resolve_voice("/sounds/tts/sv/simon_watch.wav")
+#   # Tries the hand-recorded override first; falls back to generated TTS.
 #
 #   paths = resolve_sounds("/sounds/space/", ["thruster", "shields", "horn"])
 #   # Returns ["/sd/sounds/space/thruster.wav", None, "/sd/sounds/space/horn.wav"]
@@ -36,6 +39,37 @@ def resolve(path):
         return sd_path
     except OSError:
         return path
+
+
+def resolve_voice(tts_path):
+    """Resolve a spoken-audio asset with hand-recorded overlay.
+
+    Takes a canonical TTS path and tries the parallel /recordings/ path first
+    (with the first "/tts/" segment swapped to "/recordings/"), then falls
+    back to the TTS path.  Each candidate is passed through resolve(), so the
+    effective lookup order is:
+
+        /sd/...recordings/...  →  /...recordings/...  →  /sd/...tts/...  →  /...tts/...
+
+    This lets us drop a recorded WAV at e.g. /sd/sounds/recordings/sv/simon_watch.wav
+    or /sd/stories/peter_rabbit/recordings/sv/home.wav and have it transparently
+    replace the generated TTS, with per-key/per-node granularity.
+
+    Args:
+        tts_path: canonical TTS path (must contain "/tts/").
+
+    Returns:
+        Filesystem path string if any layer has the file, else None.
+    """
+    rec_path = tts_path.replace("/tts/", "/recordings/", 1)
+    for candidate in (rec_path, tts_path):
+        resolved = resolve(candidate)
+        try:
+            os.stat(resolved)
+            return resolved
+        except OSError:
+            continue
+    return None
 
 
 def resolve_sounds(directory, names):
