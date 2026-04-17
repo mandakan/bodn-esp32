@@ -17,6 +17,7 @@ from bodn.rakna_rules import (
     DISCOVER_THRESHOLD,
     FIND_THRESHOLD,
     ADD_THRESHOLD,
+    SUB_THRESHOLD,
     DEMO_CARDS,
     CHALLENGE_DISCOVER,
     CHALLENGE_FIND,
@@ -24,6 +25,11 @@ from bodn.rakna_rules import (
     CHALLENGE_LESS,
     CHALLENGE_ADD,
     CHALLENGE_SUB,
+    CHALLENGE_BUILD,
+    BUILD_NEED_FIRST,
+    BUILD_NEED_OP,
+    BUILD_NEED_SECOND,
+    BUILD_DONE,
 )
 
 SAMPLE_CARD_SET = {
@@ -76,6 +82,12 @@ def engine_l5():
     return RaknaEngine(SAMPLE_CARD_SET, level=5)
 
 
+@pytest.fixture
+def engine_l6():
+    """Engine starting at level 6."""
+    return RaknaEngine(SAMPLE_CARD_SET, level=6)
+
+
 def _to_waiting(engine):
     """Advance engine through WELCOME -> ANNOUNCE -> WAITING."""
     engine.update(None, WELCOME_MS)
@@ -101,7 +113,7 @@ class TestInitialState:
 
     def test_level_clamped(self):
         eng = RaknaEngine(SAMPLE_CARD_SET, level=99)
-        assert eng.level == 5
+        assert eng.level == 6
         eng = RaknaEngine(SAMPLE_CARD_SET, level=0)
         assert eng.level == 1
 
@@ -371,11 +383,11 @@ class TestCheckCard:
 class TestNumberKeys:
     def test_number_key(self, engine):
         engine.check_card("dots_7")
-        assert engine.number_key == "rakna_number_7"
+        assert engine.number_key == "num_7"
 
     def test_target_number_key(self, engine_l2):
         engine_l2.update(None, WELCOME_MS)
-        assert engine_l2.target_number_key == "rakna_number_{}".format(engine_l2.target)
+        assert engine_l2.target_number_key == "num_{}".format(engine_l2.target)
 
     def test_number_key_none_for_no_scan(self, engine):
         assert engine.number_key is None
@@ -546,13 +558,150 @@ class TestLevel5Subtraction:
             engine_l5.update("dots_{}".format(start), 0)
             assert engine_l5.state == WRONG
 
-    def test_level_5_is_endless(self, engine_l5):
-        """Level 5 never triggers LEVEL_UP (level 6 is future work)."""
-        for _ in range(20):
+    def test_level_5_advances_to_6(self, engine_l5):
+        """Level 5 advances to 6 after SUB_THRESHOLD correct answers."""
+        for _ in range(SUB_THRESHOLD):
             _to_waiting(engine_l5)
             remainder = engine_l5.target
             engine_l5.update("dots_{}".format(remainder), 0)
             assert engine_l5.state == CORRECT
             engine_l5.update(None, CORRECT_MS)
-        assert engine_l5.level == 5
-        assert engine_l5.state != LEVEL_UP
+        assert engine_l5.state == LEVEL_UP
+        engine_l5.update(None, LEVEL_UP_MS)
+        assert engine_l5.level == 6
+
+
+class TestLevel6Build:
+    def test_initial_state(self, engine_l6):
+        assert engine_l6.level == 6
+        engine_l6.update(None, WELCOME_MS)
+        assert engine_l6.challenge_type == CHALLENGE_BUILD
+        assert engine_l6.build_step == BUILD_NEED_FIRST
+
+    def test_addition_flow(self, engine_l6):
+        """num -> op -> num completes the equation with result = a + b."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_3", 0)
+        assert engine_l6.state == WAITING
+        assert engine_l6.build_step == BUILD_NEED_OP
+        assert engine_l6.build_a == 3
+        engine_l6.update("op_plus", 0)
+        assert engine_l6.state == WAITING
+        assert engine_l6.build_step == BUILD_NEED_SECOND
+        assert engine_l6.build_op == "+"
+        engine_l6.update("dots_4", 0)
+        assert engine_l6.state == CORRECT
+        assert engine_l6.build_b == 4
+        assert engine_l6.build_result == 7
+        assert engine_l6.build_step == BUILD_DONE
+        assert engine_l6.target == 7
+
+    def test_subtraction_flow(self, engine_l6):
+        """num -> - -> num yields a - b."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_8", 0)
+        engine_l6.update("op_minus", 0)
+        engine_l6.update("dots_3", 0)
+        assert engine_l6.state == CORRECT
+        assert engine_l6.build_result == 5
+
+    def test_subtraction_clamps_to_zero(self, engine_l6):
+        """Negative subtraction (a < b) clamps to 0 rather than going negative."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_2", 0)
+        engine_l6.update("op_minus", 0)
+        engine_l6.update("dots_5", 0)
+        assert engine_l6.state == CORRECT
+        assert engine_l6.build_result == 0
+
+    def test_addition_beyond_ten(self, engine_l6):
+        """Results > 10 are computed normally (display handles the overflow)."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_7", 0)
+        engine_l6.update("op_plus", 0)
+        engine_l6.update("dots_8", 0)
+        assert engine_l6.state == CORRECT
+        assert engine_l6.build_result == 15
+
+    def test_operator_as_first_is_wrong(self, engine_l6):
+        """Scanning an operator when a number is needed goes to WRONG."""
+        _to_waiting(engine_l6)
+        engine_l6.update("op_plus", 0)
+        assert engine_l6.state == WRONG
+        assert engine_l6.build_step == BUILD_NEED_FIRST
+        assert engine_l6.build_a == 0
+
+    def test_number_when_op_expected_is_wrong(self, engine_l6):
+        """After the first number, scanning another number instead of an op is wrong."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_3", 0)
+        engine_l6.update("dots_4", 0)
+        assert engine_l6.state == WRONG
+        # Partial build preserved — still need the operator
+        assert engine_l6.build_step == BUILD_NEED_OP
+        assert engine_l6.build_a == 3
+
+    def test_equals_card_rejected_as_op(self, engine_l6):
+        """= card is not valid as the operator (only + and -)."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_3", 0)
+        engine_l6.update("op_equals", 0)
+        assert engine_l6.state == WRONG
+        assert engine_l6.build_step == BUILD_NEED_OP
+
+    def test_unknown_card_preserves_build(self, engine_l6):
+        """Scanning an unknown card during build goes to WRONG without discarding progress."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_5", 0)
+        prev_a = engine_l6.build_a
+        engine_l6.update("nonsense", 0)
+        assert engine_l6.state == WRONG
+        assert engine_l6.build_a == prev_a
+        assert engine_l6.build_step == BUILD_NEED_OP
+
+    def test_correct_returns_to_waiting_fresh_slot(self, engine_l6):
+        """After CORRECT, level 6 goes back to WAITING with a cleared build slot."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_2", 0)
+        engine_l6.update("op_plus", 0)
+        engine_l6.update("dots_3", 0)
+        assert engine_l6.state == CORRECT
+        engine_l6.update(None, CORRECT_MS)
+        assert engine_l6.state == WAITING
+        assert engine_l6.build_step == BUILD_NEED_FIRST
+        assert engine_l6.build_a == 0
+        assert engine_l6.build_op == ""
+        assert engine_l6.build_b == 0
+
+    def test_level_6_is_endless(self, engine_l6):
+        """Level 6 is the final level — never triggers LEVEL_UP."""
+        _to_waiting(engine_l6)
+        for _ in range(10):
+            assert engine_l6.state == WAITING
+            engine_l6.update("dots_1", 0)
+            engine_l6.update("op_plus", 0)
+            engine_l6.update("dots_1", 0)
+            assert engine_l6.state == CORRECT
+            engine_l6.update(None, CORRECT_MS)
+        assert engine_l6.level == 6
+        assert engine_l6.state != LEVEL_UP
+
+    def test_result_number_key(self, engine_l6):
+        """result_number_key returns num_N for the current result."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_2", 0)
+        engine_l6.update("op_plus", 0)
+        engine_l6.update("dots_3", 0)
+        assert engine_l6.result_number_key() == "num_5"
+
+    def test_wrong_resets_streak(self, engine_l6):
+        """A wrong scan during build resets the streak."""
+        _to_waiting(engine_l6)
+        engine_l6.update("dots_1", 0)
+        engine_l6.update("op_plus", 0)
+        engine_l6.update("dots_1", 0)
+        engine_l6.update(None, CORRECT_MS)  # back to WAITING, new slot
+        assert engine_l6.streak == 1
+        engine_l6.update("op_plus", 0)  # operator when number expected
+        assert engine_l6.state == WRONG
+        assert engine_l6.streak == 0
