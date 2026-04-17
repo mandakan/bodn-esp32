@@ -56,6 +56,12 @@ class Screen:
     # game modes.
     nfc_modes = frozenset()
 
+    # Latency-sensitive screens set this to True to ask the background
+    # NFC scanner to poll at a slower rate (~2 Hz instead of 3–4 Hz).
+    # The scan itself is always cooperative — this is just a rate knob
+    # for games whose cadence is tight (Simon flashes, sequencer beat).
+    nfc_low_priority = False
+
     def on_nfc_tag(self, parsed):
         """Handle an NFC tag routed to this screen.
 

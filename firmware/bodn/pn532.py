@@ -101,6 +101,16 @@ class PN532:
                 return None
             time.sleep_ms(1)
 
+        return self._read_response_now()
+
+    def _read_response_now(self):
+        """Read a response frame assuming the ready bit was already seen.
+
+        Does a single I2C read and parses the frame — no sleeping, no
+        retry.  Used on the cooperative scan path where the caller has
+        already polled the ready bit itself.  Returns payload bytes or
+        None on malformed frame.
+        """
         # Read response: leading ready byte + frame
         # Max expected: 1 (ready) + 6 (header) + 64 (data) + 2 (checksum+postamble)
         n = 64
@@ -257,8 +267,15 @@ class PN532:
     def read_passive_target_check(self):
         """Phase 2 of two-phase scan: check for response.
 
-        Returns UID bytes if a tag was found, None if not ready or no tag,
-        False if the command completed with no tag detected.
+        Tri-state return:
+          * ``None``  — chip not ready yet, call again after a short yield.
+          * ``False`` — command completed but no tag was detected (or I/O
+            error / malformed frame).  Scan is done; start a new one.
+          * ``bytes`` — UID bytes of a detected tag.
+
+        Callers MUST distinguish ``None`` (retry) from ``False`` (give up
+        this round) — collapsing them into a single "no tag" makes the
+        scanner thrash when the chip is slow.
         """
         if not self._scan_pending:
             return None
@@ -270,7 +287,7 @@ class PN532:
             return False
 
         self._scan_pending = False
-        resp = self._read_response(timeout_ms=10)
+        resp = self._read_response_now()
         if resp is None or len(resp) < 3:
             return False
         n_targets = resp[1]

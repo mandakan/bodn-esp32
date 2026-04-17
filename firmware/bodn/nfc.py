@@ -271,6 +271,7 @@ _pn532 = None
 _shed = False
 _mcp2 = None  # MCP23017 for power gate control
 _power_on_ms = 0  # ticks_ms when power was last turned on
+_scan_suspended = False  # pause background scanning (e.g. during provisioning write)
 
 
 def init(i2c, mcp2=None):
@@ -340,6 +341,21 @@ def set_thermal_shed(active):
     _shed = active
 
 
+def suspend_scan(active):
+    """Pause or resume background NFC scanning.
+
+    Provisioning screens set this while performing a blocking write so
+    the cooperative scan task does not race the write on the shared I2C
+    bus.  The scan task polls this flag between ticks.
+    """
+    global _scan_suspended
+    _scan_suspended = bool(active)
+
+
+def is_scan_suspended():
+    return _scan_suspended
+
+
 # ---------------------------------------------------------------------------
 # NFC reader (PN532 hardware driver)
 # ---------------------------------------------------------------------------
@@ -395,13 +411,16 @@ class NFCReader:
             print("NFC: PN532 init failed:", e)
 
     def scan(self):
-        """Scan for a tag in the field.
+        """Scan for a tag in the field (blocking).
 
         Returns (uid_str, raw_data_bytes) if a tag is present,
         or (None, None) if no tag is detected.
 
         uid_str format: colon-separated hex, e.g. "04:A3:B2:C1:D4:E5:F6"
         raw_data_bytes: NDEF Text Record payload (status + lang + text)
+
+        Retained for provisioning flows that already run off the UI
+        path.  Background scanning uses :meth:`scan_cooperative`.
         """
         if not self._available or _shed:
             return None, None
@@ -411,6 +430,104 @@ class NFCReader:
         uid_str = ":".join("{:02X}".format(b) for b in uid)
         data = self._read_ndef()
         return uid_str, data
+
+    async def scan_cooperative(self, detect_delay_ms=8, check_retries=4):
+        """Scan for a tag without blocking the asyncio loop.
+
+        Uses the PN532 two-phase API: write InListPassiveTarget, yield
+        while the chip polls the RF field, then read the response in a
+        single non-blocking I2C transaction.  Each await gives other
+        tasks (button input, LED updates, animations) a chance to run.
+
+        NDEF page reads for a detected tag are also chunked with short
+        awaits between pages.
+
+        Returns (uid_str, raw_data_bytes) on detection, otherwise
+        (None, None).
+        """
+        try:
+            import uasyncio as asyncio
+        except ImportError:
+            import asyncio
+
+        if not self._available or _shed:
+            return None, None
+
+        pn = self._pn532
+        try:
+            pn.read_passive_target_start()
+        except OSError:
+            raise
+
+        # Give the PN532 time to run the anticollision loop before we
+        # start polling its ready bit.  ~5–7 ms is typical at 106 kbps.
+        await asyncio.sleep_ms(detect_delay_ms)
+
+        uid = None
+        for _ in range(check_retries):
+            res = pn.read_passive_target_check()
+            if res is None:
+                # Not ready yet — yield and retry.
+                await asyncio.sleep_ms(4)
+                continue
+            if res is False:
+                # Command completed, no tag.
+                return None, None
+            uid = res
+            break
+        else:
+            # Ran out of retries — treat as timeout.
+            return None, None
+
+        if uid is None:
+            return None, None
+
+        uid_str = ":".join("{:02X}".format(b) for b in uid)
+        data = await self._read_ndef_cooperative()
+        return uid_str, data
+
+    async def _read_ndef_cooperative(self):
+        """Async variant of :meth:`_read_ndef` that yields between pages.
+
+        Structurally identical to the blocking version but interleaves
+        ``asyncio.sleep_ms(2)`` between each ``ntag_read`` so the main
+        loop can service frames during the ~10–20 ms cold-tag read.
+        """
+        try:
+            import uasyncio as asyncio
+        except ImportError:
+            import asyncio
+
+        raw = self._pn532.ntag_read(4)
+        if raw is None:
+            return None
+
+        i = 0
+        while i < len(raw):
+            tlv_type = raw[i]
+            if tlv_type == 0x00:
+                i += 1
+                continue
+            if tlv_type == 0xFE:
+                break
+            if i + 1 >= len(raw):
+                break
+            tlv_len = raw[i + 1]
+            i += 2
+            if tlv_type == 0x03:
+                if tlv_len > len(raw) - i:
+                    page = 8
+                    while len(raw) - i < tlv_len and page < 20:
+                        await asyncio.sleep_ms(2)
+                        extra = self._pn532.ntag_read(page)
+                        if not extra:
+                            break
+                        raw = raw + extra
+                        page += 4
+                ndef_data = raw[i : i + tlv_len]
+                return self._extract_record(ndef_data)
+            i += tlv_len
+        return None
 
     def _read_ndef(self):
         """Read NDEF Text Record from NTAG user pages (pages 4+).
