@@ -6,9 +6,9 @@
 # Level 3: More or Less — comparison challenges ("find more than 3!").
 # Level 4: Put Together — visual addition (two dot groups, scan total).
 # Level 5: Take Away — subtraction as removal (dots fade, scan remainder).
+# Level 6: Build Numbers — child scans num + op + num, device shows result.
 #
 # Self-paced, never timed.  No game-over state.
-# Level 6 (symbolic equations with operator cards) is future work.
 
 import os
 
@@ -44,6 +44,13 @@ CHALLENGE_MORE = "more"
 CHALLENGE_LESS = "less"
 CHALLENGE_ADD = "add"
 CHALLENGE_SUB = "sub"
+CHALLENGE_BUILD = "build"
+
+# Build step markers (level 6)
+BUILD_NEED_FIRST = const(0)
+BUILD_NEED_OP = const(1)
+BUILD_NEED_SECOND = const(2)
+BUILD_DONE = const(3)
 
 # Demo mode: button index -> card ID mapping (buttons 0-7 -> dots_1..dots_8)
 DEMO_CARDS = [
@@ -57,8 +64,8 @@ DEMO_CARDS = [
     "dots_8",
 ]
 
-# Number word i18n key prefix
-_NUMBER_KEY_PREFIX = "rakna_number_"
+# Number word i18n key prefix (neutral so clips can be reused across modes)
+_NUMBER_KEY_PREFIX = "num_"
 
 # Warm amber for discovery, cool cyan for challenges
 _COLOUR_DISCOVER = (255, 180, 50)
@@ -66,6 +73,7 @@ _COLOUR_FIND = (100, 200, 255)
 _COLOUR_COMPARE = (200, 150, 255)
 _COLOUR_ADD = (100, 230, 150)
 _COLOUR_SUB = (255, 150, 100)
+_COLOUR_BUILD = (180, 100, 240)
 
 
 def _rand_int(lo, hi):
@@ -92,7 +100,7 @@ class RaknaEngine:
     def reset(self, level=1):
         """Reset to initial state at the given level."""
         self.state = WELCOME
-        self.level = max(1, min(level, 5))
+        self.level = max(1, min(level, 6))
         self.score = 0
         self.streak = 0
         self.best_streak = 0
@@ -108,6 +116,12 @@ class RaknaEngine:
         self._level_correct = 0  # correct answers in current level
         self._target_range = 5  # level 2 starts with 1-5
         self._add_range = 5  # level 4 starts with totals within 5
+        # Level 6 equation builder state
+        self.build_step = BUILD_NEED_FIRST
+        self.build_a = 0
+        self.build_op = ""
+        self.build_b = 0
+        self.build_result = 0
 
     def _set_state(self, new_state):
         self.state = new_state
@@ -127,6 +141,18 @@ class RaknaEngine:
             self._pick_addition()
         elif self.level == 5:
             self._pick_subtraction()
+        elif self.level == 6:
+            self._start_build()
+
+    def _start_build(self):
+        """Level 6: set up a fresh equation slot, awaiting child's construction."""
+        self.challenge_type = CHALLENGE_BUILD
+        self.target = 0
+        self.build_step = BUILD_NEED_FIRST
+        self.build_a = 0
+        self.build_op = ""
+        self.build_b = 0
+        self.build_result = 0
 
     def _pick_comparison(self):
         """Pick a comparison challenge with guaranteed valid answers."""
@@ -207,9 +233,15 @@ class RaknaEngine:
 
     @property
     def number_key(self):
-        """i18n key for the last scanned quantity, e.g. 'rakna_number_3'."""
+        """i18n key for the last scanned quantity, e.g. 'num_3'."""
         if self.last_card_quantity > 0:
             return "{}{}".format(_NUMBER_KEY_PREFIX, self.last_card_quantity)
+        return None
+
+    def result_number_key(self):
+        """i18n key for the current build result (level 6), e.g. 'num_7'."""
+        if 0 <= self.build_result <= 20:
+            return "{}{}".format(_NUMBER_KEY_PREFIX, self.build_result)
         return None
 
     @property
@@ -232,6 +264,8 @@ class RaknaEngine:
             return _COLOUR_ADD
         elif self.level == 5:
             return _COLOUR_SUB
+        elif self.level == 6:
+            return _COLOUR_BUILD
         return _COLOUR_DISCOVER
 
     def update(self, card_id, dt):
@@ -273,6 +307,10 @@ class RaknaEngine:
                     if self.level == 1:
                         # Discovery: go straight back to waiting
                         self._set_state(WAITING)
+                    elif self.level == 6:
+                        # Free-build: clear slot and wait for next equation
+                        self._start_build()
+                        self._set_state(WAITING)
                     else:
                         self._pick_challenge()
                         self._set_state(ANNOUNCE)
@@ -285,7 +323,7 @@ class RaknaEngine:
 
         elif self.state == LEVEL_UP:
             if self._state_ms >= LEVEL_UP_MS:
-                self.level = min(self.level + 1, 5)
+                self.level = min(self.level + 1, 6)
                 self._level_correct = 0
                 if self.level == 2:
                     self._target_range = 5
@@ -299,6 +337,9 @@ class RaknaEngine:
 
     def _handle_scan(self, card_id):
         """Process a card scan during WAITING state."""
+        if self.level == 6:
+            return self._handle_build_scan(card_id)
+
         if self._check_answer(card_id):
             self.score += 1
             self.streak += 1
@@ -318,6 +359,75 @@ class RaknaEngine:
             self._set_state(WRONG)
         return self.state
 
+    def _handle_build_scan(self, card_id):
+        """Process a card scan while building a level-6 equation.
+
+        The child scans num -> op -> num.  Bad types go to WRONG without
+        discarding the partial build.  The equals card, if scanned after
+        num-op-num, finalises early (same outcome as scanning the final num
+        already did).
+        """
+        card = self._cards.get(card_id)
+        self.last_card_id = card_id
+        self.last_card = card
+        if card is None:
+            self.last_card_quantity = 0
+            self.streak = 0
+            self._set_state(WRONG)
+            return self.state
+
+        ctype = card.get("type")
+        qty = card.get("quantity")
+        op = card.get("operator")
+
+        if self.build_step == BUILD_NEED_FIRST:
+            if ctype == "number" and qty is not None:
+                self.build_a = qty
+                self.last_card_quantity = qty
+                self.build_step = BUILD_NEED_OP
+                self._set_state(WAITING)
+                return self.state
+            self.last_card_quantity = qty if qty is not None else 0
+            self.streak = 0
+            self._set_state(WRONG)
+            return self.state
+
+        if self.build_step == BUILD_NEED_OP:
+            if ctype == "operator" and op in ("+", "-"):
+                self.build_op = op
+                self.last_card_quantity = 0
+                self.build_step = BUILD_NEED_SECOND
+                self._set_state(WAITING)
+                return self.state
+            self.last_card_quantity = qty if qty is not None else 0
+            self.streak = 0
+            self._set_state(WRONG)
+            return self.state
+
+        if self.build_step == BUILD_NEED_SECOND:
+            if ctype == "number" and qty is not None:
+                self.build_b = qty
+                self.last_card_quantity = qty
+                if self.build_op == "+":
+                    self.build_result = self.build_a + self.build_b
+                else:
+                    self.build_result = max(0, self.build_a - self.build_b)
+                self.target = self.build_result
+                self.score += 1
+                self.streak += 1
+                if self.streak > self.best_streak:
+                    self.best_streak = self.streak
+                self._level_correct += 1
+                self.build_step = BUILD_DONE
+                self._set_state(CORRECT)
+                return self.state
+            self.last_card_quantity = qty if qty is not None else 0
+            self.streak = 0
+            self._set_state(WRONG)
+            return self.state
+
+        return self.state
+
     def _should_level_up(self):
         """Check if conditions are met for a level up."""
         if self.level == 1:
@@ -329,8 +439,8 @@ class RaknaEngine:
         elif self.level == 4:
             return self._level_correct >= ADD_THRESHOLD
         elif self.level == 5:
-            # Level 5 is endless — no level up (level 6 is future work)
-            return False
+            return self._level_correct >= SUB_THRESHOLD
+        # Level 6 is the final level — endless free-build
         return False
 
     def make_static_leds(self, brightness):

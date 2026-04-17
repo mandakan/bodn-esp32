@@ -31,6 +31,10 @@ from bodn.rakna_rules import (
     CHALLENGE_LESS,
     CHALLENGE_ADD,
     CHALLENGE_SUB,
+    CHALLENGE_BUILD,
+    BUILD_NEED_FIRST,
+    BUILD_NEED_OP,
+    BUILD_NEED_SECOND,
 )
 from bodn.patterns import (
     N_LEDS,
@@ -314,9 +318,10 @@ class RaknaScreen(Screen):
             return
 
         try:
-            from bodn.tts import say
+            from bodn.tts import say, say_seq
         except ImportError:
             say = None
+            say_seq = None
 
         eng = self._engine
 
@@ -328,7 +333,24 @@ class RaknaScreen(Screen):
                     pass
         elif new_state == CORRECT:
             audio.tone(_CORRECT_TONE, 150)
-            if say:
+            if eng.level == 6 and say_seq:
+                # Compose the spoken equation: "three plus four is seven"
+                op_key = "math_plus" if eng.build_op == "+" else "math_minus"
+                rk = eng.result_number_key()
+                try:
+                    say_seq(
+                        [
+                            "num_{}".format(eng.build_a),
+                            op_key,
+                            "num_{}".format(eng.build_b),
+                            "math_is",
+                            rk,
+                        ],
+                        audio,
+                    )
+                except Exception:
+                    pass
+            elif say:
                 try:
                     # Say the number word for the scanned card
                     key = eng.number_key
@@ -364,6 +386,8 @@ class RaknaScreen(Screen):
                         say("rakna_add", audio)
                     elif ct == CHALLENGE_SUB:
                         say("rakna_sub", audio)
+                    elif ct == CHALLENGE_BUILD:
+                        say("rakna_build", audio)
                 except Exception:
                     audio.tone(523, 100)
             else:
@@ -413,13 +437,15 @@ class RaknaScreen(Screen):
         challenge_text = self._challenge_display_text()
         draw_centered(tft, challenge_text, 8, theme.WHITE, w, scale=2)
 
-        # Number path below text (levels 2+ only)
-        if eng.level >= 2:
+        # Number path below text (levels 2-5 — level 6 has its own equation view)
+        if 2 <= eng.level <= 5:
             self._draw_number_path(tft, theme, w, highlight=eng.target)
 
         # Visual challenge content
         if eng.level in (4, 5):
             self._render_addend_dots(tft, theme, w, h)
+        elif eng.level == 6:
+            self._render_build_equation(tft, theme, w, h)
         elif eng.level >= 2 and eng.target > 0:
             self._draw_dots(tft, theme, eng.target, w // 2, h // 2 + 20, 12, theme.CYAN)
 
@@ -434,13 +460,25 @@ class RaknaScreen(Screen):
         challenge_text = self._challenge_display_text()
         draw_centered(tft, challenge_text, 12, theme.CYAN, w)
 
-        # Number path with target highlighted (levels 2+ only)
-        if eng.level >= 2:
+        # Number path with target highlighted (levels 2-5)
+        if 2 <= eng.level <= 5:
             self._draw_number_path(tft, theme, w, highlight=eng.target)
 
-        # Visual challenge content for levels 4-5
+        # Visual challenge content
         if eng.level in (4, 5):
             self._render_addend_dots(tft, theme, w, h)
+        elif eng.level == 6:
+            self._render_build_equation(tft, theme, w, h)
+            # Pulsing per-step hint
+            pulse = (frame % 40) < 20
+            hint_col = theme.WHITE if pulse else theme.MUTED
+            if eng.build_step == BUILD_NEED_FIRST:
+                hint = t("rakna_build_first")
+            elif eng.build_step == BUILD_NEED_OP:
+                hint = t("rakna_build_op")
+            else:
+                hint = t("rakna_build_second")
+            draw_centered(tft, hint, h - 40, hint_col, w)
         else:
             # Pulsing scan hint
             pulse = (frame % 40) < 20
@@ -454,6 +492,11 @@ class RaknaScreen(Screen):
         tft.fill(theme.BLACK)
         eng = self._engine
 
+        if eng.level == 6:
+            self._render_build_correct(tft, theme, w, h)
+            self._render_score(tft, theme, w, h)
+            return
+
         # Show scanned quantity as large dot pattern
         qty = eng.last_card_quantity
         if qty > 0:
@@ -466,15 +509,46 @@ class RaknaScreen(Screen):
 
         draw_centered(tft, t("rakna_correct"), h // 2 + 56, theme.GREEN, w)
 
-        # Number path with scanned position lit (levels 2-3 only)
-        if eng.level >= 2:
+        # Number path with scanned position lit (levels 2-5)
+        if 2 <= eng.level <= 5:
             self._draw_number_path(tft, theme, w, highlight=qty, colour=theme.GREEN)
 
         self._render_score(tft, theme, w, h)
 
+    def _render_build_correct(self, tft, theme, w, h):
+        """Level 6: show the completed equation with dot pattern for the result."""
+        eng = self._engine
+        # Equation text at top (e.g. "3 + 4 = 7")
+        draw_centered(tft, self._build_equation_text(), 16, theme.GREEN, w, scale=2)
+        # Dot pattern for the result if it fits 1-10
+        if 1 <= eng.build_result <= 10:
+            self._draw_dots(
+                tft, theme, eng.build_result, w // 2, h // 2 + 10, 12, theme.GREEN
+            )
+        else:
+            # Show numeral large when we can't render dots
+            draw_centered(
+                tft, str(eng.build_result), h // 2 + 10, theme.GREEN, w, scale=4
+            )
+        # Number word below
+        rk = eng.result_number_key()
+        if rk:
+            draw_centered(tft, t(rk), h - 48, theme.WHITE, w, scale=2)
+
     def _render_wrong(self, tft, theme, w, h):
         tft.fill(theme.BLACK)
         eng = self._engine
+
+        if eng.level == 6:
+            # Keep the partial equation visible so progress feels preserved.
+            self._render_build_equation(tft, theme, w, h)
+            if eng.build_step == BUILD_NEED_OP:
+                hint = t("rakna_need_op")
+            else:
+                hint = t("rakna_need_number")
+            draw_centered(tft, hint, h - 40, theme.AMBER, w)
+            self._render_score(tft, theme, w, h)
+            return
 
         # Show what was scanned
         qty = eng.last_card_quantity
@@ -493,6 +567,11 @@ class RaknaScreen(Screen):
             draw_centered(tft, challenge_text, h // 2 + 24, theme.CYAN, w)
 
         self._render_score(tft, theme, w, h)
+
+    def _render_build_equation(self, tft, theme, w, h):
+        """Level 6: render the in-progress equation centred on screen."""
+        text = self._build_equation_text()
+        draw_centered(tft, text, h // 2 - 12, theme.CYAN, w, scale=3)
 
     def _render_level_up(self, tft, theme, w, h):
         tft.fill(theme.BLACK)
@@ -527,7 +606,7 @@ class RaknaScreen(Screen):
                 tft, theme, a, remain, w // 2, cy, dot_r, theme.CYAN, theme.MUTED
             )
             # Narrative hint below
-            nk_b = "{}{}".format("rakna_number_", b)
+            nk_b = "num_{}".format(b)
             draw_centered(tft, t("rakna_sub_hint", t(nk_b)), h - 40, theme.MUTED, w)
 
     def _draw_dots_split(
@@ -572,7 +651,28 @@ class RaknaScreen(Screen):
             return t("rakna_add")
         elif ct == CHALLENGE_SUB:
             return t("rakna_sub")
+        elif ct == CHALLENGE_BUILD:
+            return t("rakna_build")
         return ""
+
+    def _build_equation_text(self):
+        """Text form of the in-progress equation, e.g. '3 + _' or '3 + 4 = 7'."""
+        eng = self._engine
+        if eng.build_step == BUILD_NEED_FIRST:
+            return "_  ?  _"
+        op = eng.build_op if eng.build_op else "?"
+        a = str(eng.build_a)
+        if eng.build_step == BUILD_NEED_OP:
+            return "{}  ?  _".format(a)
+        b = (
+            str(eng.build_b)
+            if eng.build_step >= BUILD_NEED_SECOND and eng.build_b
+            else "_"
+        )
+        if eng.build_step == BUILD_NEED_SECOND:
+            return "{}  {}  _".format(a, op)
+        # Complete — show full equation with result
+        return "{}  {}  {}  =  {}".format(a, op, b, eng.build_result)
 
     def _draw_number_path(self, tft, theme, w, highlight=0, colour=None):
         """Draw horizontal number path (1-10) near the top of the screen."""
