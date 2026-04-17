@@ -9,8 +9,9 @@ mythology — the drink that granted wisdom and poetic inspiration.
 A colourful, tactile device that grows with a child (starting around age 4):
 
 - **Press buttons and turn knobs** → hear sounds, see colours and animations
-- **Play games** → Simon memory game, Mystery Box discovery, Flöde flow puzzles, Rule Follow, Garden of Life, Soundboard, Spaceship cockpit, Story Mode, High-Five Friends, Sequencer
-- **NFC card games** *(planned)* → scan physical cards to sort, count, build stories, and learn (PN532 reader + NTAG213 stickers)
+- **Play games** → Simon memory, Mystery Box discovery, Flöde flow puzzles, Rule Follow, Garden of Life, Soundboard, Spaceship cockpit, Story Mode, High-Five Friends, Sequencer
+- **NFC card games** → scan physical cards for Sortera (classification) and Räkna (math); launcher cards start any game mode (PN532 reader + NTAG213 stickers)
+- **Offline spoken audio** → Piper TTS generates Swedish and English narration for game instructions and stories; hand-recorded WAVs can transparently override any line
 - **Parental controls** → session time limits, break enforcement, quiet hours, lockdown — all configured from a phone via a local web UI
 
 ## Hardware
@@ -41,57 +42,79 @@ Written in MicroPython, runs directly on the ESP32-S3.
 ```
 firmware/
   boot.py              # WiFi setup, NTP sync, battery check, boot screen
-  main.py              # async entry point (uasyncio)
+  main.py              # async entry point (uasyncio) + housekeeping/thermal task
+  sdcard.py            # SPI SD card driver (optimised for ESP32-S3 audio streaming)
   st7735.py            # framebuf-based ST7735/ILI9341 driver + dirty rect tracking
   bodn/
-    config.py           # pin assignments, constants, encoder sensitivity
     arcade.py           # arcade button input + LED output via MCP/PCA
-    audio.py            # async AudioEngine (multi-channel priority playback)
+    assets.py           # SD-first / flash-fallback asset path resolver
+    audio.py            # AudioEngine (native core-0 C mixer, falls back to viper)
     battery.py          # battery level reading and USB-only detection
     chord.py            # multi-button chord/combo detection
     cli.py              # serial REPL helpers (wifi, settings, reboot)
+    config.py           # pin assignments, constants, encoder sensitivity
     debounce.py         # generic debounce logic
     diag.py             # system diagnostics data gathering
     encoder.py          # PCNT hardware rotary encoder (zero-CPU quadrature)
+    encoder_scope.py    # visual encoder oscilloscope (CLK/DT on TFT)
     ftp.py              # FTP server for OTA bulk sync
     gesture.py          # tap/hold/long-press gesture detection
     i18n.py             # internationalisation: t(), set_language(), init()
+    i2c_diag.py         # live I2C bus diagnostic tool (REPL)
     lang/
       sv.py             # Swedish string table (default)
       en.py             # English string table
     mcp23017.py         # MCP23017 I2C GPIO expander driver
-    nfc.py              # NFC tag parsing, card sets, UID cache, reader stub
+    native_i2c.py       # native C I2C wrapper for deterministic scans
+    neo.py              # NeoPixel facade over the native C pattern engine
+    nfc.py              # NFC tag parsing, card sets, UID cache
     patterns.py         # LED animation patterns (shared buffer)
     pca9685.py          # PCA9685 I2C PWM driver (arcade button LEDs)
+    pn532.py            # PN532 NFC reader driver (I2C, polling task)
     power.py            # power management (sleep, wake, master switch)
     qr.py               # minimal QR code encoder (V1–V2)
+    sdcard.py           # SD card initialisation and mount
     session.py          # play session state machine (pure logic)
     sounds.py           # sound asset catalogue
     storage.py          # JSON settings & session history on flash
+    stories/            # story package (scripts discovered at runtime on SD)
     temperature.py      # DS18B20 + SoC temperature monitoring
     tones.py            # procedural tone generation (pure logic)
+    tts.py              # TTS playback helper (SD-first voice resolution)
     wav.py              # WAV header parser + streaming reader (pure logic)
-    wifi.py             # WiFi connect (STA / AP) + mDNS + runtime control
     web.py              # async HTTP server for parental controls
     web_ui.py           # HTML/CSS/JS served to the browser
-    *_rules.py          # pure-logic game engines (mystery, simon, flode,
-                        #   rulefollow, life, soundboard)
+    wifi.py             # WiFi connect (STA / AP) + mDNS + runtime control
+    *_rules.py          # pure-logic game engines: mystery, simon, flode,
+                        #   rulefollow, life, soundboard, space, story,
+                        #   sequencer, highfive, sortera, rakna
     ui/
       screen.py         # Screen base class + ScreenManager
       theme.py          # colour palette and layout constants
       input.py          # unified input state with debouncing
-      widgets.py        # stateless draw helpers
-      icons.py          # 16×16 bitmap icons
+      draw.py           # wrapper around the native _draw C module
+      widgets.py        # stateless draw helpers + sprite cache
+      icons.py          # 16×16 bitmap icons (flash fallback)
       font_ext.py       # extended glyphs: å ä ö Å Ä Ö
       logo.py           # pixel-art boot logo
+      android.py        # boot-time Android-style status bar helper
       home.py           # home screen with animated carousel
       demo.py           # LED playground mode
-      mystery.py        # Mystery Box discovery game
-      simon.py          # Simon memory game
-      flode.py          # Flöde flow-alignment puzzle
-      rulefollow.py     # Rule Follow (inhibition & flexibility)
-      garden.py         # Garden of Life (cellular automata)
-      soundboard.py     # Soundboard discovery mode
+      mystery.py              # Mystery Box discovery game
+      simon.py                # Simon memory game
+      flode.py                # Flöde flow-alignment puzzle
+      rulefollow.py           # Rule Follow (inhibition & flexibility)
+      garden.py               # Garden of Life (cellular automata)
+      garden_secondary.py     # Garden secondary display content
+      soundboard.py           # Soundboard discovery mode
+      soundboard_secondary.py # Soundboard secondary display content
+      sequencer.py            # loop sequencer mode
+      sequencer_secondary.py  # Sequencer secondary display content
+      highfive.py             # High-Five Friends reflex game
+      space.py                # Spaceship cockpit mode
+      story.py                # branching story mode (scripts + TTS on SD)
+      sortera.py              # Sortera NFC classification game
+      rakna.py                # Räkna NFC math game
       clock.py          # clock display mode
       catface.py        # animated cat face (secondary content)
       ambient.py        # AmbientClock + StatusStrip (secondary display)
@@ -104,6 +127,20 @@ firmware/
       nfc_provision.py  # NFC card set viewer + provisioning
       icon_browser.py   # OpenMoji emoji sprite browser
 ```
+
+### Native C modules
+
+Five C modules in `cmodules/` compile into a custom MicroPython firmware build
+(see `tools/build-firmware.sh`). Each has a Python fallback so stock
+MicroPython still runs — the board definition lives in `boards/BODN_S3/`.
+
+| Module | What it does |
+|---|---|
+| `_audiomix` | 16-voice audio mixer + I2S + step clock on core 0 |
+| `_spidma` | DMA-driven SPI display writes in 32 KB chunks |
+| `_draw` | Bitmap fonts, sprite blit, primitives with alpha blending |
+| `_mcpinput` | Deterministic MCP23017 input scanner (core 1 task) |
+| `_neopixel` | NeoPixel pattern engine (animations run in C, not Python) |
 
 ## Getting started
 
@@ -280,11 +317,11 @@ wind-down cycle.
 See [`docs/roadmap.md`](docs/roadmap.md) for detailed milestones.
 
 1. ~~**Hardware bring-up**~~ — display, buttons, encoders ✓
-2. ~~**Audio basics**~~ — tones, WAV playback, volume control ✓
-3. **Kid-facing UI** — 10 game modes shipped; NFC card games planned
-4. ~~**Parental controls**~~ — web UI, session limits, OTA, FTP sync ✓
-5. **Quality-of-life** — battery indicator, temperature monitoring, i18n (Swedish/English) ✓
-6. **NFC integration** — data layer and card generation ready; PN532 hardware bring-up next
+2. ~~**Audio basics**~~ — tones, WAV playback, native C mixer on core 0 ✓
+3. **Kid-facing UI** — 12 game modes shipped (incl. Sortera + Räkna NFC games); record & replay still planned
+4. ~~**Parental controls**~~ — web UI, session limits, PIN, OTA, FTP sync ✓
+5. **Quality-of-life** — battery indicator, temperature monitoring, i18n (Swedish/English), offline TTS ✓
+6. **NFC integration** — PN532 driver, Sortera + Räkna shipped; more card-based modes on deck
 
 ## Developmental foundations
 
@@ -313,10 +350,22 @@ See [`docs/nfc.md`](docs/nfc.md) for the tag format specification and
 [`docs/science/nfc_tangible_learning.md`](docs/science/nfc_tangible_learning.md) for the
 research foundations.
 
-### Hardware (not yet wired)
+### Hardware
 
-A PN532 NFC reader connects via I2C (address 0x24, shared bus with existing devices).
-See [issue #121](https://github.com/mandakan/bodn-esp32/issues/121) for wiring details.
+A PN532 NFC reader connects via I2C (address 0x24) on a power-gated rail so it
+can be turned off during sleep and low-battery states. The driver (`bodn/pn532.py`)
+runs a polling task; tags are written with retries and automatic PN532 recovery.
+
+### Shipped card sets
+
+| Set | Game | Contents |
+|---|---|---|
+| `sortera` | Classification (DCCS-style) | 16 animal cards in 4 colours |
+| `rakna` | Math (levels 1–6) | Numbers, operators, and equation builders |
+| `launcher` | Shortcut cards | Tap a card to jump straight into any game mode |
+
+Programmed cards are tracked via the NFC provisioning UI; the Sortera set filters
+down to whatever is actually written to tags on startup.
 
 ### Card production
 
@@ -326,17 +375,17 @@ Cards are printed on paper/cardstock with an NFC sticker on the back, then lamin
 # One-time: clone OpenMoji icons (CC-BY-SA 4.0, ~200 MB)
 git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji
 
-# Generate printable A4 PDF with card faces (85×54 mm, 2×4 per page)
+# Generate printable A4 PDFs for all card sets (85×54 mm, 2×4 per page)
 uv run python tools/generate_cards.py
+
+# Specific set only
+uv run python tools/generate_cards.py --set sortera
 
 # Preview without generating
 uv run python tools/generate_cards.py --dry-run
 ```
 
-Output: `build/cards/sortera_cards.pdf` — print, cut, laminate, attach NFC stickers.
-
-The first card set is **Sortera** (16 animal cards in 4 colours) for a classification
-game based on the Dimensional Change Card Sort (DCCS) task.
+Output: `build/cards/*_cards.pdf` — print, cut, laminate, attach NFC stickers.
 
 ## OpenMoji icons
 
@@ -351,7 +400,7 @@ if not available.
 # Clone OpenMoji (one-time, or set OPENMOJI_DIR to an existing checkout)
 git clone --depth 1 https://github.com/hfg-gmuend/openmoji.git ~/openmoji
 
-# Convert all icons (25 emoji × 3 sizes = 75 BDF files)
+# Convert all icons (33 emoji × 4 sizes → BDF sprites, ~4 bpp)
 uv run python tools/convert_icons.py
 
 # Or let sd-sync handle everything automatically:
@@ -373,6 +422,29 @@ uv run python tools/sd-sync.py --dry-run             # preview
 
 The pipeline runs 5 steps: TTS generation → story TTS → audio conversion → sprite
 building → emoji icon conversion. Each step skips up-to-date files automatically.
+
+## Stories and TTS
+
+Two offline TTS pipelines generate spoken audio with [Piper TTS](https://github.com/rhasspy/piper):
+
+- **i18n TTS** (`tools/generate_tts.py`) — game instructions, safety alerts, and
+  overlay phrases from the `STRINGS` dicts in `firmware/bodn/lang/`. Safety-critical
+  keys (e.g. `bat_critical`, `overlay_goodnight`) stay on flash; the rest live on
+  the SD card.
+- **Story TTS** (`tools/generate_story_tts.py`) — narration and choice labels for
+  branching stories authored in `assets/stories/{story_id}/script.py`. Stories are
+  self-contained SD packages: script + per-language WAVs, discovered at runtime.
+  Ships with `peter_rabbit` and `forest_walk`.
+
+Any TTS line can be replaced with a human recording — drop a WAV at
+`assets/audio/source/recordings/{lang}/{key}.wav` (i18n) or
+`assets/stories/{id}/recordings/{lang}/{node}.wav` (story). Filenames must match
+the TTS key/node exactly. `convert_audio.py` normalises the recording to 16 kHz
+mono PCM with loudnorm; `bodn.assets.resolve_voice()` prefers recordings over
+TTS. Coverage is incremental — record one key, the rest stay on TTS.
+
+See [`docs/story_authoring.md`](docs/story_authoring.md) for the story authoring
+guide and [`docs/audio_assets.md`](docs/audio_assets.md) for the audio pipeline.
 
 ## Design goals
 

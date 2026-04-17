@@ -249,18 +249,56 @@ Good sources for age-appropriate stories:
 ```
 assets/stories/my_story/
     script.py               # story script (required)
+    recordings/             # optional hand-recorded narration (see below)
+        sv/
+            opening.wav
+            opening_choices.wav
+        en/
+            opening.wav
     sfx/                    # optional sound effects
         door_creak.wav
         splash.wav
 
 # After TTS generation:
-build/story_tts/
-    sv/story_my_story_opening.wav
-    sv/story_my_story_opening_choices.wav
-    en/story_my_story_opening.wav
-    en/story_my_story_opening_choices.wav
+build/story_tts_raw/my_story/
+    sv/opening.wav
+    sv/opening_choices.wav
+    en/opening.wav
+    en/opening_choices.wav
     ...
+
+# After audio conversion — self-contained SD packages:
+build/stories/my_story/
+    script.py
+    tts/
+        sv/opening.wav
+        sv/opening_choices.wav
+        en/...
+    recordings/             # normalised hand-recordings (if any)
+        sv/opening.wav
 ```
+
+`tools/sd-sync.py` copies each package under `build/stories/<id>/` to
+`/sd/stories/<id>/` on the card. At runtime the story module discovers stories
+by scanning the SD card, so adding a story is just dropping a new folder under
+`build/stories/` and re-syncing.
+
+## Hand-recorded narration
+
+Any narration or choice line can be replaced with a human recording — drop a
+WAV at `assets/stories/{story_id}/recordings/{lang}/{node}.wav` (or
+`{node}_choices.wav` for choice narration). Filenames must match node IDs
+exactly; otherwise the file is ignored.
+
+`tools/convert_audio.py` normalises recordings to 16 kHz mono PCM with loudnorm
+(same target as TTS) into `build/stories/{id}/recordings/{lang}/`.
+`sd-sync.py` ships them alongside the generated TTS, and on the device
+`bodn.assets.resolve_voice()` prefers recordings over TTS at each storage layer.
+
+Coverage is incremental — record one node, the rest stay on TTS. **Footgun:**
+if you change the script text after recording, the old recording silently
+shadows the regenerated TTS. Delete (or re-record) the affected file whenever
+you edit its corresponding node text.
 
 ## Testing
 

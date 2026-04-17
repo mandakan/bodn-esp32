@@ -95,6 +95,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Sequencer | ◉ | | ● | Build and hold patterns in mind (WM), switch between edit/play modes (CF) |
 | *Record & Replay* | ● | | | Remember what to record and play back |
 | Sortera | ○ | ● | ◉ | Remember current rule (WM); resist sorting by previous dimension (IC); rule switches demand flexibility (CF) — tangible DCCS |
+| Räkna | ● | ○ | ○ | Hold equation state across multiple card scans (WM); level progression from counting to symbolic equations nudges CF |
 
 ### Cognitive Development
 
@@ -112,6 +113,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Sequencer | ● | ◉ | | ◉ | ● | Build patterns step by step; debug sequences |
 | *Record & Replay* | ● | | | ○ | | Voice causes recording; sequential playback |
 | Sortera | ● | ◉ | | | | Card scan → feedback (CE); categorise by matching dimension (PR) |
+| Räkna | ● | ◉ | ○ | ◉ | ● | Dot-pattern subitising (PR); counting and equation order (ST); build solutions step by step (PS); left-to-right number path (SR) |
 
 ### Sensorimotor Development
 
@@ -129,6 +131,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Sequencer | ● | ● | ● | ● | Precise input, visual-audio feedback loop |
 | *Record & Replay* | ○ | | ◉ | | Listen to own voice, discriminate recordings |
 | Sortera | ● | | ● | ● | Card manipulation (FM); bilingual TTS reinforces audio (AP); emoji + label display (VP) |
+| Räkna | ● | ○ | ● | ◉ | Handling multiple dot/numeral/operator cards (FM); bilingual number names (AP); dot patterns and numerals are the core stimulus (VP) |
 
 ### Language & Communication
 
@@ -146,6 +149,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Sequencer | | ○ | UI labels only |
 | *Record & Replay* | ● | ● | Hear and produce speech in both languages |
 | Sortera | ○ | ● | Bilingual TTS says both languages on correct scan; dual-language labels on screen match physical cards |
+| Räkna | ● | ● | Number names and instructions spoken in both languages; child hears quantities as well as sees them |
 
 ### Social-Emotional Development
 
@@ -162,6 +166,8 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | High-Five Friends | ● | ● | | Handle misses gracefully (SReg); keep trying to beat high score (PE) |
 | Sequencer | | ● | ● | Debug patience; pretend to be a musician/programmer |
 | *Record & Replay* | | | ○ | Mild pretend-play with voice |
+| Sortera | ● | ○ | | Wait through the rule announcement (SReg); try again after a mis-sort |
+| Räkna | ○ | ● | | Self-paced and never timed keeps frustration low (SReg); multi-card equations reward sustained effort (PE) |
 
 ### Creative & Exploratory
 
@@ -178,6 +184,8 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | High-Five Friends | | | | Fixed goal (tap the lit button); no creative latitude |
 | Sequencer | | ◉ | ◉ | Compose original patterns; divergent solutions |
 | *Record & Replay* | ● | | ◉ | Record anything; creative voice play |
+| Sortera | ○ | | | Free-scan mode invites incidental exploration of the card set |
+| Räkna | ○ | ○ | | Low-level free exploration of quantities; multiple card paths to the same total |
 
 ---
 
@@ -187,30 +195,32 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 
 | Aspect | Primary (◉) | Significant (●) | Total strong |
 |--------|:-----------:|:----------------:|:------------:|
-| Visual Processing (VP) | 2 | 6 | 8 |
-| Working Memory (WM) | 2 | 3 | 5 |
-| Cause & Effect (CE) | 1 | 5 | 6 |
-| Pattern Recognition (PR) | 1 | 3 | 4 |
+| Visual Processing (VP) | 3 | 6 | 9 |
+| Working Memory (WM) | 2 | 4 | 6 |
+| Cause & Effect (CE) | 1 | 6 | 7 |
+| Pattern Recognition (PR) | 2 | 3 | 5 |
 | Hand-Eye Coordination (HC) | 1 | 4 | 5 |
 | Open Exploration (OE) | 3 | 0 | 3 |
-| Self-Regulation (SReg) | 1 | 3 | 4 |
+| Self-Regulation (SReg) | 1 | 4 | 5 |
 | Cognitive Flexibility (CF) | 2 | 1 | 3 |
 | Inhibitory Control (IC) | 1 | 2 | 3 |
-| Listening Comprehension (LC) | 2 | 0 | 2 |
-| Bilingual Exposure (BL) | 1 | 1 | 2 |
+| Listening Comprehension (LC) | 2 | 1 | 3 |
+| Bilingual Exposure (BL) | 1 | 2 | 3 |
 | Imaginative Play (IP) | 2 | 1 | 3 |
-| Auditory Processing (AP) | 1 | 3 | 4 |
-| Sequential Thinking (ST) | 2 | 2 | 4 |
-| Persistence (PE) | 1 | 3 | 4 |
+| Auditory Processing (AP) | 1 | 4 | 5 |
+| Sequential Thinking (ST) | 3 | 2 | 5 |
+| Persistence (PE) | 1 | 4 | 5 |
+| Problem Solving (PS) | 1 | 2 | 3 |
+| Fine Motor (FM) | 0 | 3 | 3 |
 
 ### Gaps (1 or fewer features at ◉ or ●)
 
 | Aspect | Current state | Suggested feature |
 |--------|---------------|-------------------|
-| **Spatial Reasoning (SR)** | Only Flöde | Building/construction mode; tangram puzzles |
-| **Problem Solving (PS)** | Only Flöde + Sequencer (debugging) | More puzzle types; NFC scavenger hunts |
-| **Bilingual Exposure (BL)** | Story Mode (◉) + Sortera (●, bilingual TTS + dual labels) + passive UI labels | Language-switch game; more card sets with dual labels |
-| **Fine Motor (FM)** | Mostly incidental (Flöde, Sequencer significant) | NFC card manipulation/sorting; tracing mode |
+| **Spatial Reasoning (SR)** | Flöde (◉) + incidental Räkna number path | Building/construction mode; tangram puzzles |
+| **Problem Solving (PS)** | Flöde (◉) + Sequencer (●) + Räkna (●, equation building) | More puzzle types; NFC scavenger hunts |
+| **Bilingual Exposure (BL)** | Story Mode (◉) + Sortera (●) + Räkna (●, bilingual number naming) + passive UI labels | More card sets with dual labels; dedicated language-switch game |
+| **Fine Motor (FM)** | Sortera + Sequencer + Räkna (all ●) via card/button manipulation | Tracing mode; tangram; more tangible sorting puzzles |
 
 ---
 
@@ -231,6 +241,8 @@ The foundation — everything should produce immediate, rewarding feedback.
 | Simon | Introduce gently — 2-step sequences | Easiest |
 | Spaceship | Exposure — long timeouts, few scenarios | Easiest |
 | Story Mode | **Introduce** — simple stories, 2 choices, short paths | Easy |
+| Sortera | **Introduce** — single-dimension sorting, no rule switches | Easiest |
+| Räkna | **Introduce** — Level 1 free exploration of dot cards 1–5 | Easiest |
 
 ### Age 4–5: Executive Functions Emerge
 
@@ -244,6 +256,8 @@ The child can follow rules, hold short sequences, and switch between ideas.
 | Story Mode | **Growing** — longer stories, 3 choices, remember plot points | Medium |
 | Flöde | **Introduce** — levels 1–2 (1–2 segments) | Easy |
 | Mystery Box | Still engaging — modifier discovery deepens | Same |
+| Sortera | **Growing** — rule switches between colour, shape, and animal dimensions | Medium |
+| Räkna | **Growing** — Levels 2–3 (quantity matching, more/less) | Easy–Medium |
 
 ### Age 5–6: Increasing Challenge
 
@@ -257,6 +271,8 @@ Longer sequences, faster rule switches, real problem-solving.
 | Flöde | Levels 3–4 (3–4 segments, more snap positions) | Medium |
 | High-Five Friends | Faster reaction windows; longer rounds | Medium-Hard |
 | Sequencer | **Introduce** — simple 4-step patterns | Easy |
+| Sortera | Faster rule switches; full 16-card deck with four colour variants | Medium–Hard |
+| Räkna | **Core** — Level 4 addition with dot tokens | Medium |
 
 ### Age 6–7+: Mastery & Creativity
 
@@ -266,6 +282,7 @@ Features shift from guided challenge toward creative expression and composition.
 |---------|------|------------|
 | Sequencer | **Core** — complex patterns, programming concepts | Growing |
 | Flöde | Levels 5–6 (full difficulty) | Hard |
+| Räkna | Levels 5–6 — subtraction and symbolic equations with numerals | Growing |
 | *Record & Replay* | Creative voice compositions | Open-ended |
 | Rule Follow | Near-instant switches; scoring/competition | Expert |
 | Garden of Life | Deliberate pattern engineering | Advanced |
@@ -286,15 +303,11 @@ bring to reader → hold) that exercises fine motor skills and reinforces
 intentionality. See `docs/science/nfc_tangible_learning.md` for the full research
 summary.
 
-#### NFC-1. Sortera — Classification Game
+The first two NFC modes — **Sortera** (tangible DCCS classification) and
+**Räkna** (progressive math with dot-pattern cards) — are shipped and appear in
+the aspect matrices above. The ideas below remain on the wishlist.
 
-**Primary targets:** CF, IC, PR, BL
-**Fills gaps in:** Cognitive flexibility (tangible DCCS), bilingual exposure, fine motor
-**Concept:** Scan NFC cards to sort by announced categories; rules switch mid-game
-(colour → shape → animal). Direct tangible implementation of the DCCS task.
-**References:** Zelazo (2006) DCCS; Diamond (2013) EF training; Antle (2013) TUI for children
-
-#### NFC-2. Saga Builder — Tangible Storytelling
+#### NFC-1. Saga Builder — Tangible Storytelling
 
 **Primary targets:** ST, IP, LC, BL, CX
 **Fills gaps in:** Bilingual exposure, sequential thinking, creative expression
@@ -302,7 +315,7 @@ summary.
 each combination triggers different narration in Swedish or English.
 **References:** Sylla et al. (2012) TinkRBook; Kumpulainen & Lipponen (2012) physical story props
 
-#### NFC-3. NFC Soundboard Extension
+#### NFC-2. NFC Soundboard Extension
 
 **Primary targets:** AP, CE, CX, OE
 **Fills gaps in:** Auditory processing (tangible layer), creative expression
@@ -310,7 +323,7 @@ each combination triggers different narration in Swedish or English.
 layer multiple cards for composition.
 **References:** Paivio (1986) dual coding theory; multisensory association
 
-#### NFC-4. Memory Match
+#### NFC-3. Memory Match
 
 **Primary targets:** WM, HC, FM, VP
 **Fills gaps in:** Fine motor (physical card retrieval), working memory (extended action sequence)
@@ -318,7 +331,7 @@ layer multiple cards for composition.
 a physical spread. Physical search adds motor planning to the memory task.
 **References:** Manches & O'Malley (2012) tangible manipulation and learning
 
-#### NFC-5. Vocabulary Explorer — Bilingual Word Cards
+#### NFC-4. Vocabulary Explorer — Bilingual Word Cards
 
 **Primary targets:** BL, LC, AP
 **Fills gaps in:** Bilingual exposure (primary-level), listening comprehension
@@ -326,26 +339,12 @@ a physical spread. Physical search adds motor planning to the memory task.
 again for English. Quiz mode: device says a word, child scans the right card.
 **References:** Wohlwend (2015) physical-digital literacy; Bialystok (2011) bilingual EF advantage
 
-#### NFC-6. Free Discovery / Tag Registry
+#### NFC-5. Free Discovery / Tag Registry
 
 **Primary targets:** OE, CE, DT
 **Concept:** First-time tags get a random colour + sound + animation. Child builds
 a personal collection by tagging household objects, toys, and drawings.
 **References:** Bonawitz et al. (2011) exploration-driven discovery
-
-#### NFC-7. Räkna — Progressive Math with Tangible Numbers
-
-**Primary targets:** WM, ST, PR, PS, LC, BL, FM
-**Fills gaps in:** Problem solving (tangible math), fine motor, bilingual exposure
-**Concept:** Dot-pattern NFC cards (1--10) for progressive number sense: subitising
-→ quantity matching → more/less → addition → subtraction → symbolic equations.
-Follows Bruner's CPA progression (concrete tokens → pictorial dots → abstract
-numerals). Six levels spanning ages 3--7. Self-paced, never timed.
-**References:** Duncan et al. (2007) early math as #1 achievement predictor;
-Clements & Sarama (2014) learning trajectories; Siegler & Ramani (2009) linear
-number board games; Jordan et al. (2009) kindergarten number sense; Gelman &
-Gallistel (1978) counting principles; Bruner (1966) CPA; Willingham (2017)
-manipulatives and concreteness fading
 
 ---
 
