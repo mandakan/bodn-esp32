@@ -6,7 +6,7 @@
 - **Language**: MicroPython on ESP32-S3. No C/C++ unless absolutely required.
 - **Style**: keep modules small and self-contained. Prefer clarity over cleverness.
 - **Hardware**: check `firmware/bodn/config.py` before assigning pins. Non-time-critical I/O (buttons, toggles, status LEDs) should use the MCP23017 I2C expanders; latency-sensitive peripherals (encoder CLK/DT, SPI, I2S) stay on native GPIOs. See `docs/hardware.md` for reserved pins and the GPIO budget.
-- **SD card**: media assets (sound banks, arcade sounds, music, game-mode TTS, space SFX) live on `/sd/`. Only critical audio (UI SFX, battery/goodnight TTS) stays on flash. Use `from bodn.assets import resolve` to look up any asset path — it checks SD first, falls back to flash transparently. `tools/convert_audio.py` routes SD-bound output to `build/sounds/`; `tools/sd-sync.py` copies it to the card. See `docs/assets.md` for the directory structure. The SD card is mounted at boot; the device runs normally without one (soundboard falls back gracefully).
+- **SD card**: media assets (sound banks, arcade sounds, music, game-mode TTS, space SFX, story packages, hand-recorded voices) live on `/sd/`. Only critical audio (UI SFX, battery/goodnight TTS) stays on flash. Use `from bodn.assets import resolve` to look up any asset path — it checks SD first, falls back to flash transparently. `tools/convert_audio.py` routes SD-bound output to `build/sounds/`; `tools/sd-sync.py` copies it to the card. See `docs/assets.md` for the directory structure. The SD card is mounted at boot; the device runs normally without one (soundboard falls back gracefully).
 - **Testing**: pure logic modules (debounce, UI state, audio format) are tested with `pytest` on the host. Hardware wrappers are tested on-device via `mpremote` or in Wokwi. MicroPython compatibility tests (`tests/test_micropython_compat.py`) import firmware modules under the real MicroPython Unix port to catch CPython-only APIs (e.g. `str.capitalize()`) before they reach the device. These tests are skipped if the Unix port binary hasn't been built — see "MicroPython Unix port" below for setup.
 - **MicroPython portability**: MicroPython `str` lacks `.capitalize()`, `.title()`, `.swapcase()`, and `.casefold()`. Use `from bodn.i18n import capitalize` instead. The compat tests catch this automatically.
 - **Dependencies**: host tools are managed with `uv`. MicroPython libs go directly into `firmware/`.
@@ -80,12 +80,15 @@ Constraints: ≤ 1500 SEK budget, modular & hackable, open source from day one.
 bodn-esp32/
 ├─ firmware/
 │  ├─ boot.py              # WiFi setup, NTP sync, battery check, boot screen
-│  ├─ main.py              # async entry point (uasyncio)
+│  ├─ main.py              # async entry point (uasyncio) + housekeeping/thermal task
+│  ├─ sdcard.py            # SPI SD card driver (native-optimised for audio streaming)
 │  ├─ st7735.py            # framebuf-based ST7735/ILI9341 driver (DMA or blocking SPI)
 │  └─ bodn/
 │     ├─ __init__.py
 │     ├─ arcade.py          # arcade button input + LED output via MCP/PCA
+│     ├─ assets.py          # SD-first / flash-fallback asset path resolver
 │     ├─ audio.py           # AudioEngine (native core-0 C mixer or fallback viper)
+│     ├─ battery.py         # battery level reading and USB-only detection
 │     ├─ chord.py           # multi-button chord/combo detection
 │     ├─ cli.py             # serial REPL helpers (wifi, settings, reboot)
 │     ├─ config.py          # pin assignments, constants, encoder sensitivity
@@ -94,27 +97,42 @@ bodn-esp32/
 │     ├─ encoder.py         # PCNT hardware rotary encoder (zero-CPU quadrature)
 │     ├─ encoder_scope.py   # visual encoder oscilloscope (CLK/DT on TFT)
 │     ├─ flode_rules.py     # Flöde puzzle engine (pure logic)
+│     ├─ ftp.py             # FTP server for OTA bulk sync
 │     ├─ gesture.py         # tap/hold/long-press gesture detection
+│     ├─ highfive_rules.py  # High-Five Friends reflex game engine (pure logic)
 │     ├─ i2c_diag.py        # live I2C bus diagnostic tool (REPL)
 │     ├─ i18n.py            # internationalisation: t(), set_language(), init()
 │     ├─ lang/
 │     │  ├─ sv.py           # Swedish string table (default)
 │     │  └─ en.py           # English string table
+│     ├─ life_presets.py    # curated Game of Life seed patterns
 │     ├─ life_rules.py      # Game of Life cellular automata (pure logic)
 │     ├─ mcp23017.py        # MCP23017 I2C GPIO expander driver
 │     ├─ mystery_rules.py   # Mystery Box rule engine (pure logic)
-│     ├─ nfc.py             # NFC tag parsing, card sets, UID cache, reader stub
+│     ├─ native_i2c.py      # native C I2C wrapper for deterministic scans
+│     ├─ neo.py             # NeoPixel facade over the native _neopixel C engine
+│     ├─ nfc.py             # NFC tag parsing, NDEF records, card sets, UID cache
 │     ├─ patterns.py        # LED animation patterns (shared buffer)
-│     ├─ pca9685.py         # PCA9685 I2C PWM driver
+│     ├─ pca9685.py         # PCA9685 I2C PWM driver (arcade button LEDs)
+│     ├─ pn532.py           # PN532 NFC reader driver (I2C, polling task)
 │     ├─ power.py           # power management (sleep, wake, master switch)
 │     ├─ qr.py              # minimal QR code encoder (V1-V2)
+│     ├─ rakna_rules.py     # Räkna math game engine (levels 1–6, pure logic)
 │     ├─ rulefollow_rules.py # Rule Follow game engine (pure logic)
+│     ├─ sdcard.py          # SD card initialisation and mount
+│     ├─ sequencer_rules.py # loop Sequencer timing and step model (pure logic)
 │     ├─ session.py         # play session state machine (pure logic)
 │     ├─ simon_rules.py     # Simon game engine (pure logic)
 │     ├─ sortera_rules.py   # Sortera classification game engine (pure logic)
+│     ├─ soundboard_rules.py # Soundboard bank/slot model (pure logic)
+│     ├─ sounds.py          # sound asset catalogue
+│     ├─ space_rules.py     # Spaceship cockpit state machine (pure logic)
 │     ├─ storage.py         # JSON settings & session history on flash
+│     ├─ stories/           # story package — scripts discovered at runtime on SD
+│     ├─ story_rules.py     # story graph validation + traversal (pure logic)
 │     ├─ temperature.py     # DS18B20 + SoC temperature monitoring
 │     ├─ tones.py           # procedural tone generation (pure logic)
+│     ├─ tts.py             # TTS playback helper (SD-first voice resolution)
 │     ├─ wav.py             # WAV header parser + streaming reader (pure logic)
 │     ├─ wifi.py            # WiFi connect (STA / AP) + mDNS + runtime control
 │     ├─ web.py             # async HTTP server for parental controls
@@ -122,51 +140,74 @@ bodn-esp32/
 │     └─ ui/
 │        ├─ admin_qr.py     # admin URL screen with QR code
 │        ├─ ambient.py      # AmbientClock (content) + StatusStrip (status)
+│        ├─ android.py      # boot-time Android-style status bar helper
 │        ├─ catface.py      # cat face with emotions (secondary content)
 │        ├─ clock.py        # clock display mode
 │        ├─ demo.py         # LED playground mode
 │        ├─ diag.py         # on-device diagnostics screen
+│        ├─ draw.py         # wrapper around the native _draw C module
 │        ├─ flode.py        # Flöde flow alignment puzzle
 │        ├─ font_ext.py     # 8×8 bitmap glyphs for å ä ö Å Ä Ö
 │        ├─ garden.py       # Garden of Life (cellular automata)
 │        ├─ garden_secondary.py # Garden secondary display content
+│        ├─ highfive.py     # High-Five Friends reflex game screen
 │        ├─ home.py         # home screen with carousel mode selection
-│        ├─ icons.py        # 16×16 bitmap icons
+│        ├─ icon_browser.py # OpenMoji emoji sprite browser (settings)
+│        ├─ icons.py        # 16×16 bitmap icons (flash fallback)
 │        ├─ input.py        # unified input state with debouncing
 │        ├─ logo.py         # pixel art boot logo (Norse mead vessel)
 │        ├─ mystery.py      # Mystery Box discovery game
-│        ├─ nfc_provision.py # NFC card set viewer + provisioning (stub)
-│        ├─ icon_browser.py # OpenMoji emoji sprite browser (settings)
+│        ├─ nfc_provision.py # NFC card set viewer + tag programming
 │        ├─ overlay.py      # session state overlay
 │        ├─ pause.py        # in-game pause menu (hold-to-open)
+│        ├─ rakna.py        # Räkna NFC math game screen
 │        ├─ rulefollow.py   # Rule Follow game screen
 │        ├─ screen.py       # Screen base class + ScreenManager
 │        ├─ secondary.py    # two-zone secondary display manager
+│        ├─ sequencer.py    # loop Sequencer mode
+│        ├─ sequencer_secondary.py # Sequencer secondary display content
 │        ├─ settings.py     # on-device settings menu (scrollable)
 │        ├─ simon.py        # Simon memory game screen
 │        ├─ sortera.py      # Sortera NFC classification game
+│        ├─ soundboard.py   # Soundboard discovery mode
+│        ├─ soundboard_secondary.py # Soundboard secondary display content
+│        ├─ space.py        # Spaceship cockpit mode
+│        ├─ story.py        # branching story mode (scripts + TTS on SD)
 │        ├─ theme.py        # colour palette and layout constants
-│        └─ widgets.py      # stateless draw helpers
+│        └─ widgets.py      # stateless draw helpers + sprite cache
 ├─ docs/
+│  ├─ assets.md             # SD/flash asset layout and resolver rules
 │  ├─ audio.md              # audio file preparation guide
+│  ├─ audio_assets.md       # sound asset pipeline, drum kits, recordings
+│  ├─ getting-started.md    # first-boot walkthrough (flashing, serial, debugging)
 │  ├─ hardware.md           # BOM, board notes, pin assignments
-│  ├─ wiring.md             # auto-generated pin diagram and tables
-│  ├─ UX_GUIDELINES.md      # child-facing interaction design
-│  ├─ PERFORMANCE_GUIDELINES.md  # ESP32 performance rules
 │  ├─ nfc.md                # NFC tag format, card sets, provisioning
-│  └─ roadmap.md            # milestones and progress
+│  ├─ PERFORMANCE_GUIDELINES.md  # ESP32 performance rules
+│  ├─ protoboard_layout.md  # hand-wired protoboard reference
+│  ├─ roadmap.md            # milestones and progress
+│  ├─ schematics/           # reference images for DevKit, GPIO, power supply
+│  ├─ science/              # development matrix, guide, report.tex/pdf/bib
+│  ├─ soundboard.md         # soundboard bank layout and manifest
+│  ├─ story_authoring.md    # branching story authoring guide
+│  ├─ UX_GUIDELINES.md      # child-facing interaction design
+│  └─ wiring.md             # auto-generated pin diagram and tables
 ├─ tools/
 │  ├─ pinout.py             # generate wiring docs from config.py
 │  ├─ sync.sh               # deploy firmware to device via mpremote
 │  ├─ wokwi-sync.py         # deploy firmware to Wokwi simulator (raw TCP)
+│  ├─ wokwi-push.py         # push a single file into a running Wokwi sim
 │  ├─ ota-push.py           # push firmware over WiFi via HTTP (no USB needed)
 │  ├─ ftp-sync.py           # push firmware over WiFi via FTP (faster, STA mode only)
-│  ├─ build-firmware.sh      # build custom MicroPython firmware with C modules
-│  ├─ generate_story_tts.py  # generate story narration TTS from story scripts
-│  ├─ story_preview.py      # preview story scripts in terminal
+│  ├─ build-firmware.sh     # build custom MicroPython firmware with C modules
+│  ├─ generate_tts.py       # generate i18n TTS WAVs from STRINGS dicts
+│  ├─ generate_story_tts.py # generate story narration TTS from story scripts
+│  ├─ convert_audio.py      # convert all audio sources to device format
+│  ├─ story_preview.py      # preview story scripts in terminal / browser
 │  ├─ sd-sync.py            # build + sync SD card assets (TTS, sounds, etc.)
 │  ├─ generate_cards.py     # NFC card face PDF generator (OpenMoji → A4 PDF)
-│  └─ convert_icons.py      # OpenMoji SVG → BDF sprite conversion for on-screen icons
+│  ├─ convert_icons.py      # OpenMoji SVG → BDF sprite conversion for on-screen icons
+│  ├─ import_freesound.py   # import and licence-track Freesound.org samples
+│  └─ make_asset.py         # rasterise SVG sources into 4bpp BDF sprites
 ├─ cmodules/                  # native C extensions (compiled into firmware)
 │  ├─ micropython.cmake       # top-level cmake: includes sub-modules
 │  ├─ audiomix/               # native audio mixer (_audiomix module, core 0)
@@ -175,9 +216,26 @@ bodn-esp32/
 │  │  ├─ mixer.c/h            # FreeRTOS task: mix loop + I2S + step clock on core 0
 │  │  ├─ ringbuf.c/h          # lock-free SPSC ring buffer
 │  │  └─ tonegen.c/h          # sine/square/sawtooth/noise generators
-│  └─ spidma/                 # DMA SPI display driver (_spidma module, ISR-driven)
+│  ├─ spidma/                 # DMA SPI display driver (_spidma module, ISR-driven)
+│  │  ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
+│  │  └─ spidma.c/h           # Python bindings + ESP-IDF spi_master DMA
+│  ├─ draw/                   # bitmap fonts, sprite blit, primitives (_draw module)
+│  │  ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
+│  │  ├─ draw.c/h             # Python bindings
+│  │  ├─ primitives.c/h       # fill_rect, hline/vline, blit helpers
+│  │  ├─ blit.c/h             # sprite blit with optional alpha
+│  │  ├─ decode.c/h           # BDF sprite decoder (1/2/4/8 bpp)
+│  │  ├─ font_render.c/h      # bitmap font rasteriser
+│  │  └─ fonts/               # compiled BDF font headers
+│  ├─ mcpinput/               # deterministic MCP23017 input scanner (_mcpinput)
+│  │  ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
+│  │  ├─ mcpinput.c/h         # Python bindings + core 1 scan task
+│  │  └─ scanner.c/h          # I2C read loop + edge detection
+│  └─ neopixel/               # NeoPixel pattern engine (_neopixel module)
 │     ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
-│     └─ spidma.c/h           # Python bindings + ESP-IDF spi_master DMA
+│     ├─ neopixel_mod.c/h     # Python bindings
+│     ├─ engine.c/h           # animation engine (tick, blend, frame buffer)
+│     └─ patterns.c/h         # built-in animations (breathe, chase, rainbow, …)
 ├─ boards/
 │  └─ BODN_S3/                # custom board definition (external to MicroPython tree)
 │     ├─ mpconfigboard.cmake  # sdkconfig layering (spiram_oct, I2S IRAM-safe)
@@ -235,8 +293,8 @@ uv run pytest
 make -C micropython/mpy-cross                     # build the cross-compiler
 make -C micropython/ports/unix submodules          # init Unix port dependencies
 make -C micropython/ports/unix                     # build the Unix port binary
-# After building, `uv run pytest` automatically includes 26 MicroPython
-# import-compatibility tests. If the binary isn't built, they skip gracefully.
+# After building, `uv run pytest` automatically includes the MicroPython
+# import-compatibility suite. If the binary isn't built, they skip gracefully.
 
 # Parental controls web UI
 # On real hardware: connect to Bodn AP, open http://192.168.4.1
@@ -264,7 +322,7 @@ uv run python tools/generate_story_tts.py --dry-run  # preview
 uv run python tools/generate_story_tts.py --story peter_rabbit  # single story
 uv run python tools/convert_audio.py              # convert all audio to device format
 
-# Custom firmware build (optional — enables native C audio mixer on core 1)
+# Custom firmware build (optional — enables native C audio mixer on core 0)
 # One-time setup:
 #   git submodule add https://github.com/micropython/micropython.git micropython
 #   cd micropython && git checkout v1.27.0 && cd ..
@@ -274,9 +332,13 @@ source ~/esp-idf/export.sh                        # once per terminal session
 ./tools/build-firmware.sh                          # build firmware
 ./tools/build-firmware.sh flash                    # build + flash
 ./tools/build-firmware.sh clean                    # clean build directory
-# The custom firmware is stock MicroPython + _audiomix + _spidma C modules.
-# If _audiomix is not available, AudioEngine falls back to the viper/IRQ path.
-# If _spidma is not available, display writes fall back to blocking machine.SPI.
+# The custom firmware is stock MicroPython + _audiomix, _spidma, _draw,
+# _mcpinput, and _neopixel C modules. Each has a Python fallback:
+#   _audiomix  → AudioEngine falls back to the viper/IRQ path
+#   _spidma    → display writes fall back to blocking machine.SPI
+#   _draw      → bodn.ui.draw falls back to pure-Python framebuf helpers
+#   _mcpinput  → MCP23017 input scanned on the main loop
+#   _neopixel  → bodn.neo falls back to the built-in neopixel module
 
 # SD card asset sync (build + copy in one step — runs all 3 steps above)
 uv run python tools/sd-sync.py                    # auto-detect BODN* SD card on macOS
@@ -327,7 +389,17 @@ Hooks live in `.githooks/` and are activated with `git config core.hooksPath .gi
 
 ## Roadmap
 
-1. **Hardware bring-up** — ST7735 displaying text/graphics; buttons & encoders with debouncing.
-2. **Audio basics** — play tones/samples via MAX98357A; record/playback short clips from INMP441.
-3. **Kid-facing UI** — home screen with icons; modes for sounds, recording, and sequencing.
-4. **Quality-of-life** — battery level indicator; serial/WiFi config; simple web UI for adults.
+See [`docs/roadmap.md`](docs/roadmap.md) for the authoritative milestone
+breakdown. Status at a glance:
+
+1. **Hardware bring-up** — complete (dual displays, inputs, LEDs, thermal).
+2. **Audio basics** — complete (16-voice native C mixer, TTS, hand-recordings).
+   Record/replay from INMP441 still outstanding.
+3. **Kid-facing UI** — 12 game modes shipped (Mystery, Simon, Flöde, Rule
+   Follow, Garden, Soundboard, Sequencer, High-Five, Space, Story, Sortera,
+   Räkna). Record & replay still planned.
+4. **Parental controls** — complete (web UI, session limits, PIN, OTA, FTP).
+5. **Quality-of-life** — complete (battery, thermal, diagnostics, SD card,
+   asset resolver, custom firmware build, boot-log persistence).
+6. **NFC card games** — PN532 driver + provisioning UI shipped; Sortera,
+   Räkna, and launcher card sets live. More card sets planned.
