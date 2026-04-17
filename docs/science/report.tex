@@ -415,6 +415,32 @@ language first, then secondary \citep{tan2024translation}. This dual-label
 approach leverages the translation-equivalent bootstrapping effect while keeping
 game instructions in the configured language for clarity.
 
+\subsubsection{Räkna --- Progressive Math with Tangible Numbers}
+A six-level NFC math mode targeting \textbf{pattern recognition} (subitising),
+\textbf{sequential thinking} (counting and equation order),
+\textbf{problem solving} (composing equations step by step), and
+\textbf{fine motor} coordination (handling multiple cards per equation). Räkna
+implements Bruner's Concrete--Pictorial--Abstract progression
+\citep{bruner1966instruction,willingham2017manipulatives}: a physical dot-pattern
+card is placed on the reader (concrete), the screen renders matching dots
+(pictorial), and from Level~4 onwards the numeral and operator cards are
+introduced (abstract). Dice-face dot patterns at low levels rather than
+numerals reflect the developmental evidence that subitising is the foundation
+of number sense, not numeral recognition
+\citep{clementssarama2014learning}. Levels span free exploration (ages
+3--4), quantity matching and more/less comparison (4--5), addition and
+subtraction with tokens (5--6), and symbolic equations (6--7+). A left-to-right
+linear number path on the display implements Siegler and Ramani's
+\citeyearpar{siegler2009playing} finding that board-game-style number lines
+measurably improve preschool number competence. Bilingual TTS announces each
+quantity in Swedish and English, carrying the translation-equivalent
+bootstrapping effect \citep{tan2024translation} into a cognitively engaging
+math task. The mode is always self-paced and never timed --- a deliberate
+design choice given the evidence that timed math exercises produce anxiety
+even in preschoolers. Together with Sortera, Räkna addresses the early-math
+domain that \citet{duncan2007school} identified as the single strongest
+predictor of later academic achievement.
+
 \subsubsection{Sequencer (Sequenser)}
 A loop-based step sequencer targeting \textbf{working memory},
 \textbf{sequential thinking}, \textbf{pattern recognition}, and
@@ -441,39 +467,40 @@ feedback.
   blank = not applicable.}
 \label{tab:matrix}
 \small
-\begin{tabular}{lcccccccccc}
+\begin{tabular}{lcccccccccccc}
 \toprule
 \textbf{Domain} & \rotatebox{70}{Simon} & \rotatebox{70}{Rule Follow}
   & \rotatebox{70}{Mystery Box} & \rotatebox{70}{Fl\"ode}
   & \rotatebox{70}{Garden} & \rotatebox{70}{Soundboard}
   & \rotatebox{70}{Spaceship} & \rotatebox{70}{Story Mode}
-  & \rotatebox{70}{High-Five} & \rotatebox{70}{Sequencer} \\
+  & \rotatebox{70}{High-Five} & \rotatebox{70}{Sequencer}
+  & \rotatebox{70}{Sortera} & \rotatebox{70}{R\"akna} \\
 \midrule
-Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ \\
-Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ & & $\bullet\bullet$ & \\
-Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ \\
+Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ \\
+Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet$ \\
+Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ \\
 \midrule
-Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
-Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ \\
-Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & & & & \\
-Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ \\
-Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ & & & $\bullet\bullet$ \\
+Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ \\
+Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & & & & & & $\bullet$ \\
+Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ \\
+Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet$ \\
 \midrule
-Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ \\
-Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet$ \\
-Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
-Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ \\
+Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ \\
 \midrule
-Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & \\
-Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet$ \\
+Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet\bullet$ \\
+Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
 \midrule
-Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & \\
-Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
-Imaginative play     & & & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ \\
+Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet$ \\
+Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ \\
+Imaginative play     & & & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & \\
 \midrule
-Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & \\
-Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ \\
-Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & $\bullet\bullet\bullet$ \\
+Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet$ & $\bullet$ \\
+Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & $\bullet$ \\
+Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & $\bullet\bullet\bullet$ & & \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -489,15 +516,24 @@ Story Mode significantly improved three previously identified gaps: listening
 comprehension, bilingual exposure, and imaginative play each now have two
 primary-level features (Spaceship + Story Mode). The Sequencer filled the
 creative expression gap, and High-Five Friends added a dedicated hand-eye
-coordination mode. Remaining areas with limited coverage include:
+coordination mode. The two NFC modes that followed---Sortera and R\"akna---add
+a tangible manipulation layer and address two previously
+underserved domains: Sortera provides a tangible Dimensional Change Card Sort
+implementation \citep{zelazo2006dccs} that strengthens cognitive flexibility
+and inhibitory control, while R\"akna opens the early-mathematics
+domain that \citet{duncan2007school} identified as the single strongest
+predictor of later academic achievement. Remaining areas with limited coverage
+include:
 
 \begin{enumerate}[noitemsep]
-  \item \textbf{Spatial reasoning}: Currently addressed only by Fl\"ode. A
-    tangram or construction mode would add breadth.
-  \item \textbf{Problem solving}: Fl\"ode (primary) and Sequencer (debugging)
-    address this, but more puzzle types would strengthen the domain.
+  \item \textbf{Spatial reasoning}: Still primarily Fl\"ode; R\"akna's linear
+    number path contributes incidentally. A tangram or construction mode would
+    add breadth.
+  \item \textbf{Problem solving}: Fl\"ode (primary), Sequencer (debugging),
+    and R\"akna (equation building) now all contribute; a scavenger-hunt style
+    NFC puzzle mode would further broaden the domain.
   \item \textbf{Bilingual exposure}: Story Mode provides full narration in
-    both languages, and Sortera now offers active bilingual reinforcement
+    both languages, and Sortera and R\"akna add active bilingual reinforcement
     (dual-language labels and TTS on each card scan). A dedicated
     language-switching game could further leverage the bilingual advantage for
     EF development \citep{bialystok2011reshaping}.

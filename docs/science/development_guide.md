@@ -115,6 +115,11 @@ to press it because the current rule says to press the *opposite* color.
   for the target to appear. Premature taps are ignored — rewarding patience
   and focused attention.
 
+- **Sortera**: When the rule switches from "colour" to "animal," the child must
+  actively suppress the previously rewarded sorting strategy. This is the same
+  executive demand that makes classroom transitions challenging for
+  preschoolers, practised here in a low-stakes, playful setting.
+
 #### Cognitive Flexibility
 
 **What it looks like:** the rules change mid-game — what worked 30 seconds ago
@@ -129,6 +134,16 @@ no longer applies, and the child must switch strategies.
 - **Spaceship** (core mechanic): Five different scenario types, each requiring a
   different input (steer, press button, flip switch, push throttle). The child
   cannot predict which scenario comes next — they must stay flexible.
+
+- **Sortera** (core mechanic): A direct tangible implementation of the
+  Dimensional Change Card Sort (DCCS) — the standard preschool assessment of
+  cognitive flexibility (Zelazo, 2006). The device announces a sorting rule
+  ("Find the animals!"), the child scans NFC cards matching that rule, and
+  after several successes the rule switches to a different dimension ("Find
+  the red ones!"). The physical cards carry **all** dimensions at once
+  (animal × colour), so switching rules requires the child to inhibit the
+  previously relevant dimension and attend to a new one — exactly the
+  classroom transition skill EF training is meant to strengthen.
 
 ---
 
@@ -264,9 +279,10 @@ thinking process (Weisberg et al., 2013).
   requires trial-and-error to solve. The snap-to-grid design ensures the child
   can make progress without pixel-perfect precision.
 
-- *Future opportunity:* The planned Sequencer mode introduces debugging — the
-  child creates a pattern, runs it, hears something unexpected, and must figure
-  out which step to change.
+- **Sequencer**: Introduces debugging as a natural part of creative play — the
+  child builds a pattern, runs it, hears something unexpected, and toggles
+  individual steps until it sounds right. This is computational thinking
+  disguised as music-making.
 
 ### Early Mathematics and Number Sense
 
@@ -282,20 +298,24 @@ number sense predicts math achievement through at least third grade, with the
 prediction strength not weakening over time (Jordan et al., 2009). This makes
 number sense one of the highest-impact domains to support in early childhood.
 
-**How Böðn will support it:**
+**How Böðn supports it:**
 
-- **Räkna** (planned NFC mode): Dot-pattern NFC cards serve as tangible number
+- **Räkna** (core NFC math mode): Dot-pattern NFC cards serve as tangible number
   tokens, following Bruner's Concrete-Pictorial-Abstract (CPA) progression — the
   child places a physical card (concrete), the screen shows matching dots
-  (pictorial), and optionally the numeral appears (abstract). This three-layer
-  progression is consistently validated in early math education research.
+  (pictorial), and at higher levels the numeral appears (abstract). This
+  three-layer progression is consistently validated in early math education
+  research (Bruner, 1966; Willingham, 2017).
 
-  The mode uses structured dot patterns (like dice faces) rather than numerals,
-  because subitising — instant recognition of small quantities — is the
-  developmental foundation of number sense, not numeral recognition (Clements &
-  Sarama, 2014). Six progressive levels span ages 3–7: from free exploration
-  of quantities, through matching and comparison, to simple addition and
-  subtraction with concrete tokens, and finally symbolic equation building.
+  The mode uses structured dot patterns (like dice faces) at lower levels rather
+  than numerals, because **subitising** — instant recognition of small
+  quantities — is the developmental foundation of number sense, not numeral
+  recognition (Clements & Sarama, 2014). Six progressive levels span ages 3–7:
+  (1) free exploration of quantities, (2) quantity matching, (3) more/less
+  comparison, (4) addition with dot cards, (5) subtraction, (6) symbolic
+  equations with numerals and operator cards. The child physically composes an
+  equation by scanning cards in sequence, turning an abstract arithmetic
+  statement into a concrete tangible act.
 
   **Critical design constraint:** The mode is always self-paced, never timed.
   Research shows that timed math exercises cause anxiety even in preschoolers
@@ -307,6 +327,11 @@ number sense one of the highest-impact domains to support in early childhood.
   improved preschoolers' number competence, with gains persisting 9 weeks.
   The path runs left-to-right (small to large) — circular layouts do not
   produce the same benefit.
+
+- **Bilingual number naming** reinforces both languages during the mathematically
+  engaging task: each successful scan announces the number in Swedish and
+  English, leveraging translation-equivalent bootstrapping (Tan et al., 2024)
+  while the child is actively manipulating quantity.
 
 See `docs/science/nfc_tangible_learning.md` § 6.6 for the full research summary.
 
@@ -539,14 +564,15 @@ the thing to the thing, something happens.
 
 ### Developmental Impact
 
-NFC modes can address several gaps identified in the development matrix:
+NFC modes already address several gaps identified in the development matrix:
 
-| Gap | NFC Application |
-|-----|----------------|
-| **Problem Solving** | Scavenger hunts, puzzle cards (scan clues to unlock next step) |
-| **Fine Motor** | Card manipulation, sorting into physical piles, precision placement |
-| **Bilingual Exposure** | Same picture, two language cards — scan to hear each word |
-| **Categorisation (CF/IC)** | Physical DCCS: sort cards by one dimension, then switch rules |
+| Gap | NFC Application | Status |
+|-----|----------------|--------|
+| **Categorisation (CF/IC)** | Sortera: physical DCCS — sort cards by one dimension, then switch rules | Shipped |
+| **Early Mathematics (PR/ST/PS)** | Räkna: dot-pattern cards with CPA progression (concrete → pictorial → abstract) | Shipped |
+| **Bilingual Exposure** | Dual-language labels on cards; bilingual TTS on scans | Shipped via Sortera + Räkna |
+| **Fine Motor** | Card manipulation, sorting into physical piles, precision placement | Shipped via Sortera + Räkna |
+| **Problem Solving** | Scavenger hunts, puzzle cards (scan clues to unlock next step) | Wishlist |
 
 See `docs/science/nfc_tangible_learning.md` for the full research summary with
 references.
@@ -602,12 +628,13 @@ Böðn addresses these guidelines through:
 
 | Developmental Area | Key Finding | Böðn Response |
 |--------------------|-------------|---------------|
-| Executive functions | Strongest predictor of school readiness (Diamond, 2013) | Simon (WM), Rule Follow (IC, CF), Spaceship (CF), High-Five (IC) |
+| Executive functions | Strongest predictor of school readiness (Diamond, 2013) | Simon (WM), Rule Follow (IC, CF), Sortera (CF, tangible DCCS), Spaceship (CF), High-Five (IC), Sequencer (WM) |
 | Self-control | Predicts lifelong outcomes in a gradient (Moffitt et al., 2011) | Gentle failure feedback, session limits, pause mechanics |
 | Tangible interaction | Stronger learning than touchscreen-only (Marshall, 2007) | 18 physical controls; screens for feedback only |
 | Cause-and-effect | Foundation of scientific thinking (Gopnik, 2012) | Mystery Box, Soundboard, Garden |
 | Guided play | Deep learning through structured exploration (Weisberg et al., 2013) | Mystery Box, Garden, Soundboard — open-ended within designed environments |
 | Spatial reasoning | Predicts math achievement (Verdine et al., 2014) | Flöde |
+| Early mathematics | Strongest predictor of later academic achievement (Duncan et al., 2007) | Räkna (CPA progression, subitising, linear number path) |
 | Bilingualism | Enhanced EF through dual-language management (Bialystok, 2011) | Swedish/English UI and TTS |
 | Pretend play | Develops theory of mind and narrative skills (Lillard et al., 2013) | Spaceship cockpit mode, Story Mode |
 | Reaction time & coordination | Hand-eye coordination critical for motor development | High-Five Friends (adaptive difficulty) |
