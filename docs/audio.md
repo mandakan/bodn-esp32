@@ -34,7 +34,9 @@ resampling is needed.
 - **SD card** — sound banks, arcade sounds, music, game-mode TTS, space SFX. Use FAT32 format.
 
 All audio paths go through `bodn.assets.resolve()` which checks the SD card first,
-falling back to flash transparently.
+falling back to flash transparently. Spoken audio additionally passes through
+`bodn.assets.resolve_voice()` which gives hand-recorded overrides priority over
+generated TTS — see "Hand-recorded overrides" below.
 
 ## Converting with ffmpeg
 
@@ -126,5 +128,50 @@ if not say("simon_watch", audio):
     audio.play_sound("boop")   # procedural tone fallback
 ```
 
-`say()` calls `bodn.assets.resolve()` internally, so SD files are preferred over
-flash automatically.
+`say()` calls `bodn.assets.resolve_voice()` internally, which tries a
+hand-recorded override first and falls back to generated TTS — see the next
+section.
+
+## Hand-recorded overrides
+
+Any spoken audio (i18n TTS or story narration) can be replaced with a human
+recording on a per-key or per-node basis. The recording shadows the generated
+TTS — there is no flag to flip, just drop the file in place.
+
+### Source layout
+
+```
+assets/audio/source/recordings/<lang>/<key>.wav         # i18n override
+assets/stories/<id>/recordings/<lang>/<node>.wav        # story override
+assets/stories/<id>/recordings/<lang>/<node>_choices.wav  # choice narration
+```
+
+Filenames must exactly match the corresponding TTS output (same `<key>` as in
+`assets/audio/tts.json`, same `<node>` as in the story script). Recordings may
+be any format ffmpeg can decode — `convert_audio.py` normalises to 16 kHz mono
+PCM and applies the same EBU R128 loudness target as TTS, so recorded lines
+match the surrounding generated audio.
+
+### Resolution order
+
+`bodn.assets.resolve_voice(tts_path)` tries, in order:
+
+1. `/sd/…/recordings/…` — recording on SD card
+2. `/…/recordings/…` — recording on flash (unusual, not wired into the build)
+3. `/sd/…/tts/…` — generated TTS on SD card
+4. `/…/tts/…` — generated TTS on flash (safety keys live here)
+
+Returns the first hit or `None`. All i18n TTS and story TTS lookups flow
+through this helper, so a single recorded file at step 1 overrides everything
+below it for that key.
+
+### Incremental recording
+
+Since recordings are per-file overrides, you can record one story node, one
+i18n key, or a handful at a time. Anything not recorded keeps playing the
+generated TTS. To revert a single override, delete (or rename) the WAV — the
+resolver falls through to TTS on the next play.
+
+**Footgun:** if you edit a story's text or an i18n string, the old recording
+will silently shadow the regenerated TTS. Delete (or re-record) the affected
+recording when changing source text.

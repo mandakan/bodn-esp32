@@ -240,24 +240,22 @@ class StoryScreen(Screen):
         self._start_narration()
 
     def _resolve_story_tts(self, node_id, suffix=""):
-        """Build and resolve a story TTS path.
+        """Build and resolve a story narration path.
 
-        Story TTS lives alongside the story script on SD:
-          /stories/{story_id}/tts/{lang}/{node_id}{suffix}.wav
+        Story audio lives alongside the story script on SD:
+          /stories/{story_id}/tts/{lang}/{node_id}{suffix}.wav        (generated)
+          /stories/{story_id}/recordings/{lang}/{node_id}{suffix}.wav (recorded)
 
-        Returns the resolved filesystem path, or None if the file is missing.
+        Recordings override generated TTS per-node via bodn.assets.resolve_voice.
+        Returns the resolved filesystem path, or None if neither exists.
         """
         eng = self._engine
         lang = get_language()
-        path = "/stories/{}/tts/{}/{}{}.wav".format(eng.story_id, lang, node_id, suffix)
-        from bodn.assets import resolve
+        from bodn.assets import resolve_voice
 
-        resolved = resolve(path)
-        try:
-            os.stat(resolved)
-            return resolved
-        except OSError:
-            return None
+        return resolve_voice(
+            "/stories/{}/tts/{}/{}{}.wav".format(eng.story_id, lang, node_id, suffix)
+        )
 
     def _cache_narration_sprites(self):
         """Pre-render word-wrapped narration lines for the current node."""
