@@ -13,7 +13,6 @@ from bodn.nfc import (
     NFC_DIR,
 )
 
-
 # ---------------------------------------------------------------------------
 # Tag data parsing
 # ---------------------------------------------------------------------------
@@ -561,3 +560,172 @@ class TestNFCReaderWrite:
         finally:
             nfc_mod._pn532 = old_pn
             nfc_mod._shed = old_shed
+
+
+# ---------------------------------------------------------------------------
+# Cooperative scan
+# ---------------------------------------------------------------------------
+
+
+class CooperativePN532(FakePN532):
+    """FakePN532 extended with the two-phase detect API.
+
+    ``check_script`` is an iterable of return values for successive
+    ``read_passive_target_check`` calls: ``None`` means "not ready",
+    ``False`` means "done, no tag", ``bytes`` means "UID".
+    """
+
+    def __init__(self, check_script, pages=None):
+        super().__init__(uid=None, pages=pages or {})
+        self._script = list(check_script)
+        self.start_calls = 0
+        self.check_calls = 0
+        self.ntag_reads = []
+
+    def read_passive_target_start(self):
+        self.start_calls += 1
+
+    def read_passive_target_check(self):
+        self.check_calls += 1
+        if not self._script:
+            return False
+        return self._script.pop(0)
+
+    def ntag_read(self, page):
+        self.ntag_reads.append(page)
+        return self._pages.get(page)
+
+
+def _run(coro):
+    import asyncio
+
+    return asyncio.new_event_loop().run_until_complete(coro)
+
+
+class TestScanCooperative:
+    def _setup_nfc(self, fake_pn):
+        import bodn.nfc as nfc_mod
+
+        nfc_mod._pn532 = fake_pn
+        nfc_mod._shed = False
+        nfc_mod._scan_suspended = False
+
+    def _teardown_nfc(self, old_state):
+        import bodn.nfc as nfc_mod
+
+        nfc_mod._pn532 = old_state["pn"]
+        nfc_mod._shed = old_state["shed"]
+        nfc_mod._scan_suspended = old_state["susp"]
+
+    def _save_nfc(self):
+        import bodn.nfc as nfc_mod
+
+        return {
+            "pn": nfc_mod._pn532,
+            "shed": nfc_mod._shed,
+            "susp": nfc_mod._scan_suspended,
+        }
+
+    def test_no_tag_via_false_sentinel(self):
+        """read_passive_target_check returning False ends the scan cleanly."""
+        from bodn.nfc import NFCReader
+
+        old = self._save_nfc()
+        fake = CooperativePN532(check_script=[False])
+        self._setup_nfc(fake)
+        try:
+            reader = NFCReader()
+            uid, data = _run(reader.scan_cooperative(detect_delay_ms=0))
+            assert uid is None
+            assert data is None
+            assert fake.start_calls == 1
+            assert fake.check_calls == 1
+            # No NDEF reads on empty scan
+            assert fake.ntag_reads == []
+        finally:
+            self._teardown_nfc(old)
+
+    def test_not_ready_retries_then_gives_up(self):
+        """All None responses exhaust retries and return (None, None)."""
+        from bodn.nfc import NFCReader
+
+        old = self._save_nfc()
+        fake = CooperativePN532(check_script=[None, None, None, None, None])
+        self._setup_nfc(fake)
+        try:
+            reader = NFCReader()
+            uid, data = _run(
+                reader.scan_cooperative(detect_delay_ms=0, check_retries=4)
+            )
+            assert uid is None
+            assert data is None
+            assert fake.check_calls == 4  # respected retry budget
+        finally:
+            self._teardown_nfc(old)
+
+    def test_not_ready_then_tag_detected(self):
+        """A few None responses followed by UID bytes — must not treat None as no-tag."""
+        from bodn.nfc import NFCReader
+
+        # Build valid NDEF payload across pages so _read_ndef_cooperative
+        # can reassemble a BODN sortera tag.
+        payload = encode_tag_data("sortera", "cat_red")
+        rec = bytes([0xD1, 0x01, len(payload)]) + b"U" + payload
+        tlv = bytes([0x03, len(rec)]) + rec + b"\xfe"
+        while len(tlv) < 48:
+            tlv += b"\x00"
+        pages = {4: tlv[:16], 8: tlv[16:32], 12: tlv[32:48]}
+        uid_bytes = bytes([0x04, 0xA3, 0xB2, 0xC1, 0xD4, 0xE5, 0xF6])
+
+        old = self._save_nfc()
+        fake = CooperativePN532(
+            check_script=[None, None, uid_bytes],
+            pages=pages,
+        )
+        self._setup_nfc(fake)
+        try:
+            reader = NFCReader()
+            uid_str, data = _run(
+                reader.scan_cooperative(detect_delay_ms=0, check_retries=4)
+            )
+            assert uid_str == "04:A3:B2:C1:D4:E5:F6"
+            assert data is not None
+            parsed = parse_tag_data(data)
+            assert parsed is not None
+            assert parsed["mode"] == "sortera"
+            assert parsed["id"] == "cat_red"
+            # Must have chunked the NDEF read across multiple pages
+            assert 4 in fake.ntag_reads
+            assert 8 in fake.ntag_reads
+        finally:
+            self._teardown_nfc(old)
+
+    def test_thermal_shed_gates_cooperative_scan(self):
+        """_shed=True short-circuits before any I2C traffic."""
+        from bodn.nfc import NFCReader
+
+        old = self._save_nfc()
+        fake = CooperativePN532(check_script=[bytes([0x04, 0xAA, 0xBB, 0xCC])])
+        self._setup_nfc(fake)
+        import bodn.nfc as nfc_mod
+
+        nfc_mod._shed = True
+        try:
+            reader = NFCReader()
+            uid, data = _run(reader.scan_cooperative(detect_delay_ms=0))
+            assert uid is None
+            assert data is None
+            assert fake.start_calls == 0  # never touched the bus
+        finally:
+            self._teardown_nfc(old)
+
+
+class TestSuspendScan:
+    def test_suspend_and_resume(self):
+        import bodn.nfc as nfc_mod
+
+        assert nfc_mod.is_scan_suspended() is False
+        nfc_mod.suspend_scan(True)
+        assert nfc_mod.is_scan_suspended() is True
+        nfc_mod.suspend_scan(False)
+        assert nfc_mod.is_scan_suspended() is False

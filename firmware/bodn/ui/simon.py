@@ -44,6 +44,9 @@ class SimonScreen(Screen):
     Hold nav encoder button to open the pause menu.
     """
 
+    # Tight flash/playback cadence — throttle the background NFC scanner.
+    nfc_low_priority = True
+
     def __init__(
         self,
         overlay,

@@ -212,9 +212,13 @@ class NFCProvisionScreen(Screen):
         self._write_state = _WRITING
         self._dirty = True
 
-        try:
-            from bodn.nfc import encode_tag_data
+        # Pause the background scan task while we hold the I2C bus for
+        # the full detect→write sequence — otherwise a cooperative scan
+        # can drop in between our NTAG writes and corrupt the transfer.
+        from bodn.nfc import encode_tag_data, suspend_scan
 
+        suspend_scan(True)
+        try:
             data = encode_tag_data(mode, card_id)
             ok = self._reader.write(data)
             if ok:
@@ -226,6 +230,8 @@ class NFCProvisionScreen(Screen):
         except Exception as e:
             print("NFC: write error:", e)
             self._write_state = _FAIL
+        finally:
+            suspend_scan(False)
 
         self._write_ms = time.ticks_ms()
         self._dirty = True

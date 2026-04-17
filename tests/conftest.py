@@ -286,6 +286,10 @@ sys.modules["ntptime"] = ntptime
 try:
     import asyncio as _asyncio
 
+    # MicroPython exposes asyncio.sleep_ms — add it on CPython for tests.
+    if not hasattr(_asyncio, "sleep_ms"):
+        _asyncio.sleep_ms = lambda ms: _asyncio.sleep(ms / 1000)
+
     sys.modules["uasyncio"] = _asyncio
 except ImportError:
     pass

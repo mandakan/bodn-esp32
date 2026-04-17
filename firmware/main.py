@@ -1043,11 +1043,43 @@ async def housekeeping_task(session_mgr, settings, audio=None, pwm=None):
 
 
 async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
-    """Poll NFC reader and route tags to active screen or launch game modes."""
-    from bodn.nfc import NFCReader, parse_tag_data
+    """Poll NFC reader cooperatively and route tags globally.
+
+    Uses the PN532 two-phase API via ``NFCReader.scan_cooperative`` so a
+    single scan cycle is broken into ~1 ms I2C transactions separated by
+    short awaits.  This keeps the scan running across every screen —
+    including latency-sensitive games — without blocking the asyncio
+    loop for the full 50 ms detect window.
+
+    Adaptive polling rate (picked each cycle from the active screen):
+      * home screen                → ~3 Hz
+      * screen opts in via nfc_modes → ~4 Hz
+      * screen opts in via nfc_low_priority → ~2 Hz
+      * otherwise                   → ~3 Hz
+    """
+    from bodn.nfc import NFCReader, parse_tag_data, is_scan_suspended
 
     reader = NFCReader()
     prev_uid = None
+
+    def _idle_delay_ms():
+        active = manager.active
+        if len(manager._stack) <= 1:
+            return 150
+        if active is None:
+            return 300
+        if getattr(active, "nfc_low_priority", False):
+            return 500
+        if active.nfc_modes:
+            return 250
+        return 300
+
+    def _mark_unavailable():
+        reader._available = False
+        reader._pn532 = None
+        from bodn import nfc as _nfc_mod
+
+        _nfc_mod._pn532 = None
 
     while True:
         # Retry init if NFC hardware isn't available yet (e.g. after
@@ -1056,30 +1088,28 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
             await asyncio.sleep_ms(2000)
             continue
 
-        # Skip polling when active screen doesn't use NFC — avoids
-        # the ~50 ms I2C block that would hurt button timing in
-        # latency-sensitive modes (Simon, sequencer, etc.).
-        # Always poll on home screen (stack depth 1) for mode launching.
-        active = manager.active
-        should_poll = len(manager._stack) <= 1 or (active and active.nfc_modes)
-
-        if not should_poll:
+        # Provisioning screens hold the bus for a blocking write — skip
+        # one tick rather than race them.
+        if is_scan_suspended():
             prev_uid = None
-            await asyncio.sleep_ms(300)
+            await asyncio.sleep_ms(200)
             continue
 
         try:
-            uid, data = reader.scan()
+            uid, data = await reader.scan_cooperative()
         except OSError as e:
             print("NFC: I2C error during scan:", e)
-            # Mark unavailable so available() will re-probe
-            reader._available = False
-            reader._pn532 = None
-            from bodn import nfc as _nfc_mod
-
-            _nfc_mod._pn532 = None
+            _mark_unavailable()
             await asyncio.sleep_ms(2000)
             continue
+        except Exception as e:
+            print("NFC: scan error:", e)
+            _mark_unavailable()
+            await asyncio.sleep_ms(2000)
+            continue
+
+        # Re-read active after the awaits — user may have navigated.
+        active = manager.active
 
         if uid and data and uid != prev_uid:
             parsed = parse_tag_data(data)
@@ -1117,7 +1147,7 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
         else:
             prev_uid = uid
 
-        await asyncio.sleep_ms(300)
+        await asyncio.sleep_ms(_idle_delay_ms())
 
 
 async def main():
