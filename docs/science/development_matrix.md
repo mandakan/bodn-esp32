@@ -96,6 +96,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | *Record & Replay* | ● | | | Remember what to record and play back |
 | Sortera | ○ | ● | ◉ | Remember current rule (WM); resist sorting by previous dimension (IC); rule switches demand flexibility (CF) — tangible DCCS |
 | Räkna | ● | ○ | ○ | Hold equation state across multiple card scans (WM); level progression from counting to symbolic equations nudges CF |
+| Blippa | | | | No EF demand — every tap succeeds, nothing to hold in mind |
 
 ### Cognitive Development
 
@@ -114,6 +115,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | *Record & Replay* | ● | | | ○ | | Voice causes recording; sequential playback |
 | Sortera | ● | ◉ | | | | Card scan → feedback (CE); categorise by matching dimension (PR) |
 | Räkna | ● | ◉ | ○ | ◉ | ● | Dot-pattern subitising (PR); counting and equation order (ST); build solutions step by step (PS); left-to-right number path (SR) |
+| Blippa | ◉ | ○ | | | | Tightest possible tap → response loop (CE); incidental recognition of repeating card attributes across the set (PR) |
 
 ### Sensorimotor Development
 
@@ -132,6 +134,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | *Record & Replay* | ○ | | ◉ | | Listen to own voice, discriminate recordings |
 | Sortera | ● | | ● | ● | Card manipulation (FM); bilingual TTS reinforces audio (AP); emoji + label display (VP) |
 | Räkna | ● | ○ | ● | ◉ | Handling multiple dot/numeral/operator cards (FM); bilingual number names (AP); dot patterns and numerals are the core stimulus (VP) |
+| Blippa | ● | ○ | ● | ● | Card retrieval and presentation (FM); per-card blip + optional sample (AP); full-screen emoji + bilingual label (VP) |
 
 ### Language & Communication
 
@@ -150,6 +153,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | *Record & Replay* | ● | ● | Hear and produce speech in both languages |
 | Sortera | ○ | ● | Bilingual TTS says both languages on correct scan; dual-language labels on screen match physical cards |
 | Räkna | ● | ● | Number names and instructions spoken in both languages; child hears quantities as well as sees them |
+| Blippa | ○ | ● | Dual-language label shown on every scan; leverages the whole card stock for passive vocabulary exposure |
 
 ### Social-Emotional Development
 
@@ -168,6 +172,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | *Record & Replay* | | | ○ | Mild pretend-play with voice |
 | Sortera | ● | ○ | | Wait through the rule announcement (SReg); try again after a mis-sort |
 | Räkna | ○ | ● | | Self-paced and never timed keeps frustration low (SReg); multi-card equations reward sustained effort (PE) |
+| Blippa | | | ● | No failure state eliminates frustration; naturally invites cashier / transit-gate pretend play (IP) |
 
 ### Creative & Exploratory
 
@@ -186,6 +191,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | *Record & Replay* | ● | | ◉ | Record anything; creative voice play |
 | Sortera | ○ | | | Free-scan mode invites incidental exploration of the card set |
 | Räkna | ○ | ○ | | Low-level free exploration of quantities; multiple card paths to the same total |
+| Blippa | ◉ | ○ | | Any card the child owns works, with no goal — self-directed discovery is the entire mode |
 
 ---
 
@@ -197,10 +203,10 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 |--------|:-----------:|:----------------:|:------------:|
 | Visual Processing (VP) | 3 | 6 | 9 |
 | Working Memory (WM) | 2 | 4 | 6 |
-| Cause & Effect (CE) | 1 | 6 | 7 |
+| Cause & Effect (CE) | 2 | 6 | 8 |
 | Pattern Recognition (PR) | 2 | 3 | 5 |
 | Hand-Eye Coordination (HC) | 1 | 4 | 5 |
-| Open Exploration (OE) | 3 | 0 | 3 |
+| Open Exploration (OE) | 4 | 0 | 4 |
 | Self-Regulation (SReg) | 1 | 4 | 5 |
 | Cognitive Flexibility (CF) | 2 | 1 | 3 |
 | Inhibitory Control (IC) | 1 | 2 | 3 |
@@ -243,6 +249,7 @@ The foundation — everything should produce immediate, rewarding feedback.
 | Story Mode | **Introduce** — simple stories, 2 choices, short paths | Easy |
 | Sortera | **Introduce** — single-dimension sorting, no rule switches | Easiest |
 | Räkna | **Introduce** — Level 1 free exploration of dot cards 1–5 | Easiest |
+| Blippa | **Core** — tap any card, always works, always a response | No difficulty |
 
 ### Age 4–5: Executive Functions Emerge
 
@@ -258,6 +265,7 @@ The child can follow rules, hold short sequences, and switch between ideas.
 | Mystery Box | Still engaging — modifier discovery deepens | Same |
 | Sortera | **Growing** — rule switches between colour, shape, and animal dimensions | Medium |
 | Räkna | **Growing** — Levels 2–3 (quantity matching, more/less) | Easy–Medium |
+| Blippa | Still engaging — card vocabulary grows with the collection | Same |
 
 ### Age 5–6: Increasing Challenge
 
@@ -303,9 +311,11 @@ bring to reader → hold) that exercises fine motor skills and reinforces
 intentionality. See `docs/science/nfc_tangible_learning.md` for the full research
 summary.
 
-The first two NFC modes — **Sortera** (tangible DCCS classification) and
-**Räkna** (progressive math with dot-pattern cards) — are shipped and appear in
-the aspect matrices above. The ideas below remain on the wishlist.
+Three NFC modes have shipped and appear in the aspect matrices above:
+**Sortera** (tangible DCCS classification), **Räkna** (progressive math with
+dot-pattern cards), and **Blippa** (free-play — every owned card blips with
+audio + full-screen emoji, no goal, no failure state). The ideas below
+remain on the wishlist.
 
 #### NFC-1. Saga Builder — Tangible Storytelling
 
@@ -339,11 +349,13 @@ a physical spread. Physical search adds motor planning to the memory task.
 again for English. Quiz mode: device says a word, child scans the right card.
 **References:** Wohlwend (2015) physical-digital literacy; Bialystok (2011) bilingual EF advantage
 
-#### NFC-5. Free Discovery / Tag Registry
+#### NFC-5. Foreign-Tag Blippa Extension
 
 **Primary targets:** OE, CE, DT
-**Concept:** First-time tags get a random colour + sound + animation. Child builds
-a personal collection by tagging household objects, toys, and drawings.
+**Concept:** Extend Blippa to react to non-BODN tags (hotel keys, bus passes,
+household NFC stickers) with a UID-hashed colour/sound/animation — the child
+"discovers" that their things have hidden identities.  Blippa v1 is scoped to
+BODN-programmed cards only; this extension adds the tag-registry angle.
 **References:** Bonawitz et al. (2011) exploration-driven discovery
 
 ---

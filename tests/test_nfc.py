@@ -9,6 +9,7 @@ from bodn.nfc import (
     load_card_set,
     lookup_card,
     list_card_sets,
+    route_tag,
     UIDCache,
     NFC_DIR,
 )
@@ -718,6 +719,47 @@ class TestScanCooperative:
             assert fake.start_calls == 0  # never touched the bus
         finally:
             self._teardown_nfc(old)
+
+
+class TestRouteTag:
+    """Dispatch routing: preserve launcher semantics for catch-all subscribers."""
+
+    def test_non_launcher_tag_no_subscriber_launches(self):
+        # A sortera tag arrives; active screen doesn't subscribe.
+        # Expect: not consumed, launch mode = "sortera".
+        parsed = {"mode": "sortera", "id": "cat_red"}
+        try_consume, mode = route_tag(parsed, frozenset())
+        assert try_consume is False
+        assert mode == "sortera"
+
+    def test_non_launcher_tag_with_subscriber_routes(self):
+        # A sortera tag arrives; active screen subscribes.
+        # Expect: routed, mode still "sortera" (for fallback if on_nfc_tag returns False).
+        parsed = {"mode": "sortera", "id": "cat_red"}
+        try_consume, mode = route_tag(parsed, frozenset({"sortera"}))
+        assert try_consume is True
+        assert mode == "sortera"
+
+    def test_launcher_tag_never_routed_even_when_subscribed(self):
+        # Blippa-style catch-all subscribes to "sortera".  A launcher:sortera
+        # tag arrives — it must launch Sortera, not be swallowed by Blippa.
+        parsed = {"mode": "launcher", "id": "sortera"}
+        try_consume, mode = route_tag(parsed, frozenset({"sortera", "rakna"}))
+        assert try_consume is False
+        assert mode == "sortera"
+
+    def test_launcher_tag_with_no_subscribers(self):
+        parsed = {"mode": "launcher", "id": "simon"}
+        try_consume, mode = route_tag(parsed, frozenset())
+        assert try_consume is False
+        assert mode == "simon"
+
+    def test_launcher_tag_with_no_id(self):
+        # Malformed launcher tag — no id to launch.
+        parsed = {"mode": "launcher", "id": None}
+        try_consume, mode = route_tag(parsed, frozenset({"sortera"}))
+        assert try_consume is False
+        assert mode is None
 
 
 class TestSuspendScan:

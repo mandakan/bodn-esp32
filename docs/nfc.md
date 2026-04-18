@@ -82,6 +82,7 @@ They define the cards in a deck, their properties, and sorting dimensions.
 | `cards[].label_sv` | Swedish display name |
 | `cards[].label_en` | English display name |
 | `cards[].icon` | OpenMoji Unicode codepoint (hex string) |
+| `cards[].sound` | *(optional)* Stem name for a Blippa free-play sound, resolved as `/sounds/blippa/<stem>.wav` (SD first, flash fallback). Missing or unresolved → procedural default blip. |
 | `cards[].<dim>` | Value for each dimension (e.g., `category`, `colour`) |
 
 ### Adding a new card set
@@ -89,6 +90,9 @@ They define the cards in a deck, their properties, and sorting dimensions.
 1. Create `assets/nfc/{mode}.json` following the schema above
 2. Run `uv run python tools/sd-sync.py` to copy it to the SD card
 3. The card set will appear in the settings NFC screen and web UI
+4. If the cards should work in Blippa free-play mode, append the new mode
+   name to `_SUBSCRIBED` in `firmware/bodn/ui/blippa.py`.  Launcher tags
+   are handled globally — do not subscribe to `"launcher"`.
 
 ## UID Cache
 

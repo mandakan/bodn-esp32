@@ -401,6 +401,11 @@ STRINGS = {
     "rakna_build_second": "Scan another number card!",
     "rakna_need_number": "Need a number card!",
     "rakna_need_op": "Need plus or minus!",
+    # Blippa (free-play NFC mode — tap any card, hear a sound)
+    "mode_blippa": "blip",
+    "blippa_welcome": "Blip a card!",
+    "blippa_hint_scan": "Hold a card to the box",
+    "blippa_unknown": "Unknown card",
     # Boot screen
     "boot_cfg": "Waking up...",
     "boot_sd": "Checking SD card...",
