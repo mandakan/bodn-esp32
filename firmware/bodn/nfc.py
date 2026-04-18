@@ -107,6 +107,30 @@ def _parse_legacy(text):
     }
 
 
+def route_tag(parsed, active_nfc_modes):
+    """Decide how a parsed NFC tag should be routed.
+
+    Returns (try_consume, launch_mode):
+      * try_consume — True if the active screen's ``on_nfc_tag`` should be
+        called with *parsed*.  The screen may still return False to fall
+        through to the launch path.
+      * launch_mode — the mode name to look up in ``mode_screens`` when the
+        tag is not consumed.  None if the tag doesn't target a launchable
+        mode (e.g. launcher tag with no id).
+
+    Launcher tags (``parsed["mode"] == "launcher"`` with a non-empty id)
+    are never routed to the active screen — they always launch the target
+    mode.  This prevents a catch-all screen like Blippa (which subscribes
+    to every known card-set mode) from swallowing launcher taps and
+    breaking navigation-by-NFC.
+    """
+    parsed_mode = parsed["mode"]
+    if parsed_mode == "launcher":
+        return False, parsed["id"]
+    try_consume = parsed_mode in active_nfc_modes
+    return try_consume, parsed_mode
+
+
 def encode_tag_data(mode, card_id, version=None):
     """Create NDEF URI Record payload bytes for writing to a tag.
 

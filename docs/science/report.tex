@@ -441,6 +441,23 @@ even in preschoolers. Together with Sortera, Räkna addresses the early-math
 domain that \citet{duncan2007school} identified as the single strongest
 predictor of later academic achievement.
 
+\subsubsection{Blippa --- Free-Play NFC Discovery}
+A goal-less, failure-less companion to the other NFC modes targeting
+\textbf{open exploration}, \textbf{cause and effect}, and \textbf{imaginative
+play}. Tapping any owned card---from any card set the device knows about---
+produces a full-screen emoji, a bilingual label, and either a procedural POS
+``blip'' or an optional per-card sample. There is no rule to follow, no score,
+and no wrong scan: the mode exists specifically to turn a growing collection
+of physical cards into a low-friction exploration toy. This design is
+motivated by evidence that children's causal learning is strongest when
+exploration is self-directed rather than instructed \citep{bonawitz2011double},
+and it intentionally creates a surface for the cashier and transit-gate
+pretend play that 3--5-year-olds gravitate to, linking open exploration with
+imaginative play. Unknown card identifiers within a known card set produce a
+deterministic ``mystery blip'' whose pitch is derived from a stable hash of
+the id, so a given card always sounds the same---reinforcing object
+permanence and rehearsal of cause-effect contingencies.
+
 \subsubsection{Sequencer (Sequenser)}
 A loop-based step sequencer targeting \textbf{working memory},
 \textbf{sequential thinking}, \textbf{pattern recognition}, and
@@ -467,40 +484,41 @@ feedback.
   blank = not applicable.}
 \label{tab:matrix}
 \small
-\begin{tabular}{lcccccccccccc}
+\begin{tabular}{lccccccccccccc}
 \toprule
 \textbf{Domain} & \rotatebox{70}{Simon} & \rotatebox{70}{Rule Follow}
   & \rotatebox{70}{Mystery Box} & \rotatebox{70}{Fl\"ode}
   & \rotatebox{70}{Garden} & \rotatebox{70}{Soundboard}
   & \rotatebox{70}{Spaceship} & \rotatebox{70}{Story Mode}
   & \rotatebox{70}{High-Five} & \rotatebox{70}{Sequencer}
-  & \rotatebox{70}{Sortera} & \rotatebox{70}{R\"akna} \\
+  & \rotatebox{70}{Sortera} & \rotatebox{70}{R\"akna}
+  & \rotatebox{70}{Blippa} \\
 \midrule
-Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ \\
-Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet$ \\
-Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ \\
+Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & \\
+Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet$ & \\
+Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & \\
 \midrule
-Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
-Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ \\
-Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & & & & & & $\bullet$ \\
-Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ \\
-Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet$ \\
+Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ \\
+Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ \\
+Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & & & & & & $\bullet$ & \\
+Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & \\
+Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet$ & \\
 \midrule
-Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
-Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ \\
-Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
-Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ \\
+Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & $\bullet$ \\
+Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ \\
 \midrule
-Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet\bullet$ \\
-Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet\bullet$ & $\bullet$ \\
+Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
 \midrule
-Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet$ \\
-Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ \\
-Imaginative play     & & & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & \\
+Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet$ & \\
+Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & \\
+Imaginative play     & & & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ \\
 \midrule
-Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet$ & $\bullet$ \\
-Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & $\bullet$ \\
-Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & $\bullet\bullet\bullet$ & & \\
+Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ \\
+Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & $\bullet$ & $\bullet$ \\
+Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & $\bullet\bullet\bullet$ & & & \\
 \bottomrule
 \end{tabular}
 \end{table}

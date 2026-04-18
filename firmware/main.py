@@ -461,6 +461,19 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_blippa():
+        from bodn.ui.blippa import BlippaScreen
+
+        _reset_secondary()
+        return BlippaScreen(
+            overlay,
+            arcade=arcade,
+            audio=audio,
+            settings=settings,
+            secondary_screen=cat,
+            on_exit=_reset_secondary,
+        )
+
     def _make_flode():
         from bodn.ui.flode import FlodeScreen
 
@@ -583,6 +596,7 @@ def create_ui(
         "soundboard": _make_soundboard,
         "sequencer": _make_sequencer,
         "highfive": _make_highfive,
+        "blippa": _make_blippa,
         "sortera": _make_sortera,
         "rakna": _make_rakna,
         "demo": lambda: (
@@ -604,6 +618,7 @@ def create_ui(
         "garden",
         "soundboard",
         "sequencer",
+        "blippa",
         "sortera",
         "rakna",
         "clock",
@@ -1057,7 +1072,7 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
       * screen opts in via nfc_low_priority → ~2 Hz
       * otherwise                   → ~3 Hz
     """
-    from bodn.nfc import NFCReader, parse_tag_data, is_scan_suspended
+    from bodn.nfc import NFCReader, parse_tag_data, is_scan_suspended, route_tag
 
     reader = NFCReader()
     prev_uid = None
@@ -1114,15 +1129,11 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
         if uid and data and uid != prev_uid:
             parsed = parse_tag_data(data)
             if parsed:
-                mode = parsed["mode"]
+                active_modes = active.nfc_modes if active else frozenset()
+                try_consume, mode = route_tag(parsed, active_modes)
 
-                # Launcher tags: BODN:1:launcher:simon → target is the card_id
-                if mode == "launcher" and parsed["id"]:
-                    mode = parsed["id"]
-
-                # Route to active screen if it subscribes to this tag mode
                 consumed = False
-                if active and mode in active.nfc_modes:
+                if try_consume and active:
                     consumed = active.on_nfc_tag(parsed)
 
                 # Mode switch: launch the game if not consumed

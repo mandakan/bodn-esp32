@@ -503,6 +503,16 @@ productive.
 - **Soundboard**: Browse sound banks, mix them, adjust volume — creating personal
   soundscapes.
 
+- **Blippa**: A tangible free-play surface. Any NFC card the child owns — from
+  any card set, programmed or future — produces an instant blip, full-screen
+  emoji, and bilingual label. There is no goal, no failure state, and no
+  progression to fight. The mode exists specifically to turn a growing pile of
+  cards into a low-friction exploration toy, aligned with Bonawitz et al.'s
+  (2011) finding that children's causal learning is strongest when exploration
+  is self-directed rather than instructed. It also makes room for the POS /
+  transit-gate pretend play that 3–5-year-olds gravitate to, linking open
+  exploration with imaginative play.
+
 ### Creative Expression
 
 **What it is:** Producing something original — a sound, a pattern, a recording,
@@ -570,8 +580,10 @@ NFC modes already address several gaps identified in the development matrix:
 |-----|----------------|--------|
 | **Categorisation (CF/IC)** | Sortera: physical DCCS — sort cards by one dimension, then switch rules | Shipped |
 | **Early Mathematics (PR/ST/PS)** | Räkna: dot-pattern cards with CPA progression (concrete → pictorial → abstract) | Shipped |
-| **Bilingual Exposure** | Dual-language labels on cards; bilingual TTS on scans | Shipped via Sortera + Räkna |
-| **Fine Motor** | Card manipulation, sorting into physical piles, precision placement | Shipped via Sortera + Räkna |
+| **Bilingual Exposure** | Dual-language labels on cards; bilingual TTS on scans | Shipped via Sortera + Räkna + Blippa |
+| **Fine Motor** | Card manipulation, sorting into physical piles, precision placement | Shipped via Sortera + Räkna + Blippa |
+| **Open Exploration (OE)** | Blippa: tap any owned card, get audio + emoji — no goal, no failure state | Shipped |
+| **Cause & Effect (CE)** | Blippa: tightest possible tap → response loop; reinforces intentional action | Shipped |
 | **Problem Solving** | Scavenger hunts, puzzle cards (scan clues to unlock next step) | Wishlist |
 
 See `docs/science/nfc_tangible_learning.md` for the full research summary with

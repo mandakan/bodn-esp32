@@ -17,6 +17,7 @@
     {"name": "soundboard", "codepoint": "1F50A", "label": "Speaker High Volume"},
     {"name": "sortera",   "codepoint": "1F9E9", "label": "Puzzle Piece"},
     {"name": "rakna",     "codepoint": "1F9EE", "label": "Abacus"},
+    {"name": "blippa",    "codepoint": "1F50D", "label": "Magnifying Glass"},
 
     {"name": "cat",        "codepoint": "1F431", "label": "Cat Face"},
     {"name": "dog",        "codepoint": "1F436", "label": "Dog Face"},

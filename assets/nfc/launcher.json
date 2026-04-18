@@ -14,6 +14,7 @@
     {"id": "garden",     "label_sv": "trädgården",    "label_en": "garden",     "icon": "1F331"},
     {"id": "soundboard", "label_sv": "ljudbräda",     "label_en": "soundboard", "icon": "1F50A"},
     {"id": "sequencer",  "label_sv": "sekvens",       "label_en": "sequencer",  "icon": "1F941"},
+    {"id": "blippa",     "label_sv": "blippa",        "label_en": "blip",       "icon": "1F50D"},
     {"id": "sortera",    "label_sv": "sortera",       "label_en": "sort it",    "icon": "1F9E9"},
     {"id": "rakna",      "label_sv": "räkna",         "label_en": "count",      "icon": "1F9EE"},
     {"id": "clock",      "label_sv": "klocka",        "label_en": "clock",      "icon": "1F551"}

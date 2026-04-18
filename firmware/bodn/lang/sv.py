@@ -401,6 +401,11 @@ STRINGS = {
     "rakna_build_second": "Blippa ett sifferkort till!",
     "rakna_need_number": "Det behövs ett sifferkort!",
     "rakna_need_op": "Det behövs plus eller minus!",
+    # Blippa (free-play NFC mode — tap any card, hear a sound)
+    "mode_blippa": "blippa",
+    "blippa_welcome": "Blippa ett kort!",
+    "blippa_hint_scan": "Håll ett kort mot lådan",
+    "blippa_unknown": "Okänt kort",
     # Boot screen
     "boot_cfg": "Vaknar...",
     "boot_sd": "Kollar SD-kort...",
