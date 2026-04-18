@@ -10,6 +10,11 @@
 
 from micropython import const
 
+try:
+    import _life  # native C fast path — see cmodules/life/
+except ImportError:
+    _life = None
+
 # Default Conway rules
 CONWAY_BIRTH = frozenset((3,))
 CONWAY_SURVIVE = frozenset((2, 3))
@@ -49,6 +54,18 @@ CELL_COLORS = [
     (255, 180, 100),  # 20: peach (orange + light)
 ]
 N_BUTTON_COLORS = 8  # first 8 are directly plantable via buttons
+
+# Packed R,G,B palette for the native step kernel. Kept in sync with CELL_COLORS
+# above; regenerate if you edit the palette.
+_PALETTE_BYTES = bytes(b for rgb in CELL_COLORS for b in rgb)
+
+
+def _counts_to_mask(counts):
+    """Convert an iterable of neighbour counts into a bitmask (bit N = count N)."""
+    m = 0
+    for n in counts:
+        m |= 1 << n
+    return m
 
 # Preset garden plots — 8 highlighted positions for button planting (tier 1)
 GARDEN_PLOTS = [
@@ -101,6 +118,15 @@ def step(grid, w, h, birth=None, survive=None, wrap=False):
         birth = CONWAY_BIRTH
     if survive is None:
         survive = CONWAY_SURVIVE
+
+    if _life is not None:
+        return _life.step(
+            grid, w, h,
+            _counts_to_mask(birth),
+            _counts_to_mask(survive),
+            1 if wrap else 0,
+            _PALETTE_BYTES,
+        )
 
     new = bytearray(w * h)
     births = []
