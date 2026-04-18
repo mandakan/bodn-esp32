@@ -67,6 +67,7 @@ def _counts_to_mask(counts):
         m |= 1 << n
     return m
 
+
 # Preset garden plots — 8 highlighted positions for button planting (tier 1)
 GARDEN_PLOTS = [
     (3, 2),
@@ -121,7 +122,9 @@ def step(grid, w, h, birth=None, survive=None, wrap=False):
 
     if _life is not None:
         return _life.step(
-            grid, w, h,
+            grid,
+            w,
+            h,
             _counts_to_mask(birth),
             _counts_to_mask(survive),
             1 if wrap else 0,
