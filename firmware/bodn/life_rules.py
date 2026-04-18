@@ -10,6 +10,11 @@
 
 from micropython import const
 
+try:
+    import _life  # native C fast path — see cmodules/life/
+except ImportError:
+    _life = None
+
 # Default Conway rules
 CONWAY_BIRTH = frozenset((3,))
 CONWAY_SURVIVE = frozenset((2, 3))
@@ -23,9 +28,18 @@ GRID_W = const(16)
 GRID_H = const(12)
 
 # Color palette — first 8 are button colors (1-indexed: cell value 1–8),
-# followed by intermediate mix colors for smoother blending.
+# followed by a structured HSV grid (12 pastels + 12 darks) used for smoother
+# blending. The native step kernel picks the nearest palette entry to the
+# averaged RGB of live neighbours; a denser grid gives more expressive blends
+# with negligible cost (the search only runs per birth, in C).
+#
+# The HSV grid was generated with 12 evenly-spaced hues × 2 value rows:
+#   pastels: S=100/255, V=255   (soft, high brightness)
+#   darks:   S=255,     V=150   (saturated, lower brightness)
+# Keep entries fixed — several tests and garden.py's cursor/LED colour lookup
+# rely on the 1-indexed order.
 CELL_COLORS = [
-    # Button colors (indices 1–8)
+    # Button colors (indices 1–8) — do not reorder, bound to buttons 0–7
     (255, 0, 0),  # 1: red
     (0, 255, 0),  # 2: green
     (0, 0, 255),  # 3: blue
@@ -34,21 +48,47 @@ CELL_COLORS = [
     (255, 0, 255),  # 6: magenta
     (255, 128, 0),  # 7: orange
     (128, 0, 255),  # 8: purple
-    # Mix colors (indices 9+, only produced by blending)
-    (255, 128, 128),  # 9: pink (red + white-ish)
-    (128, 255, 0),  # 10: lime (green + yellow)
-    (0, 128, 255),  # 11: sky blue (blue + cyan)
-    (255, 200, 0),  # 12: gold (yellow + orange)
-    (0, 255, 128),  # 13: mint (green + cyan)
-    (255, 0, 128),  # 14: rose (red + magenta)
-    (128, 0, 128),  # 15: plum (blue + red dark)
-    (128, 128, 0),  # 16: olive (red + green dark)
-    (0, 128, 128),  # 17: teal (green + blue dark)
-    (200, 100, 50),  # 18: rust (warm brown-ish)
-    (128, 128, 255),  # 19: lavender (blue + white-ish)
-    (255, 180, 100),  # 20: peach (orange + light)
+    # Pastels (indices 9–20) — 12 hues at S=100/255, V=255
+    (255, 155, 155),  #  9: pastel red
+    (255, 205, 155),  # 10: pastel orange
+    (255, 255, 155),  # 11: pastel yellow
+    (205, 255, 155),  # 12: pastel lime
+    (155, 255, 155),  # 13: pastel green
+    (155, 255, 205),  # 14: pastel mint
+    (155, 255, 255),  # 15: pastel cyan
+    (155, 205, 255),  # 16: pastel sky
+    (155, 155, 255),  # 17: pastel blue
+    (205, 155, 255),  # 18: pastel violet
+    (255, 155, 255),  # 19: pastel magenta
+    (255, 155, 205),  # 20: pastel pink
+    # Darks (indices 21–32) — 12 hues at S=255, V=150
+    (150, 0, 0),  # 21: dark red
+    (150, 75, 0),  # 22: brown
+    (150, 150, 0),  # 23: olive
+    (75, 150, 0),  # 24: dark lime
+    (0, 150, 0),  # 25: dark green
+    (0, 150, 75),  # 26: forest
+    (0, 150, 150),  # 27: teal
+    (0, 75, 150),  # 28: navy cyan
+    (0, 0, 150),  # 29: dark blue
+    (75, 0, 150),  # 30: indigo
+    (150, 0, 150),  # 31: dark magenta
+    (150, 0, 75),  # 32: wine
 ]
 N_BUTTON_COLORS = 8  # first 8 are directly plantable via buttons
+
+# Packed R,G,B palette for the native step kernel. Kept in sync with CELL_COLORS
+# above; regenerate if you edit the palette.
+_PALETTE_BYTES = bytes(b for rgb in CELL_COLORS for b in rgb)
+
+
+def _counts_to_mask(counts):
+    """Convert an iterable of neighbour counts into a bitmask (bit N = count N)."""
+    m = 0
+    for n in counts:
+        m |= 1 << n
+    return m
+
 
 # Preset garden plots — 8 highlighted positions for button planting (tier 1)
 GARDEN_PLOTS = [
@@ -101,6 +141,17 @@ def step(grid, w, h, birth=None, survive=None, wrap=False):
         birth = CONWAY_BIRTH
     if survive is None:
         survive = CONWAY_SURVIVE
+
+    if _life is not None:
+        return _life.step(
+            grid,
+            w,
+            h,
+            _counts_to_mask(birth),
+            _counts_to_mask(survive),
+            1 if wrap else 0,
+            _PALETTE_BYTES,
+        )
 
     new = bytearray(w * h)
     births = []
