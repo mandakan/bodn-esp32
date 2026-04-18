@@ -10,7 +10,7 @@ from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
 from bodn.ui.widgets import draw_progress_bar
 from bodn.ui.pause import PauseMenu
-from bodn.patterns import PATTERNS, PATTERN_NAMES
+from bodn.patterns import PATTERN_NAMES
 from bodn.i18n import t
 from bodn.neo import neo
 
@@ -18,7 +18,7 @@ NAV = config.ENC_NAV
 ENC_A = config.ENC_A
 ENC_B = config.ENC_B
 
-# Map Python PATTERNS index → C _neopixel pattern ID
+# Demo pattern index → C _neopixel pattern ID (parallels PATTERN_NAMES)
 _PAT_MAP = [
     neo.PAT_RAINBOW,  # 0: Rainbow
     neo.PAT_PULSE,  # 1: Pulse
@@ -162,7 +162,7 @@ class DemoScreen(Screen):
         n_btn = len(inp.btn_held)
         for i in range(n_btn):
             if g.tap[i]:
-                self._active_pattern = i % len(PATTERNS)
+                self._active_pattern = i % len(PATTERN_NAMES)
                 ds |= _D_HEADER
                 self._neo_dirty = True
                 break
@@ -183,7 +183,7 @@ class DemoScreen(Screen):
 
         # Encoder A button → cycle pattern
         if inp.enc_btn_pressed[ENC_A]:
-            self._active_pattern = (self._active_pattern + 1) % len(PATTERNS)
+            self._active_pattern = (self._active_pattern + 1) % len(PATTERN_NAMES)
             ds |= _D_HEADER
             self._neo_dirty = True
 
