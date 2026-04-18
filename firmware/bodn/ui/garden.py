@@ -129,7 +129,9 @@ class GardenScreen(Screen):
         self._plant_count = 0  # user-planted cells (not from evolution)
         self._last_plant_ms = 0  # for idle detection
 
-        # Rule modifiers (from toggle switches)
+        # Rule modifiers (from toggle switches) — seeded here so render() works
+        # even if update() hasn't run yet (e.g. pause menu open on first frame).
+        self._speed_ms = SPEED_DEFAULT_MS
         self._friendly = False
         self._wrap = False
 

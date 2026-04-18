@@ -45,9 +45,10 @@ static mp_obj_t life_step_fn(size_t n_args, const mp_obj_t *args) {
     int pal_len = pal_buf.len / 3;
 
     // Output grid — a fresh bytearray the Python caller can hold onto.
-    mp_obj_t new_grid_obj = mp_obj_new_bytearray(total, NULL);
-    mp_buffer_info_t new_buf;
-    mp_get_buffer_raise(new_grid_obj, &new_buf, MP_BUFFER_WRITE);
+    // Use the by-ref constructor with a GC-tracked buffer; passing NULL to the
+    // copying mp_obj_new_bytearray memcpys from address 0 and crashes.
+    uint8_t *new_buf = m_new(uint8_t, total);
+    mp_obj_t new_grid_obj = mp_obj_new_bytearray_by_ref(total, new_buf);
 
     // Scratch buffers for births/deaths — at most w*h events each.
     uint8_t *births_buf = m_new(uint8_t, 2 * total);
@@ -57,7 +58,7 @@ static mp_obj_t life_step_fn(size_t n_args, const mp_obj_t *args) {
 
     life_step(
         (const uint8_t *)grid_buf.buf,
-        (uint8_t *)new_buf.buf,
+        new_buf,
         w, h,
         (uint16_t)birth_mask,
         (uint16_t)survive_mask,
