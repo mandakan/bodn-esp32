@@ -398,6 +398,7 @@ sys.modules["_neopixel"] = _neopixel_stub
 # Stub '_audiomix' C module for host tests
 _audiomix_stub = types.ModuleType("_audiomix")
 _audiomix_stub.NUM_VOICES = 16
+_audiomix_stub.SCOPE_SAMPLES = 512
 _audiomix_stub.WAVE_SQUARE = 0
 _audiomix_stub.WAVE_SINE = 1
 _audiomix_stub.WAVE_SAWTOOTH = 2
@@ -430,6 +431,47 @@ class _FakeAudiomix:
 
     def voice_tone(self, idx, freq, duration_ms, wave_id):
         self._voices[idx] = {"active": True, "type": "tone", "freq": freq}
+
+    def voice_tone_sustained(self, idx, freq, wave_id):
+        self._voices[idx] = {
+            "active": True, "type": "tone_sustained", "freq": freq,
+            "wave": wave_id,
+        }
+
+    def voice_set_freq(self, idx, freq):
+        if idx in self._voices:
+            self._voices[idx]["freq"] = freq
+
+    def voice_set_gain(self, idx, gain):
+        if idx in self._voices:
+            self._voices[idx]["gain"] = gain
+
+    def voice_set_pitch_lfo(self, idx, rate_cHz, depth_cents):
+        if idx in self._voices:
+            self._voices[idx]["pitch_lfo"] = (rate_cHz, depth_cents)
+
+    def voice_set_amp_lfo(self, idx, rate_cHz, depth_q15):
+        if idx in self._voices:
+            self._voices[idx]["amp_lfo"] = (rate_cHz, depth_q15)
+
+    def voice_set_bend(self, idx, cents_per_s, limit_cents):
+        if idx in self._voices:
+            self._voices[idx]["bend"] = (cents_per_s, limit_cents)
+
+    def voice_set_stutter(self, idx, rate_cHz, duty_q15):
+        if idx in self._voices:
+            self._voices[idx]["stutter"] = (rate_cHz, duty_q15)
+
+    def voice_clear_mods(self, idx):
+        if idx in self._voices:
+            for k in ("pitch_lfo", "amp_lfo", "bend", "stutter"):
+                self._voices[idx].pop(k, None)
+
+    def scope_peek(self, dst):
+        # Fill with zeros — tests just need the call to succeed.
+        for i in range(len(dst)):
+            dst[i] = 0
+        return len(dst) // 2
 
     def voice_play_buffer(self, idx, data, length, loop):
         self._voices[idx] = {"active": True, "type": "buffer"}
@@ -499,6 +541,15 @@ for _attr in (
     "voice_feed",
     "voice_eof",
     "voice_sequence",
+    "voice_tone_sustained",
+    "voice_set_freq",
+    "voice_set_gain",
+    "voice_set_pitch_lfo",
+    "voice_set_amp_lfo",
+    "voice_set_bend",
+    "voice_set_stutter",
+    "voice_clear_mods",
+    "scope_peek",
     "ringbuf_space",
     "clock_start",
     "clock_stop",

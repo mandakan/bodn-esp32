@@ -485,6 +485,64 @@ class AudioEngine:
         """Quick UI feedback beep."""
         self.play_sound("boop")
 
+    # -----------------------------------------------------------------------
+    # Sustained tones + modulation layer (for expressive modes like Tone Lab)
+    # -----------------------------------------------------------------------
+
+    def tone_sustained(self, freq_hz, wave="sine", channel="sfx", voice=None):
+        """Start a tone that plays until stopped.  Returns the voice index.
+
+        Use set_freq() for phase-preserving pitch changes, and the
+        set_vibrato/set_tremolo/set_bend/set_stutter helpers to layer effects.
+        Harmony = call tone_sustained() a second time on a different voice.
+        """
+        idx = self._resolve_voice(voice, channel)
+        self._stop_streaming(idx)
+        wave_id = _WAVE_MAP.get(wave, 1)
+        _audiomix.voice_tone_sustained(idx, freq_hz, wave_id)
+        return idx
+
+    def set_freq(self, voice, freq_hz):
+        """Phase-preserving pitch change for a sustained tone."""
+        _audiomix.voice_set_freq(voice, freq_hz)
+
+    def set_vibrato(self, voice, rate_hz=5.0, depth_cents=30):
+        """Pitch LFO.  rate_hz=0 disables.  depth_cents is ±."""
+        _audiomix.voice_set_pitch_lfo(
+            voice, int(rate_hz * 100), int(depth_cents))
+
+    def set_tremolo(self, voice, rate_hz=5.0, depth_pct=40):
+        """Amplitude LFO.  rate_hz=0 disables.  depth_pct is 0..100."""
+        depth = max(0, min(100, int(depth_pct)))
+        _audiomix.voice_set_amp_lfo(
+            voice, int(rate_hz * 100), depth * 32767 // 100)
+
+    def set_bend(self, voice, cents_per_s=0, limit_cents=0):
+        """Pitch ramp: accumulates at cents_per_s, clamped to ±limit_cents.
+
+        Positive cents_per_s slides up, negative slides down.
+        cents_per_s=0 clears the current bend offset.
+        """
+        _audiomix.voice_set_bend(voice, int(cents_per_s), int(limit_cents))
+
+    def set_stutter(self, voice, rate_hz=8.0, duty_pct=50):
+        """Amp gate: samples are zeroed during the 'off' fraction of cycle."""
+        duty = max(0, min(100, int(duty_pct)))
+        _audiomix.voice_set_stutter(
+            voice, int(rate_hz * 100), duty * 32767 // 100)
+
+    def clear_mods(self, voice):
+        """Disable all modulation effects on a voice."""
+        _audiomix.voice_clear_mods(voice)
+
+    def scope_peek(self, dst_buf):
+        """Copy the most recent post-mix mono samples into dst_buf.
+
+        dst_buf is a bytearray of int16 samples (length must be a multiple
+        of 2).  Up to _audiomix.SCOPE_SAMPLES samples are available.
+        """
+        return _audiomix.scope_peek(dst_buf)
+
     def stop(self, channel=None, voice=None):
         """Stop playback. voice=N stops one voice, channel stops a pool, None stops all."""
         if voice is not None:

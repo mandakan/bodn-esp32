@@ -126,9 +126,24 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     v->tone_samples_left = (audiomix_state->sample_rate * dur_ms) / 1000;
     v->tone_phase = 0;
     v->tone_wave = wave;
+    v->tone_sustain = 0;
+    v->env_total_samples = 0;
     v->loop = 0;
     v->fade_in = 1;
     v->stop_req = 0;
+    // Clear any modulation state so a fresh one-shot starts clean.
+    v->mod_lfo_pitch_rate_cHz = 0;
+    v->mod_lfo_pitch_depth_cents = 0;
+    v->mod_lfo_pitch_phase = 0;
+    v->mod_lfo_amp_rate_cHz = 0;
+    v->mod_lfo_amp_depth_q15 = 0;
+    v->mod_lfo_amp_phase = 0;
+    v->mod_bend_cents_per_s = 0;
+    v->mod_bend_current_cents = 0;
+    v->mod_bend_limit_cents = 0;
+    v->mod_stutter_rate_cHz = 0;
+    v->mod_stutter_duty_q15 = 0;
+    v->mod_stutter_phase = 0;
     audiomix_state->seq_counter++;
     v->start_seq = audiomix_state->seq_counter;
     v->source_type = SRC_TONE;
@@ -683,6 +698,187 @@ static mp_obj_t audiomix_reset_stats(void) {
 static MP_DEFINE_CONST_FUN_OBJ_0(audiomix_reset_stats_obj, audiomix_reset_stats);
 
 // ---------------------------------------------------------------------------
+// Modulation layer (reusable across modes)
+// ---------------------------------------------------------------------------
+
+// Return (voice*, idx) after range + writing flag.  NULL + raise on bad idx.
+static audiomix_voice_t *resolve_voice(int idx) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    if (idx < 0 || idx >= AUDIOMIX_NUM_VOICES) {
+        mp_raise_ValueError(MP_ERROR_TEXT("bad voice index"));
+    }
+    return &audiomix_state->voices[idx];
+}
+
+// _audiomix.voice_tone_sustained(idx, freq, wave) — start a tone that plays
+// until explicitly stopped.  Use voice_set_freq() for phase-preserving pitch
+// changes, and the modulation API for live effects.
+static mp_obj_t audiomix_voice_tone_sustained(size_t n_args, const mp_obj_t *args) {
+    (void)n_args;
+    audiomix_voice_t *v = resolve_voice(mp_obj_get_int(args[0]));
+    uint32_t freq = mp_obj_get_int(args[1]);
+    uint32_t wave = mp_obj_get_int(args[2]);
+    v->writing = 1;
+    v->source_type = SRC_NONE;
+    v->tone_freq = freq;
+    v->tone_samples_left = 0;          // unused when tone_sustain = 1
+    v->tone_phase = 0;
+    v->tone_wave = wave;
+    v->tone_sustain = 1;
+    v->env_total_samples = 0;
+    v->loop = 0;
+    v->fade_in = 1;                    // avoid click on first chunk
+    v->fade_out = 0;
+    v->stop_req = 0;
+    audiomix_state->seq_counter++;
+    v->start_seq = audiomix_state->seq_counter;
+    v->source_type = SRC_TONE;
+    v->writing = 0;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audiomix_voice_tone_sustained_obj, 3, 3,
+                                            audiomix_voice_tone_sustained);
+
+// _audiomix.voice_set_freq(idx, freq) — phase-preserving pitch change.
+// Only meaningful for a currently playing SRC_TONE voice.
+static mp_obj_t audiomix_voice_set_freq(mp_obj_t idx_obj, mp_obj_t freq_obj) {
+    audiomix_voice_t *v = resolve_voice(mp_obj_get_int(idx_obj));
+    v->tone_freq = mp_obj_get_int(freq_obj);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(audiomix_voice_set_freq_obj, audiomix_voice_set_freq);
+
+// _audiomix.voice_set_pitch_lfo(idx, rate_cHz, depth_cents) — vibrato.
+// rate_cHz = centi-Hz (500 = 5 Hz).  0 rate disables.
+static mp_obj_t audiomix_voice_set_pitch_lfo(size_t n_args, const mp_obj_t *args) {
+    (void)n_args;
+    audiomix_voice_t *v = resolve_voice(mp_obj_get_int(args[0]));
+    int rate = mp_obj_get_int(args[1]);
+    int depth = mp_obj_get_int(args[2]);
+    if (rate < 0) rate = 0;
+    if (rate > 65535) rate = 65535;
+    if (depth < -2400) depth = -2400;
+    if (depth > 2400) depth = 2400;
+    v->mod_lfo_pitch_rate_cHz = (uint16_t)rate;
+    v->mod_lfo_pitch_depth_cents = (int16_t)depth;
+    if (rate == 0) v->mod_lfo_pitch_phase = 0;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audiomix_voice_set_pitch_lfo_obj, 3, 3,
+                                            audiomix_voice_set_pitch_lfo);
+
+// _audiomix.voice_set_amp_lfo(idx, rate_cHz, depth_q15) — tremolo.
+// depth_q15: 0..32767 = fraction of amplitude to dip (32767 ≈ 100%).
+static mp_obj_t audiomix_voice_set_amp_lfo(size_t n_args, const mp_obj_t *args) {
+    (void)n_args;
+    audiomix_voice_t *v = resolve_voice(mp_obj_get_int(args[0]));
+    int rate = mp_obj_get_int(args[1]);
+    int depth = mp_obj_get_int(args[2]);
+    if (rate < 0) rate = 0;
+    if (rate > 65535) rate = 65535;
+    if (depth < 0) depth = 0;
+    if (depth > 32767) depth = 32767;
+    v->mod_lfo_amp_rate_cHz = (uint16_t)rate;
+    v->mod_lfo_amp_depth_q15 = (uint16_t)depth;
+    if (rate == 0) v->mod_lfo_amp_phase = 0;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audiomix_voice_set_amp_lfo_obj, 3, 3,
+                                            audiomix_voice_set_amp_lfo);
+
+// _audiomix.voice_set_bend(idx, cents_per_s, limit_cents) — pitch ramp.
+// Signed rate (positive = up, negative = down).  Stops when |current| reaches
+// limit.  0 rate disables and clears the current offset.
+static mp_obj_t audiomix_voice_set_bend(size_t n_args, const mp_obj_t *args) {
+    (void)n_args;
+    audiomix_voice_t *v = resolve_voice(mp_obj_get_int(args[0]));
+    int rate = mp_obj_get_int(args[1]);
+    int limit = mp_obj_get_int(args[2]);
+    if (limit < 0) limit = -limit;
+    v->mod_bend_cents_per_s = rate;
+    v->mod_bend_limit_cents = limit;
+    if (rate == 0) v->mod_bend_current_cents = 0;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audiomix_voice_set_bend_obj, 3, 3,
+                                            audiomix_voice_set_bend);
+
+// _audiomix.voice_set_stutter(idx, rate_cHz, duty_q15) — amp gate.
+// duty_q15 is the "off" fraction of the cycle (0..32767).
+static mp_obj_t audiomix_voice_set_stutter(size_t n_args, const mp_obj_t *args) {
+    (void)n_args;
+    audiomix_voice_t *v = resolve_voice(mp_obj_get_int(args[0]));
+    int rate = mp_obj_get_int(args[1]);
+    int duty = mp_obj_get_int(args[2]);
+    if (rate < 0) rate = 0;
+    if (rate > 65535) rate = 65535;
+    if (duty < 0) duty = 0;
+    if (duty > 32767) duty = 32767;
+    v->mod_stutter_rate_cHz = (uint16_t)rate;
+    v->mod_stutter_duty_q15 = (uint16_t)duty;
+    if (rate == 0) v->mod_stutter_phase = 0;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audiomix_voice_set_stutter_obj, 3, 3,
+                                            audiomix_voice_set_stutter);
+
+// _audiomix.voice_clear_mods(idx) — disable all modulation on a voice.
+static mp_obj_t audiomix_voice_clear_mods(mp_obj_t idx_obj) {
+    audiomix_voice_t *v = resolve_voice(mp_obj_get_int(idx_obj));
+    v->mod_lfo_pitch_rate_cHz = 0;
+    v->mod_lfo_pitch_depth_cents = 0;
+    v->mod_lfo_pitch_phase = 0;
+    v->mod_lfo_amp_rate_cHz = 0;
+    v->mod_lfo_amp_depth_q15 = 0;
+    v->mod_lfo_amp_phase = 0;
+    v->mod_bend_cents_per_s = 0;
+    v->mod_bend_current_cents = 0;
+    v->mod_bend_limit_cents = 0;
+    v->mod_stutter_rate_cHz = 0;
+    v->mod_stutter_duty_q15 = 0;
+    v->mod_stutter_phase = 0;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_voice_clear_mods_obj, audiomix_voice_clear_mods);
+
+// ---------------------------------------------------------------------------
+// Scope tap
+// ---------------------------------------------------------------------------
+
+// _audiomix.scope_peek(dst) — fill a bytearray with the most recent samples
+// from the post-mix scope buffer (int16 little-endian).  Returns # samples.
+// dst length must be a multiple of 2 (each sample = 2 bytes).  Up to
+// AUDIOMIX_SCOPE_SAMPLES samples are available.
+static mp_obj_t audiomix_scope_peek(mp_obj_t dst_obj) {
+    if (audiomix_state == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("not initialised"));
+    }
+    mp_buffer_info_t bufinfo;
+    mp_get_buffer_raise(dst_obj, &bufinfo, MP_BUFFER_WRITE);
+    uint32_t want = bufinfo.len / 2;
+    if (want > AUDIOMIX_SCOPE_SAMPLES) want = AUDIOMIX_SCOPE_SAMPLES;
+
+    // Read the last `want` samples ending at scope_wr.  Snapshot the write
+    // index (it's volatile and the mixer may advance it during our memcpy,
+    // but that's bounded to one chunk so the tail samples may be slightly
+    // stale — perceptually fine for 30 FPS scope updates).
+    uint32_t wr = audiomix_state->scope_wr;
+    uint32_t start = (wr + AUDIOMIX_SCOPE_SAMPLES - want) % AUDIOMIX_SCOPE_SAMPLES;
+    uint32_t first = AUDIOMIX_SCOPE_SAMPLES - start;
+    if (first > want) first = want;
+    int16_t *dst = (int16_t *)bufinfo.buf;
+    memcpy(dst, &audiomix_state->scope_buf[start], first * sizeof(int16_t));
+    if (first < want) {
+        memcpy(dst + first, &audiomix_state->scope_buf[0],
+               (want - first) * sizeof(int16_t));
+    }
+    return mp_obj_new_int(want);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_scope_peek_obj, audiomix_scope_peek);
+
+// ---------------------------------------------------------------------------
 // Module definition
 // ---------------------------------------------------------------------------
 
@@ -701,6 +897,17 @@ static const mp_rom_map_elem_t audiomix_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_voice_stop),          MP_ROM_PTR(&audiomix_voice_stop_obj) },
     { MP_ROM_QSTR(MP_QSTR_voice_active),        MP_ROM_PTR(&audiomix_voice_active_obj) },
     { MP_ROM_QSTR(MP_QSTR_voice_set_gain),      MP_ROM_PTR(&audiomix_voice_set_gain_obj) },
+    // Sustained tones + modulation layer (reusable across modes)
+    { MP_ROM_QSTR(MP_QSTR_voice_tone_sustained), MP_ROM_PTR(&audiomix_voice_tone_sustained_obj) },
+    { MP_ROM_QSTR(MP_QSTR_voice_set_freq),       MP_ROM_PTR(&audiomix_voice_set_freq_obj) },
+    { MP_ROM_QSTR(MP_QSTR_voice_set_pitch_lfo),  MP_ROM_PTR(&audiomix_voice_set_pitch_lfo_obj) },
+    { MP_ROM_QSTR(MP_QSTR_voice_set_amp_lfo),    MP_ROM_PTR(&audiomix_voice_set_amp_lfo_obj) },
+    { MP_ROM_QSTR(MP_QSTR_voice_set_bend),       MP_ROM_PTR(&audiomix_voice_set_bend_obj) },
+    { MP_ROM_QSTR(MP_QSTR_voice_set_stutter),    MP_ROM_PTR(&audiomix_voice_set_stutter_obj) },
+    { MP_ROM_QSTR(MP_QSTR_voice_clear_mods),     MP_ROM_PTR(&audiomix_voice_clear_mods_obj) },
+    // Scope tap
+    { MP_ROM_QSTR(MP_QSTR_scope_peek),           MP_ROM_PTR(&audiomix_scope_peek_obj) },
+    { MP_ROM_QSTR(MP_QSTR_SCOPE_SAMPLES),        MP_ROM_INT(AUDIOMIX_SCOPE_SAMPLES) },
     { MP_ROM_QSTR(MP_QSTR_ringbuf_space),       MP_ROM_PTR(&audiomix_ringbuf_space_obj) },
     { MP_ROM_QSTR(MP_QSTR_stats),              MP_ROM_PTR(&audiomix_stats_obj) },
     { MP_ROM_QSTR(MP_QSTR_reset_stats),        MP_ROM_PTR(&audiomix_reset_stats_obj) },

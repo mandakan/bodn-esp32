@@ -42,6 +42,10 @@ static const int16_t sine_lut[256] = {
     -6393,  -5602,  -4808,  -4011,  -3212,  -2410,  -1608,   -804,
 };
 
+int16_t tonegen_lfo_sine(uint32_t phase_q16) {
+    return sine_lut[(phase_q16 >> 8) & 0xFF];
+}
+
 uint32_t tonegen_square(int16_t *out, uint32_t n_samples,
                         uint32_t period, uint32_t phase) {
     if (period < 1) period = 1;
@@ -96,6 +100,46 @@ void tonegen_noise(int16_t *out, uint32_t n_samples,
         // Decay
         amp = (amp * decay_mult) >> 16;
     }
+}
+
+// 2^(n/12) in Q16.16 for n = 0..24 semitones (0..2 octaves).
+// Covers ±2 octaves of bend; beyond that we saturate.
+static const uint32_t semitone_mult_q16[25] = {
+     65536,  69433,  73562,  77936,  82570,  87480,  92682,  98193,
+    104032, 110218, 116772, 123715, 131072, 138866, 147125, 155872,
+    165140, 174960, 185364, 196386, 208064, 220436, 233544, 247431,
+    262144,
+};
+
+uint32_t tonegen_cents_mult_q16(int32_t cents) {
+    // Clamp to ±2 octaves (24 semitones = 2400 cents).
+    if (cents > 2400) cents = 2400;
+    if (cents < -2400) cents = -2400;
+
+    // Split into whole semitones + remainder.
+    int32_t semis = cents / 100;     // -24..24
+    int32_t rem   = cents - semis * 100;  // -99..99
+    // Normalise so rem is always 0..99 (borrow from semis if negative).
+    if (rem < 0) { rem += 100; semis -= 1; }
+
+    // Index into the positive-semitone LUT.  For negative semitones we
+    // reciprocate: 2^(-n/12) = 1 / 2^(n/12), done as a Q16 divide.
+    uint32_t base, next;
+    if (semis >= 0) {
+        base = semitone_mult_q16[semis];
+        next = semitone_mult_q16[semis + 1];
+    } else {
+        // semis in -24..-1; mirror via division.
+        uint32_t up  = semitone_mult_q16[-semis];
+        uint32_t nup = semitone_mult_q16[-semis - 1];
+        // base = 1 / up (Q16.16): (1 << 32) / up
+        base = (uint32_t)(((uint64_t)1 << 32) / up);
+        next = (uint32_t)(((uint64_t)1 << 32) / nup);
+    }
+
+    // Linear interp between base and next across the 100-cent gap.
+    int32_t diff = (int32_t)next - (int32_t)base;
+    return (uint32_t)((int32_t)base + diff * rem / 100);
 }
 
 void tonegen_envelope(int16_t *buf, uint32_t n_samples,

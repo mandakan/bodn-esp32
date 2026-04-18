@@ -23,6 +23,16 @@ uint32_t tonegen_sawtooth(int16_t *out, uint32_t n_samples,
 void tonegen_noise(int16_t *out, uint32_t n_samples,
                    uint32_t decay_rate, uint32_t sample_rate);
 
+// Sample the shared sine LUT at a Q16 phase (0..65535 = one full cycle).
+// Used by the mixer's modulation layer for LFOs without duplicating the LUT.
+int16_t tonegen_lfo_sine(uint32_t phase_q16);
+
+// Convert a pitch offset in cents to a frequency multiplier in Q16.16.
+// Result × base_freq gives the modulated frequency.  Accurate to ~0.1%
+// for |cents| ≤ 2400 via a 49-entry LUT with linear interpolation
+// between 100-cent (1 semitone) steps.
+uint32_t tonegen_cents_mult_q16(int32_t cents);
+
 // Apply linear fade-in and/or fade-out to a sample buffer.
 // Used for WAV buffer click suppression (SRC_RINGBUF, SRC_BUFFER).
 void tonegen_fade(int16_t *buf, uint32_t n_samples,
