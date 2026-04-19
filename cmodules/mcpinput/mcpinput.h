@@ -117,6 +117,7 @@ typedef struct {
 
     // Task control
     volatile uint8_t        running;
+    volatile uint8_t        paused;         // 1 = scan loop skips all I2C work
 
     // PCA9685 LED control (optional, initialized by led_init)
     i2c_master_dev_handle_t pca_dev;        // NULL if not initialized

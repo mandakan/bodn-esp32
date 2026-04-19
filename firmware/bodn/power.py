@@ -110,6 +110,18 @@ class PowerManager:
         except Exception:
             pass
 
+        # Pause the _mcpinput C scan task: it polls MCP1 over I2C at 500 Hz
+        # from core 0.  Letting it touch the bus across machine.lightsleep()
+        # entry/exit wedges peripheral state and trips RTC_WDT (rst:0x10).
+        # The mutex stays valid so Python I2C calls (mcp.refresh in the
+        # poll-sleep loop, MCP2 toggles) keep working.
+        try:
+            import _mcpinput
+
+            _mcpinput.scan_pause()
+        except (ImportError, AttributeError):
+            pass
+
     def enter_light_sleep(self):
         """Configure wake sources and enter machine.lightsleep()."""
         import machine
@@ -164,6 +176,20 @@ class PowerManager:
     def post_wake(self):
         """Restore peripherals after waking from light sleep."""
         from bodn import config
+
+        # Suppress the wake-button press: read the live MCP state and lock
+        # any held pins into "already pressed" so the first scan cycle after
+        # resume sees no edge.  Done while the task is still paused to avoid
+        # racing the first poll, then resume.  Without this, holding a
+        # button to wake the device replays a fresh PRESS into the menu and
+        # launches whatever mode the carousel is sitting on.
+        try:
+            import _mcpinput
+
+            _mcpinput.suppress_held()
+            _mcpinput.scan_resume()
+        except (ImportError, AttributeError):
+            pass
 
         # Clear MCP23017 interrupt state and disable interrupts
         if self._mcp:
