@@ -104,6 +104,23 @@ FEATURES: list[Feature] = [
         notes="Not used by Bodn; pure saving.",
     ),
     Feature(
+        name="Ethernet (SPI-attached PHY drivers)",
+        imports=(),  # network.LAN is the user API; no direct import name
+        off_when=[("CONFIG_ETH_USE_SPI_ETHERNET", "n")],
+        on_when=[("CONFIG_ETH_USE_SPI_ETHERNET", "y")],
+        default_on=True,  # sdkconfig.base enables the SPI-Ethernet drivers
+        how_to_disable=(
+            "add CONFIG_ETH_ENABLED=n + CONFIG_ETH_USE_SPI_ETHERNET=n + "
+            "CONFIG_ETH_SPI_ETHERNET_W5500=n + "
+            "CONFIG_ETH_SPI_ETHERNET_KSZ8851SNL=n + "
+            "CONFIG_ETH_SPI_ETHERNET_DM9051=n to sdkconfig.board"
+        ),
+        notes=(
+            "S3 has no internal MAC and the board has no SPI-Ethernet chip. "
+            "MICROPY_PY_NETWORK_LAN auto-flips to 0 when these are off."
+        ),
+    ),
+    Feature(
         name="ESP-NOW",
         imports=("espnow", "aioespnow"),
         off_when=[("CONFIG_ESP_WIFI_ESPNOW_ENABLED", "n")],
