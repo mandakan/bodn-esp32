@@ -232,22 +232,27 @@ async def _handle_upload(reader, writer, headers, settings=None):
             _mkdirs(parent)
         tmp = target + ".new"
         written = 0
+        # 4 KiB chunks: 8× fewer Python loop iterations than 512 B, and
+        # comfortably fits in L1 on the ESP32-S3. Flash writes are
+        # block-level anyway, so larger chunks also reduce FAT overhead.
+        CHUNK = 4096
         with open(tmp, "wb") as f:
             remaining = cl
-            chunks_since_poke = 0
+            bytes_since_poke = 0
             while remaining > 0:
-                n = min(remaining, 512)
+                n = min(remaining, CHUNK)
                 chunk = await reader.read(n)
                 if not chunk:
                     break
                 f.write(chunk)
                 written += len(chunk)
                 remaining -= len(chunk)
-                chunks_since_poke += 1
-                # Keep idle timer fresh during long single-file uploads.
-                if tracker is not None and chunks_since_poke >= 64:
+                bytes_since_poke += len(chunk)
+                # Keep idle timer fresh during long single-file uploads
+                # (~every 32 KB regardless of chunk size).
+                if tracker is not None and bytes_since_poke >= 32768:
                     tracker.poke()
-                    chunks_since_poke = 0
+                    bytes_since_poke = 0
         try:
             os.remove(target)
         except OSError:
