@@ -77,10 +77,17 @@ class PowerManager:
         """Turn off power-hungry peripherals before entering light sleep."""
         from bodn import config
 
-        # Turn off NeoPixels
+        # Flush NeoPixels to black, stop the C engine, and hold the data line
+        # low through sleep.  Without this the RMT peripheral is clock-gated
+        # during lightsleep and the WS2812B data pin goes floating — ambient
+        # noise then occasionally latches garbage frames into the chain.
         from bodn.neo import neo
+        from machine import Pin
 
-        neo.all_off()
+        neo.set_override(neo.OVERRIDE_BLACK)
+        time.sleep_ms(50)  # let the engine transmit at least one black frame
+        neo.deinit()
+        Pin(config.NEOPIXEL_PIN, Pin.OUT, value=0)
 
         # Turn off display backlight via PCA9685 PWM channel
         if self._pwm:
@@ -170,6 +177,13 @@ class PowerManager:
         # Restore backlight via PCA9685 PWM channel
         if self._pwm:
             self._pwm.set_duty(config.PWM_CH_BACKLIGHT, 4095)
+
+        # Restart the NeoPixel engine and drop the OVERRIDE_BLACK set in
+        # pre_sleep.  init() reclaims the GPIO from the Pin.OUT hold.
+        from bodn.neo import neo
+
+        neo.init()
+        neo.clear_override()
 
         # Restore PN532 power and reinitialize
         try:
