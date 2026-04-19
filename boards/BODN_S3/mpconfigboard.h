@@ -6,3 +6,10 @@
 
 #define MICROPY_HW_I2C0_SCL                 (9)
 #define MICROPY_HW_I2C0_SDA                 (8)
+
+// --- Size trimming ---
+// Both of these are `#ifndef`-gated in mpconfigport.h so overriding here
+// wins. Paired with the matching IDF-level disables in sdkconfig.board so
+// neither the Python bindings nor the C stack gets compiled.
+#define MICROPY_PY_BLUETOOTH                (0)
+#define MICROPY_PY_ESPNOW                   (0)

@@ -10,3 +10,20 @@ CONFIG_I2S_ISR_IRAM_SAFE=y
 
 # SPI master ISR in IRAM for reliable DMA callbacks
 CONFIG_SPI_MASTER_ISR_IN_IRAM=y
+
+# --- Size trimming (see tools/size-review.py + .claude/skills/size-review) ---
+# Belt-and-braces with dropping sdkconfig.ble from mpconfigboard.cmake.
+# Firmware never imports `bluetooth` — saves ~200-300 KB in the app partition.
+CONFIG_BT_ENABLED=n
+CONFIG_BT_NIMBLE_ENABLED=n
+
+# PPP (serial IP-over-UART). Unused; firmware talks WiFi only.
+CONFIG_LWIP_PPP_SUPPORT=n
+CONFIG_LWIP_PPP_PAP_SUPPORT=n
+CONFIG_LWIP_PPP_CHAP_SUPPORT=n
+
+# NOTE: TLS (mbedtls TLS layer) is also unused and would save another
+# ~150 KB, but MicroPython's esp32 port hard-wires MICROPY_PY_SSL to
+# MICROPY_PY_NETWORK with no override, and its ssl module links directly
+# against mbedtls TLS functions — disabling CONFIG_MBEDTLS_TLS_CLIENT/SERVER
+# breaks the MicroPython link. Needs a submodule patch; tracked separately.
