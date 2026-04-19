@@ -66,7 +66,8 @@ def file_hash(path: Path) -> str:
 FILES = discover_files()
 
 
-def push(base_url: str, token: str = "", force: bool = False) -> bool:
+def push(base_url: str, token: str = "", force: bool = False) -> tuple[bool, int]:
+    """Upload changed files. Returns (ok, uploaded_count)."""
     ok = True
     prev_hashes = {} if force else load_hashes()
     new_hashes = dict(prev_hashes)
@@ -134,7 +135,7 @@ def push(base_url: str, token: str = "", force: bool = False) -> bool:
     elif skipped:
         print(f"  {uploaded} uploaded, {skipped} unchanged.")
 
-    return ok and uploaded > 0
+    return ok, uploaded
 
 
 def ota_commit(base_url: str, token: str = "") -> bool:
@@ -189,16 +190,17 @@ def main() -> None:
     base_url, token, force = _parse_args()
 
     print(f"Pushing firmware to {base_url}...")
-    result = push(base_url, token, force)
-    if result:
-        print("Committing update...")
-        ota_commit(base_url, token)
-        print("Done — device is rebooting with new firmware.")
-    elif result is False:
+    ok, uploaded = push(base_url, token, force)
+    if not ok:
         print("Upload failed — aborting staged files.")
         ota_abort(base_url, token)
         sys.exit(1)
-    # else: nothing to upload (all unchanged), no reboot needed
+    if uploaded == 0:
+        # Nothing to do — device already in sync.
+        return
+    print("Committing update...")
+    ota_commit(base_url, token)
+    print("Done — device is rebooting with new firmware.")
 
 
 if __name__ == "__main__":

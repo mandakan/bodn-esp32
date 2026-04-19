@@ -181,10 +181,11 @@ async def _drain_body(reader, cl):
         cl -= n
 
 
-async def _handle_upload(reader, writer, headers):
+async def _handle_upload(reader, writer, headers, settings=None):
     """OTA file upload — streams body to staging, checks free space first."""
     remote_path = headers.get("x-path", "")
     cl = int(headers.get("content-length", 0))
+    tracker = settings.get("_idle_tracker") if settings is not None else None
 
     if not remote_path:
         await _drain_body(reader, cl)
@@ -213,6 +214,7 @@ async def _handle_upload(reader, writer, headers):
         written = 0
         with open(tmp, "wb") as f:
             remaining = cl
+            chunks_since_poke = 0
             while remaining > 0:
                 n = min(remaining, 512)
                 chunk = await reader.read(n)
@@ -221,6 +223,11 @@ async def _handle_upload(reader, writer, headers):
                 f.write(chunk)
                 written += len(chunk)
                 remaining -= len(chunk)
+                chunks_since_poke += 1
+                # Keep idle timer fresh during long single-file uploads.
+                if tracker is not None and chunks_since_poke >= 64:
+                    tracker.poke()
+                    chunks_since_poke = 0
         try:
             os.remove(staged)
         except OSError:
@@ -240,6 +247,13 @@ async def _handle_request(reader, writer, session_mgr, settings):
         request_line = await reader.readline()
         if not request_line:
             return
+
+        # Keep the device awake while clients are actively talking to us —
+        # OTA/UI/status requests all count as activity. Without this a
+        # multi-minute sync can trip the idle-timeout lightsleep.
+        tracker = settings.get("_idle_tracker")
+        if tracker is not None:
+            tracker.poke()
 
         parts = request_line.decode().split()
         if len(parts) < 2:
@@ -402,7 +416,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
             machine.reset()
 
         elif method == "POST" and path == "/api/upload":
-            await _handle_upload(reader, writer, headers)
+            await _handle_upload(reader, writer, headers, settings=settings)
 
         elif method == "POST" and path == "/api/ota/commit":
             # Verify integrity (when MANIFEST.json is present), then move

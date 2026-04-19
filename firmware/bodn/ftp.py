@@ -59,11 +59,12 @@ def _list_dir(path):
 
 
 class _FTPSession:
-    def __init__(self, reader, writer, user, password):
+    def __init__(self, reader, writer, user, password, settings=None):
         self._r = reader
         self._w = writer
         self._user = user
         self._pass = password
+        self._settings = settings
         self.authed = False
         self._pending_user = None
         self.cwd = "/"
@@ -72,6 +73,14 @@ class _FTPSession:
         self._data_r = None
         self._data_w = None
         self._data_srv = None
+
+    def _poke_idle(self):
+        """Reset the device's idle timer so a long sync doesn't trip lightsleep."""
+        if self._settings is None:
+            return
+        tracker = self._settings.get("_idle_tracker")
+        if tracker is not None:
+            tracker.poke()
 
     def _real(self, path=""):
         """Map an FTP path (relative to FTP root) to a real filesystem path
@@ -158,6 +167,7 @@ class _FTPSession:
                 text = line.decode().strip()
                 if not text:
                     continue
+                self._poke_idle()
                 parts = text.split(" ", 1)
                 cmd = parts[0].upper()
                 arg = parts[1].strip() if len(parts) > 1 else ""
@@ -338,6 +348,7 @@ class _FTPSession:
         await self._send("125 Transfer starting\r\n")
         # Write to a .tmp file first; rename on success (atomic at file level)
         tmp = real + ".tmp"
+        chunks_since_poke = 0
         try:
             with open(tmp, "wb") as f:
                 while True:
@@ -345,6 +356,11 @@ class _FTPSession:
                     if not chunk:
                         break
                     f.write(chunk)
+                    chunks_since_poke += 1
+                    # Keep the idle timer fresh during long single-file uploads.
+                    if chunks_since_poke >= 32:
+                        self._poke_idle()
+                        chunks_since_poke = 0
                     # Yield to the async loop so TCP can breathe during
                     # long flash writes — without this, large files stall.
                     await asyncio.sleep_ms(0)
@@ -423,7 +439,7 @@ async def start_ftp(settings):
     from bodn.config import FTP_PORT
 
     async def _cb(r, w):
-        session = _FTPSession(r, w, user, password)
+        session = _FTPSession(r, w, user, password, settings=settings)
         await session.run()
 
     try:
