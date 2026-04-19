@@ -16,11 +16,12 @@ Usage:
 """
 
 import hashlib
+import http.client
 import json
+import socket
 import sys
 import time
-import urllib.error
-import urllib.request
+import urllib.parse
 from pathlib import Path
 
 FIRMWARE_DIR = Path(__file__).resolve().parent.parent / "firmware"
@@ -66,7 +67,106 @@ def file_hash(path: Path) -> str:
 FILES = discover_files()
 
 
-def push(base_url: str, token: str = "", force: bool = False) -> tuple[bool, int]:
+class KeepAliveClient:
+    """Reuse one TCP connection across many HTTP requests.
+
+    The previous urlopen() path opened a fresh TCP/HTTP handshake per
+    file, which dominated per-file time on the device. http.client lets
+    us send Connection: keep-alive and reuse the socket so the second
+    request lands on an already-established connection.
+
+    Reconnects on transport errors / unexpected EOF so a transient
+    glitch (or a server-side close after the idle timeout) doesn't fail
+    the whole sync — the caller's per-file retry loop then re-sends the
+    request body.
+    """
+
+    def __init__(self, base_url: str, timeout: float = 10.0):
+        parsed = urllib.parse.urlsplit(base_url)
+        if parsed.scheme not in ("http", ""):
+            raise ValueError(f"only http:// supported, got {base_url!r}")
+        self.host = parsed.hostname or ""
+        self.port = parsed.port or 80
+        self.timeout = timeout
+        self._conn: http.client.HTTPConnection | None = None
+        # For tests: count how many times we opened a TCP connection.
+        self.connect_count = 0
+
+    def _connect(self) -> http.client.HTTPConnection:
+        if self._conn is None:
+            self._conn = http.client.HTTPConnection(
+                self.host, self.port, timeout=self.timeout
+            )
+            self.connect_count += 1
+        return self._conn
+
+    def close(self) -> None:
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        body: bytes,
+        headers: dict[str, str],
+        timeout: float | None = None,
+    ) -> tuple[int, bytes]:
+        """Send one request, returning (status, body_bytes).
+
+        Caller handles non-2xx responses; transport errors raise.
+        """
+        # Always advertise keep-alive — server falls back to close if it
+        # doesn't support it, and we'll reconnect for the next request.
+        hdrs = dict(headers)
+        hdrs.setdefault("Connection", "keep-alive")
+        hdrs.setdefault("Content-Length", str(len(body)))
+
+        # One reconnect attempt: the server may have closed the socket
+        # after its idle timeout. http.client raises BadStatusLine /
+        # RemoteDisconnected in that case.
+        for is_retry in (False, True):
+            conn = self._connect()
+            if timeout is not None:
+                conn.timeout = timeout
+                if conn.sock is not None:
+                    conn.sock.settimeout(timeout)
+            try:
+                conn.request(method, path, body=body, headers=hdrs)
+                resp = conn.getresponse()
+                data = resp.read()
+                # If the server signalled close, drop our cached conn so
+                # the next request opens a fresh one.
+                if resp.will_close:
+                    self.close()
+                return resp.status, data
+            except (
+                http.client.BadStatusLine,
+                http.client.RemoteDisconnected,
+                ConnectionResetError,
+                BrokenPipeError,
+                socket.timeout,
+            ):
+                # Stale socket — reconnect once and retry the same body.
+                self.close()
+                if is_retry:
+                    raise
+            except Exception:
+                self.close()
+                raise
+        raise RuntimeError("unreachable")
+
+
+def push(
+    base_url: str,
+    token: str = "",
+    force: bool = False,
+    client: KeepAliveClient | None = None,
+) -> tuple[bool, int]:
     """Upload changed files. Returns (ok, uploaded_count)."""
     ok = True
     prev_hashes = {} if force else load_hashes()
@@ -75,6 +175,9 @@ def push(base_url: str, token: str = "", force: bool = False) -> tuple[bool, int
     skipped = 0
     total_bytes = 0
     batch_start = time.monotonic()
+    own_client = client is None
+    if client is None:
+        client = KeepAliveClient(base_url)
 
     for rel_path in FILES:
         local = FIRMWARE_DIR / rel_path
@@ -92,7 +195,6 @@ def push(base_url: str, token: str = "", force: bool = False) -> tuple[bool, int
             skipped += 1
             continue
         remote = "/" + rel_path
-        url = base_url.rstrip("/") + "/api/upload"
         hdrs = {
             "X-Path": remote,
             "Content-Type": "application/octet-stream",
@@ -102,12 +204,21 @@ def push(base_url: str, token: str = "", force: bool = False) -> tuple[bool, int
 
         success = False
         for attempt in range(3):
-            timeout = 10 + attempt * 10  # 10s, 20s, 30s
-            req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+            req_timeout = 10 + attempt * 10  # 10s, 20s, 30s
             t0 = time.monotonic()
             try:
-                resp = urllib.request.urlopen(req, timeout=timeout)
-                resp.read()
+                status, _ = client.request(
+                    "POST", "/api/upload", data, hdrs, timeout=req_timeout
+                )
+                if status == 401:
+                    print(f"  ERROR {rel_path}: Unauthorized (set --token)")
+                    break  # no point retrying auth errors
+                if status == 507:
+                    print(f"  ERROR {rel_path}: not enough space on device")
+                    break  # no point retrying
+                if status >= 400:
+                    print(f"  ERROR {rel_path}: HTTP {status}")
+                    continue
                 dt = time.monotonic() - t0
                 rate = (len(data) / dt / 1024) if dt > 0 else 0
                 print(
@@ -118,15 +229,6 @@ def push(base_url: str, token: str = "", force: bool = False) -> tuple[bool, int
                 total_bytes += len(data)
                 success = True
                 break
-            except urllib.error.HTTPError as e:
-                if e.code == 401:
-                    print(f"  ERROR {rel_path}: Unauthorized (set --token)")
-                    break  # no point retrying auth errors
-                elif e.code == 507:
-                    print(f"  ERROR {rel_path}: not enough space on device")
-                    break  # no point retrying
-                else:
-                    print(f"  ERROR {rel_path}: HTTP {e.code}")
             except Exception as e:
                 label = "retrying..." if attempt < 2 else "giving up."
                 print(f"  {rel_path}: {e}, {label}")
@@ -137,6 +239,8 @@ def push(base_url: str, token: str = "", force: bool = False) -> tuple[bool, int
 
     # Save hashes for files that did upload (even if some failed)
     save_hashes(new_hashes)
+    if own_client:
+        client.close()
 
     elapsed = time.monotonic() - batch_start
     if uploaded:
@@ -154,30 +258,31 @@ def push(base_url: str, token: str = "", force: bool = False) -> tuple[bool, int
 
 def ota_commit(base_url: str, token: str = "") -> bool:
     """Move staged files into place and reboot."""
-    url = base_url.rstrip("/") + "/api/ota/commit"
     hdrs = {"Content-Type": "application/json"}
     if token:
         hdrs["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, data=b"{}", headers=hdrs, method="POST")
+    client = KeepAliveClient(base_url, timeout=30)
     try:
-        resp = urllib.request.urlopen(req, timeout=30)
-        resp.read()
-        return True
+        client.request("POST", "/api/ota/commit", b"{}", hdrs)
     except Exception:
-        return True  # device reboots mid-response, connection drops
+        pass  # device reboots mid-response, connection drops
+    finally:
+        client.close()
+    return True
 
 
 def ota_abort(base_url: str, token: str = "") -> None:
     """Discard staged files."""
-    url = base_url.rstrip("/") + "/api/ota/abort"
     hdrs = {"Content-Type": "application/json"}
     if token:
         hdrs["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, data=b"{}", headers=hdrs, method="POST")
+    client = KeepAliveClient(base_url, timeout=5)
     try:
-        urllib.request.urlopen(req, timeout=5)
+        client.request("POST", "/api/ota/abort", b"{}", hdrs)
     except Exception:
         pass
+    finally:
+        client.close()
 
 
 def _parse_args():

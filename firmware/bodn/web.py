@@ -114,17 +114,40 @@ def _verify_manifest():
 
 
 async def _send(writer, status, content_type, body, extra_headers=None):
-    """Send an HTTP response."""
+    """Send an HTTP response.
+
+    Honours `writer._keep_alive` (set by the connection loop) to pick the
+    response protocol (HTTP/1.1 vs 1.0) and Connection header. Always sends
+    an explicit Content-Length so the client can reuse the socket.
+    """
+    keep_alive = getattr(writer, "_keep_alive", False)
     body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
-    writer.write("HTTP/1.0 {} OK\r\n".format(status).encode())
+    proto = "HTTP/1.1" if keep_alive else "HTTP/1.0"
+    writer.write("{} {} OK\r\n".format(proto, status).encode())
     writer.write("Content-Type: {}\r\n".format(content_type).encode())
     writer.write("Content-Length: {}\r\n".format(len(body_bytes)).encode())
     if extra_headers:
         for h in extra_headers:
             writer.write("{}\r\n".format(h).encode())
-    writer.write(b"Connection: close\r\n\r\n")
+    conn = "keep-alive" if keep_alive else "close"
+    writer.write("Connection: {}\r\n\r\n".format(conn).encode())
     writer.write(body_bytes)
     await writer.drain()
+
+
+def _wants_keep_alive(request_line, headers):
+    """Decide whether to keep the connection open after this request.
+
+    HTTP/1.1 defaults to keep-alive (RFC 7230); HTTP/1.0 defaults to close
+    unless the client opted in with `Connection: keep-alive`. An explicit
+    `Connection: close` always wins.
+    """
+    conn = headers.get("connection", "").lower()
+    if "close" in conn:
+        return False
+    if "keep-alive" in conn:
+        return True
+    return b"HTTP/1.1" in request_line
 
 
 async def _send_json(writer, data, status=200):
@@ -185,8 +208,26 @@ async def _drain_body(reader, cl):
     """Read and discard cl bytes from reader."""
     while cl > 0:
         n = min(cl, 512)
-        await reader.read(n)
-        cl -= n
+        chunk = await reader.read(n)
+        if not chunk:
+            break
+        cl -= len(chunk)
+
+
+async def _read_exact(reader, n):
+    """Read exactly n bytes (loops until full or EOF). Required for
+    keep-alive: a single read() may return short, leaving body bytes in
+    the socket that would then be parsed as the next request line.
+    """
+    if n <= 0:
+        return b""
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = await reader.read(n - len(buf))
+        if not chunk:
+            break
+        buf.extend(chunk)
+    return bytes(buf)
 
 
 async def _handle_upload(reader, writer, headers, settings=None):
@@ -236,6 +277,7 @@ async def _handle_upload(reader, writer, headers, settings=None):
         # comfortably fits in L1 on the ESP32-S3. Flash writes are
         # block-level anyway, so larger chunks also reduce FAT overhead.
         CHUNK = 4096
+        short_read = False
         with open(tmp, "wb") as f:
             remaining = cl
             bytes_since_poke = 0
@@ -243,6 +285,7 @@ async def _handle_upload(reader, writer, headers, settings=None):
                 n = min(remaining, CHUNK)
                 chunk = await reader.read(n)
                 if not chunk:
+                    short_read = True
                     break
                 f.write(chunk)
                 written += len(chunk)
@@ -253,6 +296,11 @@ async def _handle_upload(reader, writer, headers, settings=None):
                 if tracker is not None and bytes_since_poke >= 32768:
                     tracker.poke()
                     bytes_since_poke = 0
+        if short_read:
+            # Socket framing is now ambiguous — force the client to
+            # reconnect rather than misread leftover bytes as the next
+            # request line.
+            writer._keep_alive = False
         try:
             os.remove(target)
         except OSError:
@@ -263,16 +311,22 @@ async def _handle_upload(reader, writer, headers, settings=None):
             {"ok": True, "path": remote_path, "size": written},
         )
     except Exception as e:
+        # Mid-write failure leaves an unknown number of bytes in the
+        # socket; safest to drop the connection.
+        writer._keep_alive = False
         await _send_json(writer, {"error": str(e)}, 500)
 
 
-async def _handle_request(reader, writer, session_mgr, settings):
-    """Parse HTTP request and route to handler."""
-    try:
-        request_line = await reader.readline()
-        if not request_line:
-            return
+async def _handle_request(reader, writer, request_line, session_mgr, settings):
+    """Parse HTTP request and route to handler.
 
+    `request_line` has already been read by the connection loop. Returns
+    True if the connection should be kept alive for another request.
+    """
+    # Default: don't keep alive — error paths fall through here and we
+    # can't safely reuse the socket if the request body wasn't drained.
+    writer._keep_alive = False
+    try:
         # Keep the device awake while clients are actively talking to us —
         # OTA/UI/status requests all count as activity. Without this a
         # multi-minute sync can trip the idle-timeout lightsleep.
@@ -282,13 +336,17 @@ async def _handle_request(reader, writer, session_mgr, settings):
 
         parts = request_line.decode().split()
         if len(parts) < 2:
-            return
+            return False
 
         method = parts[0]
         path = parts[1]
 
         # Read headers
         headers = await _read_headers(reader)
+        # Decide keep-alive intent now that we have headers; individual
+        # endpoints can downgrade to close (e.g. before reboot, or when
+        # they bail without draining the body).
+        writer._keep_alive = _wants_keep_alive(request_line, headers)
 
         # Parse body for POST (upload route streams directly to flash)
         body = None
@@ -297,7 +355,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
         elif method == "POST":
             cl = int(headers.get("content-length", 0))
             if cl > 0:
-                raw = await reader.read(cl)
+                raw = await _read_exact(reader, cl)
                 body = json.loads(raw)
 
         # --- Auth: PIN login endpoint (always accessible) ---
@@ -314,7 +372,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 )
             else:
                 await _send_unauthorized(writer, "Wrong PIN")
-            return
+            return writer._keep_alive
 
         # --- Auth: OTA endpoints require bearer token ---
         ota_paths = (
@@ -326,8 +384,12 @@ async def _handle_request(reader, writer, session_mgr, settings):
         )
         if path in ota_paths:
             if not _check_ota_token(headers, settings):
+                # /api/upload bodies are large and we haven't read them
+                # yet — force the client to reconnect rather than draining
+                # a rejected upload through the socket.
+                writer._keep_alive = False
                 await _send_unauthorized(writer, "Invalid OTA token")
-                return
+                return False
 
         # --- Auth: all other API/UI endpoints require PIN ---
         if path != "/api/login":
@@ -336,7 +398,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 from bodn.web_ui import LOGIN_HTML
 
                 await _send(writer, 200, "text/html", LOGIN_HTML)
-                return
+                return writer._keep_alive
 
         # Route
         if method == "GET" and path == "/":
@@ -429,6 +491,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                     if k in body:
                         settings[k] = body[k]
                 storage.save_settings(settings)
+            writer._keep_alive = False  # we're about to reset
             await _send_json(writer, {"ok": True})
             # Reboot after response is sent
             await asyncio.sleep_ms(500)
@@ -487,6 +550,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                     os.sync()
                 except Exception:
                     pass  # os.sync() not available on all builds
+                writer._keep_alive = False  # we're about to reset
                 await _send_json(writer, {"ok": True, "committed": count})
                 try:
                     import machine
@@ -503,6 +567,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _send_json(writer, {"ok": True})
 
         elif method == "POST" and path == "/api/reboot":
+            writer._keep_alive = False  # we're about to reset
             await _send_json(writer, {"ok": True, "rebooting": True})
             try:
                 os.sync()
@@ -589,10 +654,45 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _send(writer, 404, "text/plain", "Not found")
 
     except Exception as e:
+        # Internal error: socket may be in an unknown state — close.
+        writer._keep_alive = False
         try:
             await _send(writer, 500, "text/plain", str(e))
         except Exception:
             pass
+
+    return writer._keep_alive
+
+
+# Idle timeout for an open keep-alive connection. The full --force OTA
+# push has gaps of a few hundred ms between requests; 5 s is plenty of
+# headroom while still freeing the socket promptly when the client is
+# done.
+_KEEP_ALIVE_IDLE_S = 5
+
+
+async def _connection_loop(reader, writer, session_mgr, settings):
+    """Serve sequential requests on one TCP connection until the client
+    closes, the keep-alive timeout fires, or a handler downgrades to
+    Connection: close.
+    """
+    try:
+        while True:
+            try:
+                request_line = await asyncio.wait_for(
+                    reader.readline(), _KEEP_ALIVE_IDLE_S
+                )
+            except Exception:
+                # asyncio.TimeoutError on idle, or a transport error —
+                # either way we're done with this connection.
+                break
+            if not request_line:
+                break  # client closed cleanly between requests
+            keep_alive = await _handle_request(
+                reader, writer, request_line, session_mgr, settings
+            )
+            if not keep_alive:
+                break
     finally:
         try:
             writer.close()
@@ -606,7 +706,7 @@ async def start_server(session_mgr, settings, port=80):
 
     async def handler(reader, writer):
         try:
-            await _handle_request(reader, writer, session_mgr, settings)
+            await _connection_loop(reader, writer, session_mgr, settings)
         except Exception as e:
             print("Web handler error:", e)
 
