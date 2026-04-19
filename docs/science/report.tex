@@ -471,6 +471,35 @@ unexpected, and debugging by toggling individual steps. BPM is adjustable via
 encoder (70--140), providing fine motor practice with immediate auditory
 feedback.
 
+\subsubsection{Tone Lab (Ljudlabb)}
+A real-time synthesiser sandbox targeting \textbf{auditory processing},
+\textbf{cause-and-effect learning}, \textbf{visual processing via cross-modal
+binding}, and \textbf{creative expression}. Two encoders control pitch (strict
+pentatonic over two octaves) and timbre (a five-step morph from smooth sine to
+fuzzy noise). Five arcade buttons snap to fixed pentatonic pitches so nothing
+ever sounds ``wrong''---consistent with Gordon's Music Learning Theory
+\citep{gordon2003learning}, which argues tonal vocabulary is built through
+open but in-tune exploration. Eight mini buttons provide hold-to-apply
+effects (vibrato, tremolo, pitch bend up/down, octave jump up/down, stutter,
+harmony); each effect is a single reversible gesture, keeping the
+cause-and-effect link transparent \citep{watson1985perception}. All effects
+run inside the native audio mixer, so every input change is reflected in the
+waveform within milliseconds---preserving the tight contingency loop that
+young children need to perceive themselves as the cause of the sound
+\citep{rochat2001infant}.
+
+Two visual channels onto the same signal reinforce cross-modal learning. A
+live oscilloscope shows the actual waveform, and a central blob morphs from
+round (sine) to spiky (noise) in lockstep with the timbre encoder---
+exploiting the Bouba/Kiki correspondence first documented by
+\citet{kohler1929gestalt} and replicated in toddlers by
+\citet{maurer2006shape}. The blob's vertical position tracks pitch (higher
+tones higher on screen), drawing on the pitch-height correspondence present
+even in infants \citep{dolscheid2014thickness}. A toggle switch swaps the
+big oscilloscope between the primary and secondary displays so older
+children or accompanying adults can inspect the waveform directly while the
+child remains focused on the expressive blob.
+
 % --- 4.2 Coverage Matrix ---
 \subsection{Coverage Matrix}
 \label{sec:coverage}
@@ -484,41 +513,42 @@ feedback.
   blank = not applicable.}
 \label{tab:matrix}
 \small
-\begin{tabular}{lccccccccccccc}
+\begin{tabular}{lcccccccccccccc}
 \toprule
 \textbf{Domain} & \rotatebox{70}{Simon} & \rotatebox{70}{Rule Follow}
   & \rotatebox{70}{Mystery Box} & \rotatebox{70}{Fl\"ode}
   & \rotatebox{70}{Garden} & \rotatebox{70}{Soundboard}
   & \rotatebox{70}{Spaceship} & \rotatebox{70}{Story Mode}
   & \rotatebox{70}{High-Five} & \rotatebox{70}{Sequencer}
+  & \rotatebox{70}{Tone Lab}
   & \rotatebox{70}{Sortera} & \rotatebox{70}{R\"akna}
   & \rotatebox{70}{Blippa} \\
 \midrule
-Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & \\
-Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet$ & \\
-Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & \\
+Working memory       & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & \\
+Inhibitory control   & $\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & $\bullet$ & \\
+Cognitive flexibility & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & \\
 \midrule
-Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ \\
-Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ \\
-Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & & & & & & $\bullet$ & \\
-Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & \\
-Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet$ & \\
+Cause \& effect      & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ \\
+Pattern recognition  & $\bullet\bullet$ & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ \\
+Spatial reasoning    & & & & $\bullet\bullet\bullet$ & & & & & & & & & $\bullet$ & \\
+Sequential thinking  & $\bullet\bullet\bullet$ & & & $\bullet\bullet$ & & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet\bullet\bullet$ & \\
+Problem solving      & & & & $\bullet\bullet\bullet$ & & & $\bullet$ & & & $\bullet\bullet$ & & & $\bullet\bullet$ & \\
 \midrule
-Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
-Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & $\bullet$ \\
-Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
-Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ \\
+Fine motor           & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Hand--eye coord.     & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ \\
+Auditory processing  & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Visual processing    & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet$ \\
 \midrule
-Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet\bullet$ & $\bullet$ \\
-Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
+Listening comp.      & & & & & & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & $\bullet$ & $\bullet\bullet$ & $\bullet$ \\
+Bilingual exposure   & $\bullet$ & $\bullet$ & & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ \\
 \midrule
-Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & & $\bullet\bullet$ & $\bullet$ & \\
-Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & \\
-Imaginative play     & & & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & $\bullet\bullet$ \\
+Self-regulation      & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & $\bullet$ & & $\bullet\bullet$ & $\bullet$ & $\bullet\bullet$ & & & $\bullet\bullet$ & $\bullet$ & \\
+Persistence          & $\bullet\bullet$ & $\bullet$ & & $\bullet\bullet\bullet$ & & & $\bullet$ & $\bullet$ & $\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & $\bullet\bullet$ & \\
+Imaginative play     & & & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & $\bullet$ & & & $\bullet\bullet$ \\
 \midrule
-Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ \\
-Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & & $\bullet$ & $\bullet$ \\
-Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & $\bullet\bullet\bullet$ & & & \\
+Open exploration     & & & $\bullet\bullet\bullet$ & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet$ & $\bullet$ & $\bullet\bullet\bullet$ \\
+Divergent thinking   & & & $\bullet\bullet\bullet$ & & $\bullet\bullet$ & & & & & $\bullet\bullet\bullet$ & $\bullet\bullet$ & & $\bullet$ & $\bullet$ \\
+Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & & $\bullet\bullet\bullet$ & $\bullet\bullet\bullet$ & & & \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -540,7 +570,11 @@ underserved domains: Sortera provides a tangible Dimensional Change Card Sort
 implementation \citep{zelazo2006dccs} that strengthens cognitive flexibility
 and inhibitory control, while R\"akna opens the early-mathematics
 domain that \citet{duncan2007school} identified as the single strongest
-predictor of later academic achievement. Remaining areas with limited coverage
+predictor of later academic achievement. Tone Lab adds a third
+primary-level auditory-processing mode alongside Soundboard and Story Mode,
+and---uniquely---targets cross-modal sound--shape perception
+\citep{kohler1929gestalt, maurer2006shape, dolscheid2014thickness} that no
+previous mode addressed directly. Remaining areas with limited coverage
 include:
 
 \begin{enumerate}[noitemsep]

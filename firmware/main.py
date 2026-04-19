@@ -564,6 +564,21 @@ def create_ui(
             on_exit=_reset_secondary,
         )
 
+    def _make_tone_explorer():
+        from bodn.ui.tone_explorer import ToneExplorerScreen
+        from bodn.ui.tone_explorer_secondary import ToneExplorerSecondary
+
+        sec = ToneExplorerSecondary()
+        secondary.set_content(sec)
+        return ToneExplorerScreen(
+            overlay,
+            audio=audio,
+            arcade=arcade,
+            settings=settings,
+            secondary_screen=sec,
+            on_exit=_reset_secondary,
+        )
+
     def _make_highfive(on_progress=None):
         from bodn.ui.highfive import HighFiveScreen, preload_highfive_assets
 
@@ -595,6 +610,7 @@ def create_ui(
         "story": _make_story,
         "soundboard": _make_soundboard,
         "sequencer": _make_sequencer,
+        "tone_explorer": _make_tone_explorer,
         "highfive": _make_highfive,
         "blippa": _make_blippa,
         "sortera": _make_sortera,
@@ -618,6 +634,7 @@ def create_ui(
         "garden",
         "soundboard",
         "sequencer",
+        "tone_explorer",
         "blippa",
         "sortera",
         "rakna",

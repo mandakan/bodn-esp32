@@ -89,6 +89,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Flöde | ○ | | | Mild WM for remembering gap positions |
 | Garden of Life | | | | Observation-only; no EF demand |
 | Soundboard | | | | Free-form; no EF demand |
+| Tone Lab | ○ | | ○ | Hold current sound-shape in mind while layering effects (WM); switch focus between pitch, timbre, and effect buttons (CF) |
 | Spaceship | ● | ● | ◉ | Hold scenario in mind (WM), wait for right input (IC), different scenarios need different actions (CF) |
 | Story Mode | ● | | | Remember earlier scenes to inform choices (WM) |
 | High-Five Friends | ○ | ● | | Resist premature taps (IC); mild WM for tracking score/rhythm |
@@ -108,6 +109,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Flöde | | | ◉ | ● | ◉ | Align gaps spatially; sequential segment adjustment; trial-and-error |
 | Garden of Life | ● | ◉ | | | | Watch patterns emerge; placement affects evolution |
 | Soundboard | ● | | | | | Button → sound (cause-effect) |
+| Tone Lab | ◉ | ○ | | | | Every input produces an immediate, reliable audible+visual change (CE); children notice which combinations make "round" vs "spiky" sounds (PR) |
 | Spaceship | | | | | ○ | Mild problem-solving when matching scenario to action |
 | Story Mode | ● | | | ● | | Choices have narrative consequences (CE); story arc is sequential (ST) |
 | High-Five Friends | ● | | | | | Button → sound/animation (CE); no pattern or spatial element |
@@ -127,6 +129,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Flöde | ● | ● | | ● | Encoder precision needed; watch gap alignment |
 | Garden of Life | ○ | | | ◉ | Rich visual tracking of evolving grid |
 | Soundboard | ○ | | ◉ | | Core mechanic is listening to and distinguishing sounds |
+| Tone Lab | ● | ○ | ◉ | ● | Two encoders + 13 buttons + 4 toggles = precise fingertip control (FM); pitch discrimination, timbre recognition, effect-rhythm tracking (AP); oscilloscope + morphing blob reinforce cross-modal sound-shape binding (VP, Bouba/Kiki) |
 | Spaceship | ● | ● | ● | ● | Multiple input types + visual cues + audio TTS |
 | Story Mode | ○ | | ◉ | ● | Simple button press (FM); listen to narration (AP); mood colour wash + text (VP) |
 | High-Five Friends | ○ | ◉ | ● | ● | Target-press coordination (HC); celebration/miss sounds (AP); track lit button (VP) |
@@ -146,6 +149,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Flöde | | ○ | UI labels only |
 | Garden of Life | | ○ | UI labels only |
 | Soundboard | ○ | ○ | Themed sound banks may include words |
+| Tone Lab | | ○ | Wordless; UI labels in selected language only |
 | Spaceship | ◉ | ○ | TTS instructions drive gameplay; must listen and understand |
 | Story Mode | ◉ | ◉ | Full narration + choices in both languages; must listen to choose meaningfully |
 | High-Five Friends | | ○ | Animal names in selected language; UI labels |
@@ -165,6 +169,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Flöde | | ◉ | | Puzzles require sustained effort through difficulty |
 | Garden of Life | ○ | | | Patience in watching slow evolution |
 | Soundboard | | | | Free-form, no emotional challenge |
+| Tone Lab | | | ○ | No failure state; natural "tiny musician / sound scientist" pretend play (IP) |
 | Spaceship | ● | ○ | ◉ | Wait for right moment; pretend to be a captain |
 | Story Mode | ○ | ○ | ◉ | Wait through narration (SReg); replay for all endings (PE); guide character through narrative world (IP) |
 | High-Five Friends | ● | ● | | Handle misses gracefully (SReg); keep trying to beat high score (PE) |
@@ -184,6 +189,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 | Flöde | | | | Goal-directed puzzle |
 | Garden of Life | ◉ | ● | ● | Endless seed placements; emergent "art" |
 | Soundboard | ◉ | | ◉ | Browse freely; create sound combinations |
+| Tone Lab | ◉ | ● | ◉ | Unbounded sonic exploration (OE); pentatonic + effect stacking gives many right answers (DT); expressive sound-design as creative output (CX) |
 | Spaceship | | | | Narrative-driven, not open-ended |
 | Story Mode | | | | Goal-directed narrative; no creative latitude |
 | High-Five Friends | | | | Fixed goal (tap the lit button); no creative latitude |
@@ -242,6 +248,7 @@ The foundation — everything should produce immediate, rewarding feedback.
 |---------|------|------------|
 | Mystery Box | **Core** — endless safe exploration | No difficulty; everything works |
 | Soundboard | **Core** — button → sound mapping | Free-form |
+| Tone Lab | **Introduce** — use only the arcade buttons and the pitch encoder | Free-form; strict pentatonic means nothing sounds wrong |
 | Garden of Life | **Core** — watch pretty patterns emerge | Just press and observe |
 | High-Five Friends | **Core** — tap the lit button for animal friends | Easy; long reaction windows |
 | Simon | Introduce gently — 2-step sequences | Easiest |
@@ -266,6 +273,7 @@ The child can follow rules, hold short sequences, and switch between ideas.
 | Sortera | **Growing** — rule switches between colour, shape, and animal dimensions | Medium |
 | Räkna | **Growing** — Levels 2–3 (quantity matching, more/less) | Easy–Medium |
 | Blippa | Still engaging — card vocabulary grows with the collection | Same |
+| Tone Lab | **Growing** — layer one effect at a time (vibrato, tremolo, bend) | Discover named sound-shapes |
 
 ### Age 5–6: Increasing Challenge
 
@@ -289,6 +297,7 @@ Features shift from guided challenge toward creative expression and composition.
 | Feature | Role | Difficulty |
 |---------|------|------------|
 | Sequencer | **Core** — complex patterns, programming concepts | Growing |
+| Tone Lab | **Core** — compose expressively; stack several effects for sonic sculpting | Open-ended |
 | Flöde | Levels 5–6 (full difficulty) | Hard |
 | Räkna | Levels 5–6 — subtraction and symbolic equations with numerals | Growing |
 | *Record & Replay* | Creative voice compositions | Open-ended |
