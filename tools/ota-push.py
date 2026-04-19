@@ -66,12 +66,15 @@ def file_hash(path: Path) -> str:
 FILES = discover_files()
 
 
-def push(base_url: str, token: str = "", force: bool = False) -> bool:
+def push(base_url: str, token: str = "", force: bool = False) -> tuple[bool, int]:
+    """Upload changed files. Returns (ok, uploaded_count)."""
     ok = True
     prev_hashes = {} if force else load_hashes()
     new_hashes = dict(prev_hashes)
     uploaded = 0
     skipped = 0
+    total_bytes = 0
+    batch_start = time.monotonic()
 
     for rel_path in FILES:
         local = FIRMWARE_DIR / rel_path
@@ -101,12 +104,18 @@ def push(base_url: str, token: str = "", force: bool = False) -> bool:
         for attempt in range(3):
             timeout = 10 + attempt * 10  # 10s, 20s, 30s
             req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+            t0 = time.monotonic()
             try:
                 resp = urllib.request.urlopen(req, timeout=timeout)
                 resp.read()
-                print(f"  {rel_path} ({len(data)} bytes)")
+                dt = time.monotonic() - t0
+                rate = (len(data) / dt / 1024) if dt > 0 else 0
+                print(
+                    f"  {rel_path}  {len(data):>7} B  {dt * 1000:>5.0f} ms  {rate:>5.0f} KB/s"
+                )
                 new_hashes[rel_path] = h
                 uploaded += 1
+                total_bytes += len(data)
                 success = True
                 break
             except urllib.error.HTTPError as e:
@@ -129,12 +138,18 @@ def push(base_url: str, token: str = "", force: bool = False) -> bool:
     # Save hashes for files that did upload (even if some failed)
     save_hashes(new_hashes)
 
-    if skipped and not uploaded:
-        print(f"  All {skipped} files unchanged.")
+    elapsed = time.monotonic() - batch_start
+    if uploaded:
+        avg = (total_bytes / elapsed / 1024) if elapsed > 0 else 0
+        print(
+            f"  {uploaded} uploaded, {skipped} unchanged — "
+            f"{total_bytes / 1024:.0f} KB in {elapsed:.1f}s "
+            f"(avg {avg:.0f} KB/s)"
+        )
     elif skipped:
-        print(f"  {uploaded} uploaded, {skipped} unchanged.")
+        print(f"  All {skipped} files unchanged ({elapsed:.1f}s)")
 
-    return ok and uploaded > 0
+    return ok, uploaded
 
 
 def ota_commit(base_url: str, token: str = "") -> bool:
@@ -189,16 +204,23 @@ def main() -> None:
     base_url, token, force = _parse_args()
 
     print(f"Pushing firmware to {base_url}...")
-    result = push(base_url, token, force)
-    if result:
-        print("Committing update...")
-        ota_commit(base_url, token)
-        print("Done — device is rebooting with new firmware.")
-    elif result is False:
+    # Clear any leftover /.ota/ staging from a previously aborted run —
+    # HTTP uploads write live, but old firmware (or the FTP path) may
+    # have left staged copies behind eating VFS. Best-effort: ignore
+    # failures and keep going; the device-side endpoint no-ops when
+    # staging is already empty.
+    ota_abort(base_url, token)
+    ok, uploaded = push(base_url, token, force)
+    if not ok:
         print("Upload failed — aborting staged files.")
         ota_abort(base_url, token)
         sys.exit(1)
-    # else: nothing to upload (all unchanged), no reboot needed
+    if uploaded == 0:
+        # Nothing to do — device already in sync.
+        return
+    print("Committing update...")
+    ota_commit(base_url, token)
+    print("Done — device is rebooting with new firmware.")
 
 
 if __name__ == "__main__":

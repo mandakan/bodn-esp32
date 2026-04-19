@@ -1,0 +1,20 @@
+# Bodn custom partition table — 8 MiB flash, OTA, maximised VFS.
+#
+# Derived from micropython/ports/esp32/partitions-8MiBplus-ota.csv but with
+# OTA slots shrunk to 2.1 MiB (from 2.4 MiB) and an explicit 3.7 MiB vfs
+# partition. Safe only as long as firmware-bodn.bin stays comfortably under
+# 2.1 MiB — run `ls -l build/firmware-bodn.bin` and `tools/size-review.py`
+# after every trim change to confirm.
+#
+# Changing this file requires a full USB reflash with erase — the partition
+# table location is fixed, and VFS data cannot survive a layout change.
+# See .claude/skills/deploy-firmware/SKILL.md §"Repartitioning" for the
+# safe procedure.
+
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x4000,
+otadata,  data, ota,     0xd000,   0x2000,
+phy_init, data, phy,     0xf000,   0x1000,
+ota_0,    app,  ota_0,   0x10000,  0x210000,
+ota_1,    app,  ota_1,   0x220000, 0x210000,
+vfs,      data, fat,     0x430000, 0x3D0000,

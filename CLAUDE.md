@@ -174,11 +174,12 @@ bodn-esp32/
 │  └─ wiring.md             # auto-generated pin diagram and tables
 ├─ tools/
 │  ├─ pinout.py             # generate wiring docs from config.py
-│  ├─ sync.sh               # deploy firmware to device via mpremote
+│  ├─ deploy.sh             # top-level deploy entry point (auto-detects USB/WiFi)
+│  ├─ sync.sh               # USB sync via mpremote (used by deploy.sh --usb)
 │  ├─ wokwi-sync.py         # deploy firmware to Wokwi simulator (raw TCP)
 │  ├─ wokwi-push.py         # push a single file into a running Wokwi sim
-│  ├─ ota-push.py           # push firmware over WiFi via HTTP (no USB needed)
-│  ├─ ftp-sync.py           # push firmware over WiFi via FTP (faster, STA mode only)
+│  ├─ ota-push.py           # WiFi push via HTTP (used by deploy.sh --wifi)
+│  ├─ ftp-sync.py           # legacy WiFi push via FTP (unreliable — prefer ota-push.py)
 │  ├─ build-firmware.sh     # build custom MicroPython firmware with C modules
 │  ├─ generate_tts.py       # generate i18n TTS WAVs from STRINGS dicts
 │  ├─ generate_story_tts.py # generate story narration TTS from story scripts
@@ -245,8 +246,16 @@ bodn-esp32/
 # Install host tools
 uv sync
 
-# Deploy firmware to device
-./tools/sync.sh
+# Deploy firmware to device (auto-detects USB vs WiFi)
+./tools/deploy.sh                         # auto (WiFi via bodn.local if resolvable, else USB)
+./tools/deploy.sh --usb                   # force USB
+./tools/deploy.sh --wifi 192.168.1.143    # force WiFi to a specific IP
+./tools/deploy.sh --mount                 # live-mount firmware/ over USB (no copy; edits are live)
+./tools/deploy.sh --force                 # re-upload all files (WiFi path)
+
+# Underlying tools (deploy.sh picks one):
+./tools/sync.sh                           # USB sync via mpremote
+uv run python tools/ota-push.py HOST       # WiFi push via HTTP
 
 # Deploy firmware to Wokwi simulator (start simulator first)
 uv run python tools/wokwi-sync.py
@@ -282,15 +291,10 @@ make -C micropython/ports/unix                     # build the Unix port binary
 # In Wokwi: requires Wokwi Private Gateway for inbound port forwarding
 # Without gateway, test via REPL: import boot; boot.settings["lockdown"] = True
 
-# OTA firmware push via HTTP (works in AP and STA mode)
+# OTA firmware push via HTTP (works in AP and STA mode — use deploy.sh normally)
 uv run python tools/ota-push.py               # AP mode (192.168.4.1)
 uv run python tools/ota-push.py 192.168.1.42  # specific IP
 uv run python tools/ota-push.py --wokwi        # Wokwi (localhost:9080)
-
-# OTA firmware push via FTP (faster bulk sync — STA/home network only)
-# Device must be in STA mode; credentials set via ftp_user/ftp_pass in settings
-uv run python tools/ftp-sync.py 192.168.1.42       # specific IP
-uv run python tools/ftp-sync.py 192.168.1.42 --force  # re-upload all files
 
 # TTS pipeline (generate spoken audio from i18n strings + story scripts)
 # Install Piper TTS once: pip install piper-tts

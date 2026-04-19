@@ -48,20 +48,21 @@ def get_ip():
     return "0.0.0.0"
 
 
-def start_mdns(hostname="bodn"):
-    """Register mDNS so the device is reachable at bodn.local."""
-    try:
-        import mdns
+def _set_hostname(hostname="bodn"):
+    """Set the network hostname so mDNS advertises <hostname>.local.
 
-        mdns.start(hostname, hostname)
-        print("mDNS: {}.local".format(hostname))
-    except ImportError:
-        # mdns module not available — try network.hostname instead
-        try:
-            network.hostname(hostname)
-            print("mDNS: hostname set to", hostname)
-        except Exception:
-            print("mDNS: not available")
+    Must be called BEFORE the STA interface comes up: MicroPython's esp32
+    port initialises the ESP-IDF mDNS responder once, on IP_EVENT_STA_GOT_IP,
+    and reads the current hostname at that moment (see
+    ports/esp32/network_wlan.c::network_wlan_ip_event_handler). Setting the
+    hostname afterwards updates the DHCP-client name but leaves the mDNS
+    responder stuck on the default, which is why `<host>.local` silently
+    fails to resolve.
+    """
+    try:
+        network.hostname(hostname)
+    except Exception as e:
+        print("mDNS: could not set hostname:", e)
 
 
 class WiFiController:
@@ -116,11 +117,15 @@ def connect(settings):
 
     hostname = settings.get("hostname", "bodn")
 
+    # Set hostname BEFORE any STA activity so the mDNS responder picks
+    # up the right name at init time (see _set_hostname docstring).
+    _set_hostname(hostname)
+
     # User configured a network — try it
     if mode == "sta" and ssid:
         print("WiFi: connecting to", ssid)
         if connect_sta(ssid, password):
-            start_mdns(hostname)
+            print("mDNS: {}.local".format(hostname))
             return get_ip()
         print("WiFi: failed to connect to", ssid)
 
@@ -131,11 +136,10 @@ def connect(settings):
         # Once the user configures WiFi via the web UI, this path is skipped.
         print("WiFi: trying Wokwi-GUEST...")
         if connect_sta("Wokwi-GUEST", "", timeout=3):
-            start_mdns(hostname)
+            print("mDNS: {}.local".format(hostname))
             return get_ip()
 
-    # Fall back to AP mode
+    # Fall back to AP mode — mDNS responder only runs on the STA interface
+    # in MicroPython's esp32 port, so bodn.local won't resolve here.
     print("WiFi: starting AP mode")
-    ip = start_ap()
-    start_mdns(hostname)
-    return ip
+    return start_ap()

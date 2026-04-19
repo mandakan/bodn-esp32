@@ -1201,6 +1201,15 @@ async def main():
     )
     wifi_ctrl = WiFiController(settings)
 
+    # Create IdleTracker up front and expose it via settings so HTTP and FTP
+    # servers can poke it on activity — prevents lightsleep during an active
+    # sync (otherwise a multi-minute upload trips the idle timeout).
+    idle_tracker = IdleTracker(
+        timeout_s=settings.get("sleep_timeout_s", config.SLEEP_TIMEOUT_S),
+        time_fn=time.time,
+    )
+    settings["_idle_tracker"] = idle_tracker
+
     _server = None
     try:
         _server = await start_server(session_mgr, settings)
@@ -1271,11 +1280,8 @@ async def main():
         if not settings.get("audio_enabled", True):
             audio.volume = 0
 
-    # Power management
-    idle_tracker = IdleTracker(
-        timeout_s=settings.get("sleep_timeout_s", config.SLEEP_TIMEOUT_S),
-        time_fn=time.time,
-    )
+    # Power management (idle_tracker already constructed above so network
+    # servers can see it — just create the hardware-side PowerManager here).
     power_mgr = PowerManager(tft, tft2, mcp, pwm=pwm)
 
     # Startup sound disabled — re-enable when tuned:
