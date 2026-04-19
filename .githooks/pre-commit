@@ -25,6 +25,21 @@ if [ -n "$EXISTING_PY" ]; then
     fi
 fi
 
+# --- Size-review check: run when firmware .py or board config is staged ---
+# Hard fails when a disabled feature is imported (would ImportError on
+# device). Warnings about enabled-but-unused features don't block commits —
+# use `uv run python tools/size-review.py --strict` to gate on those too.
+if echo "$STAGED" | grep -qE '^(firmware/.+\.py|boards/BODN_S3/(sdkconfig\.board|mpconfigboard\.(cmake|h)))$'; then
+    if ! uv run python tools/size-review.py >/dev/null 2>&1; then
+        echo ""
+        echo "ERROR: size-review found imports that the custom firmware has disabled."
+        echo ""
+        echo "  See:  uv run python tools/size-review.py"
+        echo ""
+        exit 1
+    fi
+fi
+
 # --- Wiring sync check: only when config.py is being committed ---
 if ! echo "$STAGED" | grep -q 'firmware/bodn/config\.py'; then
     exit 0
