@@ -56,8 +56,25 @@ except OSError:
 
 
 def _abort_boot():
-    """Ctrl-C during boot — exit immediately so REPL is available for mpremote."""
-    print("boot.py: interrupted — dropping to REPL")
+    """Ctrl-C during boot — skip main.py and speed up the next boot.
+
+    mpremote's raw-REPL entry does a Ctrl-D soft reset with a 10 s deadline.
+    Our normal boot (5 s safe window + WiFi + NTP + display init) easily
+    blows past that, causing ``could not enter raw repl`` on sync. Dropping
+    these flag files means:
+      * ``_skip_main`` stops main.py running in this session (shared globals).
+      * ``/skip_main``  makes the *next* boot go straight to REPL.
+      * ``/fast_boot``  makes the next boot skip WiFi/NTP.
+    Both files are one-shot — boot.py removes them as it reads them.
+    """
+    global _skip_main
+    _skip_main = True
+    try:
+        open("/skip_main", "w").close()
+        open("/fast_boot", "w").close()
+    except OSError:
+        pass
+    print("boot.py: interrupted — skipping main.py, next boot fast")
     _sys.exit()
 
 
