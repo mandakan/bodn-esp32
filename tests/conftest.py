@@ -434,7 +434,9 @@ class _FakeAudiomix:
 
     def voice_tone_sustained(self, idx, freq, wave_id):
         self._voices[idx] = {
-            "active": True, "type": "tone_sustained", "freq": freq,
+            "active": True,
+            "type": "tone_sustained",
+            "freq": freq,
             "wave": wave_id,
         }
 

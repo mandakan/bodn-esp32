@@ -1,13 +1,6 @@
 """Tone Lab rule engine — pure-logic tests."""
 
-import pytest
-
 from bodn.tone_explorer_rules import (
-    EFFECT_BEND_DOWN,
-    EFFECT_BEND_UP,
-    EFFECT_HARMONY,
-    EFFECT_OCTAVE_DOWN,
-    EFFECT_OCTAVE_UP,
     EFFECT_STUTTER,
     EFFECT_TREMOLO,
     EFFECT_VIBRATO,
@@ -33,7 +26,7 @@ def test_pentatonic_table_is_monotonic():
 
 def test_initial_state_is_middle_sine():
     e = ToneExplorer()
-    assert e.pitch_idx == 3           # G4 — middle-ish of low octave
+    assert e.pitch_idx == 3  # G4 — middle-ish of low octave
     assert e.timbre_idx == 0
     assert e.effects_mask == 0
     assert e.octave_shift == 0
@@ -53,10 +46,10 @@ def test_arcade_press_snaps_pitch_within_octave():
 
 def test_arcade_press_respects_octave_toggle():
     e = ToneExplorer()
-    e.on_octave_toggle(True)           # high octave
+    e.on_octave_toggle(True)  # high octave
     assert e.octave_shift == 1
     e.on_arcade_press(0)
-    assert e.pitch_idx == NOTES_PER_OCTAVE   # first note of high octave
+    assert e.pitch_idx == NOTES_PER_OCTAVE  # first note of high octave
     e.on_arcade_press(4)
     assert e.pitch_idx == NUM_PITCHES - 1
 
@@ -96,7 +89,7 @@ def test_timbre_affects_waveform_and_shape():
     e = ToneExplorer()
     wave0 = e.waveform_id
     shape0 = e.blob_shape_id
-    e.on_timbre_delta(NUM_TIMBRES - 1)   # to the fuzzy end
+    e.on_timbre_delta(NUM_TIMBRES - 1)  # to the fuzzy end
     assert e.waveform_id != wave0
     assert e.blob_shape_id != shape0
 
@@ -104,7 +97,7 @@ def test_timbre_affects_waveform_and_shape():
 def test_octave_toggle_preserves_scale_step():
     """Switching octave should keep the 'which note in the scale' feel."""
     e = ToneExplorer()
-    e.on_arcade_press(2)                 # E in the low octave
+    e.on_arcade_press(2)  # E in the low octave
     step = e.pitch_idx % NOTES_PER_OCTAVE
     assert step == 2
     e.on_octave_toggle(True)
@@ -125,9 +118,9 @@ def test_mini_button_toggles_effect_bit():
 
 def test_multiple_effects_stack():
     e = ToneExplorer()
-    e.on_mini_button(0, True)   # vibrato
-    e.on_mini_button(1, True)   # tremolo
-    e.on_mini_button(6, True)   # stutter
+    e.on_mini_button(0, True)  # vibrato
+    e.on_mini_button(1, True)  # tremolo
+    e.on_mini_button(6, True)  # stutter
     assert e.is_effect(EFFECT_VIBRATO)
     assert e.is_effect(EFFECT_TREMOLO)
     assert e.is_effect(EFFECT_STUTTER)
@@ -145,11 +138,11 @@ def test_vibrato_params_follow_bit():
 
 def test_bend_direction_is_signed():
     e = ToneExplorer()
-    e.on_mini_button(2, True)   # bend up
+    e.on_mini_button(2, True)  # bend up
     rate_up, limit = e.bend_params()
     assert rate_up > 0 and limit > 0
     e.on_mini_button(2, False)
-    e.on_mini_button(3, True)   # bend down
+    e.on_mini_button(3, True)  # bend down
     rate_down, _ = e.bend_params()
     assert rate_down < 0
 
@@ -157,10 +150,10 @@ def test_bend_direction_is_signed():
 def test_octave_jump_cents_signed():
     e = ToneExplorer()
     assert e.octave_jump_cents() == 0
-    e.on_mini_button(4, True)   # octave up
+    e.on_mini_button(4, True)  # octave up
     assert e.octave_jump_cents() > 0
     e.on_mini_button(4, False)
-    e.on_mini_button(5, True)   # octave down
+    e.on_mini_button(5, True)  # octave down
     assert e.octave_jump_cents() < 0
 
 
@@ -168,10 +161,10 @@ def test_octave_jump_doubles_or_halves_freq():
     e = ToneExplorer()
     base = e.base_freq_hz
     assert e.effective_freq_hz() == base
-    e.on_mini_button(4, True)   # octave up
+    e.on_mini_button(4, True)  # octave up
     assert e.effective_freq_hz() == base * 2
     e.on_mini_button(4, False)
-    e.on_mini_button(5, True)   # octave down
+    e.on_mini_button(5, True)  # octave down
     assert e.effective_freq_hz() == base // 2
 
 

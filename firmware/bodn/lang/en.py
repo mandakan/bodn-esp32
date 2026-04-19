@@ -257,10 +257,10 @@ STRINGS = {
     # Tone Lab (free-play synth sandbox)
     "mode_tone_explorer": "tone lab",
     "tone_explorer_timbre_smooth": "smooth",
-    "tone_explorer_timbre_soft":   "soft",
+    "tone_explorer_timbre_soft": "soft",
     "tone_explorer_timbre_bright": "bright",
-    "tone_explorer_timbre_edgy":   "edgy",
-    "tone_explorer_timbre_fuzzy":  "fuzzy",
+    "tone_explorer_timbre_edgy": "edgy",
+    "tone_explorer_timbre_fuzzy": "fuzzy",
     "tone_explorer_scope_big_hint": "big wave",
     # Sortera (NFC classification game)
     "sortera_welcome": "Scan a card!",

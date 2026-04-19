@@ -24,7 +24,7 @@ from bodn.tone_explorer_rules import (
 
 _BLOB_SIZE = const(96)
 _SCOPE_H = const(48)
-_SCOPE_SAMPLES = const(256)   # samples drawn per frame (<= _audiomix.SCOPE_SAMPLES)
+_SCOPE_SAMPLES = const(256)  # samples drawn per frame (<= _audiomix.SCOPE_SAMPLES)
 _HEADER_H = const(22)
 _FOOTER_H = const(26)
 
@@ -33,7 +33,7 @@ _ENC_PITCH = const(0)  # config.ENC_NAV
 _ENC_TIMBRE = const(1)  # config.ENC_A
 
 # Switch indices in inp.sw — see main.input_scan_task for the MCP layout.
-_SW_VIZ_LEFT = const(2)   # MCP2 SW_LEFT — True = scope on primary
+_SW_VIZ_LEFT = const(2)  # MCP2 SW_LEFT — True = scope on primary
 _SW_OCT_RIGHT = const(3)  # MCP2 SW_RIGHT — True = high octave
 
 # Sprite transparency key (matches widgets._TRANSPARENT).
@@ -68,7 +68,7 @@ def _make_blob_sprite(shape_id, size, color):
         _fill_circle(fb, cx, cy, r - 2, color)
         # Cut a triangular wedge to give a "pointy" bias on top.
         for dy in range(-r, 0):
-            w = r + dy          # narrows as we go up
+            w = r + dy  # narrows as we go up
             if w <= 0:
                 continue
             fb.fill_rect(cx - w, cy + dy, w * 2, 1, color)
@@ -318,8 +318,10 @@ class ToneExplorerScreen(Screen):
         # Re-trigger the voice when waveform changes (different generator path).
         if eng.waveform_id != self._last_waveform:
             self._audio.tone_sustained(
-                eff_freq, wave=_wave_name(eng.waveform_id),
-                channel="music", voice=self._voice,
+                eff_freq,
+                wave=_wave_name(eng.waveform_id),
+                channel="music",
+                voice=self._voice,
             )
             self._last_waveform = eng.waveform_id
             self._last_mask = -1  # force re-apply of mods after retrigger
@@ -351,7 +353,8 @@ class ToneExplorerScreen(Screen):
         if h_freq:
             if self._harmony_voice is None:
                 self._harmony_voice = a.tone_sustained(
-                    h_freq, wave=_wave_name(eng.waveform_id), channel="music")
+                    h_freq, wave=_wave_name(eng.waveform_id), channel="music"
+                )
             else:
                 a.set_freq(self._harmony_voice, h_freq)
         elif self._harmony_voice is not None:
@@ -373,7 +376,7 @@ class ToneExplorerScreen(Screen):
         if self._full_clear:
             tft.fill(theme.BLACK)
             self._full_clear = False
-            self._dirty = True   # force full repaint of static regions
+            self._dirty = True  # force full repaint of static regions
 
         if self._dirty:
             self._render_static(tft, theme)
@@ -406,11 +409,13 @@ class ToneExplorerScreen(Screen):
         w = theme.width
         h = theme.height
         if self._engine.viz_big_scope:
-            self._render_scope(tft, theme, 0, _HEADER_H,
-                               w, h - _HEADER_H - _FOOTER_H, big=True)
+            self._render_scope(
+                tft, theme, 0, _HEADER_H, w, h - _HEADER_H - _FOOTER_H, big=True
+            )
         else:
-            self._render_scope(tft, theme, 0, h - _FOOTER_H - _SCOPE_H,
-                               w, _SCOPE_H, big=False)
+            self._render_scope(
+                tft, theme, 0, h - _FOOTER_H - _SCOPE_H, w, _SCOPE_H, big=False
+            )
 
     def _render_header(self, tft, theme):
         """Active-effect row — one small block per held effect."""
@@ -455,9 +460,10 @@ class ToneExplorerScreen(Screen):
                 self._audio.scope_peek(self._scope_buf)
             except Exception:
                 pass
-        gain = 768 if big else 256   # boost amplitude when the scope is big
-        draw_waveform(tft, x, y, w, h, self._scope_buf,
-                      theme.CYAN, theme.BLACK, gain_q8=gain)
+        gain = 768 if big else 256  # boost amplitude when the scope is big
+        draw_waveform(
+            tft, x, y, w, h, self._scope_buf, theme.CYAN, theme.BLACK, gain_q8=gain
+        )
 
     def _render_footer(self, tft, theme):
         w = theme.width
@@ -472,8 +478,7 @@ class ToneExplorerScreen(Screen):
         left = "{}{}".format(octave_mark, step)
         draw_centered(tft, left, fy + 6, theme.WHITE, w // 2, scale=2)
         label = t(eng.timbre_label_key)
-        draw_centered(tft, capitalize(label), fy + 6, theme.MUTED,
-                      w, scale=1)
+        draw_centered(tft, capitalize(label), fy + 6, theme.MUTED, w, scale=1)
         # Right-justify the label by writing into the right half via a second
         # call with an offset — simpler to just centre on w above and accept
         # overlap if the translation is long.  Keep the text short in sv.py.

@@ -508,14 +508,12 @@ class AudioEngine:
 
     def set_vibrato(self, voice, rate_hz=5.0, depth_cents=30):
         """Pitch LFO.  rate_hz=0 disables.  depth_cents is ±."""
-        _audiomix.voice_set_pitch_lfo(
-            voice, int(rate_hz * 100), int(depth_cents))
+        _audiomix.voice_set_pitch_lfo(voice, int(rate_hz * 100), int(depth_cents))
 
     def set_tremolo(self, voice, rate_hz=5.0, depth_pct=40):
         """Amplitude LFO.  rate_hz=0 disables.  depth_pct is 0..100."""
         depth = max(0, min(100, int(depth_pct)))
-        _audiomix.voice_set_amp_lfo(
-            voice, int(rate_hz * 100), depth * 32767 // 100)
+        _audiomix.voice_set_amp_lfo(voice, int(rate_hz * 100), depth * 32767 // 100)
 
     def set_bend(self, voice, cents_per_s=0, limit_cents=0):
         """Pitch ramp: accumulates at cents_per_s, clamped to ±limit_cents.
@@ -528,8 +526,7 @@ class AudioEngine:
     def set_stutter(self, voice, rate_hz=8.0, duty_pct=50):
         """Amp gate: samples are zeroed during the 'off' fraction of cycle."""
         duty = max(0, min(100, int(duty_pct)))
-        _audiomix.voice_set_stutter(
-            voice, int(rate_hz * 100), duty * 32767 // 100)
+        _audiomix.voice_set_stutter(voice, int(rate_hz * 100), duty * 32767 // 100)
 
     def clear_mods(self, voice):
         """Disable all modulation effects on a voice."""

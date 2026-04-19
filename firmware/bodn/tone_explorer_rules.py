@@ -18,6 +18,7 @@
 try:
     from micropython import const
 except ImportError:
+
     def const(x):
         return x
 
@@ -40,18 +41,18 @@ NOTES_PER_OCTAVE = const(5)
 
 # Timbre morph — 5 steps, each picks a waveform and a blob-shape sprite.
 # Waveform IDs match _audiomix.WAVE_* constants.
-_W_SINE     = const(1)
-_W_SAW      = const(2)
-_W_SQUARE   = const(0)
-_W_NOISE    = const(3)
+_W_SINE = const(1)
+_W_SAW = const(2)
+_W_SQUARE = const(0)
+_W_NOISE = const(3)
 
 # (waveform_id, blob_shape_id, display_label_i18n_key)
 TIMBRE_TABLE = (
-    (_W_SINE,   0, "tone_explorer_timbre_smooth"),
-    (_W_SINE,   1, "tone_explorer_timbre_soft"),
-    (_W_SAW,    2, "tone_explorer_timbre_bright"),
+    (_W_SINE, 0, "tone_explorer_timbre_smooth"),
+    (_W_SINE, 1, "tone_explorer_timbre_soft"),
+    (_W_SAW, 2, "tone_explorer_timbre_bright"),
     (_W_SQUARE, 3, "tone_explorer_timbre_edgy"),
-    (_W_NOISE,  4, "tone_explorer_timbre_fuzzy"),
+    (_W_NOISE, 4, "tone_explorer_timbre_fuzzy"),
 )
 NUM_TIMBRES = const(5)
 
@@ -59,14 +60,14 @@ NUM_TIMBRES = const(5)
 # Effect bitmask (mini button index -> bit).  Bit N = mini button N held.
 # ---------------------------------------------------------------------------
 
-EFFECT_VIBRATO     = const(1 << 0)
-EFFECT_TREMOLO     = const(1 << 1)
-EFFECT_BEND_UP     = const(1 << 2)
-EFFECT_BEND_DOWN   = const(1 << 3)
-EFFECT_OCTAVE_UP   = const(1 << 4)
+EFFECT_VIBRATO = const(1 << 0)
+EFFECT_TREMOLO = const(1 << 1)
+EFFECT_BEND_UP = const(1 << 2)
+EFFECT_BEND_DOWN = const(1 << 3)
+EFFECT_OCTAVE_UP = const(1 << 4)
 EFFECT_OCTAVE_DOWN = const(1 << 5)
-EFFECT_STUTTER     = const(1 << 6)
-EFFECT_HARMONY     = const(1 << 7)
+EFFECT_STUTTER = const(1 << 6)
+EFFECT_HARMONY = const(1 << 7)
 
 # Mini button index → effect bit.  Physical left-to-right.
 MINI_BUTTON_EFFECT = (
@@ -88,19 +89,19 @@ MINI_BUTTON_EFFECT = (
 
 DEFAULT_PARAMS = {
     # Vibrato
-    "vibrato_rate_hz":   5.0,
+    "vibrato_rate_hz": 5.0,
     "vibrato_depth_cents": 30,
     # Tremolo
-    "tremolo_rate_hz":   5.0,
+    "tremolo_rate_hz": 5.0,
     "tremolo_depth_pct": 40,
     # Bend (cents/s ramp, clamped at limit)
     "bend_rate_cents_per_s": 500,
-    "bend_limit_cents":      1200,
+    "bend_limit_cents": 1200,
     # Stutter
-    "stutter_rate_hz":  8.0,
+    "stutter_rate_hz": 8.0,
     "stutter_duty_pct": 50,
     # Octave jump (semitones above/below base; harmony fifth interval)
-    "octave_jump_cents":    1200,
+    "octave_jump_cents": 1200,
     "harmony_interval_cents": 702,  # 3:2 perfect fifth
 }
 
@@ -126,10 +127,12 @@ class ToneExplorer:
         # Free play starts at middle of the low octave (G4 — pentatonic index 3).
         self.pitch_idx = 3
         self.timbre_idx = 0
-        self.octave_shift = 0         # -1, 0, +1 from SW_RIGHT toggle
-        self.effects_mask = 0         # bitmask of EFFECT_*
-        self.viz_big_scope = False    # SW_LEFT: False=blob on primary, True=scope on primary
-        self.playing = False          # becomes True on first interaction
+        self.octave_shift = 0  # -1, 0, +1 from SW_RIGHT toggle
+        self.effects_mask = 0  # bitmask of EFFECT_*
+        self.viz_big_scope = (
+            False  # SW_LEFT: False=blob on primary, True=scope on primary
+        )
+        self.playing = False  # becomes True on first interaction
 
     # ---- Input events ----------------------------------------------------
 

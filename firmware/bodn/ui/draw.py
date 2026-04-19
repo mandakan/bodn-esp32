@@ -84,8 +84,7 @@ def waveform(tft, x, y, w, h, samples, fg, bg, gain_q8=256):
     centre-line when _draw isn't available.
     """
     if _HAS_NATIVE:
-        bbox = _draw.waveform(tft._buf, tft.width, x, y, w, h,
-                              samples, fg, bg, gain_q8)
+        bbox = _draw.waveform(tft._buf, tft.width, x, y, w, h, samples, fg, bg, gain_q8)
         if bbox[2] > 0 and bbox[3] > 0:
             tft.mark_dirty(*bbox)
         return

@@ -33,10 +33,12 @@ class ToneExplorerSecondary(Screen):
 
     def update_state(self, pitch_idx, timbre_idx, effects_mask, viz_big_scope):
         """Called by the primary screen when engine state changes."""
-        if (pitch_idx != self._pitch_idx
-                or timbre_idx != self._timbre_idx
-                or effects_mask != self._effects_mask
-                or viz_big_scope != self._viz_big_scope):
+        if (
+            pitch_idx != self._pitch_idx
+            or timbre_idx != self._timbre_idx
+            or effects_mask != self._effects_mask
+            or viz_big_scope != self._viz_big_scope
+        ):
             self._pitch_idx = pitch_idx
             self._timbre_idx = timbre_idx
             self._effects_mask = effects_mask
@@ -73,5 +75,4 @@ class ToneExplorerSecondary(Screen):
 
         # Viz hint — tiny marker showing which display owns the scope.
         if self._viz_big_scope:
-            draw_centered(tft, t("tone_explorer_scope_big_hint"),
-                          110, theme.MUTED, w)
+            draw_centered(tft, t("tone_explorer_scope_big_hint"), 110, theme.MUTED, w)

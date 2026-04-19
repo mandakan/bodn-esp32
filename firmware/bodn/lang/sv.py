@@ -257,10 +257,10 @@ STRINGS = {
     # Tone Lab (free-play synth sandbox)
     "mode_tone_explorer": "ljudlabb",
     "tone_explorer_timbre_smooth": "mjuk",
-    "tone_explorer_timbre_soft":   "len",
+    "tone_explorer_timbre_soft": "len",
     "tone_explorer_timbre_bright": "ljus",
-    "tone_explorer_timbre_edgy":   "kantig",
-    "tone_explorer_timbre_fuzzy":  "ruffig",
+    "tone_explorer_timbre_edgy": "kantig",
+    "tone_explorer_timbre_fuzzy": "ruffig",
     "tone_explorer_scope_big_hint": "stor våg",
     # Sortera (NFC classification game)
     "sortera_welcome": "Blippa ett kort!",
