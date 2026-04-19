@@ -284,6 +284,13 @@ static void scan_task(void *arg) {
     while (s->running) {
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
 
+        // While paused (e.g. PowerManager light-sleep window) the task stays
+        // alive but does no I2C — touching the bus across lightsleep entry/exit
+        // wedges peripheral state and trips the RTC watchdog.
+        if (s->paused) {
+            continue;
+        }
+
         // Read both MCP ports under mutex
         xSemaphoreTake(s->i2c_mutex, portMAX_DELAY);
         err = mcp_read_ports(s, port_buf);
@@ -464,6 +471,43 @@ void scanner_deinit(mcpinput_state_t *state) {
 
     heap_caps_free(state);
     ESP_LOGI(TAG, "deinit complete");
+}
+
+void scanner_suppress_held(mcpinput_state_t *state) {
+    if (state == NULL || state->mcp_dev == NULL) return;
+
+    uint8_t buf[2];
+    xSemaphoreTake(state->i2c_mutex, portMAX_DELAY);
+    esp_err_t err = mcp_read_ports(state, buf);
+    xSemaphoreGive(state->i2c_mutex);
+
+    if (err != ESP_OK) {
+        // Couldn't read — still drop queued events so a stale press from
+        // before sleep doesn't leak through.
+        state->events.rd = state->events.wr;
+        return;
+    }
+
+    uint16_t raw = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8);
+    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    uint16_t port_state = 0;
+
+    for (int i = 0; i < MCPINPUT_NUM_PINS; i++) {
+        uint8_t bit = (raw >> i) & 1;
+        state->buttons[i].raw = bit;
+        // Active-low: bit=0 means pressed.  Force the debounced state to
+        // match the live reading so the next scan sees no edge.
+        state->buttons[i].state = (bit == 0) ? 1 : 0;
+        state->buttons[i].last_change_ms = now;
+        if (state->buttons[i].state) {
+            port_state |= (1 << i);
+        }
+    }
+    state->port_state = port_state;
+
+    // Drop any events that snuck into the ring while we were entering /
+    // leaving sleep so the menu/game doesn't see the wake press.
+    state->events.rd = state->events.wr;
 }
 
 // ---------------------------------------------------------------------------

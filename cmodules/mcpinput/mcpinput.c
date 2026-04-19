@@ -70,6 +70,49 @@ static mp_obj_t mcpinput_deinit(void) {
 static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_deinit_obj, mcpinput_deinit);
 
 // ---------------------------------------------------------------------------
+// _mcpinput.scan_pause() / scan_resume()
+//
+// Suspend just the I2C polling work in the scan task without tearing down
+// the bus or PCA9685 device handle.  PowerManager calls scan_pause() before
+// machine.lightsleep() so the 500 Hz I2C polling does not run across the
+// sleep transition (which wedges the bus and trips RTC_WDT).  Python I2C
+// calls (mcp.refresh, etc.) still work because the mutex stays valid.
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_scan_pause(void) {
+    if (mcpinput_state != NULL) {
+        mcpinput_state->paused = 1;
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_scan_pause_obj, mcpinput_scan_pause);
+
+static mp_obj_t mcpinput_scan_resume(void) {
+    if (mcpinput_state != NULL) {
+        mcpinput_state->paused = 0;
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_scan_resume_obj, mcpinput_scan_resume);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.suppress_held()
+//
+// After lightsleep, primes each pin's debouncer to its live state so a
+// button still held from the wake press doesn't fire a fresh PRESS edge
+// into the menu/game.  Also drops any queued events.  Safe to call while
+// the scan task is paused.
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_suppress_held(void) {
+    if (mcpinput_state != NULL) {
+        scanner_suppress_held(mcpinput_state);
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_suppress_held_obj, mcpinput_suppress_held);
+
+// ---------------------------------------------------------------------------
 // _mcpinput.get_events() -> list of (type, pin, time_ms) tuples
 // ---------------------------------------------------------------------------
 
@@ -487,6 +530,9 @@ static const mp_rom_map_elem_t mcpinput_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_ROM_QSTR(MP_QSTR__mcpinput) },
     { MP_ROM_QSTR(MP_QSTR_init),        MP_ROM_PTR(&mcpinput_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit),      MP_ROM_PTR(&mcpinput_deinit_obj) },
+    { MP_ROM_QSTR(MP_QSTR_scan_pause),  MP_ROM_PTR(&mcpinput_scan_pause_obj) },
+    { MP_ROM_QSTR(MP_QSTR_scan_resume), MP_ROM_PTR(&mcpinput_scan_resume_obj) },
+    { MP_ROM_QSTR(MP_QSTR_suppress_held), MP_ROM_PTR(&mcpinput_suppress_held_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_events),  MP_ROM_PTR(&mcpinput_get_events_obj) },
     { MP_ROM_QSTR(MP_QSTR_read_state),  MP_ROM_PTR(&mcpinput_read_state_obj) },
     { MP_ROM_QSTR(MP_QSTR_i2c_write),   MP_ROM_PTR(&mcpinput_i2c_write_obj) },

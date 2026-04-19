@@ -23,6 +23,13 @@ const char *scanner_init(const scanner_config_t *cfg, mcpinput_state_t **state_o
 // Stop task, release I2C, free state.
 void scanner_deinit(mcpinput_state_t *state);
 
+// Read current MCP port state, prime each pin's debouncer to match (so any
+// pin held when this is called registers as "already pressed" — no fresh
+// PRESS edge will fire), and drop any queued events.  Used by PowerManager
+// after lightsleep so the button that woke the device isn't replayed into
+// the menu/game on wake.
+void scanner_suppress_held(mcpinput_state_t *state);
+
 // Mutex-protected I2C write: addr + memaddr + data.
 // Returns ESP_OK on success.
 int scanner_i2c_write(mcpinput_state_t *state, uint8_t addr,
