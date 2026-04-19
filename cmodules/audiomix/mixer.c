@@ -64,6 +64,74 @@ static void mono_to_stereo(const int16_t *mono, int16_t *stereo,
     }
 }
 
+// Append a chunk of post-mix samples to the scope ring buffer.
+static void scope_write(audiomix_state_t *state,
+                         const int16_t *samples, uint32_t n) {
+    uint32_t wr = state->scope_wr % AUDIOMIX_SCOPE_SAMPLES;
+    uint32_t first = AUDIOMIX_SCOPE_SAMPLES - wr;
+    if (first > n) first = n;
+    if (samples) {
+        memcpy(&state->scope_buf[wr], samples, first * sizeof(int16_t));
+        if (first < n) {
+            memcpy(&state->scope_buf[0], samples + first,
+                   (n - first) * sizeof(int16_t));
+        }
+    } else {
+        memset(&state->scope_buf[wr], 0, first * sizeof(int16_t));
+        if (first < n) {
+            memset(&state->scope_buf[0], 0,
+                   (n - first) * sizeof(int16_t));
+        }
+    }
+    state->scope_wr += n;
+}
+
+// Per-sample amplitude modulation: tremolo (amp LFO) + stutter gate.
+// Applied after tone generation so it stacks on top of envelopes / fades.
+static void apply_amp_modulation(int16_t *buf, uint32_t n,
+                                  audiomix_voice_t *v, uint32_t sample_rate) {
+    // Pre-compute per-sample phase increments in Q16.
+    // inc = 65536 * rate_cHz / (sample_rate * 100)
+    uint32_t amp_inc = 0, stut_inc = 0;
+    if (v->mod_lfo_amp_rate_cHz) {
+        amp_inc = (uint32_t)(((uint64_t)65536 * v->mod_lfo_amp_rate_cHz)
+                             / ((uint64_t)sample_rate * 100));
+    }
+    if (v->mod_stutter_rate_cHz) {
+        stut_inc = (uint32_t)(((uint64_t)65536 * v->mod_stutter_rate_cHz)
+                              / ((uint64_t)sample_rate * 100));
+    }
+    uint32_t amp_phase = v->mod_lfo_amp_phase;
+    uint32_t stut_phase = v->mod_stutter_phase;
+    uint32_t amp_depth = v->mod_lfo_amp_depth_q15;  // 0..32767
+    uint32_t stut_duty = v->mod_stutter_duty_q15;    // 0..32767
+
+    for (uint32_t i = 0; i < n; i++) {
+        // Amp LFO: gain in Q15, centred on unity minus half depth so it wobbles
+        // around a consistent perceived loudness (0 = unity, −depth = quietest).
+        uint32_t gain_q15 = 32767;
+        if (amp_inc && amp_depth) {
+            int16_t s = tonegen_lfo_sine(amp_phase);           // ±32767
+            // Map s from ±32767 to 0..depth, then subtract from unity.
+            int32_t dip = ((int32_t)amp_depth * (32767 - s)) >> 16;  // 0..depth
+            gain_q15 = 32767 - (uint32_t)dip;
+            amp_phase += amp_inc;
+        }
+        // Stutter: if we're in the "off" fraction of the cycle, zero the sample.
+        if (stut_inc && stut_duty) {
+            if ((stut_phase & 0xFFFF) < stut_duty) {
+                gain_q15 = 0;
+            }
+            stut_phase += stut_inc;
+        }
+        int32_t val = buf[i];
+        val = (val * (int32_t)gain_q15) >> 15;
+        buf[i] = (int16_t)val;
+    }
+    v->mod_lfo_amp_phase = amp_phase;
+    v->mod_stutter_phase = stut_phase;
+}
+
 // ---------------------------------------------------------------------------
 // Per-voice sample generation
 // ---------------------------------------------------------------------------
@@ -120,13 +188,54 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
     }
 
     case SRC_TONE: {
-        if (v->tone_samples_left == 0 || v->tone_freq == 0) {
+        if (v->tone_freq == 0) {
             v->source_type = SRC_NONE;
             break;
         }
-        n = (v->tone_samples_left < max_samples)
-            ? v->tone_samples_left : max_samples;
-        uint32_t period = state->sample_rate / v->tone_freq;
+        if (!v->tone_sustain && v->tone_samples_left == 0) {
+            v->source_type = SRC_NONE;
+            break;
+        }
+
+        n = v->tone_sustain
+            ? max_samples
+            : ((v->tone_samples_left < max_samples)
+               ? v->tone_samples_left : max_samples);
+
+        // --- Pitch modulation ---------------------------------------------
+        // Advance bend accumulator by this chunk's duration.
+        if (v->mod_bend_cents_per_s) {
+            int32_t delta = (v->mod_bend_cents_per_s * (int32_t)n)
+                            / (int32_t)state->sample_rate;
+            v->mod_bend_current_cents += delta;
+            int32_t lim = v->mod_bend_limit_cents;
+            if (lim > 0) {
+                if (v->mod_bend_current_cents >  lim) v->mod_bend_current_cents =  lim;
+                if (v->mod_bend_current_cents < -lim) v->mod_bend_current_cents = -lim;
+            }
+        }
+
+        // Combine bend + pitch LFO (sampled at chunk midpoint — 16 ms steps
+        // at 16 kHz are well below the ~5 Hz LFO rate, so quantisation is
+        // imperceptible even with square waves).
+        int32_t pitch_cents = v->mod_bend_current_cents;
+        if (v->mod_lfo_pitch_rate_cHz && v->mod_lfo_pitch_depth_cents) {
+            uint32_t inc = (uint32_t)(((uint64_t)65536
+                * v->mod_lfo_pitch_rate_cHz)
+                / ((uint64_t)state->sample_rate * 100));
+            uint32_t mid = v->mod_lfo_pitch_phase + inc * (n / 2);
+            int16_t s = tonegen_lfo_sine(mid);
+            pitch_cents += (int32_t)v->mod_lfo_pitch_depth_cents * s / 32767;
+            v->mod_lfo_pitch_phase += inc * n;
+        }
+
+        uint32_t eff_freq = v->tone_freq;
+        if (pitch_cents) {
+            uint32_t mult = tonegen_cents_mult_q16(pitch_cents);
+            eff_freq = (uint32_t)(((uint64_t)v->tone_freq * mult) >> 16);
+            if (eff_freq == 0) eff_freq = 1;
+        }
+        uint32_t period = state->sample_rate / eff_freq;
         if (period < 1) period = 1;
 
         switch (v->tone_wave) {
@@ -140,7 +249,7 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
             v->tone_phase = tonegen_sawtooth(voice_buf, n, period, v->tone_phase);
             break;
         case AUDIOMIX_WAVE_NOISE:
-            tonegen_noise(voice_buf, n, v->tone_freq, state->sample_rate);
+            tonegen_noise(voice_buf, n, eff_freq, state->sample_rate);
             break;
         default:
             memset(voice_buf, 0, n * 2);
@@ -154,17 +263,28 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
                             v->env_attack_samples, v->env_release_samples,
                             v->env_velocity);
             v->env_pos += n;
-        } else {
-            // Legacy fade for Python-triggered tones
+        } else if (!v->tone_sustain) {
+            // Legacy fade for Python-triggered one-shot tones
             int is_last = (v->tone_samples_left <= n);
             if (v->fade_in || is_last) {
                 tonegen_fade(voice_buf, n, v->fade_in, is_last,
                             AUDIOMIX_FADE_SAMPLES);
                 v->fade_in = 0;
             }
+        } else if (v->fade_in) {
+            // Sustained voice: fade in the very first chunk to avoid a click.
+            tonegen_fade(voice_buf, n, 1, 0, AUDIOMIX_FADE_SAMPLES);
+            v->fade_in = 0;
         }
 
-        v->tone_samples_left -= n;
+        // --- Amplitude modulation -----------------------------------------
+        if (v->mod_lfo_amp_rate_cHz || v->mod_stutter_rate_cHz) {
+            apply_amp_modulation(voice_buf, n, v, state->sample_rate);
+        }
+
+        if (!v->tone_sustain) {
+            v->tone_samples_left -= n;
+        }
         break;
     }
 
@@ -382,6 +502,7 @@ static void mix_task(void *arg) {
             // No active voices and no clock — write full silence chunk
             // (must match max_samples so clock timing stays consistent)
             memset(stereo_buf, 0, max_samples * 4);
+            scope_write(state, NULL, max_samples);
             size_t written;
             i2s_channel_write(s_i2s_handle, stereo_buf, max_samples * 4,
                              &written, portMAX_DELAY);
@@ -422,6 +543,7 @@ static void mix_task(void *arg) {
         if (max_n == 0) {
             // No voice produced samples — output full silence chunk
             memset(stereo_buf, 0, max_samples * 4);
+            scope_write(state, NULL, max_samples);
             size_t written;
             i2s_channel_write(s_i2s_handle, stereo_buf, max_samples * 4,
                              &written, portMAX_DELAY);
@@ -432,6 +554,9 @@ static void mix_task(void *arg) {
         if (state->master_volume < 100) {
             apply_gain(mix_buf, max_n, state->vol_mult);
         }
+
+        // Scope tap — post-master-volume mono samples for visualisation.
+        scope_write(state, mix_buf, max_n);
 
         // Mono → stereo
         mono_to_stereo(mix_buf, stereo_buf, max_n);

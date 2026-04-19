@@ -73,3 +73,21 @@ def info(asset):
     if _HAS_NATIVE and asset is not None:
         return _draw.info(asset)
     return None
+
+
+def waveform(tft, x, y, w, h, samples, fg, bg, gain_q8=256):
+    """Render a scope-style waveform from int16 PCM samples.
+
+    `samples` is a bytes-like object of int16 little-endian samples.  The
+    entire buffer is stretched across `w` pixels.  `gain_q8` is an 8.8
+    fixed-point amplitude multiplier (256 = unity).  Falls back to a flat
+    centre-line when _draw isn't available.
+    """
+    if _HAS_NATIVE:
+        bbox = _draw.waveform(tft._buf, tft.width, x, y, w, h, samples, fg, bg, gain_q8)
+        if bbox[2] > 0 and bbox[3] > 0:
+            tft.mark_dirty(*bbox)
+        return
+    # Fallback: flat line
+    tft.fill_rect(x, y, w, h, bg)
+    tft.hline(x, y + h // 2, w, fg)

@@ -503,6 +503,23 @@ productive.
 - **Soundboard**: Browse sound banks, mix them, adjust volume — creating personal
   soundscapes.
 
+- **Tone Lab**: A sandbox synthesiser tuned for preschoolers. Two encoders
+  control pitch and timbre; 5 arcade buttons snap to a strict pentatonic
+  scale so nothing ever sounds "wrong" (consistent with Gordon's (2003)
+  Music Learning Theory — tonal vocabulary is built through open but
+  in-tune exploration). Eight hold-to-apply effect buttons (vibrato,
+  tremolo, bend, stutter, octave jump, harmony) add expressive range
+  without overwhelming the child: each effect is a single, reversible
+  gesture mapped directly to one button, keeping the cause-effect link
+  transparent (Watson, 1985). The live oscilloscope and the blob whose
+  shape morphs from round (sine) to spiky (noise) provide a second,
+  visual channel onto the same signal, exploiting the Bouba/Kiki
+  cross-modal correspondence first documented by Köhler (1929) and
+  replicated in toddlers by Maurer et al. (2006). Higher pitch also
+  lifts the blob up the screen — the pitch-height correspondence
+  present even in infants (Dolscheid et al., 2014) — so the child
+  feels the relationship before naming it.
+
 - **Blippa**: A tangible free-play surface. Any NFC card the child owns — from
   any card set, programmed or future — produces an instant blip, full-screen
   emoji, and bilingual label. There is no goal, no failure state, and no
@@ -537,6 +554,17 @@ emotional) in a single activity.
   records hits in real-time during looped playback; toggle switches control
   play/pause, step count (8/16), and metronome — making abstract music
   concepts tangible.
+
+- **Tone Lab**: The most immediate creative outlet. Instead of producing
+  patterns over time (as the Sequencer does), the child sculpts a single
+  continuous sound: pitch, timbre, vibrato, bend, and harmony all stack in
+  real-time. Because the effect layer lives in the native audio mixer,
+  every input change is reflected in the waveform within milliseconds,
+  preserving the tight contingency loop that young children need to
+  perceive themselves as the cause of the sound (Rochat, 2001). The
+  pentatonic constraint plus the absence of a failure state make the mode
+  a true "sonic Lego": expressive range without the aesthetic risk that
+  comes with a chromatic instrument.
 
 ---
 

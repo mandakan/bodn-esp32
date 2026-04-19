@@ -13,6 +13,7 @@
 #include "decode.h"
 #include "font_render.h"
 #include "blit.h"
+#include "primitives.h"
 #include "fonts/builtin_8x8.h"
 
 /* ══════════════════════════════════════════════════════════════════
@@ -230,6 +231,53 @@ static mp_obj_t draw_info_fn(mp_obj_t asset_obj) {
 static MP_DEFINE_CONST_FUN_OBJ_1(draw_info_obj, draw_info_fn);
 
 /* ══════════════════════════════════════════════════════════════════
+ * _draw.waveform(fb, buf_w, x, y, w, h, samples, fg, bg, gain_q8) → (x,y,w,h)
+ *
+ * Render an oscilloscope trace into an RGB565 framebuffer.  `samples` is a
+ * bytes-like object of int16 PCM samples; the scope stretches its entire
+ * length horizontally across `w` pixels.
+ * ══════════════════════════════════════════════════════════════════ */
+
+static mp_obj_t draw_waveform_fn(size_t n_args, const mp_obj_t *args) {
+    (void)n_args;  /* always 10 */
+    mp_buffer_info_t fbinfo;
+    mp_get_buffer_raise(args[0], &fbinfo, MP_BUFFER_WRITE);
+
+    int buf_w = mp_obj_get_int(args[1]);
+    if (buf_w <= 0) {
+        mp_raise_ValueError(MP_ERROR_TEXT("buf_w must be > 0"));
+    }
+    int buf_h = (int)(fbinfo.len / ((size_t)buf_w * 2));
+
+    int x = mp_obj_get_int(args[2]);
+    int y = mp_obj_get_int(args[3]);
+    int w = mp_obj_get_int(args[4]);
+    int h = mp_obj_get_int(args[5]);
+
+    mp_buffer_info_t sbinfo;
+    mp_get_buffer_raise(args[6], &sbinfo, MP_BUFFER_READ);
+    int n_samples = (int)(sbinfo.len / 2);
+
+    uint16_t fg = (uint16_t)mp_obj_get_int(args[7]);
+    uint16_t bg = (uint16_t)mp_obj_get_int(args[8]);
+    int gain_q8 = mp_obj_get_int(args[9]);
+
+    draw_bbox_t bb = draw_waveform((uint16_t *)fbinfo.buf, buf_w, buf_h,
+                                   x, y, w, h,
+                                   (const int16_t *)sbinfo.buf, n_samples,
+                                   fg, bg, gain_q8);
+
+    mp_obj_t items[4] = {
+        MP_OBJ_NEW_SMALL_INT(bb.x),
+        MP_OBJ_NEW_SMALL_INT(bb.y),
+        MP_OBJ_NEW_SMALL_INT(bb.w),
+        MP_OBJ_NEW_SMALL_INT(bb.h),
+    };
+    return mp_obj_new_tuple(4, items);
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(draw_waveform_obj, 10, 10, draw_waveform_fn);
+
+/* ══════════════════════════════════════════════════════════════════
  * Module definition
  * ══════════════════════════════════════════════════════════════════ */
 
@@ -239,6 +287,7 @@ static const mp_rom_map_elem_t draw_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_text),        MP_ROM_PTR(&draw_text_obj) },
     { MP_ROM_QSTR(MP_QSTR_text_width),  MP_ROM_PTR(&draw_text_width_obj) },
     { MP_ROM_QSTR(MP_QSTR_sprite),      MP_ROM_PTR(&draw_sprite_obj) },
+    { MP_ROM_QSTR(MP_QSTR_waveform),    MP_ROM_PTR(&draw_waveform_obj) },
     { MP_ROM_QSTR(MP_QSTR_info),        MP_ROM_PTR(&draw_info_obj) },
     { MP_ROM_QSTR(MP_QSTR_BUILTIN_8X8), MP_ROM_PTR(&builtin_8x8_obj) },
     { MP_ROM_QSTR(MP_QSTR_Asset),       MP_ROM_PTR(&draw_asset_type) },

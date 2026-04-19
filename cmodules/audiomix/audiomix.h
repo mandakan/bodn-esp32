@@ -19,6 +19,11 @@
 #define AUDIOMIX_RINGBUF_SIZE   2048  // bytes per voice (64ms @ 16kHz mono 16-bit)
 #define AUDIOMIX_MONO_BUF_SIZE  512   // bytes per mono read (256 samples = 16ms)
 
+// Scope tap: post-mix mono samples captured for visualisation.
+// 512 samples × 2 bytes = 1 KB; at 16 kHz that's 32 ms of history
+// (~2 cycles of the lowest pentatonic tone the UI shows).
+#define AUDIOMIX_SCOPE_SAMPLES  512
+
 // Waveform types (match Python: 0=square, 1=sine, 2=sawtooth, 3=noise)
 #define AUDIOMIX_WAVE_SQUARE    0
 #define AUDIOMIX_WAVE_SINE      1
@@ -80,6 +85,31 @@ typedef struct {
     uint32_t tone_samples_left;
     uint32_t tone_phase;
     uint8_t  tone_wave;
+    uint8_t  tone_sustain;              // 1 = play indefinitely until stop_req
+
+    // --- Reusable modulation layer (any SRC_TONE voice) ---
+    // All fields zero = effect disabled.  Modes enable a subset and all
+    // stack: vibrato + tremolo + stutter run simultaneously on one voice.
+
+    // Pitch LFO (vibrato)
+    uint16_t mod_lfo_pitch_rate_cHz;    // 0 = off; 500 = 5.00 Hz
+    int16_t  mod_lfo_pitch_depth_cents; // ± cents; 30 = a quarter-tone wobble
+    uint32_t mod_lfo_pitch_phase;       // Q16 phase accumulator
+
+    // Amplitude LFO (tremolo)
+    uint16_t mod_lfo_amp_rate_cHz;      // 0 = off
+    uint16_t mod_lfo_amp_depth_q15;     // 0..32767 fraction of gain to wobble
+    uint32_t mod_lfo_amp_phase;
+
+    // Pitch bend ramp (hold-to-slide)
+    int32_t  mod_bend_cents_per_s;      // 0 = off; sign = direction
+    int32_t  mod_bend_current_cents;    // accumulated (clamped to ±limit)
+    int32_t  mod_bend_limit_cents;      // absolute clamp; 0 = no clamp
+
+    // Stutter gate (amp chopped to 0 at duty cycle)
+    uint16_t mod_stutter_rate_cHz;      // 0 = off
+    uint16_t mod_stutter_duty_q15;      // 0..32767 = off-fraction of cycle
+    uint32_t mod_stutter_phase;
 
     // Envelope state (for clock-driven tone tracks — replaces fade_in for tones)
     uint32_t env_attack_samples;        // attack ramp length (0 = instant)
@@ -191,6 +221,13 @@ typedef struct {
 
     // Step sequencer clock
     seq_clock_t clock;
+
+    // Scope tap — post-mix mono samples for visualisation.
+    // Mixer writes a full chunk at once, then advances scope_wr.  Python reads
+    // the most recent N samples via scope_peek() (memcpy — race-free for the
+    // reader because writes arrive in bounded chunks, not mid-byte).
+    int16_t  scope_buf[AUDIOMIX_SCOPE_SAMPLES];
+    volatile uint32_t scope_wr;         // next write sample index (monotonic)
 
     // Diagnostics (written by core 0, read by Python)
     volatile uint32_t underruns;        // ring buffer underrun count

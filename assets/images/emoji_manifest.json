@@ -13,6 +13,7 @@
     {"name": "space",      "codepoint": "1F680", "label": "Rocket"},
     {"name": "story",      "codepoint": "1F4D6", "label": "Open Book"},
     {"name": "sequencer",  "codepoint": "1F941", "label": "Drum"},
+    {"name": "tone_explorer", "codepoint": "1F3B9", "label": "Musical Keyboard"},
     {"name": "highfive",   "codepoint": "270B",  "label": "Raised Hand"},
     {"name": "soundboard", "codepoint": "1F50A", "label": "Speaker High Volume"},
     {"name": "sortera",   "codepoint": "1F9E9", "label": "Puzzle Piece"},
