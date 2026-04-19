@@ -1314,7 +1314,15 @@ if not _skip:
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Bodn stopped.")
+        # Make the next boot fast + drop to REPL so mpremote (which does
+        # a Ctrl-D soft reset with a 10 s deadline) can enter raw REPL
+        # reliably. Mirror of boot.py's _abort_boot() behaviour.
+        try:
+            open("/skip_main", "w").close()
+            open("/fast_boot", "w").close()
+        except OSError:
+            pass
+        print("Bodn stopped — next boot fast.")
     except Exception as e:
         import sys
 
