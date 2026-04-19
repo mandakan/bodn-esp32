@@ -51,8 +51,16 @@ def _rmtree(path):
 
 
 def _ota_walk(stage_dir):
-    """Yield (staged_path, target_path) pairs from the staging directory."""
-    for name in os.listdir(stage_dir):
+    """Yield (staged_path, target_path) pairs from the staging directory.
+
+    Silently yields nothing if the staging dir doesn't exist (HTTP uploads
+    write live, so /.ota is only populated by the FTP path).
+    """
+    try:
+        entries = os.listdir(stage_dir)
+    except OSError:
+        return
+    for name in entries:
         full = stage_dir + "/" + name
         try:
             os.listdir(full)  # directory
@@ -182,7 +190,16 @@ async def _drain_body(reader, cl):
 
 
 async def _handle_upload(reader, writer, headers, settings=None):
-    """OTA file upload — streams body to staging, checks free space first."""
+    """OTA file upload — streams body directly to the target path.
+
+    We used to stage into /.ota/ and copy to live on commit, but that
+    doubles filesystem usage, which exceeds the VFS partition on the 8 MiB
+    build once firmware grows past ~half the partition. The bulk-atomic
+    FTP path still uses /.ota/ staging because it needs MANIFEST-backed
+    cross-file integrity verification; HTTP uploads are one-file-at-a-time
+    and retry per file, so per-file atomicity (write .new + rename) is
+    sufficient.
+    """
     remote_path = headers.get("x-path", "")
     cl = int(headers.get("content-length", 0))
     tracker = settings.get("_idle_tracker") if settings is not None else None
@@ -192,7 +209,10 @@ async def _handle_upload(reader, writer, headers, settings=None):
         await _send_json(writer, {"error": "need X-Path header"}, 400)
         return
 
-    # Check free space (keep 4 KB reserve for filesystem metadata)
+    # Need room for the new copy + small metadata reserve. The old copy
+    # still on disk is freed by the rename below; if the new file is
+    # larger than the old we have to hold both briefly, which is what
+    # this check ensures.
     try:
         st = os.statvfs("/")
         free = st[0] * st[3]  # f_bsize * f_bavail
@@ -206,11 +226,11 @@ async def _handle_upload(reader, writer, headers, settings=None):
         return
 
     try:
-        staged = OTA_STAGE + remote_path
-        parent = staged.rsplit("/", 1)[0]
-        _mkdirs(parent)
-        # Stream body in 512-byte chunks
-        tmp = staged + ".tmp"
+        target = remote_path  # remote_path starts with "/"
+        parent = target.rsplit("/", 1)[0]
+        if parent and parent != "":
+            _mkdirs(parent)
+        tmp = target + ".new"
         written = 0
         with open(tmp, "wb") as f:
             remaining = cl
@@ -229,13 +249,13 @@ async def _handle_upload(reader, writer, headers, settings=None):
                     tracker.poke()
                     chunks_since_poke = 0
         try:
-            os.remove(staged)
+            os.remove(target)
         except OSError:
             pass
-        os.rename(tmp, staged)
+        os.rename(tmp, target)
         await _send_json(
             writer,
-            {"ok": True, "path": remote_path, "staged": staged, "size": written},
+            {"ok": True, "path": remote_path, "size": written},
         )
     except Exception as e:
         await _send_json(writer, {"error": str(e)}, 500)
@@ -419,30 +439,43 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _handle_upload(reader, writer, headers, settings=settings)
 
         elif method == "POST" and path == "/api/ota/commit":
-            # Verify integrity (when MANIFEST.json is present), then move
-            # staged files into place and reboot.
+            # Two deploy paths converge here:
+            #   * HTTP (/api/upload) writes directly to the live path and
+            #     never creates a MANIFEST — commit is just "please reboot".
+            #   * FTP populates /.ota/ plus a MANIFEST; commit verifies
+            #     hashes and moves staged files to live.
+            # Presence of MANIFEST.json is the unambiguous signal for the
+            # FTP path. Without this gate, a stale /.ota/ left over from
+            # an aborted HTTP deploy (or a USB hotfix) would silently
+            # downgrade live files on the next commit.
             try:
-                ok, errors = _verify_manifest()
-                if not ok:
-                    await _send_json(
-                        writer,
-                        {"error": "integrity check failed", "details": errors},
-                        400,
-                    )
-                    return
+                try:
+                    os.stat(_OTA_MANIFEST)
+                    have_manifest = True
+                except OSError:
+                    have_manifest = False
                 count = 0
-                for staged, target in _ota_walk(OTA_STAGE):
-                    if staged == _OTA_MANIFEST:
-                        continue  # control file — never deploy to live filesystem
-                    parent = target.rsplit("/", 1)[0]
-                    _mkdirs(parent)
-                    try:
-                        os.remove(target)
-                    except OSError:
-                        pass
-                    os.rename(staged, target)
-                    count += 1
-                _rmtree(OTA_STAGE)
+                if have_manifest:
+                    ok, errors = _verify_manifest()
+                    if not ok:
+                        await _send_json(
+                            writer,
+                            {"error": "integrity check failed", "details": errors},
+                            400,
+                        )
+                        return
+                    for staged, target in _ota_walk(OTA_STAGE):
+                        if staged == _OTA_MANIFEST:
+                            continue  # control file — never deploy to live
+                        parent = target.rsplit("/", 1)[0]
+                        _mkdirs(parent)
+                        try:
+                            os.remove(target)
+                        except OSError:
+                            pass
+                        os.rename(staged, target)
+                        count += 1
+                    _rmtree(OTA_STAGE)
                 # Flush filesystem to flash before hard reset — without this,
                 # FAT metadata for unrelated dirs (e.g. /data/) can be lost.
                 try:

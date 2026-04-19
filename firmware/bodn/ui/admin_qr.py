@@ -23,11 +23,25 @@ class AdminQRScreen(Screen):
         self._manager = manager
         self._dirty = True
 
-        # Build URL from current IP
-        from bodn.wifi import get_ip
+        # Prefer <hostname>.local when we're on a real network (STA). mDNS
+        # is only advertised on the STA interface in MicroPython's esp32
+        # port, so fall back to the raw AP IP when serving the device's
+        # own access point.
+        try:
+            import network
 
-        ip = get_ip()
-        self._url = "http://{}".format(ip)
+            sta = network.WLAN(network.STA_IF)
+            on_sta = sta.active() and sta.isconnected()
+        except Exception:
+            on_sta = False
+
+        if on_sta:
+            hostname = self._settings.get("hostname", "bodn")
+            self._url = "http://{}.local".format(hostname)
+        else:
+            from bodn.wifi import get_ip
+
+            self._url = "http://{}".format(get_ip())
 
         # Generate QR code
         try:
