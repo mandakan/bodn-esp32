@@ -23,6 +23,37 @@ from bodn import storage
 OTA_STAGE = "/.ota"
 _OTA_MANIFEST = OTA_STAGE + "/MANIFEST.json"
 
+# Deadline in ticks_ms; once past it, ota_active() returns False and the
+# main render tasks go back to normal. Refreshed on every /api/upload
+# and /api/ota/* call, so an interrupted deploy recovers on its own.
+_OTA_QUIET_MS = 10_000
+
+
+def _mark_ota_active(settings):
+    """Extend the 'OTA in progress' window.
+
+    primary_task / secondary_task poll `ota_active(settings)` and skip
+    rendering while the flag is set, freeing the Python VM so the
+    upload handler's many `await` points return promptly instead of
+    round-tripping through a frame render each time.
+    """
+    import time
+
+    settings["_ota_deadline_ms"] = time.ticks_add(time.ticks_ms(), _OTA_QUIET_MS)
+
+
+def ota_active(settings):
+    """Query whether we're currently mid-OTA and render loops should step aside."""
+    deadline = settings.get("_ota_deadline_ms")
+    if deadline is None:
+        return False
+    import time
+
+    if time.ticks_diff(deadline, time.ticks_ms()) <= 0:
+        settings["_ota_deadline_ms"] = None
+        return False
+    return True
+
 
 def _mkdirs(path):
     """Recursively create parent directories (MicroPython os.mkdir is single-level)."""
@@ -249,7 +280,17 @@ async def _handle_upload(reader, writer, headers, settings=None):
     cross-file integrity verification; HTTP uploads are one-file-at-a-time
     and retry per file, so per-file atomicity (write .new + rename) is
     sufficient.
+
+    When `settings["debug_ota"]` is truthy, prints a per-phase timing
+    breakdown to serial so a slow floor can be diagnosed without guessing.
     """
+    import time
+
+    debug = bool(settings and settings.get("debug_ota"))
+    ticks = time.ticks_ms
+    diff = time.ticks_diff
+    t_start = ticks()
+
     remote_path = headers.get("x-path", "")
     cl = int(headers.get("content-length", 0))
     tracker = settings.get("_idle_tracker") if settings is not None else None
@@ -263,11 +304,13 @@ async def _handle_upload(reader, writer, headers, settings=None):
     # still on disk is freed by the rename below; if the new file is
     # larger than the old we have to hold both briefly, which is what
     # this check ensures.
+    t_stat0 = ticks()
     try:
         st = os.statvfs("/")
         free = st[0] * st[3]  # f_bsize * f_bavail
     except Exception:
         free = 0
+    t_stat = diff(ticks(), t_stat0)
     if free > 0 and cl > free - 4096:
         await _drain_body(reader, cl)
         await _send_json(
@@ -287,16 +330,24 @@ async def _handle_upload(reader, writer, headers, settings=None):
         # block-level anyway, so larger chunks also reduce FAT overhead.
         CHUNK = 4096
         short_read = False
+        t_open0 = ticks()
+        t_read = 0
+        t_write = 0
         with open(tmp, "wb") as f:
+            t_open = diff(ticks(), t_open0)
             remaining = cl
             bytes_since_poke = 0
             while remaining > 0:
                 n = min(remaining, CHUNK)
+                tr0 = ticks()
                 chunk = await reader.read(n)
+                t_read += diff(ticks(), tr0)
                 if not chunk:
                     short_read = True
                     break
+                tw0 = ticks()
                 f.write(chunk)
+                t_write += diff(ticks(), tw0)
                 written += len(chunk)
                 remaining -= len(chunk)
                 bytes_since_poke += len(chunk)
@@ -310,15 +361,36 @@ async def _handle_upload(reader, writer, headers, settings=None):
             # reconnect rather than misread leftover bytes as the next
             # request line.
             writer._keep_alive = False
+        t_rm0 = ticks()
         try:
             os.remove(target)
         except OSError:
             pass
+        t_rm = diff(ticks(), t_rm0)
+        t_rn0 = ticks()
         os.rename(tmp, target)
+        t_rn = diff(ticks(), t_rn0)
+        t_resp0 = ticks()
         await _send_json(
             writer,
             {"ok": True, "path": remote_path, "size": written},
         )
+        t_resp = diff(ticks(), t_resp0)
+        if debug:
+            print(
+                "OTA {} {}B  stat={} open={} read={} write={} rm={} rn={} resp={} total={}".format(
+                    remote_path,
+                    written,
+                    t_stat,
+                    t_open,
+                    t_read,
+                    t_write,
+                    t_rm,
+                    t_rn,
+                    t_resp,
+                    diff(ticks(), t_start),
+                )
+            )
     except Exception as e:
         # Mid-write failure leaves an unknown number of bytes in the
         # socket; safest to drop the connection.
@@ -399,6 +471,9 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
                 writer._keep_alive = False
                 await _send_unauthorized(writer, "Invalid OTA token")
                 return False
+            # Mark OTA active *after* auth succeeds — an attacker probing
+            # with no token shouldn't be able to freeze the UI.
+            _mark_ota_active(settings)
 
         # --- Auth: all other API/UI endpoints require PIN ---
         if path != "/api/login":

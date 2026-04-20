@@ -16,7 +16,7 @@ from bodn.mcp23017 import MCP23017
 from bodn.pca9685 import PCA9685
 from bodn.arcade import ArcadeButtons
 from bodn.session import SessionManager
-from bodn.web import start_server
+from bodn.web import start_server, ota_active
 from bodn.ftp import start_ftp
 from bodn.wifi import WiFiController
 from bodn import storage
@@ -751,6 +751,18 @@ async def primary_task(
     _PERF_INTERVAL = const(60)  # print every 60 frames
 
     while True:
+        # ── OTA quiet mode ───────────────────────────────────
+        # While a WiFi OTA is in progress, every ~20 ms we'd otherwise
+        # spend a few ms on update()+render() — long enough that the
+        # upload handler's await points end up round-tripping through
+        # a frame render on each chunk. Skipping both here frees the
+        # Python VM so the web task's awaits return promptly.
+        # The deadline auto-expires ~10 s after the last OTA request,
+        # so an interrupted deploy recovers without human intervention.
+        if ota_active(settings):
+            await asyncio.sleep_ms(50)
+            continue
+
         t0 = ticks_ms()
 
         # ── Input + game logic (always runs) ──────────────────
@@ -876,7 +888,7 @@ async def primary_task(
         await asyncio.sleep_ms(2)
 
 
-async def secondary_task(secondary):
+async def secondary_task(secondary, settings):
     """Secondary display tick.
 
     DMA mode: 50 ms (20 fps) — SPI no longer blocks Python.
@@ -887,6 +899,10 @@ async def secondary_task(secondary):
     _interval = 50 if _dma else 200
     errors = 0
     while True:
+        if ota_active(settings):
+            # See OTA quiet mode comment in primary_task — same rationale.
+            await asyncio.sleep_ms(_interval)
+            continue
         try:
             secondary.tick()
         except KeyboardInterrupt:
@@ -1301,7 +1317,7 @@ async def main():
             idle_tracker,
             power_mgr,
         ),
-        secondary_task(secondary),
+        secondary_task(secondary, settings),
         housekeeping_task(session_mgr, settings, audio=audio, pwm=pwm),
     ]
     if audio:
