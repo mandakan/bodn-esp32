@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # Sync firmware to the ESP32 device via mpremote.
 # Usage: ./tools/sync.sh [--clean] [--minimal]
+#        ./tools/sync.sh PATH [PATH ...]
 #   --clean    Wipe device filesystem before syncing
 #   --minimal  Flash only boot.py, main.py, st7735.py, sdcard.py, and bodn/
 #              (skip firmware/sounds/). Useful when the device is hanging
 #              badly — press RST on the devkit, then run this immediately.
+#   PATH…      Copy only the given files and reset. Accepts repo-relative
+#              (firmware/bodn/web.py) or firmware-relative (bodn/web.py)
+#              paths. The device path mirrors the firmware-relative form.
+#              Fast path for iterating on one or two files.
 #
 # Reliability notes
 # -----------------
@@ -22,6 +27,27 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MPREMOTE="uv run mpremote connect auto"
+
+# Targeted single/multi-file sync. Everything that isn't a flag is a
+# path; resolve each to a (local_path, device_path) pair and issue a
+# single mpremote invocation (one raw-REPL entry keeps it fast).
+if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then
+    cd "$ROOT/firmware"
+    cmd=()
+    for arg in "$@"; do
+        # Strip leading firmware/ so the caller can paste repo-relative paths.
+        rel="${arg#firmware/}"
+        rel="${rel#./}"
+        if [ ! -f "$rel" ]; then
+            echo "sync.sh: not a file: $arg (looked for $ROOT/firmware/$rel)" >&2
+            exit 2
+        fi
+        cmd+=( fs cp "$rel" ":$rel" + )
+    done
+    echo "Deploying ${#} file(s) via USB..."
+    $MPREMOTE "${cmd[@]}" reset
+    exit 0
+fi
 
 if [ "${1:-}" = "--minimal" ]; then
     echo "Deploying core files (boot.py, main.py, st7735.py, sdcard.py, bodn/)..."

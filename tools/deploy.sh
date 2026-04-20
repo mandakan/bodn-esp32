@@ -2,14 +2,19 @@
 # Deploy firmware to Bodn — auto-detects USB vs WiFi.
 #
 # Usage:
-#   ./tools/deploy.sh                   auto (prefers WiFi if mDNS resolves, else USB)
-#   ./tools/deploy.sh --usb             force USB sync via mpremote (tools/sync.sh)
-#   ./tools/deploy.sh --wifi            force WiFi push via HTTP (tools/ota-push.py)
-#   ./tools/deploy.sh --wifi 192.168.x  WiFi to a specific host
-#   ./tools/deploy.sh --mount           live-mount firmware/ over USB (no copy, edits are live)
-#   ./tools/deploy.sh --force           re-upload all files (skip hash cache); forwarded to WiFi path
+#   ./tools/deploy.sh                          auto (prefers WiFi if mDNS resolves, else USB)
+#   ./tools/deploy.sh --usb                    force USB sync via mpremote (tools/sync.sh)
+#   ./tools/deploy.sh --usb PATH [PATH ...]    USB-deploy just these files (no full rsync)
+#   ./tools/deploy.sh --wifi                   force WiFi push via HTTP (tools/ota-push.py)
+#   ./tools/deploy.sh --wifi 192.168.x         WiFi to a specific host
+#   ./tools/deploy.sh --mount                  live-mount firmware/ over USB (no copy, edits are live)
+#   ./tools/deploy.sh --force                  re-upload all files (skip hash cache); forwarded to WiFi path
 #
-# Any bare non-flag argument is treated as the WiFi host shorthand:
+# PATH arguments accept either firmware-relative (bodn/web.py) or
+# repo-relative (firmware/bodn/web.py) paths. The device-side target
+# mirrors the firmware-relative form.
+#
+# Any bare non-flag argument without --usb is treated as the WiFi host:
 #   ./tools/deploy.sh 192.168.1.143
 set -euo pipefail
 
@@ -19,9 +24,10 @@ MDNS_HOST="${BODN_MDNS:-bodn.local}"
 mode=""
 host=""
 force=""
+files=()
 
 usage() {
-    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -32,7 +38,19 @@ while [ $# -gt 0 ]; do
         --force)  force="--force" ;;
         -h|--help) usage; exit 0 ;;
         --*)      echo "unknown flag: $1" >&2; usage >&2; exit 2 ;;
-        *)        host="$1"; [ -z "$mode" ] && mode=wifi ;;
+        *)
+            # --usb collects positionals as file paths; without an
+            # explicit mode (or with --wifi) the first bare arg is the
+            # host and anything else is an error.
+            if [ "$mode" = "usb" ]; then
+                files+=("$1")
+            elif [ -z "$host" ]; then
+                host="$1"
+                [ -z "$mode" ] && mode=wifi
+            else
+                echo "unexpected argument: $1" >&2; usage >&2; exit 2
+            fi
+            ;;
     esac
     shift
 done
@@ -85,6 +103,9 @@ fi
 
 case "$mode" in
     usb)
+        if [ ${#files[@]} -gt 0 ]; then
+            exec "$ROOT/tools/sync.sh" "${files[@]}"
+        fi
         exec "$ROOT/tools/sync.sh"
         ;;
     mount)
