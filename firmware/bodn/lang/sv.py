@@ -127,6 +127,10 @@ STRINGS = {
     "overlay_see_you": "Vi ses",
     "overlay_soon": "snart!",
     "overlay_goodnight": "Godnatt!",
+    # OTA status screen (shown while a WiFi firmware sync is active)
+    "ota_updating": "Uppdaterar...",
+    "ota_please_wait": "Vänta lite...",
+    "ota_rebooting": "Startar om!",
     # Demo
     "demo_buttons": "Knappar",
     "demo_arcade": "Trummor",

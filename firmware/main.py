@@ -16,7 +16,7 @@ from bodn.mcp23017 import MCP23017
 from bodn.pca9685 import PCA9685
 from bodn.arcade import ArcadeButtons
 from bodn.session import SessionManager
-from bodn.web import start_server
+from bodn.web import start_server, ota_active
 from bodn.ftp import start_ftp
 from bodn.wifi import WiFiController
 from bodn import storage
@@ -750,7 +750,47 @@ async def primary_task(
     _perf_t0 = ticks_ms()
     _PERF_INTERVAL = const(60)  # print every 60 frames
 
+    prev_ota = False
+    ota_frame = 0
+    next_ota_render_ms = 0
+    _OTA_RENDER_INTERVAL_MS = 250  # ~4 fps — enough for a moving progress bar
     while True:
+        # ── OTA quiet mode ───────────────────────────────────
+        # While a WiFi OTA is in progress, every ~20 ms we'd otherwise
+        # spend a few ms on update()+render() — long enough that the
+        # upload handler's await points end up round-tripping through
+        # a frame render on each chunk. Skipping the normal pipeline
+        # here frees the Python VM so the web task's awaits return
+        # promptly. We still paint the dedicated OTA status screen at
+        # ~4 fps so the kid sees something purposeful happening rather
+        # than a frozen game. The deadline auto-expires ~10 s after
+        # the last OTA request, so an interrupted deploy recovers
+        # without human intervention.
+        if ota_active(settings):
+            prev_ota = True
+            now = ticks_ms()
+            if ticks_diff(now, next_ota_render_ms) >= 0:
+                from bodn.ui import ota as ota_ui
+
+                try:
+                    ota_ui.render(manager.tft, manager.theme, settings, ota_frame)
+                    manager.tft.show()
+                except Exception as e:
+                    import sys
+
+                    sys.print_exception(e)
+                next_ota_render_ms = ticks_ms() + _OTA_RENDER_INTERVAL_MS
+                ota_frame += 1
+            await asyncio.sleep_ms(50)
+            continue
+
+        # Transitioning out of OTA — the OTA screen is still on the
+        # framebuffer; force the active screen to repaint from scratch
+        # on the next frame.
+        if prev_ota:
+            prev_ota = False
+            manager.invalidate()
+
         t0 = ticks_ms()
 
         # ── Input + game logic (always runs) ──────────────────
@@ -876,7 +916,7 @@ async def primary_task(
         await asyncio.sleep_ms(2)
 
 
-async def secondary_task(secondary):
+async def secondary_task(secondary, settings):
     """Secondary display tick.
 
     DMA mode: 50 ms (20 fps) — SPI no longer blocks Python.
@@ -886,7 +926,27 @@ async def secondary_task(secondary):
     _dma = getattr(secondary.tft, "_native", False)
     _interval = 50 if _dma else 200
     errors = 0
+    prev_ota = False
     while True:
+        if ota_active(settings):
+            # Paint "Uppdaterar..." once on entry; no per-tick work
+            # while OTA is running (progress/polish lives on the
+            # primary display). Secondary re-renders after OTA ends
+            # via the transition-out path below.
+            if not prev_ota:
+                prev_ota = True
+                try:
+                    from bodn.ui import ota as ota_ui
+
+                    ota_ui.render_secondary(secondary.tft, secondary.theme, settings)
+                    secondary.tft.show()
+                except Exception as e:
+                    print("secondary OTA paint error:", e)
+            await asyncio.sleep_ms(_interval)
+            continue
+        if prev_ota:
+            prev_ota = False
+            secondary.invalidate()
         try:
             secondary.tick()
         except KeyboardInterrupt:
@@ -1301,7 +1361,7 @@ async def main():
             idle_tracker,
             power_mgr,
         ),
-        secondary_task(secondary),
+        secondary_task(secondary, settings),
         housekeeping_task(session_mgr, settings, audio=audio, pwm=pwm),
     ]
     if audio:

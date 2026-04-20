@@ -23,6 +23,92 @@ from bodn import storage
 OTA_STAGE = "/.ota"
 _OTA_MANIFEST = OTA_STAGE + "/MANIFEST.json"
 
+# Deadline in ticks_ms; once past it, ota_active() returns False and the
+# main render tasks go back to normal. Refreshed on every /api/upload
+# and /api/ota/* call, so an interrupted deploy recovers on its own.
+_OTA_QUIET_MS = 10_000
+
+
+def _mark_ota_active(settings):
+    """Extend the 'OTA in progress' window.
+
+    primary_task / secondary_task poll `ota_active(settings)` and
+    render the OTA status screen at low fps while the flag is set,
+    freeing the Python VM so the upload handler's many `await` points
+    return promptly instead of round-tripping through a full frame of
+    the game screen each time.
+    """
+    import time
+
+    settings["_ota_deadline_ms"] = time.ticks_add(time.ticks_ms(), _OTA_QUIET_MS)
+
+
+def _reset_ota_progress(settings):
+    """Clear per-sync counters. Called from /api/ota/begin and
+    /api/ota/abort so the status screen doesn't show stale numbers
+    from a previous sync.
+    """
+    settings["_ota_current_path"] = ""
+    settings["_ota_files_done"] = 0
+    settings["_ota_bytes_done"] = 0
+    settings["_ota_total_files"] = 0
+    settings["_ota_total_bytes"] = 0
+
+
+def ota_active(settings):
+    """Query whether we're currently mid-OTA and render loops should step aside."""
+    deadline = settings.get("_ota_deadline_ms")
+    if deadline is None:
+        return False
+    import time
+
+    if time.ticks_diff(deadline, time.ticks_ms()) <= 0:
+        settings["_ota_deadline_ms"] = None
+        return False
+    return True
+
+
+# MicroPython's FAT statvfs walks the FAT to count free clusters —
+# ~1.1-1.3 s per call on the 6 MiB VFS partition. Calling it per
+# /api/upload turned a 97-file --force into ~125 s of pure statvfs
+# overhead. Cache the answer, decrement by bytes we write ourselves,
+# and only re-stat when the estimate drifts stale (a fresh write might
+# exceed it) or a generous time budget elapses.
+_FREE_CACHE = {"bytes": None, "written_since": 0, "refreshed_ms": 0}
+_FREE_REFRESH_BYTES = 500_000
+_FREE_REFRESH_MS = 60_000
+
+
+def _estimated_free(force=False):
+    import time
+
+    now = time.ticks_ms()
+    stale = (
+        _FREE_CACHE["bytes"] is None
+        or force
+        or _FREE_CACHE["written_since"] >= _FREE_REFRESH_BYTES
+        or time.ticks_diff(now, _FREE_CACHE["refreshed_ms"]) >= _FREE_REFRESH_MS
+    )
+    if stale:
+        try:
+            st = os.statvfs("/")
+            _FREE_CACHE["bytes"] = st[0] * st[3]
+        except Exception:
+            _FREE_CACHE["bytes"] = 0
+        _FREE_CACHE["written_since"] = 0
+        _FREE_CACHE["refreshed_ms"] = now
+    return _FREE_CACHE["bytes"]
+
+
+def _record_free_delta(bytes_written):
+    """Decrement the cached estimate. Approximate — the FAT may charge
+    a cluster-rounded amount, but over-writes get caught the next time
+    we re-stat (either by the byte or time budget).
+    """
+    if _FREE_CACHE["bytes"] is not None:
+        _FREE_CACHE["bytes"] -= bytes_written
+    _FREE_CACHE["written_since"] += bytes_written
+
 
 def _mkdirs(path):
     """Recursively create parent directories (MicroPython os.mkdir is single-level)."""
@@ -114,17 +200,49 @@ def _verify_manifest():
 
 
 async def _send(writer, status, content_type, body, extra_headers=None):
-    """Send an HTTP response."""
+    """Send an HTTP response.
+
+    Honours `writer._keep_alive` (set by the connection loop) to pick the
+    response protocol (HTTP/1.1 vs 1.0) and Connection header. Always sends
+    an explicit Content-Length so the client can reuse the socket.
+
+    Batches headers + body into a single write(): under keep-alive there's
+    no terminating close() to flush a half-filled segment, so splitting the
+    response across multiple write() calls lets Nagle + delayed-ACK pair up
+    and add ~hundreds of ms per request on MicroPython. One write() →
+    one segment → fast.
+    """
+    keep_alive = getattr(writer, "_keep_alive", False)
     body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
-    writer.write("HTTP/1.0 {} OK\r\n".format(status).encode())
-    writer.write("Content-Type: {}\r\n".format(content_type).encode())
-    writer.write("Content-Length: {}\r\n".format(len(body_bytes)).encode())
+    proto = "HTTP/1.1" if keep_alive else "HTTP/1.0"
+    conn = "keep-alive" if keep_alive else "close"
+    parts = [
+        "{} {} OK\r\n".format(proto, status).encode(),
+        "Content-Type: {}\r\n".format(content_type).encode(),
+        "Content-Length: {}\r\n".format(len(body_bytes)).encode(),
+    ]
     if extra_headers:
         for h in extra_headers:
-            writer.write("{}\r\n".format(h).encode())
-    writer.write(b"Connection: close\r\n\r\n")
-    writer.write(body_bytes)
+            parts.append("{}\r\n".format(h).encode())
+    parts.append("Connection: {}\r\n\r\n".format(conn).encode())
+    parts.append(body_bytes)
+    writer.write(b"".join(parts))
     await writer.drain()
+
+
+def _wants_keep_alive(request_line, headers):
+    """Decide whether to keep the connection open after this request.
+
+    HTTP/1.1 defaults to keep-alive (RFC 7230); HTTP/1.0 defaults to close
+    unless the client opted in with `Connection: keep-alive`. An explicit
+    `Connection: close` always wins.
+    """
+    conn = headers.get("connection", "").lower()
+    if "close" in conn:
+        return False
+    if "keep-alive" in conn:
+        return True
+    return b"HTTP/1.1" in request_line
 
 
 async def _send_json(writer, data, status=200):
@@ -185,8 +303,26 @@ async def _drain_body(reader, cl):
     """Read and discard cl bytes from reader."""
     while cl > 0:
         n = min(cl, 512)
-        await reader.read(n)
-        cl -= n
+        chunk = await reader.read(n)
+        if not chunk:
+            break
+        cl -= len(chunk)
+
+
+async def _read_exact(reader, n):
+    """Read exactly n bytes (loops until full or EOF). Required for
+    keep-alive: a single read() may return short, leaving body bytes in
+    the socket that would then be parsed as the next request line.
+    """
+    if n <= 0:
+        return b""
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = await reader.read(n - len(buf))
+        if not chunk:
+            break
+        buf.extend(chunk)
+    return bytes(buf)
 
 
 async def _handle_upload(reader, writer, headers, settings=None):
@@ -199,10 +335,25 @@ async def _handle_upload(reader, writer, headers, settings=None):
     cross-file integrity verification; HTTP uploads are one-file-at-a-time
     and retry per file, so per-file atomicity (write .new + rename) is
     sufficient.
+
+    When `settings["debug_ota"]` is truthy, prints a per-phase timing
+    breakdown to serial so a slow floor can be diagnosed without guessing.
     """
+    import time
+
+    debug = bool(settings and settings.get("debug_ota"))
+    ticks = time.ticks_ms
+    diff = time.ticks_diff
+    t_start = ticks()
+
     remote_path = headers.get("x-path", "")
     cl = int(headers.get("content-length", 0))
     tracker = settings.get("_idle_tracker") if settings is not None else None
+
+    # Publish the current file path so the OTA status screen can show
+    # it while we process this upload.
+    if settings is not None and remote_path:
+        settings["_ota_current_path"] = remote_path
 
     if not remote_path:
         await _drain_body(reader, cl)
@@ -212,12 +363,14 @@ async def _handle_upload(reader, writer, headers, settings=None):
     # Need room for the new copy + small metadata reserve. The old copy
     # still on disk is freed by the rename below; if the new file is
     # larger than the old we have to hold both briefly, which is what
-    # this check ensures.
-    try:
-        st = os.statvfs("/")
-        free = st[0] * st[3]  # f_bsize * f_bavail
-    except Exception:
-        free = 0
+    # this check ensures. Uses the cached estimate — see _estimated_free.
+    t_stat0 = ticks()
+    free = _estimated_free()
+    t_stat = diff(ticks(), t_stat0)
+    if free > 0 and cl > free - 4096:
+        # Cache may be stale — force one authoritative re-stat before
+        # refusing the upload.
+        free = _estimated_free(force=True)
     if free > 0 and cl > free - 4096:
         await _drain_body(reader, cl)
         await _send_json(
@@ -230,21 +383,43 @@ async def _handle_upload(reader, writer, headers, settings=None):
         parent = target.rsplit("/", 1)[0]
         if parent and parent != "":
             _mkdirs(parent)
-        tmp = target + ".new"
         written = 0
         # 4 KiB chunks: 8× fewer Python loop iterations than 512 B, and
         # comfortably fits in L1 on the ESP32-S3. Flash writes are
         # block-level anyway, so larger chunks also reduce FAT overhead.
         CHUNK = 4096
-        with open(tmp, "wb") as f:
+        short_read = False
+        # Write directly to target — not via a `.new` + remove + rename
+        # dance. On MicroPython FAT, each os.rename costs ~150-1000 ms
+        # (rises linearly within a directory until it hits a cluster
+        # boundary), and every rename is preceded by an os.remove that
+        # also scans the directory. Over a 97-file --force that totalled
+        # ~60 s of pure FAT metadata work. Writing in place sacrifices
+        # atomicity (power loss mid-write corrupts the target instead
+        # of keeping the old version), which is an acceptable trade-off
+        # for HTTP OTA: the client retries on error, and on any write
+        # exception we delete the target so the next boot fails
+        # cleanly on a missing file rather than importing a truncated
+        # one. FTP OTA still uses the `/.ota/` manifest-verified path
+        # when cross-file atomicity matters.
+        t_open0 = ticks()
+        t_read = 0
+        t_write = 0
+        with open(target, "wb") as f:
+            t_open = diff(ticks(), t_open0)
             remaining = cl
             bytes_since_poke = 0
             while remaining > 0:
                 n = min(remaining, CHUNK)
+                tr0 = ticks()
                 chunk = await reader.read(n)
+                t_read += diff(ticks(), tr0)
                 if not chunk:
+                    short_read = True
                     break
+                tw0 = ticks()
                 f.write(chunk)
+                t_write += diff(ticks(), tw0)
                 written += len(chunk)
                 remaining -= len(chunk)
                 bytes_since_poke += len(chunk)
@@ -253,26 +428,63 @@ async def _handle_upload(reader, writer, headers, settings=None):
                 if tracker is not None and bytes_since_poke >= 32768:
                     tracker.poke()
                     bytes_since_poke = 0
-        try:
-            os.remove(target)
-        except OSError:
-            pass
-        os.rename(tmp, target)
+        if short_read:
+            # The file is now truncated on flash. Delete it — better a
+            # missing import than a half-written one.
+            try:
+                os.remove(target)
+            except OSError:
+                pass
+            # Socket framing is also ambiguous — force the client to
+            # reconnect rather than misread leftover bytes as the next
+            # request line.
+            writer._keep_alive = False
+        _record_free_delta(written)
+        # Bump per-sync counters for the status screen.
+        if settings is not None:
+            settings["_ota_files_done"] = settings.get("_ota_files_done", 0) + 1
+            settings["_ota_bytes_done"] = settings.get("_ota_bytes_done", 0) + written
+        t_resp0 = ticks()
         await _send_json(
             writer,
             {"ok": True, "path": remote_path, "size": written},
         )
+        t_resp = diff(ticks(), t_resp0)
+        if debug:
+            print(
+                "OTA {} {}B  stat={} open={} read={} write={} resp={} total={}".format(
+                    remote_path,
+                    written,
+                    t_stat,
+                    t_open,
+                    t_read,
+                    t_write,
+                    t_resp,
+                    diff(ticks(), t_start),
+                )
+            )
     except Exception as e:
+        # Mid-write failure leaves an unknown number of bytes in the
+        # socket AND possibly a partial file. Delete the partial and
+        # drop the connection.
+        try:
+            os.remove(target)
+        except (OSError, NameError):
+            pass
+        writer._keep_alive = False
         await _send_json(writer, {"error": str(e)}, 500)
 
 
-async def _handle_request(reader, writer, session_mgr, settings):
-    """Parse HTTP request and route to handler."""
-    try:
-        request_line = await reader.readline()
-        if not request_line:
-            return
+async def _handle_request(reader, writer, request_line, session_mgr, settings):
+    """Parse HTTP request and route to handler.
 
+    `request_line` has already been read by the connection loop. Returns
+    True if the connection should be kept alive for another request.
+    """
+    # Default: don't keep alive — error paths fall through here and we
+    # can't safely reuse the socket if the request body wasn't drained.
+    writer._keep_alive = False
+    try:
         # Keep the device awake while clients are actively talking to us —
         # OTA/UI/status requests all count as activity. Without this a
         # multi-minute sync can trip the idle-timeout lightsleep.
@@ -282,13 +494,17 @@ async def _handle_request(reader, writer, session_mgr, settings):
 
         parts = request_line.decode().split()
         if len(parts) < 2:
-            return
+            return False
 
         method = parts[0]
         path = parts[1]
 
         # Read headers
         headers = await _read_headers(reader)
+        # Decide keep-alive intent now that we have headers; individual
+        # endpoints can downgrade to close (e.g. before reboot, or when
+        # they bail without draining the body).
+        writer._keep_alive = _wants_keep_alive(request_line, headers)
 
         # Parse body for POST (upload route streams directly to flash)
         body = None
@@ -297,7 +513,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
         elif method == "POST":
             cl = int(headers.get("content-length", 0))
             if cl > 0:
-                raw = await reader.read(cl)
+                raw = await _read_exact(reader, cl)
                 body = json.loads(raw)
 
         # --- Auth: PIN login endpoint (always accessible) ---
@@ -314,20 +530,28 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 )
             else:
                 await _send_unauthorized(writer, "Wrong PIN")
-            return
+            return writer._keep_alive
 
         # --- Auth: OTA endpoints require bearer token ---
         ota_paths = (
             "/api/upload",
             "/api/reboot",
             "/api/files",
+            "/api/ota/begin",
             "/api/ota/commit",
             "/api/ota/abort",
         )
         if path in ota_paths:
             if not _check_ota_token(headers, settings):
+                # /api/upload bodies are large and we haven't read them
+                # yet — force the client to reconnect rather than draining
+                # a rejected upload through the socket.
+                writer._keep_alive = False
                 await _send_unauthorized(writer, "Invalid OTA token")
-                return
+                return False
+            # Mark OTA active *after* auth succeeds — an attacker probing
+            # with no token shouldn't be able to freeze the UI.
+            _mark_ota_active(settings)
 
         # --- Auth: all other API/UI endpoints require PIN ---
         if path != "/api/login":
@@ -336,7 +560,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                 from bodn.web_ui import LOGIN_HTML
 
                 await _send(writer, 200, "text/html", LOGIN_HTML)
-                return
+                return writer._keep_alive
 
         # Route
         if method == "GET" and path == "/":
@@ -429,6 +653,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                     if k in body:
                         settings[k] = body[k]
                 storage.save_settings(settings)
+            writer._keep_alive = False  # we're about to reset
             await _send_json(writer, {"ok": True})
             # Reboot after response is sent
             await asyncio.sleep_ms(500)
@@ -487,6 +712,7 @@ async def _handle_request(reader, writer, session_mgr, settings):
                     os.sync()
                 except Exception:
                     pass  # os.sync() not available on all builds
+                writer._keep_alive = False  # we're about to reset
                 await _send_json(writer, {"ok": True, "committed": count})
                 try:
                     import machine
@@ -497,12 +723,30 @@ async def _handle_request(reader, writer, session_mgr, settings):
             except Exception as e:
                 await _send_json(writer, {"error": str(e)}, 500)
 
+        elif method == "POST" and path == "/api/ota/begin":
+            # Called by ota-push.py once per sync, before the first
+            # /api/upload, with {"files": N, "bytes": M}. Used by the
+            # OTA status screen to render a real progress bar instead
+            # of an indeterminate pulse. Body is optional — if it's
+            # missing we just fall through to the indeterminate state.
+            _reset_ota_progress(settings)
+            if body:
+                try:
+                    settings["_ota_total_files"] = int(body.get("files", 0) or 0)
+                    settings["_ota_total_bytes"] = int(body.get("bytes", 0) or 0)
+                except (TypeError, ValueError):
+                    pass  # malformed — keep the zeroed counters
+            await _send_json(writer, {"ok": True})
+
         elif method == "POST" and path == "/api/ota/abort":
-            # Discard staged files.
+            # Discard staged files and clear any progress state — a
+            # follow-up sync starts from a clean slate.
             _rmtree(OTA_STAGE)
+            _reset_ota_progress(settings)
             await _send_json(writer, {"ok": True})
 
         elif method == "POST" and path == "/api/reboot":
+            writer._keep_alive = False  # we're about to reset
             await _send_json(writer, {"ok": True, "rebooting": True})
             try:
                 os.sync()
@@ -589,10 +833,45 @@ async def _handle_request(reader, writer, session_mgr, settings):
             await _send(writer, 404, "text/plain", "Not found")
 
     except Exception as e:
+        # Internal error: socket may be in an unknown state — close.
+        writer._keep_alive = False
         try:
             await _send(writer, 500, "text/plain", str(e))
         except Exception:
             pass
+
+    return writer._keep_alive
+
+
+# Idle timeout for an open keep-alive connection. The full --force OTA
+# push has gaps of a few hundred ms between requests; 5 s is plenty of
+# headroom while still freeing the socket promptly when the client is
+# done.
+_KEEP_ALIVE_IDLE_S = 5
+
+
+async def _connection_loop(reader, writer, session_mgr, settings):
+    """Serve sequential requests on one TCP connection until the client
+    closes, the keep-alive timeout fires, or a handler downgrades to
+    Connection: close.
+    """
+    try:
+        while True:
+            try:
+                request_line = await asyncio.wait_for(
+                    reader.readline(), _KEEP_ALIVE_IDLE_S
+                )
+            except Exception:
+                # asyncio.TimeoutError on idle, or a transport error —
+                # either way we're done with this connection.
+                break
+            if not request_line:
+                break  # client closed cleanly between requests
+            keep_alive = await _handle_request(
+                reader, writer, request_line, session_mgr, settings
+            )
+            if not keep_alive:
+                break
     finally:
         try:
             writer.close()
@@ -601,12 +880,38 @@ async def _handle_request(reader, writer, session_mgr, settings):
             pass
 
 
+def _disable_nagle(writer):
+    """Turn off Nagle's algorithm on the accepted TCP socket.
+
+    Without TCP_NODELAY, small writes (response headers, small JSON
+    bodies) get stuck waiting for the ACK of the previous segment, which
+    on MicroPython's lwIP can pause ~200ms per request. Under keep-alive
+    this overhead stacks across every file in an OTA sync.
+    """
+    sock = None
+    try:
+        sock = writer.get_extra_info("socket")
+    except Exception:
+        pass
+    if sock is None:
+        sock = getattr(writer, "s", None)  # MicroPython uasyncio
+    if sock is None:
+        return
+    try:
+        import socket as _sock
+
+        sock.setsockopt(_sock.IPPROTO_TCP, _sock.TCP_NODELAY, 1)
+    except Exception:
+        pass  # platform/build doesn't expose TCP_NODELAY — no-op
+
+
 async def start_server(session_mgr, settings, port=80):
     """Start the async web server. Returns the server object."""
 
     async def handler(reader, writer):
+        _disable_nagle(writer)
         try:
-            await _handle_request(reader, writer, session_mgr, settings)
+            await _connection_loop(reader, writer, session_mgr, settings)
         except Exception as e:
             print("Web handler error:", e)
 
