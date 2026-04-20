@@ -252,6 +252,9 @@ def push(
         )
     elif skipped:
         print(f"  All {skipped} files unchanged ({elapsed:.1f}s)")
+    # Sanity check: confirms HTTP keep-alive actually reused the socket
+    # instead of opening a fresh TCP connection per file.
+    print(f"  (opened {client.connect_count} TCP connection(s))")
 
     return ok, uploaded
 

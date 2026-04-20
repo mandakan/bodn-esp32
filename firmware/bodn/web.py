@@ -119,19 +119,28 @@ async def _send(writer, status, content_type, body, extra_headers=None):
     Honours `writer._keep_alive` (set by the connection loop) to pick the
     response protocol (HTTP/1.1 vs 1.0) and Connection header. Always sends
     an explicit Content-Length so the client can reuse the socket.
+
+    Batches headers + body into a single write(): under keep-alive there's
+    no terminating close() to flush a half-filled segment, so splitting the
+    response across multiple write() calls lets Nagle + delayed-ACK pair up
+    and add ~hundreds of ms per request on MicroPython. One write() →
+    one segment → fast.
     """
     keep_alive = getattr(writer, "_keep_alive", False)
     body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
     proto = "HTTP/1.1" if keep_alive else "HTTP/1.0"
-    writer.write("{} {} OK\r\n".format(proto, status).encode())
-    writer.write("Content-Type: {}\r\n".format(content_type).encode())
-    writer.write("Content-Length: {}\r\n".format(len(body_bytes)).encode())
+    conn = "keep-alive" if keep_alive else "close"
+    parts = [
+        "{} {} OK\r\n".format(proto, status).encode(),
+        "Content-Type: {}\r\n".format(content_type).encode(),
+        "Content-Length: {}\r\n".format(len(body_bytes)).encode(),
+    ]
     if extra_headers:
         for h in extra_headers:
-            writer.write("{}\r\n".format(h).encode())
-    conn = "keep-alive" if keep_alive else "close"
-    writer.write("Connection: {}\r\n\r\n".format(conn).encode())
-    writer.write(body_bytes)
+            parts.append("{}\r\n".format(h).encode())
+    parts.append("Connection: {}\r\n\r\n".format(conn).encode())
+    parts.append(body_bytes)
+    writer.write(b"".join(parts))
     await writer.drain()
 
 
@@ -701,10 +710,36 @@ async def _connection_loop(reader, writer, session_mgr, settings):
             pass
 
 
+def _disable_nagle(writer):
+    """Turn off Nagle's algorithm on the accepted TCP socket.
+
+    Without TCP_NODELAY, small writes (response headers, small JSON
+    bodies) get stuck waiting for the ACK of the previous segment, which
+    on MicroPython's lwIP can pause ~200ms per request. Under keep-alive
+    this overhead stacks across every file in an OTA sync.
+    """
+    sock = None
+    try:
+        sock = writer.get_extra_info("socket")
+    except Exception:
+        pass
+    if sock is None:
+        sock = getattr(writer, "s", None)  # MicroPython uasyncio
+    if sock is None:
+        return
+    try:
+        import socket as _sock
+
+        sock.setsockopt(_sock.IPPROTO_TCP, _sock.TCP_NODELAY, 1)
+    except Exception:
+        pass  # platform/build doesn't expose TCP_NODELAY — no-op
+
+
 async def start_server(session_mgr, settings, port=80):
     """Start the async web server. Returns the server object."""
 
     async def handler(reader, writer):
+        _disable_nagle(writer)
         try:
             await _connection_loop(reader, writer, session_mgr, settings)
         except Exception as e:
