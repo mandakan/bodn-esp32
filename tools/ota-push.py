@@ -204,7 +204,13 @@ def push(
 
         success = False
         for attempt in range(3):
-            req_timeout = 10 + attempt * 10  # 10s, 20s, 30s
+            # Start at 30s: the device's asyncio scheduler yields on every
+            # await, and a busy main loop (UI frame, NeoPixel tick) can push
+            # a single file's processing to >10s. A 10s first-attempt would
+            # then fire socket.timeout, drop the keep-alive connection, and
+            # pay a full reconnect — more costly than just waiting out the
+            # spike on the socket we already have.
+            req_timeout = 30 + attempt * 15  # 30s, 45s, 60s
             t0 = time.monotonic()
             try:
                 status, _ = client.request(
