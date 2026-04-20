@@ -179,6 +179,27 @@ def push(
     if client is None:
         client = KeepAliveClient(base_url)
 
+    # Pre-scan: count files + bytes we're about to upload. The device's
+    # OTA status screen uses these to render a real progress bar instead
+    # of an indeterminate spinner. We'd have to hash every file to
+    # skip-check anyway, so this costs nothing extra.
+    plan_files = 0
+    plan_bytes = 0
+    for rel_path in FILES:
+        local = FIRMWARE_DIR / rel_path
+        if not local.exists():
+            continue
+        h = file_hash(local)
+        if not force and prev_hashes.get(rel_path) == h:
+            continue
+        size = local.stat().st_size
+        if size == 0:
+            continue
+        plan_files += 1
+        plan_bytes += size
+    if plan_files > 0:
+        _ota_begin(client, plan_files, plan_bytes, token)
+
     for rel_path in FILES:
         local = FIRMWARE_DIR / rel_path
         if not local.exists():
@@ -263,6 +284,24 @@ def push(
     print(f"  (opened {client.connect_count} TCP connection(s))")
 
     return ok, uploaded
+
+
+def _ota_begin(
+    client: KeepAliveClient, files: int, byte_total: int, token: str
+) -> None:
+    """Tell the device how many files + bytes we're about to upload so
+    it can render a progress bar on the OTA status screen. Best-effort:
+    if the endpoint doesn't exist (old firmware) or the request fails,
+    the device falls back to an indeterminate spinner.
+    """
+    hdrs = {"Content-Type": "application/json"}
+    if token:
+        hdrs["Authorization"] = f"Bearer {token}"
+    body = json.dumps({"files": files, "bytes": byte_total}).encode("utf-8")
+    try:
+        client.request("POST", "/api/ota/begin", body, hdrs)
+    except Exception:
+        pass
 
 
 def ota_commit(base_url: str, token: str = "") -> bool:

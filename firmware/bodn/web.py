@@ -32,14 +32,27 @@ _OTA_QUIET_MS = 10_000
 def _mark_ota_active(settings):
     """Extend the 'OTA in progress' window.
 
-    primary_task / secondary_task poll `ota_active(settings)` and skip
-    rendering while the flag is set, freeing the Python VM so the
-    upload handler's many `await` points return promptly instead of
-    round-tripping through a frame render each time.
+    primary_task / secondary_task poll `ota_active(settings)` and
+    render the OTA status screen at low fps while the flag is set,
+    freeing the Python VM so the upload handler's many `await` points
+    return promptly instead of round-tripping through a full frame of
+    the game screen each time.
     """
     import time
 
     settings["_ota_deadline_ms"] = time.ticks_add(time.ticks_ms(), _OTA_QUIET_MS)
+
+
+def _reset_ota_progress(settings):
+    """Clear per-sync counters. Called from /api/ota/begin and
+    /api/ota/abort so the status screen doesn't show stale numbers
+    from a previous sync.
+    """
+    settings["_ota_current_path"] = ""
+    settings["_ota_files_done"] = 0
+    settings["_ota_bytes_done"] = 0
+    settings["_ota_total_files"] = 0
+    settings["_ota_total_bytes"] = 0
 
 
 def ota_active(settings):
@@ -337,6 +350,11 @@ async def _handle_upload(reader, writer, headers, settings=None):
     cl = int(headers.get("content-length", 0))
     tracker = settings.get("_idle_tracker") if settings is not None else None
 
+    # Publish the current file path so the OTA status screen can show
+    # it while we process this upload.
+    if settings is not None and remote_path:
+        settings["_ota_current_path"] = remote_path
+
     if not remote_path:
         await _drain_body(reader, cl)
         await _send_json(writer, {"error": "need X-Path header"}, 400)
@@ -422,6 +440,10 @@ async def _handle_upload(reader, writer, headers, settings=None):
             # request line.
             writer._keep_alive = False
         _record_free_delta(written)
+        # Bump per-sync counters for the status screen.
+        if settings is not None:
+            settings["_ota_files_done"] = settings.get("_ota_files_done", 0) + 1
+            settings["_ota_bytes_done"] = settings.get("_ota_bytes_done", 0) + written
         t_resp0 = ticks()
         await _send_json(
             writer,
@@ -515,6 +537,7 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             "/api/upload",
             "/api/reboot",
             "/api/files",
+            "/api/ota/begin",
             "/api/ota/commit",
             "/api/ota/abort",
         )
@@ -700,9 +723,26 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             except Exception as e:
                 await _send_json(writer, {"error": str(e)}, 500)
 
+        elif method == "POST" and path == "/api/ota/begin":
+            # Called by ota-push.py once per sync, before the first
+            # /api/upload, with {"files": N, "bytes": M}. Used by the
+            # OTA status screen to render a real progress bar instead
+            # of an indeterminate pulse. Body is optional — if it's
+            # missing we just fall through to the indeterminate state.
+            _reset_ota_progress(settings)
+            if body:
+                try:
+                    settings["_ota_total_files"] = int(body.get("files", 0) or 0)
+                    settings["_ota_total_bytes"] = int(body.get("bytes", 0) or 0)
+                except (TypeError, ValueError):
+                    pass  # malformed — keep the zeroed counters
+            await _send_json(writer, {"ok": True})
+
         elif method == "POST" and path == "/api/ota/abort":
-            # Discard staged files.
+            # Discard staged files and clear any progress state — a
+            # follow-up sync starts from a clean slate.
             _rmtree(OTA_STAGE)
+            _reset_ota_progress(settings)
             await _send_json(writer, {"ok": True})
 
         elif method == "POST" and path == "/api/reboot":
