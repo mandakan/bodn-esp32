@@ -55,6 +55,48 @@ def ota_active(settings):
     return True
 
 
+# MicroPython's FAT statvfs walks the FAT to count free clusters —
+# ~1.1-1.3 s per call on the 6 MiB VFS partition. Calling it per
+# /api/upload turned a 97-file --force into ~125 s of pure statvfs
+# overhead. Cache the answer, decrement by bytes we write ourselves,
+# and only re-stat when the estimate drifts stale (a fresh write might
+# exceed it) or a generous time budget elapses.
+_FREE_CACHE = {"bytes": None, "written_since": 0, "refreshed_ms": 0}
+_FREE_REFRESH_BYTES = 500_000
+_FREE_REFRESH_MS = 60_000
+
+
+def _estimated_free(force=False):
+    import time
+
+    now = time.ticks_ms()
+    stale = (
+        _FREE_CACHE["bytes"] is None
+        or force
+        or _FREE_CACHE["written_since"] >= _FREE_REFRESH_BYTES
+        or time.ticks_diff(now, _FREE_CACHE["refreshed_ms"]) >= _FREE_REFRESH_MS
+    )
+    if stale:
+        try:
+            st = os.statvfs("/")
+            _FREE_CACHE["bytes"] = st[0] * st[3]
+        except Exception:
+            _FREE_CACHE["bytes"] = 0
+        _FREE_CACHE["written_since"] = 0
+        _FREE_CACHE["refreshed_ms"] = now
+    return _FREE_CACHE["bytes"]
+
+
+def _record_free_delta(bytes_written):
+    """Decrement the cached estimate. Approximate — the FAT may charge
+    a cluster-rounded amount, but over-writes get caught the next time
+    we re-stat (either by the byte or time budget).
+    """
+    if _FREE_CACHE["bytes"] is not None:
+        _FREE_CACHE["bytes"] -= bytes_written
+    _FREE_CACHE["written_since"] += bytes_written
+
+
 def _mkdirs(path):
     """Recursively create parent directories (MicroPython os.mkdir is single-level)."""
     parts = path.strip("/").split("/")
@@ -303,14 +345,14 @@ async def _handle_upload(reader, writer, headers, settings=None):
     # Need room for the new copy + small metadata reserve. The old copy
     # still on disk is freed by the rename below; if the new file is
     # larger than the old we have to hold both briefly, which is what
-    # this check ensures.
+    # this check ensures. Uses the cached estimate — see _estimated_free.
     t_stat0 = ticks()
-    try:
-        st = os.statvfs("/")
-        free = st[0] * st[3]  # f_bsize * f_bavail
-    except Exception:
-        free = 0
+    free = _estimated_free()
     t_stat = diff(ticks(), t_stat0)
+    if free > 0 and cl > free - 4096:
+        # Cache may be stale — force one authoritative re-stat before
+        # refusing the upload.
+        free = _estimated_free(force=True)
     if free > 0 and cl > free - 4096:
         await _drain_body(reader, cl)
         await _send_json(
@@ -370,6 +412,11 @@ async def _handle_upload(reader, writer, headers, settings=None):
         t_rn0 = ticks()
         os.rename(tmp, target)
         t_rn = diff(ticks(), t_rn0)
+        # os.remove freed the old target's clusters; we net-consumed
+        # (written - old_size) but don't know old_size cheaply. Record
+        # the conservative worst case: the full write. Any drift is
+        # reconciled by the byte/time budget in _estimated_free.
+        _record_free_delta(written)
         t_resp0 = ticks()
         await _send_json(
             writer,
