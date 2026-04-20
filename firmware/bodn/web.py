@@ -365,17 +365,29 @@ async def _handle_upload(reader, writer, headers, settings=None):
         parent = target.rsplit("/", 1)[0]
         if parent and parent != "":
             _mkdirs(parent)
-        tmp = target + ".new"
         written = 0
         # 4 KiB chunks: 8× fewer Python loop iterations than 512 B, and
         # comfortably fits in L1 on the ESP32-S3. Flash writes are
         # block-level anyway, so larger chunks also reduce FAT overhead.
         CHUNK = 4096
         short_read = False
+        # Write directly to target — not via a `.new` + remove + rename
+        # dance. On MicroPython FAT, each os.rename costs ~150-1000 ms
+        # (rises linearly within a directory until it hits a cluster
+        # boundary), and every rename is preceded by an os.remove that
+        # also scans the directory. Over a 97-file --force that totalled
+        # ~60 s of pure FAT metadata work. Writing in place sacrifices
+        # atomicity (power loss mid-write corrupts the target instead
+        # of keeping the old version), which is an acceptable trade-off
+        # for HTTP OTA: the client retries on error, and on any write
+        # exception we delete the target so the next boot fails
+        # cleanly on a missing file rather than importing a truncated
+        # one. FTP OTA still uses the `/.ota/` manifest-verified path
+        # when cross-file atomicity matters.
         t_open0 = ticks()
         t_read = 0
         t_write = 0
-        with open(tmp, "wb") as f:
+        with open(target, "wb") as f:
             t_open = diff(ticks(), t_open0)
             remaining = cl
             bytes_since_poke = 0
@@ -399,23 +411,16 @@ async def _handle_upload(reader, writer, headers, settings=None):
                     tracker.poke()
                     bytes_since_poke = 0
         if short_read:
-            # Socket framing is now ambiguous — force the client to
+            # The file is now truncated on flash. Delete it — better a
+            # missing import than a half-written one.
+            try:
+                os.remove(target)
+            except OSError:
+                pass
+            # Socket framing is also ambiguous — force the client to
             # reconnect rather than misread leftover bytes as the next
             # request line.
             writer._keep_alive = False
-        t_rm0 = ticks()
-        try:
-            os.remove(target)
-        except OSError:
-            pass
-        t_rm = diff(ticks(), t_rm0)
-        t_rn0 = ticks()
-        os.rename(tmp, target)
-        t_rn = diff(ticks(), t_rn0)
-        # os.remove freed the old target's clusters; we net-consumed
-        # (written - old_size) but don't know old_size cheaply. Record
-        # the conservative worst case: the full write. Any drift is
-        # reconciled by the byte/time budget in _estimated_free.
         _record_free_delta(written)
         t_resp0 = ticks()
         await _send_json(
@@ -425,22 +430,25 @@ async def _handle_upload(reader, writer, headers, settings=None):
         t_resp = diff(ticks(), t_resp0)
         if debug:
             print(
-                "OTA {} {}B  stat={} open={} read={} write={} rm={} rn={} resp={} total={}".format(
+                "OTA {} {}B  stat={} open={} read={} write={} resp={} total={}".format(
                     remote_path,
                     written,
                     t_stat,
                     t_open,
                     t_read,
                     t_write,
-                    t_rm,
-                    t_rn,
                     t_resp,
                     diff(ticks(), t_start),
                 )
             )
     except Exception as e:
         # Mid-write failure leaves an unknown number of bytes in the
-        # socket; safest to drop the connection.
+        # socket AND possibly a partial file. Delete the partial and
+        # drop the connection.
+        try:
+            os.remove(target)
+        except (OSError, NameError):
+            pass
         writer._keep_alive = False
         await _send_json(writer, {"error": str(e)}, 500)
 
