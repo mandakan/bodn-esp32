@@ -100,6 +100,14 @@ LED_LID_RING = (16, 92)  # 144 LED/m strip around lid perimeter
 NEOPIXEL_BRIGHTNESS = const(64)  # 0-255, sticks — low for battery + kid eyes
 NEOPIXEL_LID_BRIGHTNESS = const(32)  # 0-255, lid ring — lower for ambient glow
 
+# Hard cap on NeoPixel brightness (0-255).  All calls through bodn.neo clamp
+# pattern brightness and scale per-pixel RGB to this ceiling.  Keeps peak
+# current from the 5 V buck-boost within safe limits (108 LEDs × 60 mA/LED at
+# full white ≈ 6.5 A — well above the converter and battery C-rate) and
+# prevents thermal issues on the LED strip.  Raise carefully while watching
+# battery temp and brown-out resets.
+NEOPIXEL_MAX_BRIGHTNESS = const(128)
+
 # DevKit-Lipo on-board power monitoring (board-reserved — do not reassign)
 BAT_SENS_PIN = const(6)  # BAT_SENS: LiPo voltage via voltage divider → ADC
 PWR_SENS_PIN = const(5)  # PWR_SENS: high-Z on battery, low when USB present
