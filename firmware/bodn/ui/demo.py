@@ -180,6 +180,8 @@ class DemoScreen(Screen):
             self._arc_flash_ttl -= 1
             if self._arc_flash_ttl == 0:
                 self._arc_flash = -1
+                # Release the solid-colour override so zone patterns render again
+                neo.clear_override()
 
         # Encoder A button → cycle pattern
         if inp.enc_btn_pressed[ENC_A]:
