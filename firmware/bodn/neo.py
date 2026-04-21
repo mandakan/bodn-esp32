@@ -15,6 +15,28 @@ except ImportError:
     _neopixel = None
 
 
+def _cap(brightness):
+    """Clamp a pattern brightness to config.NEOPIXEL_MAX_BRIGHTNESS."""
+    m = config.NEOPIXEL_MAX_BRIGHTNESS
+    return brightness if brightness <= m else m
+
+
+def _scale_rgb(r, g, b):
+    """Scale per-pixel RGB to honour NEOPIXEL_MAX_BRIGHTNESS."""
+    m = config.NEOPIXEL_MAX_BRIGHTNESS
+    if m >= 255:
+        return r, g, b
+    return (r * m) // 255, (g * m) // 255, (b * m) // 255
+
+
+def _scale_bytes(data):
+    """Scale an r,g,b,r,g,b,... buffer by NEOPIXEL_MAX_BRIGHTNESS."""
+    m = config.NEOPIXEL_MAX_BRIGHTNESS
+    if m >= 255:
+        return data
+    return bytes((b * m) // 255 for b in data)
+
+
 class NeoEngine:
     """Convenience wrapper around _neopixel C module."""
 
@@ -81,7 +103,7 @@ class NeoEngine:
                 brightness = config.NEOPIXEL_LID_BRIGHTNESS
             else:
                 brightness = config.NEOPIXEL_BRIGHTNESS
-        kw = {"speed": speed, "brightness": brightness, "hue_offset": hue_offset}
+        kw = {"speed": speed, "brightness": _cap(brightness), "hue_offset": hue_offset}
         if colour is not None:
             kw["colour"] = colour
         _neopixel.zone_pattern(zone, pattern, **kw)
@@ -92,7 +114,7 @@ class NeoEngine:
 
     def zone_brightness(self, zone, brightness):
         if self._active:
-            _neopixel.zone_brightness(zone, brightness)
+            _neopixel.zone_brightness(zone, _cap(brightness))
 
     def all_off(self):
         """Turn off all zones."""
@@ -116,12 +138,13 @@ class NeoEngine:
 
     def set_pixel(self, index, r, g, b):
         if self._active:
+            r, g, b = _scale_rgb(r, g, b)
             _neopixel.set_pixel(index, r, g, b)
 
     def set_pixels(self, start, data):
         """Bulk set pixels from bytes(r,g,b,r,g,b,...)."""
         if self._active:
-            _neopixel.set_pixels(start, data)
+            _neopixel.set_pixels(start, _scale_bytes(data))
 
     def clear_pixel(self, index):
         if self._active:
@@ -139,6 +162,7 @@ class NeoEngine:
 
     def set_override(self, mode, r=0, g=0, b=0):
         if self._active:
+            r, g, b = _scale_rgb(r, g, b)
             _neopixel.set_override(mode, r=r, g=g, b=b)
 
     def clear_override(self):
