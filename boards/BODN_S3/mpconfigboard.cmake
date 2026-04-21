@@ -11,5 +11,6 @@ set(SDKCONFIG_DEFAULTS
     ${_PORT_DIR}/boards/sdkconfig.base
     ${_PORT_DIR}/boards/sdkconfig.spiram_sx
     ${_PORT_DIR}/boards/sdkconfig.spiram_oct
+    ${_PORT_DIR}/boards/sdkconfig.240mhz
     ${CMAKE_CURRENT_LIST_DIR}/sdkconfig.board
 )
