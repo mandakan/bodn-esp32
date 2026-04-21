@@ -38,6 +38,10 @@ _D_BUTTONS = const(8)
 _D_ARCADE = const(16)
 _D_ALL = const(31)  # 1|2|4|8|16
 
+# Arcade colour override: held = solid full-brightness, release fades over
+# this many frames (~20 ms each, so 18 ≈ 600 ms) back to the pattern.
+_ARC_FADE_FRAMES = const(18)
+
 # Colour palette per pattern index — module-level to avoid per-frame allocation
 _COLOUR_RGB = [
     (255, 0, 0),
@@ -167,16 +171,22 @@ class DemoScreen(Screen):
                 self._neo_dirty = True
                 break
 
-        # Arcade button tap → flash that button's color on all LEDs
+        # Arcade buttons drive a colour override on all NeoPixels:
+        #   • while held → solid at full brightness
+        #   • on release → fade back to the running pattern over _ARC_FADE_FRAMES
+        # A quick tap still looks like a flash: the press sets full brightness
+        # for at least one frame, then the release kicks off the fade.
         n_arc = len(inp.arc_held)
+        held_idx = -1
         for i in range(n_arc):
-            if inp.arc_just_pressed[i]:
-                self._arc_flash = i
-                self._arc_flash_ttl = 9  # ~300 ms at 30 fps
+            if inp.arc_held[i]:
+                held_idx = i
                 break
 
-        # Decay arcade flash (LED-only, no screen section)
-        if self._arc_flash_ttl > 0:
+        if held_idx >= 0:
+            self._arc_flash = held_idx
+            self._arc_flash_ttl = _ARC_FADE_FRAMES
+        elif self._arc_flash_ttl > 0:
             self._arc_flash_ttl -= 1
             if self._arc_flash_ttl == 0:
                 self._arc_flash = -1
@@ -255,15 +265,19 @@ class DemoScreen(Screen):
         if self._neo_dirty:
             self._neo_dirty = False
             self._apply_neo_pattern()
-        # Arcade flash override via C engine
+        # Arcade flash override via C engine: held = full, released = fade
         if self._arc_flash >= 0 and self._arc_flash < len(_ARC_RGB):
             cr, cg, cb = _ARC_RGB[self._arc_flash]
-            fade = self._arc_flash_ttl * self._brightness.value // 9
+            bri = self._brightness.value
+            if held_idx >= 0:
+                scale = bri
+            else:
+                scale = self._arc_flash_ttl * bri // _ARC_FADE_FRAMES
             neo.set_override(
                 neo.OVERRIDE_SOLID,
-                (cr * fade) >> 8,
-                (cg * fade) >> 8,
-                (cb * fade) >> 8,
+                (cr * scale) >> 8,
+                (cg * scale) >> 8,
+                (cb * scale) >> 8,
             )
 
     def _apply_neo_pattern(self):
