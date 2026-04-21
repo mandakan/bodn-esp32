@@ -33,6 +33,7 @@ _ENC_PITCH = const(0)  # config.ENC_NAV
 _ENC_TIMBRE = const(1)  # config.ENC_A
 
 # Switch indices in inp.sw — see main.input_scan_task for the MCP layout.
+_SW_AUDIO_OUT = const(0)  # MCP1 GPB0 — True = speaker on, False = silent
 _SW_VIZ_LEFT = const(2)  # MCP2 SW_LEFT — True = scope on primary
 _SW_OCT_RIGHT = const(3)  # MCP2 SW_RIGHT — True = high octave
 
@@ -164,6 +165,11 @@ class ToneExplorerScreen(Screen):
         self._scope_buf = bytearray(_SCOPE_SAMPLES * 2)
         self._have_scope = False
 
+        # Ephemeral audio-output mute via sw[0] — stash the entry-time value so
+        # exit() can restore it without touching persisted storage.
+        self._saved_audio_enabled = True
+        self._last_audio_sw = None
+
     # ---- lifecycle ------------------------------------------------------
 
     def enter(self, manager):
@@ -174,6 +180,9 @@ class ToneExplorerScreen(Screen):
         self._last_mask = -1
         self._last_waveform = -1
         self._last_eff_freq = 0
+
+        self._saved_audio_enabled = self._settings.get("audio_enabled", True)
+        self._last_audio_sw = None
 
         # Pick blob colour — cyan reads well on black; pitch shifts hue later
         # via the background tint.  Keeping the sprite one colour avoids
@@ -217,6 +226,13 @@ class ToneExplorerScreen(Screen):
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
+        # Restore audio-enabled flag to its entry-time value. The housekeeping
+        # task will sync audio.volume within 500 ms; push it now for no gap.
+        self._settings["audio_enabled"] = self._saved_audio_enabled
+        if self._audio:
+            self._audio.volume = (
+                self._settings.get("volume", 30) if self._saved_audio_enabled else 0
+            )
         if self._on_exit:
             self._on_exit()
 
@@ -249,6 +265,8 @@ class ToneExplorerScreen(Screen):
             eng.on_octave_toggle(inp.sw[_SW_OCT_RIGHT])
         if len(inp.sw) > _SW_VIZ_LEFT:
             eng.on_viz_toggle(inp.sw[_SW_VIZ_LEFT])
+        if len(inp.sw) > _SW_AUDIO_OUT:
+            self._apply_audio_switch(inp.sw[_SW_AUDIO_OUT])
 
         # Encoders — each detent = one pentatonic / timbre step.  Clamping
         # lives in the engine so the screen doesn't need to know the bounds.
@@ -303,6 +321,20 @@ class ToneExplorerScreen(Screen):
                 eng.effects_mask,
                 eng.viz_big_scope,
             )
+
+    def _apply_audio_switch(self, sw_on):
+        """Ephemerally mirror sw[0] into settings['audio_enabled'] so the
+        housekeeping task mutes/unmutes the engine.  Never persisted — the
+        global parental setting stashed in enter() is restored on exit.
+        A globally-disabled setting cannot be overridden up by this switch.
+        """
+        if sw_on == self._last_audio_sw:
+            return
+        self._last_audio_sw = sw_on
+        enabled = bool(sw_on) and self._saved_audio_enabled
+        self._settings["audio_enabled"] = enabled
+        if self._audio:
+            self._audio.volume = self._settings.get("volume", 30) if enabled else 0
 
     def _sync_audio(self):
         """Translate engine state into C-mixer commands.  Idempotent — only
