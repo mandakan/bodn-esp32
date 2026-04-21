@@ -62,7 +62,6 @@ class SequencerScreen(Screen):
 
     def __init__(
         self,
-        np,
         overlay,
         audio=None,
         arcade=None,
@@ -71,7 +70,6 @@ class SequencerScreen(Screen):
         on_exit=None,
         drum_bufs=None,
     ):
-        self._np = np
         self._overlay = overlay
         self._audio = audio
         self._arcade = arcade

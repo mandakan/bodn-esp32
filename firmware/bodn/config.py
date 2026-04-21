@@ -48,13 +48,13 @@ TFT2_LANDSCAPE = False  # set True when display is mounted sideways
 if TFT2_LANDSCAPE:
     TFT2_WIDTH = 160
     TFT2_HEIGHT = 128
-    TFT2_MADCTL = 0x68  # MV + MX + BGR (90° CW — adjust MX/MY to match mounting)
+    TFT2_MADCTL = 0x60  # MV + MX (90° CW, RGB — panel uses RGB subpixels)
     TFT2_COL_OFFSET = 0
     TFT2_ROW_OFFSET = 0
 else:
     TFT2_WIDTH = 128
     TFT2_HEIGHT = 160
-    TFT2_MADCTL = 0x08  # BGR only (may need MX depending on module)
+    TFT2_MADCTL = 0xC0  # MY + MX (180° for upside-down mount, RGB subpixels)
     TFT2_COL_OFFSET = 0
     TFT2_ROW_OFFSET = 0
 
