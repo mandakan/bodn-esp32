@@ -346,6 +346,44 @@ def test_catface_all_emotions_render():
         cat.render(tft, theme, 1)
 
 
+def test_catface_curious_gaze_animates():
+    """In CURIOUS mode, pupils should shift on a slow cycle via partial redraws."""
+    from bodn.ui.catface import _GAZE_TICKS_PER_SLOT, _GAZE_PATTERN
+
+    tft = FakeTft()
+    theme = FakeTheme()
+    cat = CatFaceScreen()
+    cat.enter(None)
+    cat.set_emotion(CURIOUS)
+    # Consume the initial full redraw.
+    assert cat.needs_redraw()
+    cat.render(tft, theme, 1)
+
+    # Within the first slot, no gaze change should fire.
+    for _ in range(_GAZE_TICKS_PER_SLOT - 1):
+        assert not cat.needs_redraw()
+
+    # Crossing the slot boundary should mark the eyes dirty.
+    assert cat.needs_redraw()
+    assert cat._gaze_slot == 1 % len(_GAZE_PATTERN)
+
+    # Partial redraws should not blow up and should clear the eyes-dirty flag.
+    cat.render(tft, theme, 2)
+    assert not cat._eyes_dirty
+
+
+def test_catface_non_curious_does_not_animate():
+    """NEUTRAL / HAPPY / etc. should stay idle between emotion changes."""
+    tft = FakeTft()
+    theme = FakeTheme()
+    cat = CatFaceScreen()
+    cat.enter(None)
+    cat.render(tft, theme, 1)  # consume initial dirty
+    assert not cat.needs_redraw()
+    for _ in range(200):
+        assert not cat.needs_redraw()
+
+
 # --- Zone-aware partial push tests ---
 
 
