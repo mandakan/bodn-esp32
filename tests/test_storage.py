@@ -50,6 +50,25 @@ class TestSettings:
         settings = load_settings()
         assert settings == DEFAULT_SETTINGS
 
+    def test_underscore_keys_are_not_persisted(self):
+        """Runtime-only keys (e.g. _idle_tracker, _pwm, _all_modes) must
+        not reach flash — they often hold non-serializable objects."""
+
+        class _Opaque:
+            pass
+
+        settings = dict(DEFAULT_SETTINGS)
+        settings["_idle_tracker"] = _Opaque()
+        settings["_pwm"] = _Opaque()
+        settings["_all_modes"] = ["demo", "simon"]
+        settings["max_session_min"] = 17
+        save_settings(settings)
+        loaded = load_settings()
+        assert "_idle_tracker" not in loaded
+        assert "_pwm" not in loaded
+        assert "_all_modes" not in loaded
+        assert loaded["max_session_min"] == 17
+
 
 class TestSessions:
     def test_empty_when_no_file(self):
