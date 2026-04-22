@@ -506,6 +506,15 @@ class AudioEngine:
         """Phase-preserving pitch change for a sustained tone."""
         _audiomix.voice_set_freq(voice, freq_hz)
 
+    def set_wave(self, voice, wave):
+        """Phase-preserving waveform change for a sustained tone.
+
+        Triggers a short (~3ms) linear crossfade between the old and new
+        oscillators so the sample shape transitions smoothly without a click.
+        """
+        wave_id = _WAVE_MAP.get(wave, 1)
+        _audiomix.voice_set_wave(voice, wave_id)
+
     def set_vibrato(self, voice, rate_hz=5.0, depth_cents=30):
         """Pitch LFO.  rate_hz=0 disables.  depth_cents is ±."""
         _audiomix.voice_set_pitch_lfo(voice, int(rate_hz * 100), int(depth_cents))

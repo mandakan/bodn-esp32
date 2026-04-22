@@ -444,6 +444,10 @@ class _FakeAudiomix:
         if idx in self._voices:
             self._voices[idx]["freq"] = freq
 
+    def voice_set_wave(self, idx, wave_id):
+        if idx in self._voices:
+            self._voices[idx]["wave"] = wave_id
+
     def voice_set_gain(self, idx, gain):
         if idx in self._voices:
             self._voices[idx]["gain"] = gain
@@ -545,6 +549,7 @@ for _attr in (
     "voice_sequence",
     "voice_tone_sustained",
     "voice_set_freq",
+    "voice_set_wave",
     "voice_set_gain",
     "voice_set_pitch_lfo",
     "voice_set_amp_lfo",

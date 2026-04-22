@@ -105,6 +105,12 @@ static void apply_amp_modulation(int16_t *buf, uint32_t n,
     uint32_t stut_phase = v->mod_stutter_phase;
     uint32_t amp_depth = v->mod_lfo_amp_depth_q15;  // 0..32767
     uint32_t stut_duty = v->mod_stutter_duty_q15;    // 0..32767
+    // Slew-limited stutter gate: the raw 0/32767 target is low-passed so the
+    // gate edges aren't sharp clicks.  Per-sample step gives a linear ramp
+    // across AUDIOMIX_STUTTER_RAMP_SAMPLES samples.
+    uint32_t stut_gate = v->mod_stutter_gate_q15;
+    const int32_t stut_step = 32767 / AUDIOMIX_STUTTER_RAMP_SAMPLES;
+    int stut_active = (stut_inc && stut_duty) ? 1 : 0;
 
     for (uint32_t i = 0; i < n; i++) {
         // Amp LFO: gain in Q15, centred on unity minus half depth so it wobbles
@@ -117,12 +123,21 @@ static void apply_amp_modulation(int16_t *buf, uint32_t n,
             gain_q15 = 32767 - (uint32_t)dip;
             amp_phase += amp_inc;
         }
-        // Stutter: if we're in the "off" fraction of the cycle, zero the sample.
-        if (stut_inc && stut_duty) {
-            if ((stut_phase & 0xFFFF) < stut_duty) {
-                gain_q15 = 0;
-            }
+        // Stutter: slew-limit a binary on/off target toward the current sample.
+        if (stut_active) {
+            uint32_t target = ((stut_phase & 0xFFFF) < stut_duty) ? 0 : 32767;
+            int32_t delta = (int32_t)target - (int32_t)stut_gate;
+            if (delta >  stut_step) delta =  stut_step;
+            if (delta < -stut_step) delta = -stut_step;
+            stut_gate = (uint32_t)((int32_t)stut_gate + delta);
+            gain_q15 = (gain_q15 * stut_gate) >> 15;
             stut_phase += stut_inc;
+        } else if (stut_gate != 32767) {
+            // Effect just turned off — coast the gate back up to unity.
+            int32_t delta = 32767 - (int32_t)stut_gate;
+            if (delta >  stut_step) delta =  stut_step;
+            stut_gate = (uint32_t)((int32_t)stut_gate + delta);
+            gain_q15 = (gain_q15 * stut_gate) >> 15;
         }
         int32_t val = buf[i];
         val = (val * (int32_t)gain_q15) >> 15;
@@ -130,6 +145,35 @@ static void apply_amp_modulation(int16_t *buf, uint32_t n,
     }
     v->mod_lfo_amp_phase = amp_phase;
     v->mod_stutter_phase = stut_phase;
+    v->mod_stutter_gate_q15 = (uint16_t)stut_gate;
+}
+
+// Compute Q16 phase increment from a frequency in Hz.  Rounded to nearest.
+static inline uint32_t phase_inc_q16(uint32_t freq_hz, uint32_t sample_rate) {
+    if (freq_hz == 0 || sample_rate == 0) return 0;
+    return (uint32_t)(((uint64_t)freq_hz * 65536 + sample_rate / 2)
+                      / sample_rate);
+}
+
+// Generate one chunk of a single waveform into `out` and return the new Q16
+// phase.  Noise has no phase so we pass through unchanged.
+static uint32_t render_wave_chunk(int16_t *out, uint32_t n, uint8_t wave,
+                                   uint32_t inc_q16, uint32_t phase_q16,
+                                   uint32_t freq_hz, uint32_t sample_rate) {
+    switch (wave) {
+    case AUDIOMIX_WAVE_SQUARE:
+        return tonegen_square(out, n, inc_q16, phase_q16);
+    case AUDIOMIX_WAVE_SINE:
+        return tonegen_sine(out, n, inc_q16, phase_q16);
+    case AUDIOMIX_WAVE_SAWTOOTH:
+        return tonegen_sawtooth(out, n, inc_q16, phase_q16);
+    case AUDIOMIX_WAVE_NOISE:
+        tonegen_noise(out, n, freq_hz, sample_rate);
+        return phase_q16;
+    default:
+        memset(out, 0, n * sizeof(int16_t));
+        return phase_q16;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -235,25 +279,46 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
             eff_freq = (uint32_t)(((uint64_t)v->tone_freq * mult) >> 16);
             if (eff_freq == 0) eff_freq = 1;
         }
-        uint32_t period = state->sample_rate / eff_freq;
-        if (period < 1) period = 1;
+        uint32_t inc = phase_inc_q16(eff_freq, state->sample_rate);
 
-        switch (v->tone_wave) {
-        case AUDIOMIX_WAVE_SQUARE:
-            v->tone_phase = tonegen_square(voice_buf, n, period, v->tone_phase);
-            break;
-        case AUDIOMIX_WAVE_SINE:
-            v->tone_phase = tonegen_sine(voice_buf, n, period, v->tone_phase);
-            break;
-        case AUDIOMIX_WAVE_SAWTOOTH:
-            v->tone_phase = tonegen_sawtooth(voice_buf, n, period, v->tone_phase);
-            break;
-        case AUDIOMIX_WAVE_NOISE:
-            tonegen_noise(voice_buf, n, eff_freq, state->sample_rate);
-            break;
-        default:
-            memset(voice_buf, 0, n * 2);
-            break;
+        // Waveform crossfade: if Python requested a wave change, render the
+        // new wave for the whole chunk, then blend the old wave over the first
+        // xfade_left samples.  Phase is shared so both oscillators step in
+        // lockstep — no double-pitch artefacts — and samples past the fade
+        // continue with the new wave cleanly.
+        if (v->tone_wave_xfade_left > 0
+                && v->tone_wave_pending != v->tone_wave) {
+            uint32_t xfade_n = v->tone_wave_xfade_left;
+            if (xfade_n > n) xfade_n = n;
+
+            uint32_t new_phase = render_wave_chunk(
+                voice_buf, n, v->tone_wave_pending, inc, v->tone_phase,
+                eff_freq, state->sample_rate);
+
+            int16_t scratch[AUDIOMIX_WAVE_XFADE_SAMPLES];
+            render_wave_chunk(scratch, xfade_n, v->tone_wave,
+                              inc, v->tone_phase,
+                              eff_freq, state->sample_rate);
+
+            const uint32_t total = AUDIOMIX_WAVE_XFADE_SAMPLES;
+            uint32_t done = total - v->tone_wave_xfade_left;
+            for (uint32_t i = 0; i < xfade_n; i++) {
+                uint32_t t = ((done + i) << 15) / (total > 0 ? total : 1);
+                if (t > 32767) t = 32767;
+                int32_t a = (int32_t)scratch[i]   * (int32_t)(32767 - t);
+                int32_t b = (int32_t)voice_buf[i] * (int32_t)t;
+                voice_buf[i] = (int16_t)((a + b) >> 15);
+            }
+
+            v->tone_phase = new_phase;
+            v->tone_wave_xfade_left -= xfade_n;
+            if (v->tone_wave_xfade_left == 0) {
+                v->tone_wave = v->tone_wave_pending;
+            }
+        } else {
+            v->tone_phase = render_wave_chunk(
+                voice_buf, n, v->tone_wave, inc, v->tone_phase,
+                eff_freq, state->sample_rate);
         }
 
         // Apply envelope or legacy fade
@@ -306,25 +371,10 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
             if (want > v->seq_samples_left) want = v->seq_samples_left;
 
             if (v->tone_freq > 0) {
-                uint32_t period = state->sample_rate / v->tone_freq;
-                if (period < 1) period = 1;
-                switch (v->tone_wave) {
-                case AUDIOMIX_WAVE_SQUARE:
-                    v->seq_phase = tonegen_square(voice_buf + n, want,
-                                                   period, v->seq_phase);
-                    break;
-                case AUDIOMIX_WAVE_SINE:
-                    v->seq_phase = tonegen_sine(voice_buf + n, want,
-                                                 period, v->seq_phase);
-                    break;
-                case AUDIOMIX_WAVE_SAWTOOTH:
-                    v->seq_phase = tonegen_sawtooth(voice_buf + n, want,
-                                                     period, v->seq_phase);
-                    break;
-                default:
-                    memset(voice_buf + n, 0, want * 2);
-                    break;
-                }
+                uint32_t inc = phase_inc_q16(v->tone_freq, state->sample_rate);
+                v->seq_phase = render_wave_chunk(
+                    voice_buf + n, want, v->tone_wave, inc, v->seq_phase,
+                    v->tone_freq, state->sample_rate);
             } else {
                 // freq == 0 means silence (rest)
                 memset(voice_buf + n, 0, want * 2);
@@ -444,11 +494,14 @@ static void mix_task(void *arg) {
                             v->tone_samples_left = dur_samples;
                             v->tone_phase = 0;
                             v->tone_wave = clk->melody_wave;
+                            v->tone_wave_pending = clk->melody_wave;
+                            v->tone_wave_xfade_left = 0;
                             v->loop = 0;
                             v->fade_in = 1;
                             v->fade_out = 0;
                             v->stop_req = 0;
                             v->env_total_samples = 0;  // legacy path
+                            v->mod_stutter_gate_q15 = 32767;
                             v->source_type = SRC_TONE;
                         }
                     }
@@ -479,6 +532,8 @@ static void mix_task(void *arg) {
                     v->tone_samples_left = dur_samples;
                     v->tone_phase = 0;
                     v->tone_wave = ts->wave;
+                    v->tone_wave_pending = ts->wave;
+                    v->tone_wave_xfade_left = 0;
                     v->loop = 0;
                     v->fade_in = 0;   // envelope handles attack
                     v->fade_out = 0;
@@ -490,6 +545,7 @@ static void mix_task(void *arg) {
                     v->env_total_samples = dur_samples;
                     v->env_pos = 0;
                     v->env_velocity = ts->velocity;
+                    v->mod_stutter_gate_q15 = 32767;
 
                     v->source_type = SRC_TONE;
                 }
@@ -632,6 +688,7 @@ const char *mixer_init(const mixer_config_t *cfg, audiomix_state_t **state_out) 
         audiomix_voice_t *v = &state->voices[i];
         v->source_type = SRC_NONE;
         v->gain = AUDIOMIX_GAIN_DEFAULT;
+        v->mod_stutter_gate_q15 = 32767;
         ringbuf_init(&v->ringbuf, AUDIOMIX_RINGBUF_SIZE);
     }
 

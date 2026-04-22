@@ -126,6 +126,8 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     v->tone_samples_left = (audiomix_state->sample_rate * dur_ms) / 1000;
     v->tone_phase = 0;
     v->tone_wave = wave;
+    v->tone_wave_pending = wave;
+    v->tone_wave_xfade_left = 0;
     v->tone_sustain = 0;
     v->env_total_samples = 0;
     v->loop = 0;
@@ -144,6 +146,7 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     v->mod_stutter_rate_cHz = 0;
     v->mod_stutter_duty_q15 = 0;
     v->mod_stutter_phase = 0;
+    v->mod_stutter_gate_q15 = 32767;
     audiomix_state->seq_counter++;
     v->start_seq = audiomix_state->seq_counter;
     v->source_type = SRC_TONE;
@@ -726,12 +729,15 @@ static mp_obj_t audiomix_voice_tone_sustained(size_t n_args, const mp_obj_t *arg
     v->tone_samples_left = 0;          // unused when tone_sustain = 1
     v->tone_phase = 0;
     v->tone_wave = wave;
+    v->tone_wave_pending = wave;
+    v->tone_wave_xfade_left = 0;
     v->tone_sustain = 1;
     v->env_total_samples = 0;
     v->loop = 0;
     v->fade_in = 1;                    // avoid click on first chunk
     v->fade_out = 0;
     v->stop_req = 0;
+    v->mod_stutter_gate_q15 = 32767;
     audiomix_state->seq_counter++;
     v->start_seq = audiomix_state->seq_counter;
     v->source_type = SRC_TONE;
@@ -740,6 +746,22 @@ static mp_obj_t audiomix_voice_tone_sustained(size_t n_args, const mp_obj_t *arg
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(audiomix_voice_tone_sustained_obj, 3, 3,
                                             audiomix_voice_tone_sustained);
+
+// _audiomix.voice_set_wave(idx, wave) — phase-preserving waveform change.
+// Only meaningful for a currently playing SRC_TONE voice.  Kicks off a short
+// (~3ms) linear crossfade between the old and new oscillators so the sample
+// shape transitions smoothly without a click.
+static mp_obj_t audiomix_voice_set_wave(mp_obj_t idx_obj, mp_obj_t wave_obj) {
+    audiomix_voice_t *v = resolve_voice(mp_obj_get_int(idx_obj));
+    uint8_t wave = (uint8_t)mp_obj_get_int(wave_obj);
+    if (wave == v->tone_wave && v->tone_wave_xfade_left == 0) {
+        return mp_const_none;  // no-op
+    }
+    v->tone_wave_pending = wave;
+    v->tone_wave_xfade_left = AUDIOMIX_WAVE_XFADE_SAMPLES;
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(audiomix_voice_set_wave_obj, audiomix_voice_set_wave);
 
 // _audiomix.voice_set_freq(idx, freq) — phase-preserving pitch change.
 // Only meaningful for a currently playing SRC_TONE voice.
@@ -839,6 +861,7 @@ static mp_obj_t audiomix_voice_clear_mods(mp_obj_t idx_obj) {
     v->mod_stutter_rate_cHz = 0;
     v->mod_stutter_duty_q15 = 0;
     v->mod_stutter_phase = 0;
+    v->mod_stutter_gate_q15 = 32767;
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(audiomix_voice_clear_mods_obj, audiomix_voice_clear_mods);
@@ -900,6 +923,7 @@ static const mp_rom_map_elem_t audiomix_module_globals_table[] = {
     // Sustained tones + modulation layer (reusable across modes)
     { MP_ROM_QSTR(MP_QSTR_voice_tone_sustained), MP_ROM_PTR(&audiomix_voice_tone_sustained_obj) },
     { MP_ROM_QSTR(MP_QSTR_voice_set_freq),       MP_ROM_PTR(&audiomix_voice_set_freq_obj) },
+    { MP_ROM_QSTR(MP_QSTR_voice_set_wave),       MP_ROM_PTR(&audiomix_voice_set_wave_obj) },
     { MP_ROM_QSTR(MP_QSTR_voice_set_pitch_lfo),  MP_ROM_PTR(&audiomix_voice_set_pitch_lfo_obj) },
     { MP_ROM_QSTR(MP_QSTR_voice_set_amp_lfo),    MP_ROM_PTR(&audiomix_voice_set_amp_lfo_obj) },
     { MP_ROM_QSTR(MP_QSTR_voice_set_bend),       MP_ROM_PTR(&audiomix_voice_set_bend_obj) },
