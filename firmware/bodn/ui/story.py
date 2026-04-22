@@ -292,7 +292,7 @@ class StoryScreen(Screen):
         self._tts_has_choices = eng.narrate_choices and eng.choice_count > 0
         # Try to play scene TTS
         tts_found = False
-        if self._audio and self._audio._voices:
+        if self._audio:
             scene_path = self._resolve_story_tts(eng.node_id)
             if scene_path:
                 self._audio.play(scene_path, channel="ui")
@@ -315,13 +315,9 @@ class StoryScreen(Screen):
             return
 
         if self._tts_playing:
-            # Check if UI voice is still active
-            if self._audio and self._audio._voices:
-                from bodn.audio import V_UI
-
-                ui_voice = self._audio._voices[V_UI]
-                if ui_voice.source is not None:
-                    return  # still playing
+            # Check if UI channel is still active
+            if self._audio and self._audio.channel_active("ui"):
+                return  # still playing
             # TTS phase finished
             if self._tts_phase == 0:
                 # Scene done — try choices
