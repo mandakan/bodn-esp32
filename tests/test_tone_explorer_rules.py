@@ -36,10 +36,11 @@ def test_initial_state_is_middle_sine():
 
 def test_arcade_press_snaps_pitch_within_octave():
     e = ToneExplorer()
-    e.on_arcade_press(0)
+    e.on_arcade(0, True)
     assert e.pitch_idx == 0
     assert e.base_freq_hz == PENTATONIC_HZ[0]
-    e.on_arcade_press(4)
+    e.on_arcade(0, False)
+    e.on_arcade(4, True)
     assert e.pitch_idx == 4
     assert e.base_freq_hz == PENTATONIC_HZ[4]
 
@@ -48,18 +49,76 @@ def test_arcade_press_respects_octave_toggle():
     e = ToneExplorer()
     e.on_octave_toggle(True)  # high octave
     assert e.octave_shift == 1
-    e.on_arcade_press(0)
+    e.on_arcade(0, True)
     assert e.pitch_idx == NOTES_PER_OCTAVE  # first note of high octave
-    e.on_arcade_press(4)
+    e.on_arcade(0, False)
+    e.on_arcade(4, True)
     assert e.pitch_idx == NUM_PITCHES - 1
 
 
 def test_arcade_press_ignores_out_of_range():
     e = ToneExplorer()
     before = e.pitch_idx
-    e.on_arcade_press(-1)
-    e.on_arcade_press(5)
+    e.on_arcade(-1, True)
+    e.on_arcade(5, True)
     assert e.pitch_idx == before
+
+
+def test_arcade_last_note_priority():
+    """Newest press wins; releasing it falls back to the still-held note."""
+    e = ToneExplorer()
+    e.on_arcade(1, True)
+    assert e.pitch_idx == 1
+    e.on_arcade(3, True)
+    assert e.pitch_idx == 3
+    e.on_arcade(3, False)
+    # Falls back to 1, which is still held.
+    assert e.pitch_idx == 1
+    assert e.arcade_active_step() == 1
+    e.on_arcade(1, False)
+    # All released: pitch holds at the last sounding value (gate handles mute).
+    assert e.pitch_idx == 1
+    assert e.arcade_active_step() == -1
+
+
+def test_arcade_re_press_moves_to_top_of_stack():
+    """Re-pressing a held button should make it the active note again."""
+    e = ToneExplorer()
+    e.on_arcade(0, True)
+    e.on_arcade(2, True)
+    assert e.pitch_idx == 2
+    # Pressing 0 again while still held — 0 becomes top of stack.
+    e.on_arcade(0, True)
+    assert e.pitch_idx == 0
+    # Releasing 0 falls back to 2.
+    e.on_arcade(0, False)
+    assert e.pitch_idx == 2
+
+
+def test_arcade_release_without_press_is_noop():
+    e = ToneExplorer()
+    before = e.pitch_idx
+    e.on_arcade(0, False)
+    assert e.pitch_idx == before
+    assert e.arcade_active_step() == -1
+
+
+def test_arcade_is_held_reports_stack_membership():
+    e = ToneExplorer()
+    e.on_arcade(2, True)
+    e.on_arcade(4, True)
+    assert e.arcade_is_held(2)
+    assert e.arcade_is_held(4)
+    assert not e.arcade_is_held(0)
+
+
+def test_panic_clears_arcade_stack():
+    e = ToneExplorer()
+    e.on_arcade(1, True)
+    e.on_arcade(3, True)
+    e.on_panic()
+    assert e.arcade_active_step() == -1
+    assert not e.arcade_is_held(1)
 
 
 def test_pitch_encoder_clamps_and_sets_playing():
@@ -97,7 +156,8 @@ def test_timbre_affects_waveform_and_shape():
 def test_octave_toggle_preserves_scale_step():
     """Switching octave should keep the 'which note in the scale' feel."""
     e = ToneExplorer()
-    e.on_arcade_press(2)  # E in the low octave
+    e.on_arcade(2, True)  # E in the low octave
+    e.on_arcade(2, False)
     step = e.pitch_idx % NOTES_PER_OCTAVE
     assert step == 2
     e.on_octave_toggle(True)
@@ -182,7 +242,7 @@ def test_harmony_freq_is_pentatonic_fifth():
 
 def test_panic_clears_effects_and_playing():
     e = ToneExplorer()
-    e.on_arcade_press(1)
+    e.on_arcade(1, True)
     e.on_mini_button(0, True)
     assert e.playing is True
     assert e.effects_mask != 0

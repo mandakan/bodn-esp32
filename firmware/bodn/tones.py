@@ -133,7 +133,8 @@ else:
 def generate(buf, freq_hz, sample_rate=16000, wave="square", phase_offset=0):
     """Fill *buf* with PCM 16-bit LE mono samples at *freq_hz*.
 
-    Supported waveforms: 'square', 'sine', 'sawtooth', 'noise'.
+    Supported waveforms: 'square', 'sine', 'sawtooth', 'triangle',
+    'noise' (decaying), 'noise_pitched' (sample-and-hold at freq_hz).
     For 'noise', freq_hz controls the decay rate: higher = faster decay.
     *phase_offset* is the sample index to start from (for phase continuity
     across multiple calls). Returns (bytes_written, next_phase_offset).
@@ -166,10 +167,89 @@ def generate(buf, freq_hz, sample_rate=16000, wave="square", phase_offset=0):
     elif wave == "sawtooth":
         _gen_sawtooth(buf, n_samples, period, phase_offset)
 
+    elif wave == "triangle":
+        _generate_triangle_py(buf, n_samples, period, phase_offset)
+
+    elif wave == "noise_pitched":
+        return (
+            _generate_noise_pitched(buf, n_samples, period, phase_offset),
+            phase_offset + n_samples,
+        )
+
     else:
         return 0, phase_offset
 
     return n_samples * 2, phase_offset + n_samples
+
+
+def _generate_triangle_py(buf, n_samples, period, phase_offset):
+    """Triangle wave — symmetric rise/fall over one period."""
+    if period < 1:
+        period = 1
+    half = period // 2
+    if half < 1:
+        half = 1
+    for i in range(n_samples):
+        pos = (phase_offset + i) % period
+        if pos < half:
+            # rising: -32768 → +32767 across first half
+            val = -32768 + (pos * 65535) // half
+        else:
+            # falling: +32767 → -32768 across second half
+            q = pos - half
+            denom = period - half
+            if denom < 1:
+                denom = 1
+            val = 32767 - (q * 65535) // denom
+        if val > 32767:
+            val = 32767
+        if val < -32768:
+            val = -32768
+        lo = val & 0xFF
+        hi = (val >> 8) & 0xFF
+        buf[2 * i] = lo
+        buf[2 * i + 1] = hi
+
+
+def _generate_noise_pitched(buf, n_samples, period, phase_offset):
+    """Sample-and-hold LFSR with triangular decay per period.
+
+    Each LFSR tick latches a fresh amplitude; the held value then decays
+    linearly back to zero across the period, so the perceived fundamental
+    at freq_hz is clearly audible instead of smeared into white noise.
+    """
+    if period < 1:
+        period = 1
+    lfsr = 0xACE1
+    wraps = phase_offset // period
+    for _ in range(wraps):
+        bit = lfsr & 1
+        lfsr >>= 1
+        if bit:
+            lfsr ^= 0xB400
+    pos = phase_offset % period
+    held = (lfsr & 0xFFFF) - 32768
+    for i in range(n_samples):
+        # Decay envelope: 1.0 at pos=0 → ~0 as pos approaches period.
+        env_num = period - pos
+        val = (held * env_num) // period
+        if val > 32767:
+            val = 32767
+        if val < -32768:
+            val = -32768
+        lo = val & 0xFF
+        hi = (val >> 8) & 0xFF
+        buf[2 * i] = lo
+        buf[2 * i + 1] = hi
+        pos += 1
+        if pos >= period:
+            pos = 0
+            bit = lfsr & 1
+            lfsr >>= 1
+            if bit:
+                lfsr ^= 0xB400
+            held = (lfsr & 0xFFFF) - 32768
+    return n_samples * 2
 
 
 def _generate_noise(buf, n_samples, decay_rate, sample_rate):

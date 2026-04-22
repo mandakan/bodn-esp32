@@ -20,10 +20,22 @@ uint32_t tonegen_sine(int16_t *out, uint32_t n_samples,
 uint32_t tonegen_sawtooth(int16_t *out, uint32_t n_samples,
                           uint32_t inc_q16, uint32_t phase_q16);
 
+uint32_t tonegen_triangle(int16_t *out, uint32_t n_samples,
+                          uint32_t inc_q16, uint32_t phase_q16);
+
 // Noise has no notion of phase — it's an exponentially-decaying LFSR burst.
 // decay_rate controls how fast the noise fades (~4000 = sharp click).
 void tonegen_noise(int16_t *out, uint32_t n_samples,
                    uint32_t decay_rate, uint32_t sample_rate);
+
+// Sustained pitched noise — sample-and-hold on a 16-bit LFSR clocked at
+// the given frequency (via inc_q16).  The phase accumulator ticks the
+// LFSR every time it wraps; between wraps the held sample is repeated.
+// Both phase and LFSR state persist across chunks for click-free output.
+// *lfsr is read/written (seed with non-zero at voice start).
+uint32_t tonegen_noise_pitched(int16_t *out, uint32_t n_samples,
+                               uint32_t inc_q16, uint32_t phase_q16,
+                               uint16_t *lfsr);
 
 // Sample the shared sine LUT at a Q16 phase (0..65535 = one full cycle).
 // Used by the mixer's modulation layer for LFOs without duplicating the LUT.

@@ -85,6 +85,35 @@ uint32_t tonegen_sawtooth(int16_t *out, uint32_t n_samples,
     return phase;
 }
 
+uint32_t tonegen_triangle(int16_t *out, uint32_t n_samples,
+                          uint32_t inc_q16, uint32_t phase_q16) {
+    uint32_t phase = phase_q16 & 0xFFFF;
+    uint32_t inc = inc_q16 & 0xFFFF;
+    for (uint32_t i = 0; i < n_samples; i++) {
+        // Fold the phase into a triangle:
+        //   0x0000 →       0
+        //   0x4000 →  +32767  (peak)
+        //   0x8000 →       0
+        //   0xC000 →  -32768  (trough)
+        // Two linear ramps of amplitude 65534 over half a cycle each.
+        int32_t p = (int32_t)phase;
+        int32_t tri;
+        if (p < 0x8000) {
+            // rising half: 0 → +32767 → 0, with peak at 0x4000
+            tri = (p < 0x4000) ? (p * 2) : (0xFFFE - p * 2);
+        } else {
+            // falling half: 0 → -32768 → 0, with trough at 0xC000
+            int32_t q = p - 0x8000;
+            tri = (q < 0x4000) ? -(q * 2) : -(0xFFFE - q * 2);
+        }
+        if (tri > 32767) tri = 32767;
+        if (tri < -32768) tri = -32768;
+        out[i] = (int16_t)tri;
+        phase = (phase + inc) & 0xFFFF;
+    }
+    return phase;
+}
+
 void tonegen_noise(int16_t *out, uint32_t n_samples,
                    uint32_t decay_rate, uint32_t sample_rate) {
     // Matches Python: fixed seed, Galois LFSR, exponential decay
@@ -108,6 +137,47 @@ void tonegen_noise(int16_t *out, uint32_t n_samples,
         // Decay
         amp = (amp * decay_mult) >> 16;
     }
+}
+
+uint32_t tonegen_noise_pitched(int16_t *out, uint32_t n_samples,
+                               uint32_t inc_q16, uint32_t phase_q16,
+                               uint16_t *lfsr) {
+    // Sample-and-hold LFSR with a triangular decay envelope per period:
+    // every time the phase accumulator wraps (at freq_hz), we clock the
+    // LFSR and latch a new amplitude.  Instead of holding it flat until
+    // the next wrap — which gives pitched noise but with a weak, heavily
+    // smeared fundamental — we decay each latched value linearly back to
+    // zero across the hold period.  The result is a sequence of sharp
+    // "pops" at freq_hz whose fundamental is clearly audible to the ear
+    // while the per-pop amplitude (from the LFSR) keeps the noisy
+    // character.  Low freq → fewer, slower pops = gritty growl; high
+    // freq → more pops/sec = bright crackle.
+    uint32_t phase = phase_q16 & 0xFFFF;
+    uint32_t inc = inc_q16 & 0xFFFF;
+    uint16_t state = *lfsr;
+    if (state == 0) state = 0xACE1;  // LFSR must be non-zero
+
+    int16_t held = (int16_t)((int32_t)state - 32768);
+
+    for (uint32_t i = 0; i < n_samples; i++) {
+        // Decay envelope: 0x10000 just after a tick → 1 just before the
+        // next.  (held * env) >> 16 lands back in int16 range; held is
+        // already signed so the envelope preserves sign through the decay.
+        uint32_t env = 0x10000 - phase;
+        int32_t val = ((int32_t)held * (int32_t)env) >> 16;
+        out[i] = (int16_t)val;
+        uint32_t next = phase + inc;
+        if (next >> 16) {
+            // Phase wrapped → tick the LFSR (Galois, taps 16/15/13/4).
+            uint32_t bit = state & 1;
+            state >>= 1;
+            if (bit) state ^= 0xB400;
+            held = (int16_t)((int32_t)state - 32768);
+        }
+        phase = next & 0xFFFF;
+    }
+    *lfsr = state;
+    return phase;
 }
 
 // 2^(n/12) in Q16.16 for n = 0..24 semitones (0..2 octaves).

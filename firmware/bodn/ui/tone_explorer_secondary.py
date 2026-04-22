@@ -11,6 +11,7 @@ from bodn.ui.widgets import draw_centered
 from bodn.i18n import t, capitalize
 from bodn.tone_explorer_rules import (
     MINI_BUTTON_EFFECT,
+    MINI_BUTTON_LABEL_KEYS,
     NOTES_PER_OCTAVE,
     TIMBRE_TABLE,
 )
@@ -73,6 +74,21 @@ class ToneExplorerSecondary(Screen):
             colour = theme.BTN_565[i] if (self._effects_mask & bit) else theme.DIM
             tft.fill_rect(x, y, slot_w - 3, 12, colour)
 
+        # Active-effect names — space-separated under the ribbon so the child
+        # can see *which* effects are currently engaged, not just that some
+        # mini button is held.
+        active = []
+        for i, bit in enumerate(MINI_BUTTON_EFFECT):
+            if self._effects_mask & bit:
+                active.append(t(MINI_BUTTON_LABEL_KEYS[i]))
+        if active:
+            line = " ".join(active)
+            # Truncate if the translation makes the line wider than the panel.
+            while line and len(line) * 8 > w:
+                active.pop()
+                line = " ".join(active) + ("…" if active else "")
+            draw_centered(tft, line, 106, theme.CYAN, w)
+
         # Viz hint — tiny marker showing which display owns the scope.
         if self._viz_big_scope:
-            draw_centered(tft, t("tone_explorer_scope_big_hint"), 110, theme.MUTED, w)
+            draw_centered(tft, t("tone_explorer_scope_big_hint"), 118, theme.MUTED, w)

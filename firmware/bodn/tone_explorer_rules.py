@@ -41,18 +41,19 @@ NOTES_PER_OCTAVE = const(5)
 
 # Timbre morph — 5 steps, each picks a waveform and a blob-shape sprite.
 # Waveform IDs match _audiomix.WAVE_* constants.
+_W_SQUARE = const(0)
 _W_SINE = const(1)
 _W_SAW = const(2)
-_W_SQUARE = const(0)
-_W_NOISE = const(3)
+_W_TRIANGLE = const(4)
+_W_NOISE_PITCHED = const(5)
 
 # (waveform_id, blob_shape_id, display_label_i18n_key)
 TIMBRE_TABLE = (
     (_W_SINE, 0, "tone_explorer_timbre_smooth"),
-    (_W_SINE, 1, "tone_explorer_timbre_soft"),
+    (_W_TRIANGLE, 1, "tone_explorer_timbre_soft"),
     (_W_SAW, 2, "tone_explorer_timbre_bright"),
     (_W_SQUARE, 3, "tone_explorer_timbre_edgy"),
-    (_W_NOISE, 4, "tone_explorer_timbre_fuzzy"),
+    (_W_NOISE_PITCHED, 4, "tone_explorer_timbre_fuzzy"),
 )
 NUM_TIMBRES = const(5)
 
@@ -79,6 +80,20 @@ MINI_BUTTON_EFFECT = (
     EFFECT_OCTAVE_DOWN,
     EFFECT_STUTTER,
     EFFECT_HARMONY,
+)
+
+# Short display labels for each mini-button effect (i18n keys, parallel to
+# MINI_BUTTON_EFFECT).  Rendered on the secondary display so the child (and
+# parent) can see *which* effect is active while buttons are held.
+MINI_BUTTON_LABEL_KEYS = (
+    "tone_explorer_effect_vibrato",
+    "tone_explorer_effect_tremolo",
+    "tone_explorer_effect_bend_up",
+    "tone_explorer_effect_bend_down",
+    "tone_explorer_effect_octave_up",
+    "tone_explorer_effect_octave_down",
+    "tone_explorer_effect_stutter",
+    "tone_explorer_effect_harmony",
 )
 
 # ---------------------------------------------------------------------------
@@ -134,14 +149,58 @@ class ToneExplorer:
         )
         self.playing = False  # becomes True on first interaction
 
+        # Last-note-priority monosynth stack.  Stores arcade step indices
+        # (0..NOTES_PER_OCTAVE-1, unscaled by octave_shift) in press order.
+        # The top of the stack drives pitch_idx; releasing the top falls back
+        # to the previous held note — MS-20 / SH-101 style.
+        self._arcade_stack = []
+
     # ---- Input events ----------------------------------------------------
 
-    def on_arcade_press(self, idx):
-        """Arcade button 0..4 pressed → snap pitch to that pentatonic step."""
-        if 0 <= idx < NOTES_PER_OCTAVE:
-            base = 0 if self.octave_shift <= 0 else NOTES_PER_OCTAVE
-            self.pitch_idx = base + idx
+    def on_arcade(self, idx, pressed):
+        """Arcade button 0..4 press/release — last-note-priority voicing.
+
+        Holding a second button while the first is held plays the second note;
+        releasing it falls back to the still-held first.  Releasing the final
+        held button leaves pitch_idx at the last sounding note (the screen's
+        gate logic handles whether audio is still produced).
+        """
+        if not (0 <= idx < NOTES_PER_OCTAVE):
+            return
+        stack = self._arcade_stack
+        if pressed:
+            # Re-pressing a held button shouldn't duplicate it on the stack.
+            if idx in stack:
+                stack.remove(idx)
+            stack.append(idx)
+            self._apply_arcade_top()
             self.playing = True
+        else:
+            if idx in stack:
+                stack.remove(idx)
+            if stack:
+                self._apply_arcade_top()
+
+    def _apply_arcade_top(self):
+        """Snap pitch to the top of the arcade held-stack."""
+        if not self._arcade_stack:
+            return
+        base = 0 if self.octave_shift <= 0 else NOTES_PER_OCTAVE
+        self.pitch_idx = base + self._arcade_stack[-1]
+
+    def arcade_active_step(self):
+        """Return the currently sounding arcade step (0..4), or -1 if none held.
+
+        Readers (e.g. LED layer) use this to light the button that's actually
+        driving the pitch right now, not just the most recently pressed one.
+        """
+        if not self._arcade_stack:
+            return -1
+        return self._arcade_stack[-1]
+
+    def arcade_is_held(self, idx):
+        """True if arcade step `idx` is currently held."""
+        return idx in self._arcade_stack
 
     def on_pitch_delta(self, delta):
         """Left encoder: step pentatonic pitch by `delta` notes (clamped)."""
@@ -199,6 +258,7 @@ class ToneExplorer:
         """Left encoder push: silence everything, release all effects."""
         self.effects_mask = 0
         self.playing = False
+        self._arcade_stack = []
 
     # ---- Derived state (read by screen / audio adapter) ------------------
 

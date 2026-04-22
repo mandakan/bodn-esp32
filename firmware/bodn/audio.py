@@ -71,7 +71,14 @@ _GAIN_SFX = _GAIN_DEFAULT
 _GAIN_UI = _GAIN_DEFAULT
 
 # Wave name → C enum mapping
-_WAVE_MAP = {"square": 0, "sine": 1, "sawtooth": 2, "noise": 3}
+_WAVE_MAP = {
+    "square": 0,
+    "sine": 1,
+    "sawtooth": 2,
+    "noise": 3,
+    "triangle": 4,
+    "noise_pitched": 5,
+}
 
 
 # ---------------------------------------------------------------------------
