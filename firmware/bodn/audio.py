@@ -353,6 +353,10 @@ class AudioEngine:
                 return True
         return False
 
+    def voice_active(self, idx):
+        """True if the given voice index is currently playing."""
+        return bool(_audiomix.voice_active(idx))
+
     @property
     def sfx_active(self):
         """Number of SFX pool voices currently playing."""
@@ -428,7 +432,7 @@ class AudioEngine:
     # -----------------------------------------------------------------------
 
     def play(self, path, loop=False, channel="sfx", voice=None):
-        """Play a WAV file."""
+        """Play a WAV file.  Returns the voice index used."""
         idx = self._resolve_voice(voice, channel)
         self._stop_streaming(idx)
         try:
@@ -441,9 +445,10 @@ class AudioEngine:
         except Exception as e:
             print("audio.play error:", e)
             _audiomix.voice_stop(idx)
+        return idx
 
     def play_buffer(self, data, loop=False, channel="sfx", voice=None):
-        """Play pre-loaded PCM data (bytearray)."""
+        """Play pre-loaded PCM data (bytearray).  Returns the voice index used."""
         idx = self._resolve_voice(voice, channel)
         self._stop_streaming(idx)
         # Set the new buffer reference BEFORE telling C to play.
@@ -453,6 +458,7 @@ class AudioEngine:
         # GC can't free the buffer while C is using it.
         self._buf_refs[idx] = data
         _audiomix.voice_play_buffer(idx, data, len(data), loop)
+        return idx
 
     def tone(self, freq_hz, duration_ms=200, wave="square", channel="sfx", voice=None):
         """Play a procedural tone."""

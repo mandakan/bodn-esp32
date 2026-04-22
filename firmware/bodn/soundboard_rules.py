@@ -212,6 +212,11 @@ class SoundboardState:
         self.bank = 0  # current bank index 0–3
         self.playing_slots = set()  # currently-playing mini buttons
         self.playing_arcades = set()  # currently-playing arcade buttons
+        # {slot: voice_idx} — tracks which mixer voice each active slot uses,
+        # so we can detect per-sound completion instead of waiting for the
+        # whole SFX pool to drain.
+        self.slot_voices = {}
+        self.arcade_voices = {}
         self.volume = 50  # 0–100
         self.muted = False
         self.slots_present = [False] * NUM_MINI_BUTTONS
@@ -236,6 +241,8 @@ class SoundboardState:
         self.bank = bank & 0x3
         self.playing_slots.clear()
         self.playing_arcades.clear()
+        self.slot_voices.clear()
+        self.arcade_voices.clear()
         self._rescan()
 
     def _rescan(self, on_progress=None):
@@ -401,7 +408,27 @@ class SoundboardState:
             return None, arcade_wav_path(slot)
         return None, None
 
+    def mark_slot_voice(self, slot, voice):
+        """Record the mixer voice used by a slot press."""
+        self.slot_voices[slot] = voice
+
+    def mark_arcade_voice(self, slot, voice):
+        """Record the mixer voice used by an arcade press."""
+        self.arcade_voices[slot] = voice
+
+    def finish_slot(self, slot):
+        """Mark a single mini slot's sound as finished."""
+        self.playing_slots.discard(slot)
+        self.slot_voices.pop(slot, None)
+
+    def finish_arcade(self, slot):
+        """Mark a single arcade slot's sound as finished."""
+        self.playing_arcades.discard(slot)
+        self.arcade_voices.pop(slot, None)
+
     def on_playback_done(self):
         """Call when all SFX voices have finished."""
         self.playing_slots.clear()
         self.playing_arcades.clear()
+        self.slot_voices.clear()
+        self.arcade_voices.clear()

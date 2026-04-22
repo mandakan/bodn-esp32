@@ -91,6 +91,9 @@ class SoundboardScreen(Screen):
         self._slots_dirty = False  # only affected slots need redraw
         self._vol_dirty = False  # only volume bar needs redraw
         self._leds_dirty = True
+        # Slots whose sound finished this tick and need repainting.
+        self._finished_mini = set()
+        self._finished_arc = set()
         self._prev_bank = -1
         self._prev_volume = -1
         self._prev_muted = None
@@ -119,6 +122,8 @@ class SoundboardScreen(Screen):
         self._prev_muted = None
         self._flash = None
         self._prev_flash = None
+        self._finished_mini.clear()
+        self._finished_arc.clear()
         neo.clear_all_overrides()
 
     def exit(self):
@@ -184,12 +189,15 @@ class SoundboardScreen(Screen):
         for i in range(NUM_MINI_BUTTONS):
             if inp.btn_just_pressed[i]:
                 buf, path = state.press_slot(i)
+                voice = None
                 if buf:
-                    self._audio.play_buffer(buf, channel="sfx")
+                    voice = self._audio.play_buffer(buf, channel="sfx")
                 elif path:
-                    self._audio.play(path, channel="sfx")
+                    voice = self._audio.play(path, channel="sfx")
                 else:
                     self._audio.play_sound("boop", channel="ui")
+                if voice is not None:
+                    state.mark_slot_voice(i, voice)
                 self._prev_flash = self._flash
                 self._flash = ("mini", i, frame + _FLASH_FRAMES)
                 self._slots_dirty = True
@@ -199,21 +207,31 @@ class SoundboardScreen(Screen):
         for i in range(NUM_ARCADE_BUTTONS):
             if inp.arc_just_pressed[i]:
                 buf, path = state.press_arcade(i)
+                voice = None
                 if buf:
-                    self._audio.play_buffer(buf, channel="sfx")
+                    voice = self._audio.play_buffer(buf, channel="sfx")
                 elif path:
-                    self._audio.play(path, channel="sfx")
+                    voice = self._audio.play(path, channel="sfx")
                 else:
                     self._audio.play_sound("boop", channel="ui")
+                if voice is not None:
+                    state.mark_arcade_voice(i, voice)
                 self._prev_flash = self._flash
                 self._flash = ("arc", i, frame + _FLASH_FRAMES)
                 self._slots_dirty = True
                 self._leds_dirty = True
 
-        # --- Check if audio finished ---
-        if self._audio.sfx_active == 0:
-            if state.playing_slots or state.playing_arcades:
-                state.on_playback_done()
+        # --- Per-voice completion: each sound clears its own slot ---
+        for slot, voice in list(state.slot_voices.items()):
+            if not self._audio.voice_active(voice):
+                state.finish_slot(slot)
+                self._finished_mini.add(slot)
+                self._slots_dirty = True
+                self._leds_dirty = True
+        for slot, voice in list(state.arcade_voices.items()):
+            if not self._audio.voice_active(voice):
+                state.finish_arcade(slot)
+                self._finished_arc.add(slot)
                 self._slots_dirty = True
                 self._leds_dirty = True
 
@@ -332,6 +350,8 @@ class SoundboardScreen(Screen):
             self._dirty = False
             self._slots_dirty = False
             self._vol_dirty = False
+            self._finished_mini.clear()
+            self._finished_arc.clear()
             if self._full_clear:
                 self._full_clear = False
                 tft.fill(theme.BLACK)
@@ -398,15 +418,13 @@ class SoundboardScreen(Screen):
             else:
                 to_redraw_arc.add(cf[1])
 
-        # If playback just finished, redraw all previously-playing slots
-        if not state.playing_slots and not state.playing_arcades:
-            # All slots might need un-highlighting — redraw all present
-            for i in range(NUM_MINI_BUTTONS):
-                if state.slots_present[i]:
-                    to_redraw_mini.add(i)
-            for i in range(NUM_ARCADE_BUTTONS):
-                if state.arcade_present[i]:
-                    to_redraw_arc.add(i)
+        # Individual slots whose sound just finished need un-highlighting.
+        if self._finished_mini:
+            to_redraw_mini.update(self._finished_mini)
+            self._finished_mini.clear()
+        if self._finished_arc:
+            to_redraw_arc.update(self._finished_arc)
+            self._finished_arc.clear()
 
         for i in to_redraw_mini:
             x, y = self._slot_xy(i, margin, grid_top, cell_w, cell_h)
