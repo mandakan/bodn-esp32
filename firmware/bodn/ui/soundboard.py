@@ -319,44 +319,44 @@ class SoundboardScreen(Screen):
             y = grid_top + row * (cell_h + margin)
             tft.rect(x, y, cell_w, cell_h, theme.DIM)
 
-        # Empty arcade row — dim outlines only.
+        # Arcade row — shared across banks, already loaded, so render
+        # normally instead of flashing them empty during the switch.
+        rgb = tft.rgb
         for i in range(NUM_ARCADE_BUTTONS):
             x = margin + i * (arc_cell_w + margin)
-            tft.rect(x, arc_top, arc_cell_w, arc_cell_h, theme.DIM)
+            self._draw_arc_slot(
+                tft, theme, rgb, state, i, x, arc_top, arc_cell_w, arc_cell_h, frame
+            )
 
         tft.show()
         self._bank_switch_geom = geom
         self._bank_switch_frame = frame
 
     def _on_slot_preloaded(self, kind, idx):
-        """Repaint a single slot once its WAV has finished preloading.
+        """Repaint a mini slot once its WAV has finished preloading.
 
         Called from inside ``SoundboardState.set_bank`` while the update
         loop is blocked, so it draws directly to the TFT and pushes just
-        that slot's rectangle.
+        that slot's rectangle.  Arcade sounds are bank-agnostic and
+        stay resident across switches, so we only handle "mini" here.
         """
+        if kind != "mini":
+            return
         geom = self._bank_switch_geom
         if geom is None or self._manager is None:
             return
-        (margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h) = geom
+        (margin, grid_top, cell_w, cell_h, _arc_top, _arc_cell_w, _arc_cell_h) = geom
         tft = self._manager.tft
         theme = self._manager.theme
         rgb = tft.rgb
         frame = self._bank_switch_frame
         state = self._state
-        if kind == "mini":
-            col = idx % 4
-            row = idx // 4
-            x = margin + col * (cell_w + margin)
-            y = grid_top + row * (cell_h + margin)
-            self._draw_slot(tft, theme, rgb, state, idx, x, y, cell_w, cell_h, frame)
-            tft.show_rect(x, y, cell_w, cell_h)
-        elif kind == "arc":
-            x = margin + idx * (arc_cell_w + margin)
-            self._draw_arc_slot(
-                tft, theme, rgb, state, idx, x, arc_top, arc_cell_w, arc_cell_h, frame
-            )
-            tft.show_rect(x, arc_top, arc_cell_w, arc_cell_h)
+        col = idx % 4
+        row = idx // 4
+        x = margin + col * (cell_w + margin)
+        y = grid_top + row * (cell_h + margin)
+        self._draw_slot(tft, theme, rgb, state, idx, x, y, cell_w, cell_h, frame)
+        tft.show_rect(x, y, cell_w, cell_h)
 
     def _resolve_bank_name(self, state):
         """Return display name for current bank (manifest or i18n fallback)."""
