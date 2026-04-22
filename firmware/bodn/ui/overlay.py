@@ -31,6 +31,7 @@ class SessionOverlay(Screen):
         self._prev_state = None
         self._prev_temp_status = "ok"
         self._prev_bat_status = "ok"
+        self._prev_countdown_s = -1
         self._dirty = True
         self._full_clear = True
 
@@ -91,6 +92,15 @@ class SessionOverlay(Screen):
         # Blinking states need periodic redraws
         if state == WINDDOWN and frame % 20 == 0:
             self._dirty = True
+
+        # Countdown needs per-second redraw during break states
+        if state in (WINDDOWN, SLEEPING, COOLDOWN):
+            countdown_s = self.session_mgr.cooldown_remaining_s
+            if countdown_s != self._prev_countdown_s:
+                self._prev_countdown_s = countdown_s
+                self._dirty = True
+        else:
+            self._prev_countdown_s = -1
         # Overtemp / low-battery blink for attention
         if temp_status in ("warn", "critical") and frame % 15 == 0:
             self._dirty = True
@@ -156,11 +166,13 @@ class SessionOverlay(Screen):
             tft.fill_rect(40, 70, 80, 10, theme.BLACK)
             if (frame // 20) % 2 == 0:
                 tft.text(t("overlay_zzz"), 40, 70, theme.AMBER)
+            self._draw_countdown(tft, theme)
 
         elif state in (SLEEPING, COOLDOWN):
             tft.text(t("overlay_zzz_short"), 52, 60, theme.BLUE)
             tft.text(t("overlay_see_you"), 36, 80, theme.WHITE)
             tft.text(t("overlay_soon"), 44, 96, theme.WHITE)
+            self._draw_countdown(tft, theme)
 
         elif state == LOCKDOWN:
             tft.text(t("overlay_goodnight"), 24, 70, theme.MAGENTA)
@@ -176,6 +188,21 @@ class SessionOverlay(Screen):
             lx = (tft.width - len(label) * 8) // 2
             tft.fill_rect(0, 0, tft.width, 12, theme.AMBER)
             tft.text(label, max(0, lx), 2, theme.BLACK)
+
+    def _draw_countdown(self, tft, theme):
+        """Draw an M:SS countdown showing time until the device wakes."""
+        secs = self.session_mgr.cooldown_remaining_s
+        if secs <= 0:
+            return
+        m = secs // 60
+        s = secs % 60
+        label = "{}:{:02d}".format(m, s)
+        # scale=2 → 16 px glyph width
+        w = len(label) * 16
+        x = (tft.width - w) // 2
+        y = 130
+        tft.fill_rect(0, y, tft.width, 18, theme.BLACK)
+        tft.text(label, max(0, x), y, theme.CYAN, scale=2)
 
     def static_led_override(self, state, leds, brightness):
         """Override LEDs with static colors based on session state.

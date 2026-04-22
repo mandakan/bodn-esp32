@@ -189,11 +189,13 @@ def _start_real_server(port: int):
         "ui_pin": "",
         "ota_token": "",
         "max_session_min": 10,
+        "break_min": 15,
     }
 
     class FakeSession:
         state = "idle"
         time_remaining_s = 0
+        cooldown_remaining_s = 0
         sessions_today = 0
         sessions_remaining = 0
         mode = None
