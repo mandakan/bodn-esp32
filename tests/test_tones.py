@@ -95,7 +95,7 @@ class TestEdgeCases:
 
     def test_unknown_wave(self):
         buf = bytearray(100)
-        n, _ = generate(buf, 440, wave="triangle")
+        n, _ = generate(buf, 440, wave="bogus_waveform")
         assert n == 0
 
     def test_empty_buffer(self):

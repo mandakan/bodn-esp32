@@ -97,8 +97,10 @@ LED_STICK_B = (8, 8)  # second 8-LED stick
 LED_STICKS = (0, 16)  # both sticks combined
 LED_LID_RING = (16, 92)  # 144 LED/m strip around lid perimeter
 
-NEOPIXEL_BRIGHTNESS = const(64)  # 0-255, sticks — low for battery + kid eyes
-NEOPIXEL_LID_BRIGHTNESS = const(32)  # 0-255, lid ring — lower for ambient glow
+NEOPIXEL_BRIGHTNESS = const(24)  # 0-255, sticks — kept gentle so the WS2812s
+# sit below the TFT backlight and arcade LEDs in perceived brightness.  Modes
+# that need more punch (e.g. celebration flashes) pass an explicit brightness=.
+NEOPIXEL_LID_BRIGHTNESS = const(16)  # 0-255, lid ring — lower for ambient glow
 
 # Hard cap on NeoPixel brightness (0-255).  All calls through bodn.neo clamp
 # pattern brightness and scale per-pixel RGB to this ceiling.  Keeps peak

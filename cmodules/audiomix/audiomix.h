@@ -24,11 +24,14 @@
 // (~2 cycles of the lowest pentatonic tone the UI shows).
 #define AUDIOMIX_SCOPE_SAMPLES  512
 
-// Waveform types (match Python: 0=square, 1=sine, 2=sawtooth, 3=noise)
-#define AUDIOMIX_WAVE_SQUARE    0
-#define AUDIOMIX_WAVE_SINE      1
-#define AUDIOMIX_WAVE_SAWTOOTH  2
-#define AUDIOMIX_WAVE_NOISE     3
+// Waveform types (match Python: 0=square, 1=sine, 2=sawtooth, 3=noise,
+//                                4=triangle, 5=noise_pitched)
+#define AUDIOMIX_WAVE_SQUARE         0
+#define AUDIOMIX_WAVE_SINE           1
+#define AUDIOMIX_WAVE_SAWTOOTH       2
+#define AUDIOMIX_WAVE_NOISE          3
+#define AUDIOMIX_WAVE_TRIANGLE       4
+#define AUDIOMIX_WAVE_NOISE_PITCHED  5
 
 // Default per-voice gain (fixed-point 16.16) — ~70%
 #define AUDIOMIX_GAIN_DEFAULT       45875
@@ -93,6 +96,7 @@ typedef struct {
     uint32_t tone_freq;
     uint32_t tone_samples_left;
     uint32_t tone_phase;                // Q16 cycle phase (0..65535 = one cycle)
+    uint16_t tone_lfsr;                 // LFSR state for AUDIOMIX_WAVE_NOISE_PITCHED
     uint8_t  tone_wave;                 // currently rendering waveform
     uint8_t  tone_sustain;              // 1 = play indefinitely until stop_req
 

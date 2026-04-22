@@ -46,18 +46,18 @@ class SessionOverlay(Screen):
         return self._dirty
 
     def sync_led_override(self):
-        """Push session LED state to the C NeoPixel engine."""
+        """Push session LED state to the C NeoPixel engine.
+
+        Warning-level visuals (WARN_5 / WARN_2 / WINDDOWN) are disabled while
+        the dedicated timer-LED strip is unplanned hardware: the override is
+        global and preempts every game mode's NeoPixel use.  Bedtime states
+        (SLEEPING / COOLDOWN / LOCKDOWN) still force BLACK.
+        """
         if not neo.active:
             return
         state = self.session_mgr.state
         if state in (SLEEPING, COOLDOWN, LOCKDOWN):
             neo.set_override(neo.OVERRIDE_BLACK)
-        elif state == WARN_5:
-            neo.set_override(neo.OVERRIDE_SOLID, 255, 191, 0)
-        elif state == WARN_2:
-            neo.set_override(neo.OVERRIDE_PULSE, 255, 100, 0)
-        elif state == WINDDOWN:
-            neo.set_override(neo.OVERRIDE_FADE, 40, 40, 80)
         else:
             neo.clear_override()
 

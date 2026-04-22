@@ -12,10 +12,15 @@ from micropython import const
 from bodn.ui.screen import Screen
 from bodn.ui.pause import PauseMenu
 from bodn.ui.widgets import blit_sprite, draw_centered
-from bodn.ui.draw import waveform as draw_waveform
+from bodn.ui.draw import waveform as draw_waveform, text as draw_text, text_width
 from bodn.i18n import t, capitalize
+from bodn.neo import neo
 from bodn.tone_explorer_rules import (
+    EFFECT_STUTTER,
+    EFFECT_TREMOLO,
+    EFFECT_VIBRATO,
     MINI_BUTTON_EFFECT,
+    MINI_BUTTON_LABEL_KEYS,
     NOTES_PER_OCTAVE,
     NUM_PITCHES,
     NUM_TIMBRES,
@@ -27,6 +32,36 @@ _SCOPE_H = const(48)
 _SCOPE_SAMPLES = const(256)  # samples drawn per frame (<= _audiomix.SCOPE_SAMPLES)
 _HEADER_H = const(22)
 _FOOTER_H = const(26)
+
+# Arcade LED animation ids — plain int constants so the _mcpinput C driver
+# doesn't need to be queried on every update().
+_ARC_OFF = const(0)
+_ARC_GLOW = const(1)
+_ARC_ON = const(2)
+
+# Pitch step → RGB (matches the physical arcade button colours so the stick
+# LEDs light up in the same shade as whichever button plays that note).
+# Order: 0=green, 1=blue, 2=white, 3=yellow, 4=red.  Brightness intentionally
+# left low — the sticks are peripheral, not the focus.
+_STEP_RGB = (
+    (0, 255, 80),  # green
+    (40, 90, 255),  # blue
+    (220, 220, 220),  # white
+    (255, 200, 0),  # yellow
+    (255, 40, 40),  # red
+)
+
+# Timbre → NeoPixel pattern and base speed.  Sine = solid (calm), triangle =
+# gentle pulse, saw = faster pulse (bright), square = chase (edgy), noise_pitched
+# = sparkle (fuzzy).  Pattern ids resolve against neo.PAT_* at init time.
+_TIMBRE_PATTERN = (
+    neo.PAT_SOLID,
+    neo.PAT_PULSE,
+    neo.PAT_PULSE,
+    neo.PAT_CHASE,
+    neo.PAT_SPARKLE,
+)
+_TIMBRE_SPEED = (0, 2, 4, 3, 5)
 
 # Left encoder = pitch, right encoder = timbre.
 _ENC_PITCH = const(0)  # config.ENC_NAV
@@ -179,6 +214,20 @@ class ToneExplorerScreen(Screen):
         self._gate_mode = False
         self._gate_any_arcade_held = False
 
+        # Cached switch state for the MUTE/GATE status badges on the primary
+        # display.  We diff against this so the badges only repaint on change.
+        self._muted = False
+        self._last_muted_painted = None
+        self._last_gate_painted = None
+
+        # Arcade LED state cache — one entry per button (0..4), each _ARC_*.
+        # Diffing avoids spamming I2C writes via _mcpinput.led_anim().
+        self._last_arcade_led = [None] * NOTES_PER_OCTAVE
+
+        # NeoPixel sticks: cache last (pitch_step, timbre, speed) tuple so we
+        # only re-issue zone_pattern when something actually changes.
+        self._last_stick_key = None
+
     # ---- lifecycle ------------------------------------------------------
 
     def enter(self, manager):
@@ -192,6 +241,10 @@ class ToneExplorerScreen(Screen):
 
         self._saved_audio_enabled = self._settings.get("audio_enabled", True)
         self._last_audio_sw = None
+        self._last_muted_painted = None
+        self._last_gate_painted = None
+        self._last_arcade_led = [None] * NOTES_PER_OCTAVE
+        self._last_stick_key = None
 
         # Pick blob colour — cyan reads well on black; pitch shifts hue later
         # via the background tint.  Keeping the sprite one colour avoids
@@ -239,6 +292,10 @@ class ToneExplorerScreen(Screen):
         if self._arcade:
             self._arcade.all_off()
             self._arcade.flush()
+        # Release the NeoPixel sticks so the next mode starts clean.
+        if neo.active:
+            neo.zone_off(neo.ZONE_STICK_A)
+            neo.zone_off(neo.ZONE_STICK_B)
         # Restore audio-enabled flag to its entry-time value. The housekeeping
         # task will sync audio.volume within 500 ms; push it now for no gap.
         self._settings["audio_enabled"] = self._saved_audio_enabled
@@ -280,9 +337,12 @@ class ToneExplorerScreen(Screen):
             eng.on_viz_toggle(inp.sw[_SW_VIZ_LEFT])
         if len(inp.sw) > _SW_AUDIO_OUT:
             self._apply_audio_switch(inp.sw[_SW_AUDIO_OUT])
+        prev_gate = self._gate_mode
         self._gate_mode = (
             inp.sw[_SW_GATE_MODE] if len(inp.sw) > _SW_GATE_MODE else False
         )
+        if self._gate_mode != prev_gate:
+            self._dirty = True
         self._gate_any_arcade_held = any(
             inp.arc_held[i] for i in range(min(NOTES_PER_OCTAVE, len(inp.arc_held)))
         )
@@ -304,10 +364,17 @@ class ToneExplorerScreen(Screen):
             eng.on_reset_timbre()
             self._dirty = True
 
-        # Arcade buttons — snap to pentatonic step.
-        for i in range(min(NOTES_PER_OCTAVE, len(inp.arc_just_pressed))):
+        # Arcade buttons — last-note-priority monosynth: press pushes onto
+        # the engine's held-stack, release pops it, and the top drives pitch.
+        n_arc = min(
+            NOTES_PER_OCTAVE, len(inp.arc_just_pressed), len(inp.arc_just_released)
+        )
+        for i in range(n_arc):
             if inp.arc_just_pressed[i]:
-                eng.on_arcade_press(i)
+                eng.on_arcade(i, True)
+                self._dirty = True
+            if inp.arc_just_released[i]:
+                eng.on_arcade(i, False)
                 self._dirty = True
 
         # Mini buttons — hold-to-apply effects.
@@ -332,6 +399,9 @@ class ToneExplorerScreen(Screen):
         # Push derived state to the audio engine.
         self._sync_audio()
 
+        # Mirror state onto the arcade button LEDs and the NeoPixel sticks.
+        self._sync_leds()
+
         # Push status to the secondary display.
         if self._secondary and hasattr(self._secondary, "update_state"):
             self._secondary.update_state(
@@ -352,6 +422,10 @@ class ToneExplorerScreen(Screen):
         self._last_audio_sw = sw_on
         enabled = bool(sw_on) and self._saved_audio_enabled
         self._settings["audio_enabled"] = enabled
+        # Muted whenever the physical switch is off *or* audio is globally
+        # disabled.  Drives the on-screen MUTE badge.
+        self._muted = not enabled
+        self._dirty = True
         if self._audio:
             self._audio.volume = self._settings.get("volume", 30) if enabled else 0
 
@@ -402,11 +476,25 @@ class ToneExplorerScreen(Screen):
         if eff_freq != self._last_eff_freq:
             self._audio.set_freq(self._voice, eff_freq)
             self._last_eff_freq = eff_freq
+            # Harmony tracks the base pitch, not the effective one — the
+            # octave-jump mod buttons only bend the main voice.  Refresh it
+            # whenever the pitch changes so holding the duo effect doesn't
+            # freeze the fifth at whatever note it was triggered on.
+            if self._harmony_voice is not None:
+                h_freq = eng.harmony_freq_hz()
+                if h_freq:
+                    self._audio.set_freq(self._harmony_voice, h_freq)
 
         # Waveform change: phase-preserving crossfade (no voice retrigger).
         if eng.waveform_id != self._last_waveform:
-            self._audio.set_wave(self._voice, _wave_name(eng.waveform_id))
+            wave_name = _wave_name(eng.waveform_id)
+            self._audio.set_wave(self._voice, wave_name)
             self._last_waveform = eng.waveform_id
+            # Keep the harmony voice on the same timbre as the main voice —
+            # otherwise changing timbre while duo is held gives you two
+            # different waveforms at once.
+            if self._harmony_voice is not None:
+                self._audio.set_wave(self._harmony_voice, wave_name)
 
         if eng.effects_mask != self._last_mask:
             self._apply_effects()
@@ -442,6 +530,77 @@ class ToneExplorerScreen(Screen):
         elif self._harmony_voice is not None:
             a.stop(voice=self._harmony_voice)
             self._harmony_voice = None
+
+    # ---- LEDs -----------------------------------------------------------
+
+    def _sync_leds(self):
+        """Mirror engine state onto the arcade LEDs and NeoPixel sticks.
+
+        Called from update() — diffed against cached state so we only issue
+        I2C / NeoPixel writes when something actually changed.  No per-frame
+        spam even when nothing is happening.
+        """
+        eng = self._engine
+        active_step = eng.arcade_active_step()  # 0..4 held top of stack, or -1
+        pitch_step = eng.pitch_idx % NOTES_PER_OCTAVE
+
+        # --- Arcade LEDs: bright on the sounding note, dim glow on held but
+        # inactive notes, dim glow on the pitch-matching step when nothing is
+        # held (so the child sees "which button plays this note"), else off.
+        if self._arcade is not None:
+            any_held = active_step >= 0
+            for i in range(NOTES_PER_OCTAVE):
+                if i == active_step:
+                    target = _ARC_ON
+                elif eng.arcade_is_held(i):
+                    target = _ARC_GLOW
+                elif not any_held and i == pitch_step:
+                    target = _ARC_GLOW
+                else:
+                    target = _ARC_OFF
+                if target != self._last_arcade_led[i]:
+                    self._last_arcade_led[i] = target
+                    if target == _ARC_ON:
+                        self._arcade.on(i)
+                    elif target == _ARC_GLOW:
+                        self._arcade.glow(i)
+                    else:
+                        self._arcade.off(i)
+
+        # --- NeoPixel sticks: pitch-coloured pattern whose motion picks up the
+        # current timbre, and whose speed bumps while motion effects are held.
+        if neo.active:
+            timbre = eng.timbre_idx
+            pattern = _TIMBRE_PATTERN[timbre]
+            speed = _TIMBRE_SPEED[timbre]
+            # Motion effects (vibrato / tremolo / stutter) nudge the speed up so
+            # the sticks visibly react when the child holds a mod button.
+            if eng.is_effect(EFFECT_VIBRATO | EFFECT_TREMOLO | EFFECT_STUTTER):
+                speed += 3
+            r, g, b = _STEP_RGB[pitch_step]
+            key = (pitch_step, pattern, speed)
+            if key != self._last_stick_key:
+                self._last_stick_key = key
+                # Both sticks share the same animation — they're symmetric on
+                # the lid, so animating them together reads as "one state".
+                # Deliberately low — the sticks are peripheral ambience in this
+                # mode, not the focus.  Anything above ~25 overpowers the TFT
+                # backlight and the PCA9685-driven arcade button LEDs.
+                stick_brightness = 18
+                neo.zone_pattern(
+                    neo.ZONE_STICK_A,
+                    pattern,
+                    speed=speed,
+                    colour=(r, g, b),
+                    brightness=stick_brightness,
+                )
+                neo.zone_pattern(
+                    neo.ZONE_STICK_B,
+                    pattern,
+                    speed=speed,
+                    colour=(r, g, b),
+                    brightness=stick_brightness,
+                )
 
     # ---- render ---------------------------------------------------------
 
@@ -485,6 +644,7 @@ class ToneExplorerScreen(Screen):
 
         self._render_header(tft, theme)
         self._render_footer(tft, theme)
+        self._render_status_badges(tft, theme)
 
     def _render_scope_strip(self, tft, theme):
         """The animated region.  Picks primary-big or bottom-strip mode."""
@@ -500,16 +660,71 @@ class ToneExplorerScreen(Screen):
             )
 
     def _render_header(self, tft, theme):
-        """Active-effect row — one small block per held effect."""
+        """Active-effect labels — short coloured pills, one per held effect.
+
+        The secondary display carries the full 8-slot ribbon (visual state
+        at a glance); here we only show the effects that are actually held
+        so the child sees the *name* of each live effect right above the
+        blob.  Lays out left-to-right, wrapping to a second row when more
+        than four are held simultaneously (mini-button count is 8, so
+        two rows are enough).
+        """
         w = theme.width
+        # Reserve the top-right corner for MUTE / GATE badges so they never
+        # collide with the effect labels.
+        badge_corner_w = 56
+        avail_w = w - badge_corner_w - 4
         tft.fill_rect(0, 0, w, _HEADER_H, theme.BLACK)
-        # 8 slots spaced across the width; lit if the matching bit is set.
-        slot_w = w // 10
-        y = 6
+
+        mask = self._engine.effects_mask
+        # (button_index, label_text) for each currently-held effect.
+        active = []
         for i, bit in enumerate(MINI_BUTTON_EFFECT):
-            x = slot_w + i * slot_w
-            col = theme.BTN_565[i] if (self._engine.effects_mask & bit) else theme.DIM
-            tft.fill_rect(x, y, slot_w - 4, 10, col)
+            if mask & bit:
+                active.append((i, t(MINI_BUTTON_LABEL_KEYS[i])))
+        if not active:
+            return
+
+        pad_x = 3
+        pad_y = 1
+        gap = 3
+        row_h = 10
+
+        # Pack labels into rows — greedy fill, wrap to a second row when the
+        # next pill would overflow the available width.
+        row1, row2 = [], []
+        row1_w = 0
+        for idx, label in active:
+            pill_w = text_width(label) + 2 * pad_x
+            need = pill_w + (gap if row1 else 0)
+            if row1_w + need <= avail_w:
+                row1.append((idx, label, pill_w))
+                row1_w += need
+            else:
+                row2.append((idx, label, pill_w))
+
+        def _draw_row(row, y):
+            if not row:
+                return
+            total_w = sum(pw for _, _, pw in row) + gap * (len(row) - 1)
+            x = (avail_w - total_w) // 2
+            if x < 2:
+                x = 2
+            for idx, label, pill_w in row:
+                fg = theme.BTN_565[idx]
+                # Colour the pill with the button's own colour so the child can
+                # map "this label ↔ this physical button" by colour alone.
+                tft.fill_rect(x, y, pill_w, row_h, fg)
+                draw_text(tft, x + pad_x, y + pad_y, label, theme.BLACK, bg=fg)
+                x += pill_w + gap
+
+        if row2:
+            # Two rows — fill the header.
+            _draw_row(row1, 1)
+            _draw_row(row2, 1 + row_h + 1)
+        else:
+            # One row — vertically centred in the header.
+            _draw_row(row1, (_HEADER_H - row_h) // 2)
 
     def _render_blob(self, tft, theme):
         """Blob centred horizontally, y maps to pitch (higher = higher)."""
@@ -547,6 +762,46 @@ class ToneExplorerScreen(Screen):
             tft, x, y, w, h, self._scope_buf, theme.CYAN, theme.BLACK, gain_q8=gain
         )
 
+    def _render_status_badges(self, tft, theme):
+        """Top-right pills showing which toggle switches are currently engaged.
+
+        Only drawn when at least one badge is active, so most of the time this
+        corner is clean.  Labels are translated via i18n and sit inside a
+        coloured box that signals "flip the matching switch to turn off".
+        """
+        w = theme.width
+        # Rightmost 56 px of the header are reserved for these badges — the
+        # effect-label layout in _render_header() stops before this column so
+        # the two never collide.  Each badge is 10 px tall; MUTE on top,
+        # GATE underneath.
+        pad_x = 4
+        pad_y = 1
+        gap = 2
+        badge_h = 10
+        y = 2
+        # Always clear the corner first so cleared badges don't leave ghosts.
+        corner_w = 56
+        tft.fill_rect(w - corner_w, 0, corner_w, _HEADER_H, theme.BLACK)
+
+        if self._muted:
+            label = t("tone_explorer_status_mute")
+            tw = text_width(label)
+            bw = tw + 2 * pad_x
+            x = w - bw - 2
+            tft.fill_rect(x, y, bw, badge_h, theme.RED)
+            draw_text(tft, x + pad_x, y + pad_y, label, theme.WHITE, bg=theme.RED)
+            y += badge_h + gap
+        if self._gate_mode:
+            label = t("tone_explorer_status_gate")
+            tw = text_width(label)
+            bw = tw + 2 * pad_x
+            x = w - bw - 2
+            tft.fill_rect(x, y, bw, badge_h, theme.YELLOW)
+            draw_text(tft, x + pad_x, y + pad_y, label, theme.BLACK, bg=theme.YELLOW)
+
+        self._last_muted_painted = self._muted
+        self._last_gate_painted = self._gate_mode
+
     def _render_footer(self, tft, theme):
         w = theme.width
         h = theme.height
@@ -574,4 +829,8 @@ def _wave_name(wave_id):
         return "sawtooth"
     if wave_id == 3:
         return "noise"
+    if wave_id == 4:
+        return "triangle"
+    if wave_id == 5:
+        return "noise_pitched"
     return "sine"

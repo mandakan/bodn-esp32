@@ -156,10 +156,12 @@ static inline uint32_t phase_inc_q16(uint32_t freq_hz, uint32_t sample_rate) {
 }
 
 // Generate one chunk of a single waveform into `out` and return the new Q16
-// phase.  Noise has no phase so we pass through unchanged.
+// phase.  Noise (decaying) has no phase so we pass through unchanged.
+// `lfsr` may be NULL for callers that never render AUDIOMIX_WAVE_NOISE_PITCHED.
 static uint32_t render_wave_chunk(int16_t *out, uint32_t n, uint8_t wave,
                                    uint32_t inc_q16, uint32_t phase_q16,
-                                   uint32_t freq_hz, uint32_t sample_rate) {
+                                   uint32_t freq_hz, uint32_t sample_rate,
+                                   uint16_t *lfsr) {
     switch (wave) {
     case AUDIOMIX_WAVE_SQUARE:
         return tonegen_square(out, n, inc_q16, phase_q16);
@@ -170,6 +172,15 @@ static uint32_t render_wave_chunk(int16_t *out, uint32_t n, uint8_t wave,
     case AUDIOMIX_WAVE_NOISE:
         tonegen_noise(out, n, freq_hz, sample_rate);
         return phase_q16;
+    case AUDIOMIX_WAVE_TRIANGLE:
+        return tonegen_triangle(out, n, inc_q16, phase_q16);
+    case AUDIOMIX_WAVE_NOISE_PITCHED: {
+        uint16_t local = lfsr ? *lfsr : 0xACE1;
+        uint32_t new_phase = tonegen_noise_pitched(out, n, inc_q16, phase_q16,
+                                                    &local);
+        if (lfsr) *lfsr = local;
+        return new_phase;
+    }
     default:
         memset(out, 0, n * sizeof(int16_t));
         return phase_q16;
@@ -293,12 +304,15 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
 
             uint32_t new_phase = render_wave_chunk(
                 voice_buf, n, v->tone_wave_pending, inc, v->tone_phase,
-                eff_freq, state->sample_rate);
+                eff_freq, state->sample_rate, &v->tone_lfsr);
 
+            // Scratch path uses a local LFSR copy so the fade-out tail doesn't
+            // double-advance the voice's persistent noise state.
+            uint16_t scratch_lfsr = v->tone_lfsr;
             int16_t scratch[AUDIOMIX_WAVE_XFADE_SAMPLES];
             render_wave_chunk(scratch, xfade_n, v->tone_wave,
                               inc, v->tone_phase,
-                              eff_freq, state->sample_rate);
+                              eff_freq, state->sample_rate, &scratch_lfsr);
 
             const uint32_t total = AUDIOMIX_WAVE_XFADE_SAMPLES;
             uint32_t done = total - v->tone_wave_xfade_left;
@@ -318,7 +332,7 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
         } else {
             v->tone_phase = render_wave_chunk(
                 voice_buf, n, v->tone_wave, inc, v->tone_phase,
-                eff_freq, state->sample_rate);
+                eff_freq, state->sample_rate, &v->tone_lfsr);
         }
 
         // Apply envelope or legacy fade
@@ -374,7 +388,7 @@ static uint32_t voice_read(audiomix_state_t *state, audiomix_voice_t *v,
                 uint32_t inc = phase_inc_q16(v->tone_freq, state->sample_rate);
                 v->seq_phase = render_wave_chunk(
                     voice_buf + n, want, v->tone_wave, inc, v->seq_phase,
-                    v->tone_freq, state->sample_rate);
+                    v->tone_freq, state->sample_rate, &v->tone_lfsr);
             } else {
                 // freq == 0 means silence (rest)
                 memset(voice_buf + n, 0, want * 2);
@@ -493,6 +507,7 @@ static void mix_task(void *arg) {
                             v->tone_freq = st->melody_freq;
                             v->tone_samples_left = dur_samples;
                             v->tone_phase = 0;
+                            v->tone_lfsr = 0xACE1;
                             v->tone_wave = clk->melody_wave;
                             v->tone_wave_pending = clk->melody_wave;
                             v->tone_wave_xfade_left = 0;
@@ -531,6 +546,7 @@ static void mix_task(void *arg) {
                     v->tone_freq = ts->freq;
                     v->tone_samples_left = dur_samples;
                     v->tone_phase = 0;
+                    v->tone_lfsr = 0xACE1;
                     v->tone_wave = ts->wave;
                     v->tone_wave_pending = ts->wave;
                     v->tone_wave_xfade_left = 0;

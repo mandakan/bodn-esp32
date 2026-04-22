@@ -125,6 +125,7 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     v->tone_freq = freq;
     v->tone_samples_left = (audiomix_state->sample_rate * dur_ms) / 1000;
     v->tone_phase = 0;
+    v->tone_lfsr = 0xACE1;
     v->tone_wave = wave;
     v->tone_wave_pending = wave;
     v->tone_wave_xfade_left = 0;
@@ -728,6 +729,7 @@ static mp_obj_t audiomix_voice_tone_sustained(size_t n_args, const mp_obj_t *arg
     v->tone_freq = freq;
     v->tone_samples_left = 0;          // unused when tone_sustain = 1
     v->tone_phase = 0;
+    v->tone_lfsr = 0xACE1;
     v->tone_wave = wave;
     v->tone_wave_pending = wave;
     v->tone_wave_xfade_left = 0;
@@ -959,6 +961,8 @@ static const mp_rom_map_elem_t audiomix_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_WAVE_SINE),            MP_ROM_INT(AUDIOMIX_WAVE_SINE) },
     { MP_ROM_QSTR(MP_QSTR_WAVE_SAWTOOTH),        MP_ROM_INT(AUDIOMIX_WAVE_SAWTOOTH) },
     { MP_ROM_QSTR(MP_QSTR_WAVE_NOISE),           MP_ROM_INT(AUDIOMIX_WAVE_NOISE) },
+    { MP_ROM_QSTR(MP_QSTR_WAVE_TRIANGLE),        MP_ROM_INT(AUDIOMIX_WAVE_TRIANGLE) },
+    { MP_ROM_QSTR(MP_QSTR_WAVE_NOISE_PITCHED),   MP_ROM_INT(AUDIOMIX_WAVE_NOISE_PITCHED) },
 };
 static MP_DEFINE_CONST_DICT(audiomix_module_globals,
                              audiomix_module_globals_table);
