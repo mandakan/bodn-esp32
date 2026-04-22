@@ -85,6 +85,26 @@ class SessionManager:
         return max(0, limit - elapsed)
 
     @property
+    def cooldown_remaining_s(self):
+        """Seconds until the device returns to IDLE from a break state.
+
+        Covers WINDDOWN (30 s grace) + SLEEPING + COOLDOWN (break_min).
+        Returns 0 for all other states. Always 0 when sessions are disabled.
+        """
+        if not self.settings.get("sessions_enabled", True):
+            return 0
+        break_s = self.settings.get("break_min", 0) * 60
+        now = self._get_time()
+        if self.state == WINDDOWN:
+            winddown_left = max(0, 30 - (now - self._sleep_start))
+            return winddown_left + break_s
+        if self.state == SLEEPING:
+            return break_s
+        if self.state == COOLDOWN:
+            return max(0, break_s - (now - self._sleep_start))
+        return 0
+
+    @property
     def sessions_today(self):
         return self._sessions_today
 
@@ -238,3 +258,17 @@ class SessionManager:
             self._record_session("force_sleep")
         self.state = SLEEPING
         self._sleep_start = self._get_time()
+
+    def resume_now(self):
+        """Skip the remainder of a break and return to IDLE immediately.
+
+        Has no effect outside WINDDOWN / SLEEPING / COOLDOWN. If the current
+        state is WINDDOWN the session record is emitted as if the break had
+        run to completion, so the sessions_today count stays consistent.
+        """
+        if self.state == WINDDOWN:
+            self._record_session("normal")
+        if self.state in (WINDDOWN, SLEEPING, COOLDOWN):
+            self.state = IDLE
+            return True
+        return False

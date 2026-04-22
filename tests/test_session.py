@@ -200,6 +200,89 @@ class TestForceSleep:
         assert mgr.sessions_today == 1
 
 
+class TestCooldownRemaining:
+    def test_zero_when_idle(self):
+        mgr, _, _ = make_session()
+        assert mgr.cooldown_remaining_s == 0
+
+    def test_zero_while_playing(self):
+        mgr, _, _ = make_session()
+        mgr.try_wake()
+        assert mgr.cooldown_remaining_s == 0
+
+    def test_counts_down_during_cooldown(self):
+        mgr, now, _ = make_session({"max_session_min": 1, "break_min": 2})
+        mgr.try_wake()
+        now[0] = 60
+        mgr.tick()  # WINDDOWN
+        now[0] = 90
+        mgr.tick()  # SLEEPING
+        mgr.tick()  # COOLDOWN
+        assert mgr.state == COOLDOWN
+        assert mgr.cooldown_remaining_s == 120  # 2 min break
+        now[0] = 150
+        assert mgr.cooldown_remaining_s == 60
+        now[0] = 210
+        assert mgr.cooldown_remaining_s == 0
+
+    def test_includes_winddown_grace(self):
+        mgr, now, _ = make_session({"max_session_min": 1, "break_min": 2})
+        mgr.try_wake()
+        now[0] = 60
+        mgr.tick()  # WINDDOWN (sleep_start = 60)
+        assert mgr.state == WINDDOWN
+        # 30s winddown + 120s break = 150s until IDLE
+        assert mgr.cooldown_remaining_s == 150
+        now[0] = 75
+        assert mgr.cooldown_remaining_s == 135  # 15s winddown left + 120
+
+    def test_zero_when_sessions_disabled(self):
+        mgr, _, _ = make_session({"sessions_enabled": False})
+        assert mgr.cooldown_remaining_s == 0
+
+
+class TestResumeNow:
+    def test_resume_from_cooldown(self):
+        mgr, now, _ = make_session({"max_session_min": 1, "break_min": 5})
+        mgr.try_wake()
+        now[0] = 60
+        mgr.tick()  # WINDDOWN
+        now[0] = 90
+        mgr.tick()  # SLEEPING
+        mgr.tick()  # COOLDOWN
+        assert mgr.state == COOLDOWN
+        assert mgr.resume_now() is True
+        assert mgr.state == IDLE
+        assert mgr.try_wake()
+
+    def test_resume_from_winddown_records_session(self):
+        records = []
+        mgr, now, _ = make_session(
+            {"max_session_min": 1, "break_min": 5},
+            on_session_end=lambda r: records.append(r),
+        )
+        mgr.try_wake()
+        now[0] = 60
+        mgr.tick()  # WINDDOWN
+        assert mgr.state == WINDDOWN
+        assert mgr.resume_now() is True
+        assert mgr.state == IDLE
+        assert len(records) == 1
+        assert records[0]["end_reason"] == "normal"
+        assert mgr.sessions_today == 1
+
+    def test_resume_is_noop_while_playing(self):
+        mgr, _, _ = make_session()
+        mgr.try_wake()
+        assert mgr.resume_now() is False
+        assert mgr.state == PLAYING
+
+    def test_resume_is_noop_while_idle(self):
+        mgr, _, _ = make_session()
+        assert mgr.resume_now() is False
+        assert mgr.state == IDLE
+
+
 class TestModeLimits:
     def test_default_mode_is_free_play(self):
         mgr, _, _ = make_session()

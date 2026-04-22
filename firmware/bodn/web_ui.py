@@ -117,7 +117,7 @@ th{color:#aaa}
 <span id="state-badge" class="badge idle">IDLE</span>
 </div>
 <div class="stat"><label>Sessions today</label><span id="s-count" class="val">0</span> / <span id="s-max" class="val">5</span></div>
-<div class="stat"><label>Time remaining</label><div class="progress"><div id="time-bar" class="bar" style="width:0%"></div></div><div id="time-text" style="text-align:center;font-size:0.85em;margin-top:4px">--</div></div>
+<div class="stat"><label id="time-label">Time remaining</label><div class="progress"><div id="time-bar" class="bar" style="width:0%"></div></div><div id="time-text" style="text-align:center;font-size:0.85em;margin-top:4px">--</div></div>
 <div class="toggle"><input type="checkbox" id="sessions-enabled" checked onchange="toggleSessions()"><label>Session limits enabled</label></div>
 <div class="stats-grid">
 <div id="bat-card" class="stat-card" style="display:none">
@@ -130,6 +130,7 @@ th{color:#aaa}
 </div>
 </div>
 <div id="safety-alert" style="display:none;margin:8px 0;padding:10px;border-radius:8px;font-size:0.85em;font-weight:bold"></div>
+<button class="btn btn-primary" id="resume-btn" onclick="resumeNow()" style="display:none;margin-bottom:8px">Resume now</button>
 <button class="btn btn-danger" id="lockdown-btn" onclick="toggleLockdown()">Lockdown</button>
 </div>
 
@@ -239,10 +240,22 @@ var b=document.getElementById('state-badge');
 b.textContent=d.state;b.className='badge '+badgeClass(d.state);
 document.getElementById('s-count').textContent=d.sessions_today;
 document.getElementById('s-max').textContent=d.sessions_remaining+d.sessions_today;
+var tLbl=document.getElementById('time-label'),tBar=document.getElementById('time-bar'),tText=document.getElementById('time-text');
+var inBreak=(d.state==='WINDDOWN'||d.state==='SLEEPING'||d.state==='COOLDOWN');
+if(inBreak&&d.cooldown_remaining_s>0){
+var totS=(d.break_s||0)+30;
+var cpct=totS>0?Math.round(d.cooldown_remaining_s*100/totS):0;
+tLbl.textContent='Break remaining';
+tBar.style.width=cpct+'%';tBar.style.background='#8e44ad';
+tText.textContent=fmtTime(d.cooldown_remaining_s);
+}else{
 var pct=0,maxS=d.max_session_s||1200;
 if(d.time_remaining_s>0)pct=Math.round(d.time_remaining_s*100/maxS);
-document.getElementById('time-bar').style.width=pct+'%';
-document.getElementById('time-text').textContent=d.time_remaining_s>0?fmtTime(d.time_remaining_s):'--';
+tLbl.textContent='Time remaining';
+tBar.style.width=pct+'%';tBar.style.background='';
+tText.textContent=d.time_remaining_s>0?fmtTime(d.time_remaining_s):'--';
+}
+var rb=document.getElementById('resume-btn');if(rb)rb.style.display=inBreak?'':'none';
 document.getElementById('lockdown-btn').textContent=d.state==='LOCKDOWN'?'Unlock':'Lockdown';
 var tc=document.getElementById('temp-card'),tv=document.getElementById('temp-val');
 var bc=document.getElementById('bat-card'),bv=document.getElementById('bat-val'),bl=document.getElementById('bat-lbl');
@@ -353,6 +366,10 @@ setTimeout(function(){msg.className='msg'},2000);
 }
 async function toggleLockdown(){
 await fetch('/api/lockdown',{method:'POST'});
+refresh();
+}
+async function resumeNow(){
+await fetch('/api/resume',{method:'POST'});
 refresh();
 }
 async function loadHistory(){

@@ -1,7 +1,7 @@
 # bodn/ui/ambient.py — screens for the secondary (ambient) display
 
 import time
-from bodn.session import PLAYING, WARN_5, WARN_2, IDLE
+from bodn.session import PLAYING, WARN_5, WARN_2, IDLE, WINDDOWN, SLEEPING, COOLDOWN
 from bodn.ui.screen import Screen
 from bodn.ui.widgets import draw_centered, draw_progress_bar, draw_battery_icon
 from bodn.ui.secondary import CONTENT_SIZE
@@ -59,6 +59,7 @@ class StatusStrip(Screen):
         self._last_min = -1
         self._prev_state = None
         self._prev_remaining_min = -1
+        self._prev_cooldown_s = -1
         self._prev_bat_pct = -1
         self._prev_charging = None
         self._prev_temp_status = "ok"
@@ -68,6 +69,7 @@ class StatusStrip(Screen):
         self._last_min = -1
         self._prev_state = None
         self._prev_remaining_min = -1
+        self._prev_cooldown_s = -1
         self._prev_bat_pct = -1
         self._prev_charging = None
         self._prev_temp_status = "ok"
@@ -92,6 +94,14 @@ class StatusStrip(Screen):
             if remaining_min != self._prev_remaining_min:
                 self._prev_remaining_min = remaining_min
                 changed = True
+
+        if state in (WINDDOWN, SLEEPING, COOLDOWN):
+            cd_s = self._session_mgr.cooldown_remaining_s
+            if cd_s != self._prev_cooldown_s:
+                self._prev_cooldown_s = cd_s
+                changed = True
+        else:
+            self._prev_cooldown_s = -1
 
         # Battery (cached — at most one ADC read per call, refresh every 30 s)
         bat_pct, charging = battery.read()
@@ -166,6 +176,15 @@ class StatusStrip(Screen):
             label = _t("plays", remaining)
             x_right = w - len(label) * 8 - 2
             tft.text(label, x_right, 2, color)
+
+        elif state in (WINDDOWN, SLEEPING, COOLDOWN):
+            cd_s = self._session_mgr.cooldown_remaining_s
+            if cd_s > 0:
+                mm = cd_s // 60
+                ss = cd_s % 60
+                label = "{}:{:02d}".format(mm, ss)
+                x_right = w - len(label) * 8 - 2
+                tft.text(label, x_right, 2, theme.MAGENTA)
 
         # Row 2: safety alerts > battery icon (priority order)
         temp_st = temperature.status()
@@ -279,6 +298,18 @@ class StatusStrip(Screen):
                 label = label[:max_chars]
             lx = (w - len(label) * 8) // 2
             tft.text(label, max(0, lx), y_session, color)
+
+        elif state in (WINDDOWN, SLEEPING, COOLDOWN):
+            cd_s = self._session_mgr.cooldown_remaining_s
+            if cd_s > 0:
+                mm = cd_s // 60
+                ss = cd_s % 60
+                label = "{}:{:02d}".format(mm, ss)
+                max_chars = w // 8
+                if len(label) > max_chars:
+                    label = "{}m".format(mm)
+                lx = (w - len(label) * 8) // 2
+                tft.text(label, max(0, lx), y_session, theme.MAGENTA)
 
         # Bottom: safety alerts > battery icon (priority order)
         temp_st = temperature.status()

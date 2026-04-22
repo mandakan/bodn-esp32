@@ -570,6 +570,8 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             data = {
                 "state": session_mgr.state,
                 "time_remaining_s": session_mgr.time_remaining_s,
+                "cooldown_remaining_s": session_mgr.cooldown_remaining_s,
+                "break_s": settings["break_min"] * 60,
                 "sessions_today": session_mgr.sessions_today,
                 "sessions_remaining": session_mgr.sessions_remaining,
                 "max_session_s": settings["max_session_min"] * 60,
@@ -621,6 +623,10 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             settings["lockdown"] = not settings.get("lockdown", False)
             storage.save_settings(settings)
             await _send_json(writer, {"ok": True, "lockdown": settings["lockdown"]})
+
+        elif method == "POST" and path == "/api/resume":
+            ok = session_mgr.resume_now()
+            await _send_json(writer, {"ok": ok, "state": session_mgr.state})
 
         elif method == "GET" and path == "/api/history":
             sessions = storage.load_sessions()
