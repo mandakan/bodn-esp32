@@ -34,6 +34,7 @@ _ENC_TIMBRE = const(1)  # config.ENC_A
 
 # Switch indices in inp.sw — see main.input_scan_task for the MCP layout.
 _SW_AUDIO_OUT = const(0)  # MCP1 GPB0 — True = speaker on, False = silent
+_SW_GATE_MODE = const(1)  # MCP1 GPB1 — True = arcade-gated, False = continuous
 _SW_VIZ_LEFT = const(2)  # MCP2 SW_LEFT — True = scope on primary
 _SW_OCT_RIGHT = const(3)  # MCP2 SW_RIGHT — True = high octave
 
@@ -170,6 +171,14 @@ class ToneExplorerScreen(Screen):
         self._saved_audio_enabled = True
         self._last_audio_sw = None
 
+        # Gate-mode state (sw[1]): when True, the voice only sounds while an
+        # arcade button is held.  _voice_active tracks whether the mixer is
+        # currently producing sound on self._voice — we fade in on first press
+        # and fade out on release so transitions stay click-free.
+        self._voice_active = False
+        self._gate_mode = False
+        self._gate_any_arcade_held = False
+
     # ---- lifecycle ------------------------------------------------------
 
     def enter(self, manager):
@@ -199,7 +208,11 @@ class ToneExplorerScreen(Screen):
         # Scope is only meaningful when the native audio engine is present.
         self._have_scope = hasattr(self._audio, "scope_peek") if self._audio else False
 
-        # Start the sustained voice.  Initial pitch is the engine's default.
+        # Allocate a voice slot from the "music" pool.  Whether it starts
+        # sounding depends on the gate-mode switch — we (re)start it from
+        # _sync_audio() once we know the current sw[1] state.
+        self._voice_active = False
+        self._gate_mode = False
         if self._audio:
             try:
                 self._voice = self._audio.tone_sustained(
@@ -207,7 +220,7 @@ class ToneExplorerScreen(Screen):
                     wave=_wave_name(self._engine.waveform_id),
                     channel="music",
                 )
-                # Zero gain until the first interaction — avoids a startup chirp.
+                self._voice_active = True
                 self._audio.set_freq(self._voice, self._engine.base_freq_hz)
             except Exception as e:
                 print("tone_explorer: failed to start voice:", e)
@@ -267,6 +280,12 @@ class ToneExplorerScreen(Screen):
             eng.on_viz_toggle(inp.sw[_SW_VIZ_LEFT])
         if len(inp.sw) > _SW_AUDIO_OUT:
             self._apply_audio_switch(inp.sw[_SW_AUDIO_OUT])
+        self._gate_mode = (
+            inp.sw[_SW_GATE_MODE] if len(inp.sw) > _SW_GATE_MODE else False
+        )
+        self._gate_any_arcade_held = any(
+            inp.arc_held[i] for i in range(min(NOTES_PER_OCTAVE, len(inp.arc_held)))
+        )
 
         # Encoders — each detent = one pentatonic / timbre step.  Clamping
         # lives in the engine so the screen doesn't need to know the bounds.
@@ -343,20 +362,51 @@ class ToneExplorerScreen(Screen):
             return
         eng = self._engine
         eff_freq = eng.effective_freq_hz()
-        if eff_freq != self._last_eff_freq:
-            self._audio.set_freq(self._voice, eff_freq)
-            self._last_eff_freq = eff_freq
 
-        # Re-trigger the voice when waveform changes (different generator path).
-        if eng.waveform_id != self._last_waveform:
-            self._audio.tone_sustained(
+        # Gate mode: voice only sounds while an arcade button is held.  We
+        # fade the voice out on release (voice_stop) and re-trigger it on the
+        # next press — tone_sustained's fade-in keeps that click-free.
+        if self._gate_mode:
+            should_sound = self._gate_any_arcade_held
+        else:
+            should_sound = True
+
+        if should_sound and not self._voice_active:
+            self._voice = self._audio.tone_sustained(
                 eff_freq,
                 wave=_wave_name(eng.waveform_id),
                 channel="music",
                 voice=self._voice,
             )
+            self._voice_active = True
+            self._last_eff_freq = eff_freq
             self._last_waveform = eng.waveform_id
-            self._last_mask = -1  # force re-apply of mods after retrigger
+            self._last_mask = -1  # reapply effects after retrigger
+        elif not should_sound and self._voice_active:
+            # voice_stop() triggers a graceful fade-out in the mixer before
+            # the voice is released.  No need to touch effect state — the
+            # next tone_sustained() reapplies everything.
+            self._audio.stop(voice=self._voice)
+            self._voice_active = False
+            # Drop the harmony too so it doesn't linger past the gate close.
+            if self._harmony_voice is not None:
+                self._audio.stop(voice=self._harmony_voice)
+                self._harmony_voice = None
+
+        if not self._voice_active:
+            # Keep derived state in sync so the next gate-open starts cleanly.
+            self._last_eff_freq = eff_freq
+            self._last_waveform = eng.waveform_id
+            return
+
+        if eff_freq != self._last_eff_freq:
+            self._audio.set_freq(self._voice, eff_freq)
+            self._last_eff_freq = eff_freq
+
+        # Waveform change: phase-preserving crossfade (no voice retrigger).
+        if eng.waveform_id != self._last_waveform:
+            self._audio.set_wave(self._voice, _wave_name(eng.waveform_id))
+            self._last_waveform = eng.waveform_id
 
         if eng.effects_mask != self._last_mask:
             self._apply_effects()

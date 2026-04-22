@@ -36,6 +36,15 @@
 // Fade length in samples
 #define AUDIOMIX_FADE_SAMPLES   16  // 1ms @ 16kHz
 
+// Waveform crossfade length (samples) for phase-preserving tone_wave swaps.
+// 48 ≈ 3ms at 16kHz — short enough to feel "instant", long enough to mask
+// the sample-value jump between differently-shaped oscillators.
+#define AUDIOMIX_WAVE_XFADE_SAMPLES   48
+
+// Stutter-gate edge ramp in samples (linear slew on the binary on/off gate).
+// 24 ≈ 1.5ms @ 16kHz — removes the click without audibly softening the gate.
+#define AUDIOMIX_STUTTER_RAMP_SAMPLES 24
+
 // ---------------------------------------------------------------------------
 // Ring buffer (lock-free SPSC)
 // ---------------------------------------------------------------------------
@@ -83,9 +92,15 @@ typedef struct {
     // SRC_TONE fields
     uint32_t tone_freq;
     uint32_t tone_samples_left;
-    uint32_t tone_phase;
-    uint8_t  tone_wave;
+    uint32_t tone_phase;                // Q16 cycle phase (0..65535 = one cycle)
+    uint8_t  tone_wave;                 // currently rendering waveform
     uint8_t  tone_sustain;              // 1 = play indefinitely until stop_req
+
+    // Waveform crossfade: when Python asks for a wave change via
+    // voice_set_wave(), we keep playing tone_wave while linearly mixing in
+    // tone_wave_pending over AUDIOMIX_WAVE_XFADE_SAMPLES samples.  0 = idle.
+    uint8_t  tone_wave_pending;
+    uint16_t tone_wave_xfade_left;
 
     // --- Reusable modulation layer (any SRC_TONE voice) ---
     // All fields zero = effect disabled.  Modes enable a subset and all
@@ -110,6 +125,7 @@ typedef struct {
     uint16_t mod_stutter_rate_cHz;      // 0 = off
     uint16_t mod_stutter_duty_q15;      // 0..32767 = off-fraction of cycle
     uint32_t mod_stutter_phase;
+    uint16_t mod_stutter_gate_q15;      // smoothed 0/32767 gate (slew-limited)
 
     // Envelope state (for clock-driven tone tracks — replaces fade_in for tones)
     uint32_t env_attack_samples;        // attack ramp length (0 = instant)

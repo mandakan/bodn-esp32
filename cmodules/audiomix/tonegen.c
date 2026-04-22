@@ -46,35 +46,43 @@ int16_t tonegen_lfo_sine(uint32_t phase_q16) {
     return sine_lut[(phase_q16 >> 8) & 0xFF];
 }
 
+// Phase is a 16-bit cycle counter (0..65535 = one full cycle).  Each sample
+// advances by inc_q16; the accumulator wraps naturally in 32-bit math and is
+// masked to 16 bits on return.  Because the wrap point doesn't depend on the
+// frequency, freq changes mid-stream are phase-continuous → no click.
+
 uint32_t tonegen_square(int16_t *out, uint32_t n_samples,
-                        uint32_t period, uint32_t phase) {
-    if (period < 1) period = 1;
-    uint32_t half = period / 2;
+                        uint32_t inc_q16, uint32_t phase_q16) {
+    uint32_t phase = phase_q16 & 0xFFFF;
+    uint32_t inc = inc_q16 & 0xFFFF;
     for (uint32_t i = 0; i < n_samples; i++) {
-        uint32_t p = (i + phase) % period;
-        out[i] = (p < half) ? 32767 : -32767;
+        out[i] = (phase < 0x8000) ? 32767 : -32767;
+        phase = (phase + inc) & 0xFFFF;
     }
-    return phase + n_samples;
+    return phase;
 }
 
 uint32_t tonegen_sine(int16_t *out, uint32_t n_samples,
-                      uint32_t period, uint32_t phase) {
-    if (period < 1) period = 1;
+                      uint32_t inc_q16, uint32_t phase_q16) {
+    uint32_t phase = phase_q16 & 0xFFFF;
+    uint32_t inc = inc_q16 & 0xFFFF;
     for (uint32_t i = 0; i < n_samples; i++) {
-        uint32_t idx = ((i + phase) * 256 / period) % 256;
-        out[i] = sine_lut[idx];
+        out[i] = sine_lut[phase >> 8];
+        phase = (phase + inc) & 0xFFFF;
     }
-    return phase + n_samples;
+    return phase;
 }
 
 uint32_t tonegen_sawtooth(int16_t *out, uint32_t n_samples,
-                          uint32_t period, uint32_t phase) {
-    if (period < 1) period = 1;
+                          uint32_t inc_q16, uint32_t phase_q16) {
+    uint32_t phase = phase_q16 & 0xFFFF;
+    uint32_t inc = inc_q16 & 0xFFFF;
     for (uint32_t i = 0; i < n_samples; i++) {
-        uint32_t p = (i + phase) % period;
-        out[i] = (int16_t)((p * 65534 / period) - 32767);
+        // phase 0x0000 → -32768 (min), 0x8000 → 0, 0xFFFF → +32767.
+        out[i] = (int16_t)((int32_t)phase - 0x8000);
+        phase = (phase + inc) & 0xFFFF;
     }
-    return phase + n_samples;
+    return phase;
 }
 
 void tonegen_noise(int16_t *out, uint32_t n_samples,

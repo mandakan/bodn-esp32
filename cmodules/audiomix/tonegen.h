@@ -5,20 +5,22 @@
 
 #include <stdint.h>
 
-// Generate square wave samples into `out`.
-// Returns the new phase offset for seamless chaining.
+// Square/sine/sawtooth take a Q16 phase accumulator: 65536 = one full cycle.
+// Callers compute inc_q16 = round(freq_hz * 65536 / sample_rate).  Phase is
+// continuous across chunks and across frequency changes — only the rate of
+// advance changes, so pitch sweeps are click-free.  Returns the new phase
+// (wrapped into 0..65535).
+
 uint32_t tonegen_square(int16_t *out, uint32_t n_samples,
-                        uint32_t period, uint32_t phase);
+                        uint32_t inc_q16, uint32_t phase_q16);
 
-// Generate sine wave samples using a 256-entry LUT.
 uint32_t tonegen_sine(int16_t *out, uint32_t n_samples,
-                      uint32_t period, uint32_t phase);
+                      uint32_t inc_q16, uint32_t phase_q16);
 
-// Generate sawtooth wave samples.
 uint32_t tonegen_sawtooth(int16_t *out, uint32_t n_samples,
-                          uint32_t period, uint32_t phase);
+                          uint32_t inc_q16, uint32_t phase_q16);
 
-// Generate noise with exponential decay.
+// Noise has no notion of phase — it's an exponentially-decaying LFSR burst.
 // decay_rate controls how fast the noise fades (~4000 = sharp click).
 void tonegen_noise(int16_t *out, uint32_t n_samples,
                    uint32_t decay_rate, uint32_t sample_rate);
