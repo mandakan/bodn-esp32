@@ -1,5 +1,6 @@
-# 8 MiB flash with OTA support (2×2.4 MiB app slots)
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions-8MiBplus-ota.csv"
+# 8 MiB flash with OTA support (2×2.1 MiB app slots, 3.7 MiB VFS)
+# Path is relative to micropython/ports/esp32/ (the IDF CMAKE_SOURCE_DIR).
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../../boards/BODN_S3/partitions-bodn-8MiB.csv"
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 
 # Dual-core (default for S3, but be explicit)
