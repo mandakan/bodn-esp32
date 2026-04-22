@@ -234,18 +234,31 @@ class SoundboardState:
     def load(self, on_progress=None):
         """Scan filesystem and load manifest. Call once on mode entry."""
         self.manifest = load_manifest()
-        self._rescan(on_progress=on_progress)
+        # Arcade sounds are shared across banks — load once here and
+        # keep them resident for the whole session.  set_bank() only
+        # rescans the bank-specific mini slots.
+        self._rescan_arcade(on_progress=on_progress)
+        self._rescan_bank(on_progress=on_progress)
 
-    def set_bank(self, bank):
-        """Switch to a new bank and rescan."""
+    def set_bank(self, bank, on_progress=None, on_slot_ready=None):
+        """Switch to a new bank and rescan the mini slots only.
+
+        Arcade sounds live under ``sounds/arcade/`` and don't change
+        across banks, so they stay resident from the initial ``load()``.
+
+        ``on_progress(loaded, total)`` tracks overall preload progress.
+        ``on_slot_ready(kind, idx)`` fires after each individual slot
+        has finished (or attempted) preload, with ``kind`` = ``"mini"``.
+        """
         self.bank = bank & 0x3
         self.playing_slots.clear()
         self.playing_arcades.clear()
         self.slot_voices.clear()
         self.arcade_voices.clear()
-        self._rescan()
+        self._rescan_bank(on_progress=on_progress, on_slot_ready=on_slot_ready)
 
-    def _rescan(self, on_progress=None):
+    def _rescan_bank(self, on_progress=None, on_slot_ready=None):
+        """Scan + preload the mini slots for the current bank."""
         import gc
         from bodn.assets import preload_wav
 
@@ -268,20 +281,13 @@ class SoundboardState:
             self._disc_labels = [
                 found[i][1] if i < len(found) else None for i in range(NUM_MINI_BUTTONS)
             ]
-        self.arcade_present = scan_arcade()
 
-        # Free old buffers before allocating new ones (avoids PSRAM
-        # fragmentation when switching banks).
+        # Free old mini buffers before allocating new ones (avoids PSRAM
+        # fragmentation when switching banks).  Arcade buffers persist.
         self._slot_bufs = [None] * NUM_MINI_BUTTONS
-        self._arcade_bufs = [None] * NUM_ARCADE_BUTTONS
         gc.collect()
 
-        # Preload sounds into PSRAM one at a time — skip files that
-        # fail (MemoryError, corrupt WAV, missing file).  Slots that
-        # fail to preload fall back to streaming file I/O on press.
-        total = sum(1 for p in self._slot_paths if p) + sum(
-            1 for i in range(NUM_ARCADE_BUTTONS) if self.arcade_present[i]
-        )
+        total = sum(1 for p in self._slot_paths if p)
         loaded = 0
         for i, p in enumerate(self._slot_paths):
             if p:
@@ -292,6 +298,18 @@ class SoundboardState:
                 loaded += 1
                 if on_progress:
                     on_progress(loaded, total)
+                if on_slot_ready:
+                    on_slot_ready("mini", i)
+
+    def _rescan_arcade(self, on_progress=None):
+        """Scan + preload the arcade-button sounds.  Called once at
+        mode entry — bank switches don't touch this."""
+        from bodn.assets import preload_wav
+
+        self.arcade_present = scan_arcade()
+        self._arcade_bufs = [None] * NUM_ARCADE_BUTTONS
+        total = sum(1 for i in range(NUM_ARCADE_BUTTONS) if self.arcade_present[i])
+        loaded = 0
         for i in range(NUM_ARCADE_BUTTONS):
             if self.arcade_present[i]:
                 try:

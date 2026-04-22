@@ -255,6 +255,13 @@ class PN532:
         """Phase 1 of two-phase scan: send the InListPassiveTarget command.
 
         Call read_passive_target_check() on subsequent frames to get the result.
+
+        Returns True if the PN532 accepted the command (ACK received).  The
+        ACK must be consumed here: if we leave it in the chip's buffer, the
+        subsequent _read_response_now() in read_passive_target_check() reads
+        the ACK frame as if it were the response, fails checksum, and
+        reports "no tag" on every cycle.  ACK arrives within ~1–2 ms so a
+        short blocking read here does not break cooperativeness.
         """
         data = bytearray(4)
         data[0] = _HOST_TO_PN532
@@ -262,7 +269,8 @@ class PN532:
         data[2] = 0x01  # max 1 target
         data[3] = 0x00  # 106 kbps type A
         self._write_frame(data)
-        self._scan_pending = True
+        self._scan_pending = self._read_ack(timeout_ms=20)
+        return self._scan_pending
 
     def read_passive_target_check(self):
         """Phase 2 of two-phase scan: check for response.

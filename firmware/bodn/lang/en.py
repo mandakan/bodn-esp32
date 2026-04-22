@@ -426,7 +426,7 @@ STRINGS = {
     # Blippa (free-play NFC mode — tap any card, hear a sound)
     "mode_blippa": "blip",
     "blippa_welcome": "Blip a card!",
-    "blippa_hint_scan": "Hold a card to the box",
+    "blippa_hint_scan": "Hold a card here",
     "blippa_unknown": "Unknown card",
     # Boot screen
     "boot_cfg": "Waking up...",

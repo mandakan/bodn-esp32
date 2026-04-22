@@ -576,15 +576,17 @@ class CooperativePN532(FakePN532):
     ``False`` means "done, no tag", ``bytes`` means "UID".
     """
 
-    def __init__(self, check_script, pages=None):
+    def __init__(self, check_script, pages=None, start_ack=True):
         super().__init__(uid=None, pages=pages or {})
         self._script = list(check_script)
+        self._start_ack = start_ack
         self.start_calls = 0
         self.check_calls = 0
         self.ntag_reads = []
 
     def read_passive_target_start(self):
         self.start_calls += 1
+        return self._start_ack
 
     def read_passive_target_check(self):
         self.check_calls += 1
@@ -698,6 +700,26 @@ class TestScanCooperative:
             # Must have chunked the NDEF read across multiple pages
             assert 4 in fake.ntag_reads
             assert 8 in fake.ntag_reads
+        finally:
+            self._teardown_nfc(old)
+
+    def test_start_without_ack_returns_no_tag(self):
+        """read_passive_target_start returning False (ACK not received) must
+        abort the cycle cleanly rather than polling for a response that
+        will never come."""
+        from bodn.nfc import NFCReader
+
+        old = self._save_nfc()
+        fake = CooperativePN532(check_script=[], start_ack=False)
+        self._setup_nfc(fake)
+        try:
+            reader = NFCReader()
+            uid, data = _run(reader.scan_cooperative(detect_delay_ms=0))
+            assert uid is None
+            assert data is None
+            assert fake.start_calls == 1
+            # No check polling after a failed start
+            assert fake.check_calls == 0
         finally:
             self._teardown_nfc(old)
 

@@ -455,7 +455,7 @@ class NFCReader:
         data = self._read_ndef()
         return uid_str, data
 
-    async def scan_cooperative(self, detect_delay_ms=8, check_retries=4):
+    async def scan_cooperative(self, detect_delay_ms=8, check_retries=8):
         """Scan for a tag without blocking the asyncio loop.
 
         Uses the PN532 two-phase API: write InListPassiveTarget, yield
@@ -479,12 +479,21 @@ class NFCReader:
 
         pn = self._pn532
         try:
-            pn.read_passive_target_start()
+            started = pn.read_passive_target_start()
         except OSError:
             raise
+        if not started:
+            # PN532 didn't ACK the InListPassiveTarget command.  No scan
+            # is pending; reporting "no tag" lets the main loop retry on
+            # the next cycle instead of waiting for a response that will
+            # never come.
+            return None, None
 
         # Give the PN532 time to run the anticollision loop before we
-        # start polling its ready bit.  ~5–7 ms is typical at 106 kbps.
+        # start polling its ready bit.  With the ACK consumed in
+        # read_passive_target_start, the response arrives within a few
+        # ms so 8 retries × 4 ms is plenty of headroom without adding
+        # perceptible latency to no-tag cycles.
         await asyncio.sleep_ms(detect_delay_ms)
 
         uid = None

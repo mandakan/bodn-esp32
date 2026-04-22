@@ -47,15 +47,13 @@ _MYSTERY_TONE_MS = const(150)
 _HOLD_MS = const(2500)
 
 
-def _card_bilingual_label(card):
-    """Build a dual-language label, e.g. 'Katt / Cat'."""
+def _card_labels(card):
+    """Return (sv, en) display labels for a card — either may be empty."""
     if card is None:
-        return None
-    sv = card.get("label_sv", "")
-    en = card.get("label_en", "")
-    if sv and en:
-        return "{} / {}".format(capitalize(sv), capitalize(en))
-    return capitalize(sv or en or "") or None
+        return "", ""
+    sv = capitalize(card.get("label_sv", ""))
+    en = capitalize(card.get("label_en", ""))
+    return sv, en
 
 
 def _stable_hash(s):
@@ -313,9 +311,15 @@ class BlippaScreen(Screen):
             except Exception:
                 pass
 
-        label = _card_bilingual_label(card) or capitalize(card_id)
-        if label:
-            draw_centered(tft, label, h - 60, theme.WHITE, w, scale=2)
+        sv, en = _card_labels(card)
+        if not sv and not en:
+            sv = capitalize(card_id)
+        # Two lines so long pairs like "Brandbil / Fire truck" can't
+        # overrun the 320 px primary display at scale=2.
+        if sv:
+            draw_centered(tft, sv, h - 80, theme.WHITE, w, scale=2)
+        if en:
+            draw_centered(tft, en, h - 55, theme.MUTED, w, scale=2)
 
         draw_centered(tft, t("mode_" + mode), h - 20, theme.MUTED, w)
 

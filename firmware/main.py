@@ -1217,7 +1217,28 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
                 if not consumed and mode in mode_screens:
                     factory = mode_screens[mode]
                     try:
-                        screen = factory()
+                        # Pre-launch feedback.  Home has its own carousel
+                        # jump + bar via show_launching.  In-game (mode →
+                        # mode replace) there's nothing to reuse, so paint
+                        # a generic splash so the child sees which mode is
+                        # loading before the factory blocks the event loop.
+                        on_launching = getattr(active, "show_launching", None)
+                        if on_launching is not None:
+                            on_launching(mode)
+                            on_progress = getattr(active, "show_loading_progress", None)
+                        else:
+                            from bodn.ui.launch_splash import make_launch_splash
+
+                            on_progress = make_launch_splash(manager, mode)
+                            on_progress(0, 1)
+                        try:
+                            screen = (
+                                factory(on_progress=on_progress)
+                                if on_progress
+                                else factory()
+                            )
+                        except TypeError:
+                            screen = factory()
                         if mode != "settings":
                             session_mgr.try_wake(mode)
                         if audio:
@@ -1228,7 +1249,14 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
                         else:
                             manager.replace(screen)
                     except Exception as e:
-                        print("NFC launch error:", e)
+                        # Full traceback — a prior silent regression (a
+                        # CPython-only function-attr closure in the
+                        # launch splash) was hidden for an entire
+                        # session by only printing str(e).
+                        import sys
+
+                        print("NFC launch error:")
+                        sys.print_exception(e)
 
         if uid is None:
             prev_uid = None
