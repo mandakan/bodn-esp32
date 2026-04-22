@@ -75,8 +75,13 @@ def load_settings():
 
 
 def save_settings(settings):
-    """Save settings dict to flash."""
-    _atomic_write(SETTINGS_PATH, settings)
+    """Save settings dict to flash.
+
+    Keys starting with ``_`` are runtime-only (hardware handles, mode list,
+    idle tracker, …) and never persisted.
+    """
+    persistable = {k: v for k, v in settings.items() if not k.startswith("_")}
+    _atomic_write(SETTINGS_PATH, persistable)
 
 
 def load_sessions():

@@ -603,7 +603,10 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             await _send_json(writer, data)
 
         elif method == "GET" and path == "/api/settings":
-            await _send_json(writer, settings)
+            # Strip runtime-only keys (non-serializable objects like _pwm,
+            # _idle_tracker, plus internal lists like _all_modes).
+            public = {k: v for k, v in settings.items() if not k.startswith("_")}
+            await _send_json(writer, public)
 
         elif method == "POST" and path == "/api/settings":
             if body:
