@@ -97,6 +97,10 @@ class SoundboardScreen(Screen):
         self._prev_bank = -1
         self._prev_volume = -1
         self._prev_muted = None
+        # Populated during bank-switch intro so the per-slot preload
+        # callback can paint directly without recomputing layout.
+        self._bank_switch_geom = None
+        self._bank_switch_frame = 0
 
     def enter(self, manager):
         self._manager = manager
@@ -163,11 +167,17 @@ class SoundboardScreen(Screen):
         # --- Toggle switches → bank select ---
         new_bank = bank_from_toggles(inp.sw[0], inp.sw[1])
         if new_bank != state.bank:
-            state.set_bank(new_bank)
+            # Bank preload stalls for ~hundreds of ms.  Clear the grid
+            # and fill in each slot as its WAV finishes preloading, so
+            # the child sees the new bank assembling itself.
+            state.bank = new_bank & 0x3  # set early so header reflects the target
+            self._paint_bank_switch_intro(frame)
+            state.set_bank(new_bank, on_slot_ready=self._on_slot_preloaded)
             self._audio.play_sound("select", channel="ui")
             self._dirty = True
             self._full_clear = True
             self._leds_dirty = True
+            self._bank_switch_geom = None
 
         # --- ENC_A click → mute/unmute ---
         if inp.enc_btn_pressed[ENC_A]:
@@ -259,6 +269,94 @@ class SoundboardScreen(Screen):
         self._audio.volume = vol
         if self._settings is not None:
             self._settings["volume"] = state.volume
+
+    def _bank_switch_layout(self):
+        """Return the geometry used by both intro and per-slot repaints
+        during a bank switch.  Kept identical to ``_render_landscape`` so
+        the slots land in their final positions.
+        """
+        theme = self._manager.theme
+        w = theme.width
+        h = theme.height
+        cols = 4
+        rows = 2
+        margin = 4
+        grid_top = 24
+        cell_w = (w - margin * (cols + 1)) // cols
+        cell_h = (h - grid_top - 60) // rows
+        arc_top = grid_top + rows * (cell_h + margin) + 4
+        arc_cell_w = (w - margin * (NUM_ARCADE_BUTTONS + 1)) // NUM_ARCADE_BUTTONS
+        arc_cell_h = h - arc_top - 20
+        return (margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h)
+
+    def _paint_bank_switch_intro(self, frame):
+        """Clear the layout and show the new bank's header with an empty
+        slot grid.  Slots fill in via ``_on_slot_preloaded`` as the WAVs
+        finish preloading.
+        """
+        if self._manager is None:
+            return
+        tft = self._manager.tft
+        theme = self._manager.theme
+        w = theme.width
+        state = self._state
+
+        tft.fill(theme.BLACK)
+        bank_name = self._resolve_bank_name(state)
+        bank_label = t("sb_bank", state.bank + 1)
+        draw_centered(tft, capitalize(bank_name), 2, theme.CYAN, w, scale=2)
+        bank_lbl_x = w - len(bank_label) * 8 - 4
+        tft.text(bank_label, bank_lbl_x, 4, theme.MUTED)
+
+        geom = self._bank_switch_layout()
+        (margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h) = geom
+
+        # Empty mini slot grid — dim outlines only.
+        for i in range(NUM_MINI_BUTTONS):
+            col = i % 4
+            row = i // 4
+            x = margin + col * (cell_w + margin)
+            y = grid_top + row * (cell_h + margin)
+            tft.rect(x, y, cell_w, cell_h, theme.DIM)
+
+        # Empty arcade row — dim outlines only.
+        for i in range(NUM_ARCADE_BUTTONS):
+            x = margin + i * (arc_cell_w + margin)
+            tft.rect(x, arc_top, arc_cell_w, arc_cell_h, theme.DIM)
+
+        tft.show()
+        self._bank_switch_geom = geom
+        self._bank_switch_frame = frame
+
+    def _on_slot_preloaded(self, kind, idx):
+        """Repaint a single slot once its WAV has finished preloading.
+
+        Called from inside ``SoundboardState.set_bank`` while the update
+        loop is blocked, so it draws directly to the TFT and pushes just
+        that slot's rectangle.
+        """
+        geom = self._bank_switch_geom
+        if geom is None or self._manager is None:
+            return
+        (margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h) = geom
+        tft = self._manager.tft
+        theme = self._manager.theme
+        rgb = tft.rgb
+        frame = self._bank_switch_frame
+        state = self._state
+        if kind == "mini":
+            col = idx % 4
+            row = idx // 4
+            x = margin + col * (cell_w + margin)
+            y = grid_top + row * (cell_h + margin)
+            self._draw_slot(tft, theme, rgb, state, idx, x, y, cell_w, cell_h, frame)
+            tft.show_rect(x, y, cell_w, cell_h)
+        elif kind == "arc":
+            x = margin + idx * (arc_cell_w + margin)
+            self._draw_arc_slot(
+                tft, theme, rgb, state, idx, x, arc_top, arc_cell_w, arc_cell_h, frame
+            )
+            tft.show_rect(x, arc_top, arc_cell_w, arc_cell_h)
 
     def _resolve_bank_name(self, state):
         """Return display name for current bank (manifest or i18n fallback)."""

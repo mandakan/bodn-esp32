@@ -236,16 +236,24 @@ class SoundboardState:
         self.manifest = load_manifest()
         self._rescan(on_progress=on_progress)
 
-    def set_bank(self, bank):
-        """Switch to a new bank and rescan."""
+    def set_bank(self, bank, on_progress=None, on_slot_ready=None):
+        """Switch to a new bank and rescan.
+
+        ``on_progress(loaded, total)`` tracks overall preload progress.
+        ``on_slot_ready(kind, idx)`` fires after each individual slot
+        has finished (or attempted) preload, with ``kind`` = ``"mini"``
+        or ``"arc"``.  The UI uses the per-slot hook to paint the slot
+        grid as it fills in — preload is where the multi-hundred-ms
+        bank-switch stall lives.
+        """
         self.bank = bank & 0x3
         self.playing_slots.clear()
         self.playing_arcades.clear()
         self.slot_voices.clear()
         self.arcade_voices.clear()
-        self._rescan()
+        self._rescan(on_progress=on_progress, on_slot_ready=on_slot_ready)
 
-    def _rescan(self, on_progress=None):
+    def _rescan(self, on_progress=None, on_slot_ready=None):
         import gc
         from bodn.assets import preload_wav
 
@@ -292,6 +300,8 @@ class SoundboardState:
                 loaded += 1
                 if on_progress:
                     on_progress(loaded, total)
+                if on_slot_ready:
+                    on_slot_ready("mini", i)
         for i in range(NUM_ARCADE_BUTTONS):
             if self.arcade_present[i]:
                 try:
@@ -301,6 +311,8 @@ class SoundboardState:
                 loaded += 1
                 if on_progress:
                     on_progress(loaded, total)
+                if on_slot_ready:
+                    on_slot_ready("arc", i)
 
     def bank_name(self):
         """Return the display name for the current bank in the active language."""
