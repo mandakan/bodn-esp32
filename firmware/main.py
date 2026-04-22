@@ -1134,58 +1134,6 @@ async def housekeeping_task(session_mgr, settings, audio=None, pwm=None):
         await asyncio.sleep_ms(500)
 
 
-def _make_launch_splash(manager, mode_name):
-    """Return a progress callback that paints a full-screen launch splash.
-
-    Used by the NFC launch path when replacing one mode with another —
-    the active screen doesn't provide its own loading UI, so we draw a
-    generic "Loading <mode>" frame with a progress bar.  Returned
-    callable has signature ``(loaded, total) -> None`` and pushes only
-    the loading zone on subsequent calls.
-    """
-    from bodn.i18n import t, capitalize
-    from bodn.ui.widgets import draw_centered
-
-    tft = manager.tft
-    theme = manager.theme
-    w = theme.width
-    h = theme.height
-
-    label = capitalize(t("mode_" + mode_name) if mode_name else t("home_loading"))
-    bar_mx = 40
-    bar_w = w - bar_mx * 2
-    bar_h = 8
-    bar_y = h // 2 + 12
-    zone_y = h // 2 - 24
-    zone_h = (bar_y + bar_h + 8) - zone_y
-
-    # MicroPython doesn't support assigning attributes to function
-    # objects, so state lives in a list cell the closure can mutate.
-    # state = [first_call, first_push]
-    state = [True, True]
-
-    def _paint(loaded, total):
-        # First call clears the whole screen; subsequent updates only
-        # repaint the loading zone so we don't flash.
-        if state[0]:
-            tft.fill(theme.BLACK)
-            draw_centered(tft, label, zone_y, theme.WHITE, w, scale=2)
-            state[0] = False
-        tft.fill_rect(bar_mx, bar_y, bar_w, bar_h, theme.BLACK)
-        tft.rect(bar_mx, bar_y, bar_w, bar_h, theme.DIM)
-        if total > 0:
-            fill_w = bar_w * loaded // total
-            if fill_w > 0:
-                tft.fill_rect(bar_mx, bar_y, fill_w, bar_h, theme.CYAN)
-        if state[1]:
-            tft.show()
-            state[1] = False
-        else:
-            tft.show_rect(0, zone_y, w, zone_h)
-
-    return _paint
-
-
 async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
     """Poll NFC reader cooperatively and route tags globally.
 
@@ -1279,7 +1227,9 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
                             on_launching(mode)
                             on_progress = getattr(active, "show_loading_progress", None)
                         else:
-                            on_progress = _make_launch_splash(manager, mode)
+                            from bodn.ui.launch_splash import make_launch_splash
+
+                            on_progress = make_launch_splash(manager, mode)
                             on_progress(0, 1)
                         try:
                             screen = (
@@ -1299,7 +1249,14 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
                         else:
                             manager.replace(screen)
                     except Exception as e:
-                        print("NFC launch error:", e)
+                        # Full traceback — a prior silent regression (a
+                        # CPython-only function-attr closure in the
+                        # launch splash) was hidden for an entire
+                        # session by only printing str(e).
+                        import sys
+
+                        print("NFC launch error:")
+                        sys.print_exception(e)
 
         if uid is None:
             prev_uid = None
