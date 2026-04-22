@@ -1134,6 +1134,55 @@ async def housekeeping_task(session_mgr, settings, audio=None, pwm=None):
         await asyncio.sleep_ms(500)
 
 
+def _make_launch_splash(manager, mode_name):
+    """Return a progress callback that paints a full-screen launch splash.
+
+    Used by the NFC launch path when replacing one mode with another —
+    the active screen doesn't provide its own loading UI, so we draw a
+    generic "Loading <mode>" frame with a progress bar.  Returned
+    callable has signature ``(loaded, total) -> None`` and pushes only
+    the loading zone on subsequent calls.
+    """
+    from bodn.i18n import t, capitalize
+    from bodn.ui.widgets import draw_centered
+
+    tft = manager.tft
+    theme = manager.theme
+    w = theme.width
+    h = theme.height
+
+    label = capitalize(t("mode_" + mode_name) if mode_name else t("home_loading"))
+    bar_mx = 40
+    bar_w = w - bar_mx * 2
+    bar_h = 8
+    bar_y = h // 2 + 12
+    zone_y = h // 2 - 24
+    zone_h = (bar_y + bar_h + 8) - zone_y
+
+    def _paint(loaded, total):
+        # First call clears the whole screen; subsequent updates only
+        # repaint the loading zone so we don't flash.
+        if _paint.first:
+            tft.fill(theme.BLACK)
+            draw_centered(tft, label, zone_y, theme.WHITE, w, scale=2)
+            _paint.first = False
+        tft.fill_rect(bar_mx, bar_y, bar_w, bar_h, theme.BLACK)
+        tft.rect(bar_mx, bar_y, bar_w, bar_h, theme.DIM)
+        if total > 0:
+            fill_w = bar_w * loaded // total
+            if fill_w > 0:
+                tft.fill_rect(bar_mx, bar_y, fill_w, bar_h, theme.CYAN)
+        if _paint.first_push:
+            tft.show()
+            _paint.first_push = False
+        else:
+            tft.show_rect(0, zone_y, w, zone_h)
+
+    _paint.first = True
+    _paint.first_push = True
+    return _paint
+
+
 async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
     """Poll NFC reader cooperatively and route tags globally.
 
@@ -1217,7 +1266,26 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
                 if not consumed and mode in mode_screens:
                     factory = mode_screens[mode]
                     try:
-                        screen = factory()
+                        # Pre-launch feedback.  Home has its own carousel
+                        # jump + bar via show_launching.  In-game (mode →
+                        # mode replace) there's nothing to reuse, so paint
+                        # a generic splash so the child sees which mode is
+                        # loading before the factory blocks the event loop.
+                        on_launching = getattr(active, "show_launching", None)
+                        if on_launching is not None:
+                            on_launching(mode)
+                            on_progress = getattr(active, "show_loading_progress", None)
+                        else:
+                            on_progress = _make_launch_splash(manager, mode)
+                            on_progress(0, 1)
+                        try:
+                            screen = (
+                                factory(on_progress=on_progress)
+                                if on_progress
+                                else factory()
+                            )
+                        except TypeError:
+                            screen = factory()
                         if mode != "settings":
                             session_mgr.try_wake(mode)
                         if audio:

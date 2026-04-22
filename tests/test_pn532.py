@@ -205,13 +205,30 @@ class TestUIDParsing:
 # ---------------------------------------------------------------------------
 
 
+ACK_FRAME_7 = bytes([0x01, 0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00])
+
+
 class TestTwoPhaseScan:
-    def test_start_sends_command(self):
+    def test_start_sends_command_and_consumes_ack(self):
         i2c = FakePN532I2C()
         pn = PN532(i2c, addr=0x24)
-        pn.read_passive_target_start()
+        # Queue the ACK the PN532 sends after accepting the command —
+        # read_passive_target_start must consume it so the next
+        # read_passive_target_check reads the response, not the ACK.
+        i2c.reads.append(bytes([0x01]))  # _read_ready sees ready
+        i2c.reads.append(ACK_FRAME_7)  # _read_ack consumes ACK
+        ok = pn.read_passive_target_start()
+        assert ok is True
         assert len(i2c.writes) == 1
         assert pn._scan_pending is True
+
+    def test_start_fails_when_ack_missing(self):
+        """No ACK queued → timeout returns False, scan not marked pending."""
+        i2c = FakePN532I2C()
+        pn = PN532(i2c, addr=0x24)
+        ok = pn.read_passive_target_start()
+        assert ok is False
+        assert pn._scan_pending is False
 
     def test_check_not_ready(self):
         i2c = FakePN532I2C()

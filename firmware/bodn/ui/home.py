@@ -202,9 +202,9 @@ class HomeScreen(Screen):
                 # Show loading indicator immediately so the child sees feedback.
                 # Draw into the free zone and push it to the display before the
                 # (potentially slow) factory call begins.
-                self._draw_loading_bar(0, 1)
+                self.show_loading_progress(0, 1)
                 try:
-                    screen = factory(on_progress=self._draw_loading_bar)
+                    screen = factory(on_progress=self.show_loading_progress)
                 except TypeError:
                     screen = factory()
                 if name != "settings":
@@ -248,7 +248,34 @@ class HomeScreen(Screen):
             if self._audio:
                 self._audio.play_sound("nav_click")
 
-    def _draw_loading_bar(self, loaded, total):
+    def show_launching(self, mode_name):
+        """Jump the carousel to *mode_name*, repaint the home content, and
+        draw the loading bar — used by the NFC launch path so the child
+        sees which mode is being loaded before the (potentially slow)
+        factory call blocks the event loop.
+
+        No-op if *mode_name* isn't in the visible carousel (e.g. hidden
+        via settings); the loading bar still renders over whatever mode
+        was selected.
+        """
+        if self._manager is None:
+            return
+        try:
+            idx = self._names.index(mode_name)
+        except ValueError:
+            idx = None
+        if idx is not None and idx != self._index:
+            self._index = idx
+            self._prev_name = None
+            self._anim_step = _ANIM_STEPS  # skip slide animation
+            self._dirty = True
+            self._full_clear = True
+            # Repaint synchronously so the loading bar lands on top of
+            # the correct icon/label, not the previously-selected mode.
+            self._manager.render_and_show()
+        self.show_loading_progress(0, 1)
+
+    def show_loading_progress(self, loaded, total):
         """Draw a progress bar in the free zone below the carousel dots.
 
         Called once before the factory (loaded=0, total=1) to show "Loading..."

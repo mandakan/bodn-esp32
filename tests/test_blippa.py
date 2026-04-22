@@ -56,23 +56,22 @@ class TestOnNfcTag:
         assert s._pending_tag is None
 
 
-class TestBilingualLabel:
-    def test_combines_sv_and_en(self):
-        from bodn.ui.blippa import _card_bilingual_label
+class TestCardLabels:
+    def test_returns_both_languages_capitalized(self):
+        from bodn.ui.blippa import _card_labels
 
-        label = _card_bilingual_label({"label_sv": "katt", "label_en": "cat"})
-        assert label == "Katt / Cat"
+        assert _card_labels({"label_sv": "katt", "label_en": "cat"}) == ("Katt", "Cat")
 
-    def test_falls_back_to_single_language(self):
-        from bodn.ui.blippa import _card_bilingual_label
+    def test_missing_language_is_empty(self):
+        from bodn.ui.blippa import _card_labels
 
-        assert _card_bilingual_label({"label_sv": "katt", "label_en": ""}) == "Katt"
-        assert _card_bilingual_label({"label_sv": "", "label_en": "cat"}) == "Cat"
+        assert _card_labels({"label_sv": "katt", "label_en": ""}) == ("Katt", "")
+        assert _card_labels({"label_sv": "", "label_en": "cat"}) == ("", "Cat")
 
-    def test_none_card_returns_none(self):
-        from bodn.ui.blippa import _card_bilingual_label
+    def test_none_card_returns_empty_pair(self):
+        from bodn.ui.blippa import _card_labels
 
-        assert _card_bilingual_label(None) is None
+        assert _card_labels(None) == ("", "")
 
 
 class TestEmojiName:

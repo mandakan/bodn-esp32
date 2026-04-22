@@ -75,6 +75,17 @@ class NFCProvisionScreen(Screen):
         self._state = "menu"
         self._title_sprite = make_label_sprite(t("settings_nfc"), 0xFFFF, scale=2)
         self._load_sets()
+        # Exclusive NFC access: otherwise the background scanner reads the
+        # tag first and launches its target mode, stealing the card before
+        # the user can write a new payload to it.
+        from bodn.nfc import suspend_scan
+
+        suspend_scan(True)
+
+    def exit(self):
+        from bodn.nfc import suspend_scan
+
+        suspend_scan(False)
 
     def _load_sets(self):
         try:
@@ -212,12 +223,10 @@ class NFCProvisionScreen(Screen):
         self._write_state = _WRITING
         self._dirty = True
 
-        # Pause the background scan task while we hold the I2C bus for
-        # the full detect→write sequence — otherwise a cooperative scan
-        # can drop in between our NTAG writes and corrupt the transfer.
-        from bodn.nfc import encode_tag_data, suspend_scan
+        # Background scan is already suspended for the whole screen
+        # lifetime (enter/exit), so the I2C bus is exclusive here.
+        from bodn.nfc import encode_tag_data
 
-        suspend_scan(True)
         try:
             data = encode_tag_data(mode, card_id)
             ok = self._reader.write(data)
@@ -230,8 +239,6 @@ class NFCProvisionScreen(Screen):
         except Exception as e:
             print("NFC: write error:", e)
             self._write_state = _FAIL
-        finally:
-            suspend_scan(False)
 
         self._write_ms = time.ticks_ms()
         self._dirty = True
