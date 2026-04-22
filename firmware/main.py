@@ -1159,27 +1159,30 @@ def _make_launch_splash(manager, mode_name):
     zone_y = h // 2 - 24
     zone_h = (bar_y + bar_h + 8) - zone_y
 
+    # MicroPython doesn't support assigning attributes to function
+    # objects, so state lives in a list cell the closure can mutate.
+    # state = [first_call, first_push]
+    state = [True, True]
+
     def _paint(loaded, total):
         # First call clears the whole screen; subsequent updates only
         # repaint the loading zone so we don't flash.
-        if _paint.first:
+        if state[0]:
             tft.fill(theme.BLACK)
             draw_centered(tft, label, zone_y, theme.WHITE, w, scale=2)
-            _paint.first = False
+            state[0] = False
         tft.fill_rect(bar_mx, bar_y, bar_w, bar_h, theme.BLACK)
         tft.rect(bar_mx, bar_y, bar_w, bar_h, theme.DIM)
         if total > 0:
             fill_w = bar_w * loaded // total
             if fill_w > 0:
                 tft.fill_rect(bar_mx, bar_y, fill_w, bar_h, theme.CYAN)
-        if _paint.first_push:
+        if state[1]:
             tft.show()
-            _paint.first_push = False
+            state[1] = False
         else:
             tft.show_rect(0, zone_y, w, zone_h)
 
-    _paint.first = True
-    _paint.first_push = True
     return _paint
 
 
