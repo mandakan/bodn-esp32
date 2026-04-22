@@ -284,8 +284,7 @@ class ToneExplorerScreen(Screen):
             inp.sw[_SW_GATE_MODE] if len(inp.sw) > _SW_GATE_MODE else False
         )
         self._gate_any_arcade_held = any(
-            inp.arc_held[i]
-            for i in range(min(NOTES_PER_OCTAVE, len(inp.arc_held)))
+            inp.arc_held[i] for i in range(min(NOTES_PER_OCTAVE, len(inp.arc_held)))
         )
 
         # Encoders — each detent = one pentatonic / timbre step.  Clamping
