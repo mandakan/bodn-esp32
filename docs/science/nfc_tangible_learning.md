@@ -199,9 +199,14 @@ intuitive: bring the thing to the thing, something happens.
 
 ---
 
-## 6. Proposed Bodn Integrations
+## 6. Bodn NFC Modes
 
-### 6.1 Sortera --- Classification Game (new mode)
+Three modes from the original wishlist have shipped and are now part of the
+standard catalogue: **Sortera** (§6.1), **Räkna** (§6.6), and **Blippa**
+(§6.7, scoped as a free-play subset of the original "tag registry" concept).
+Sections 6.2--6.5 remain on the wishlist.
+
+### 6.1 Sortera --- Classification Game *(shipped)*
 
 **Concept**: Child receives a deck of NFC cards depicting animals, vehicles,
 colours, and shapes. The device announces a rule via TTS: "Find all the animals!"
@@ -226,7 +231,7 @@ consistently shows benefits this age group (Marshall, 2007; Antle, 2013).
 - Age 4--5: Sort by one dimension, then switch to another
 - Age 5--6: Sort by two dimensions simultaneously, smaller time windows
 
-### 6.2 Saga Builder --- Tangible Storytelling (new mode or Story Mode extension)
+### 6.2 Saga Builder --- Tangible Storytelling *(wishlist)*
 
 **Concept**: NFC cards represent characters (rabbit, wolf, owl), settings (forest,
 house, river), and objects (key, basket, lantern). The child scans cards in
@@ -247,7 +252,7 @@ narrative complexity. Kumpulainen & Lipponen (2012) found physical props enhance
 storytelling quality. This extends Bodn's existing Story Mode (which uses arcade
 buttons for choices) with a richer, more tangible input method.
 
-### 6.3 NFC Soundboard Extension (existing mode enhancement)
+### 6.3 NFC Soundboard Extension *(wishlist)*
 
 **Concept**: Each NFC card triggers a unique sound, instrument, or animal sound.
 Scan multiple cards to layer sounds. Cards become a physical "instrument collection"
@@ -263,7 +268,7 @@ that the child can sort, trade, and combine.
 sound, feeling the card --- engages dual coding (Paivio, 1986). Extends the
 existing Soundboard's button-to-sound mapping into the tangible domain.
 
-### 6.4 Memory Match (new mode)
+### 6.4 Memory Match *(wishlist)*
 
 **Concept**: The device shows or plays a stimulus (colour, animal sound, melody
 fragment). The child must find and scan the matching NFC card from a spread of
@@ -278,7 +283,7 @@ cards on the table. Combines visual search, working memory, and physical retriev
 **Science basis**: Physical search-and-select adds motor planning to the memory
 task, exercising WM more deeply than a button press (Manches & O'Malley, 2012).
 
-### 6.5 Vocabulary Explorer --- Bilingual Word Cards (new mode)
+### 6.5 Vocabulary Explorer --- Bilingual Word Cards *(wishlist)*
 
 **Concept**: Picture cards (animals, objects, colours) with NFC tags. Scan to hear
 the word in Swedish; scan again to hear it in English (or use toggle switch for
@@ -294,7 +299,7 @@ engagement with language concepts. Bialystok (2011) documents enhanced executive
 functions in bilingual children. This mode would fill the bilingual exposure gap
 identified in the development matrix.
 
-### 6.6 Räkna --- Progressive Math with Tangible Numbers (new mode)
+### 6.6 Räkna --- Progressive Math with Tangible Numbers *(shipped)*
 
 **Concept**: NFC cards with dot patterns (1--10, structured like dice faces) serve
 as tangible number tokens. The mode progresses through six levels following
@@ -342,20 +347,29 @@ abstract numerals --- is consistently validated across cultures and age groups.
 - **Concreteness fading**: dot-only cards → small numerals added → symbols last
   (Willingham, 2017)
 
-### 6.7 Free Discovery / Tag Registry (infrastructure + exploration mode)
+### 6.7 Blippa / Tag Registry --- Free-Play Discovery *(Blippa shipped; foreign-tag registry wishlist)*
 
-**Concept**: Any new NFC tag scanned for the first time is assigned a random colour,
-sound, and animation. The child builds a personal "collection" of tagged objects.
-They can tag household items, toys, drawings --- anything.
+**Concept**: The shipped **Blippa** mode scopes this to BODN-programmed cards:
+tapping any owned card from any card set produces an instant procedural or
+per-card "blip" tone plus a full-screen emoji and bilingual label. There is no
+goal, no failure state, and no progression. A wishlist extension would add a
+**foreign-tag registry** --- the first time the device sees an unknown NFC
+tag (a hotel key, a bus pass, a household sticker), it assigns and remembers a
+stable colour/sound/animation so the child can "discover" that their
+everyday things have hidden identities.
 
 **Developmental targets:**
 - Open Exploration (primary) --- pure discovery, no wrong answers
 - Cause & Effect (primary) --- each tag consistently triggers its response
-- Divergent Thinking (significant) --- what else can I tag?
+- Imaginative Play (significant) --- cashier / transit-gate pretend scenarios
+- Divergent Thinking (significant) --- what else can I tag? (foreign-tag mode)
 
 **Science basis**: Bonawitz et al. (2011) showed exploration-driven discovery
-produces deeper learning than instruction. This mode gives the child complete
-agency over what enters the system.
+produces deeper learning than instruction --- the mode gives the child
+complete agency over when and what to scan. The deliberate absence of
+goals is also informed by Self-Determination Theory (Deci \& Ryan, 2000):
+autonomy-supporting environments sustain intrinsic motivation more durably
+than reward-driven ones.
 
 ---
 

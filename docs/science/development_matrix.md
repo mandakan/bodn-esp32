@@ -203,36 +203,44 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 
 ## Coverage Analysis
 
+Counts exclude the planned *Record & Replay* mode (italic in the tables above).
+"Strong" = primary (◉) + significant (●); incidentals (○) are noted in notes but
+not counted here.
+
 ### Well-Covered Aspects (3+ features at ● or ◉)
 
 | Aspect | Primary (◉) | Significant (●) | Total strong |
 |--------|:-----------:|:----------------:|:------------:|
-| Visual Processing (VP) | 3 | 6 | 9 |
+| Visual Processing (VP) | 3 | 10 | 13 |
+| Auditory Processing (AP) | 3 | 7 | 10 |
+| Cause & Effect (CE) | 3 | 7 | 10 |
+| Fine Motor (FM) | 0 | 7 | 7 |
 | Working Memory (WM) | 2 | 4 | 6 |
-| Cause & Effect (CE) | 2 | 6 | 8 |
-| Pattern Recognition (PR) | 2 | 3 | 5 |
-| Hand-Eye Coordination (HC) | 1 | 4 | 5 |
-| Open Exploration (OE) | 4 | 0 | 4 |
+| Pattern Recognition (PR) | 4 | 2 | 6 |
+| Hand-Eye Coordination (HC) | 1 | 5 | 6 |
+| Open Exploration (OE) | 5 | 0 | 5 |
 | Self-Regulation (SReg) | 1 | 4 | 5 |
-| Cognitive Flexibility (CF) | 2 | 1 | 3 |
-| Inhibitory Control (IC) | 1 | 2 | 3 |
-| Listening Comprehension (LC) | 2 | 1 | 3 |
-| Bilingual Exposure (BL) | 1 | 2 | 3 |
-| Imaginative Play (IP) | 2 | 1 | 3 |
-| Auditory Processing (AP) | 1 | 4 | 5 |
 | Sequential Thinking (ST) | 3 | 2 | 5 |
 | Persistence (PE) | 1 | 4 | 5 |
+| Bilingual Exposure (BL) | 1 | 3 | 4 |
+| Cognitive Flexibility (CF) | 3 | 1 | 4 |
+| Inhibitory Control (IC) | 1 | 3 | 4 |
+| Imaginative Play (IP) | 2 | 2 | 4 |
+| Divergent Thinking (DT) | 2 | 2 | 4 |
+| Creative Expression (CX) | 3 | 1 | 4 |
+| Listening Comprehension (LC) | 2 | 1 | 3 |
 | Problem Solving (PS) | 1 | 2 | 3 |
-| Fine Motor (FM) | 0 | 3 | 3 |
 
-### Gaps (1 or fewer features at ◉ or ●)
+### Remaining Gaps (≤ 1 feature at ◉ or ●)
 
 | Aspect | Current state | Suggested feature |
 |--------|---------------|-------------------|
-| **Spatial Reasoning (SR)** | Flöde (◉) + incidental Räkna number path | Building/construction mode; tangram puzzles |
-| **Problem Solving (PS)** | Flöde (◉) + Sequencer (●) + Räkna (●, equation building) | More puzzle types; NFC scavenger hunts |
-| **Bilingual Exposure (BL)** | Story Mode (◉) + Sortera (●) + Räkna (●, bilingual number naming) + passive UI labels | More card sets with dual labels; dedicated language-switch game |
-| **Fine Motor (FM)** | Sortera + Sequencer + Räkna (all ●) via card/button manipulation | Tracing mode; tangram; more tangible sorting puzzles |
+| **Spatial Reasoning (SR)** | Flöde (◉) only; Räkna's left-to-right number path is incidental | Tangram / construction puzzle mode; tangible building blocks with NFC |
+
+Spatial reasoning is now the single under-covered domain. Every other aspect
+has at least 3 features at ● or ◉ — a meaningful shift from the state before
+Tone Lab and Blippa shipped, when auditory processing, cognitive flexibility,
+fine motor, and bilingual exposure were all weakly covered.
 
 ---
 
