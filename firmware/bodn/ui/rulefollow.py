@@ -263,13 +263,6 @@ class RuleFollowScreen(Screen):
         self._pause.render(tft, theme, frame)
 
     def _render_game(self, tft, theme, frame):
-        landscape = theme.width > theme.height
-        if landscape:
-            self._render_landscape(tft, theme, frame)
-        else:
-            self._render_portrait(tft, theme, frame)
-
-    def _render_landscape(self, tft, theme, frame):
         eng = self._engine
         w = theme.width
         h = theme.height
@@ -402,112 +395,6 @@ class RuleFollowScreen(Screen):
                     h // 2 + block // 2 + 8,
                     theme.WHITE,
                     w,
-                )
-            return
-
-    def _render_portrait(self, tft, theme, frame):
-        eng = self._engine
-        w = theme.width
-        h = theme.height
-        held = self._manager.inp.btn_held if self._manager else [False] * 8
-
-        if eng.state == READY:
-            draw_centered(tft, t("rf_title_p1"), 20, theme.CYAN, w, scale=2)
-            draw_centered(tft, t("rf_title_p2"), 40, theme.CYAN, w, scale=2)
-            draw_centered(tft, t("rf_instructions_p1"), h // 2 - 16, theme.WHITE, w)
-            draw_centered(tft, t("rf_instructions_p2"), h // 2, theme.WHITE, w)
-            draw_centered(tft, t("rf_press_start"), h - 20, theme.MUTED, w)
-            return
-
-        if eng.state == GAME_OVER:
-            draw_centered(tft, t("rf_great_short"), 20, theme.YELLOW, w, scale=2)
-            draw_centered(
-                tft,
-                "{}/{}".format(eng.score, eng.total),
-                h // 2 - 8,
-                theme.WHITE,
-                w,
-                scale=2,
-            )
-            if eng.best_streak > 0:
-                draw_centered(
-                    tft,
-                    t("rf_streak_short", eng.best_streak),
-                    h // 2 + 20,
-                    theme.CYAN,
-                    w,
-                )
-            draw_centered(tft, t("rf_press_again_short"), h - 16, theme.MUTED, w)
-            return
-
-        rule_565 = self._rule_565[eng.current_rule]
-
-        if eng.state == SHOW_RULE:
-            rule_name = (
-                t("rf_match") if eng.current_rule == RULE_MATCH else t("rf_opposite")
-            )
-            draw_centered(tft, rule_name, 8, rule_565, w, scale=2)
-            cx = w // 2
-            cy = h // 2
-            self._draw_rule_icon(tft, theme, cx, cy, eng.current_rule, rule_565)
-            return
-
-        if eng.state == RULE_SWITCH:
-            draw_centered(tft, t("rf_new_rule_p1"), 20, theme.YELLOW, w, scale=2)
-            draw_centered(tft, t("rf_new_rule_p2"), 44, theme.YELLOW, w, scale=2)
-            rule_name = (
-                t("rf_match") if eng.current_rule == RULE_MATCH else t("rf_opposite")
-            )
-            draw_centered(tft, rule_name, h // 2, rule_565, w)
-            return
-
-        if eng.state == STIMULUS:
-            rule_label = (
-                t("rf_match_short")
-                if eng.current_rule == RULE_MATCH
-                else t("rf_opposite_short")
-            )
-            draw_centered(tft, rule_label, 2, rule_565, w)
-
-            stim_color = self._btn_565[eng.stimulus_button]
-            block_size = min(w - 20, h // 3)
-            bx = (w - block_size) // 2
-            by = 18
-            tft.fill_rect(bx, by, block_size, block_size, stim_color)
-
-            btn_y = by + block_size + 8
-            btn_names = theme.BTN_NAMES[:NUM_BUTTONS]
-            btn_held = held[:NUM_BUTTONS]
-            cell_w = w // 2 - 2
-            cell_h = (h - btn_y - 16) // 2
-            btn_x0 = (w - 2 * cell_w) // 2
-            draw_button_grid(
-                tft,
-                theme,
-                btn_names,
-                btn_held,
-                cols=2,
-                x0=btn_x0,
-                y0=btn_y,
-                cell_w=cell_w,
-                cell_h=cell_h,
-            )
-
-            tft.fill_rect(0, h - 16, w, 16, theme.BLACK)
-            tft.text("{}/{}".format(eng.score, eng.total), 2, h - 12, theme.MUTED)
-            return
-
-        if eng.state == CORRECT:
-            draw_centered(tft, t("rf_yes"), 20, theme.GREEN, w, scale=2)
-            return
-
-        if eng.state == WRONG:
-            draw_centered(tft, t("rf_try_again"), 20, theme.RED, w)
-            if eng.correct_button >= 0:
-                correct_color = self._btn_565[eng.correct_button]
-                block = min(30, w // 3)
-                tft.fill_rect(
-                    (w - block) // 2, h // 2 - block // 2, block, block, correct_color
                 )
             return
 

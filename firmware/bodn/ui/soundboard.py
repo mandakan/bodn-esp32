@@ -27,36 +27,37 @@ ENC_A = const(1)  # config.ENC_A
 # Flash duration for button-press feedback (frames at ~33 fps)
 _FLASH_FRAMES = const(10)
 
-# Auto-color cycle for anonymous slots (one color per button index)
-_SLOT_COLORS_RGB = [
-    (255, 80, 80),  # 0 — coral red
-    (80, 255, 80),  # 1 — lime
-    (80, 140, 255),  # 2 — sky blue
-    (255, 230, 60),  # 3 — yellow
-    (0, 220, 220),  # 4 — cyan
-    (230, 80, 230),  # 5 — magenta
-    (255, 150, 40),  # 6 — orange
-    (160, 80, 255),  # 7 — violet
-]
+# Slot and arcade colours are sourced from Theme (BTN_RGB / ARC_RGB) so the
+# on-screen cells match the physical cap colours of the mini-buttons and
+# arcade buttons.  The row of 8 cells on screen mirrors the physical row
+# of 8 buttons below the display (left to right, 1:1).
 
-# Arc colors (for the 5 arcade buttons)
-_ARC_COLORS_RGB = [
-    (60, 220, 60),  # green (far left)
-    (60, 100, 255),  # blue
-    (255, 255, 255),  # white (centre)
-    (255, 220, 60),  # yellow
-    (255, 60, 60),  # red (far right)
-]
+# Max characters per wrapped label line.  Derived from cell width / 8-px
+# font glyph; narrow-and-tall cells wrap long labels over up to 3 lines.
+_LABEL_MAX_CHARS = const(4)
+_LABEL_MAX_LINES = const(3)
 
 
-def _rgb_to_565(rgb_fn, r, g, b):
-    return rgb_fn(r, g, b)
+def _wrap_label(label, max_chars=_LABEL_MAX_CHARS, max_lines=_LABEL_MAX_LINES):
+    """Split label into up to max_lines lines of max_chars each.
+
+    Simple fixed-width chunking (no word-break heuristic) — keeps behaviour
+    predictable for a 4-year-old who tracks position and colour, not words.
+    """
+    if not label:
+        return []
+    lines = []
+    while label and len(lines) < max_lines:
+        lines.append(label[:max_chars])
+        label = label[max_chars:]
+    return lines
 
 
 class SoundboardScreen(Screen):
     """Soundboard — press buttons to play sounds.
 
-    Primary display: 2×4 grid of mini-button slots + 5 arcade slots + volume bar.
+    Primary display: row of 8 mini-button slots (matching the physical
+    strip below the display) + 5 arcade slots + volume bar.
     Secondary display: bank name and volume indicator.
     """
 
@@ -278,15 +279,15 @@ class SoundboardScreen(Screen):
         theme = self._manager.theme
         w = theme.width
         h = theme.height
-        cols = 4
-        rows = 2
-        margin = 4
+        margin = 3
         grid_top = 24
-        cell_w = (w - margin * (cols + 1)) // cols
-        cell_h = (h - grid_top - 60) // rows
-        arc_top = grid_top + rows * (cell_h + margin) + 4
+        cell_w = (w - margin * (NUM_MINI_BUTTONS + 1)) // NUM_MINI_BUTTONS
+        arc_h = 36
+        vol_h = 20
+        cell_h = h - grid_top - arc_h - vol_h - margin * 2
+        arc_top = grid_top + cell_h + margin
         arc_cell_w = (w - margin * (NUM_ARCADE_BUTTONS + 1)) // NUM_ARCADE_BUTTONS
-        arc_cell_h = h - arc_top - 20
+        arc_cell_h = arc_h
         return (margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h)
 
     def _paint_bank_switch_intro(self, frame):
@@ -309,14 +310,12 @@ class SoundboardScreen(Screen):
         tft.text(bank_label, bank_lbl_x, 4, theme.MUTED)
 
         geom = self._bank_switch_layout()
-        (margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h) = geom
+        margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h = geom
 
-        # Empty mini slot grid — dim outlines only.
+        # Empty mini slot row — dim outlines only.
         for i in range(NUM_MINI_BUTTONS):
-            col = i % 4
-            row = i // 4
-            x = margin + col * (cell_w + margin)
-            y = grid_top + row * (cell_h + margin)
+            x = margin + i * (cell_w + margin)
+            y = grid_top
             tft.rect(x, y, cell_w, cell_h, theme.DIM)
 
         # Arcade row — shared across banks, already loaded, so render
@@ -345,16 +344,14 @@ class SoundboardScreen(Screen):
         geom = self._bank_switch_geom
         if geom is None or self._manager is None:
             return
-        (margin, grid_top, cell_w, cell_h, _arc_top, _arc_cell_w, _arc_cell_h) = geom
+        margin, grid_top, cell_w, cell_h, _arc_top, _arc_cell_w, _arc_cell_h = geom
         tft = self._manager.tft
         theme = self._manager.theme
         rgb = tft.rgb
         frame = self._bank_switch_frame
         state = self._state
-        col = idx % 4
-        row = idx // 4
-        x = margin + col * (cell_w + margin)
-        y = grid_top + row * (cell_h + margin)
+        x = margin + idx * (cell_w + margin)
+        y = grid_top
         self._draw_slot(tft, theme, rgb, state, idx, x, y, cell_w, cell_h, frame)
         tft.show_rect(x, y, cell_w, cell_h)
 
@@ -372,18 +369,19 @@ class SoundboardScreen(Screen):
         brightness = config.NEOPIXEL_BRIGHTNESS
         lid_bright = config.NEOPIXEL_LID_BRIGHTNESS
         playing_any = bool(state.playing_slots or state.playing_arcades)
+        btn_rgb = self._manager.theme.BTN_RGB
 
         # Stick A: one LED per mini button (indices 0-7) as pixel overrides
         for i in range(8):
             if self._flash and self._flash[0] == "mini" and self._flash[1] == i:
-                c = led_scale(_SLOT_COLORS_RGB[i], brightness)
+                c = led_scale(btn_rgb[i], brightness)
             elif i in state.playing_slots:
                 phase = (frame * 4) & 0xFF
                 v = phase if phase < 128 else 255 - phase
                 v = (v * brightness) >> 8
-                c = led_scale(_SLOT_COLORS_RGB[i], max(v, 30))
+                c = led_scale(btn_rgb[i], max(v, 30))
             elif state.slots_present[i]:
-                c = led_scale(_SLOT_COLORS_RGB[i], brightness >> 2)
+                c = led_scale(btn_rgb[i], brightness >> 2)
             else:
                 c = led_scale(bank_color, brightness >> 5)
             neo.set_pixel(i, c[0], c[1], c[2])
@@ -466,26 +464,27 @@ class SoundboardScreen(Screen):
         self._pause.render(tft, theme, frame)
 
     def _grid_geometry(self, theme):
-        """Compute grid layout constants (cached values would be better but
-        this is cheap and keeps the code simple)."""
+        """Compute grid layout constants.
+
+        Mini buttons render as a single row of 8, matching the physical
+        strip of 8 buttons below the display left-to-right.
+        """
         w = theme.width
         h = theme.height
-        cols = 4
-        rows = 2
-        margin = 4
+        margin = 3
         grid_top = 24
-        cell_w = (w - margin * (cols + 1)) // cols
-        cell_h = (h - grid_top - 60) // rows
-        arc_top = grid_top + rows * (cell_h + margin) + 4
+        cell_w = (w - margin * (NUM_MINI_BUTTONS + 1)) // NUM_MINI_BUTTONS
+        arc_h = 36
+        vol_h = 20
+        cell_h = h - grid_top - arc_h - vol_h - margin * 2
+        arc_top = grid_top + cell_h + margin
         arc_cell_w = (w - margin * (NUM_ARCADE_BUTTONS + 1)) // NUM_ARCADE_BUTTONS
-        arc_cell_h = h - arc_top - 20
+        arc_cell_h = arc_h
         return margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h
 
     def _slot_xy(self, idx, margin, grid_top, cell_w, cell_h):
-        """Return (x, y) for mini-button slot idx."""
-        col = idx % 4
-        row = idx // 4
-        return margin + col * (cell_w + margin), grid_top + row * (cell_h + margin)
+        """Return (x, y) for mini-button slot idx in the row of 8."""
+        return margin + idx * (cell_w + margin), grid_top
 
     def _render_changed_slots(self, tft, theme, frame):
         """Redraw only the slots that changed (flash on/off, playback done)."""
@@ -561,14 +560,11 @@ class SoundboardScreen(Screen):
             )
 
     def _render_content(self, tft, theme, frame):
-        landscape = theme.width > theme.height
-        if landscape:
-            self._render_landscape(tft, theme, frame)
-        else:
-            self._render_portrait(tft, theme, frame)
+        """Primary display: 320×240 landscape layout.
 
-    def _render_landscape(self, tft, theme, frame):
-        """Primary display: 320×240 landscape layout."""
+        Mini buttons render as a row of 8 tall cells matching the
+        physical strip below the display (1:1 left-to-right).
+        """
         state = self._state
         w = theme.width  # 320
         h = theme.height  # 240
@@ -582,27 +578,15 @@ class SoundboardScreen(Screen):
         bank_lbl_x = w - len(bank_label) * 8 - 4
         tft.text(bank_label, bank_lbl_x, 4, theme.MUTED)
 
-        # --- Mini button grid: 2 rows × 4 cols ---
-        cols = 4
-        rows = 2
-        margin = 4
-        grid_top = 24
-        cell_w = (w - margin * (cols + 1)) // cols  # ~74px
-        cell_h = (h - grid_top - 60) // rows  # ~72px with room below
+        # --- Mini button row: 1 × 8 cells matching the physical strip ---
+        margin, grid_top, cell_w, cell_h, arc_top, arc_cell_w, arc_cell_h = (
+            self._grid_geometry(theme)
+        )
 
         for i in range(NUM_MINI_BUTTONS):
-            col = i % cols
-            row = i // cols
-            x = margin + col * (cell_w + margin)
-            y = grid_top + row * (cell_h + margin)
+            x = margin + i * (cell_w + margin)
+            y = grid_top
             self._draw_slot(tft, theme, rgb, state, i, x, y, cell_w, cell_h, frame)
-
-        # --- Arcade button row ---
-        arc_top = grid_top + rows * (cell_h + margin) + 4
-        arc_cell_w = (
-            w - margin * (NUM_ARCADE_BUTTONS + 1)
-        ) // NUM_ARCADE_BUTTONS  # ~56px
-        arc_cell_h = h - arc_top - 20
 
         for i in range(NUM_ARCADE_BUTTONS):
             x = margin + i * (arc_cell_w + margin)
@@ -634,16 +618,15 @@ class SoundboardScreen(Screen):
             )
 
     def _draw_slot(self, tft, theme, rgb, state, idx, x, y, w, h, frame):
-        """Draw one mini-button slot square."""
+        """Draw one mini-button slot — tall cell in the row of 8."""
         present = state.slots_present[idx]
         playing = idx in state.playing_slots
         flashing = self._flash and self._flash[0] == "mini" and self._flash[1] == idx
 
-        slot_rgb = _SLOT_COLORS_RGB[idx]
-        color_full = rgb(*slot_rgb)
+        slot_rgb = theme.BTN_RGB[idx]
+        color_full = theme.BTN_565[idx]
 
         if flashing or playing:
-            # Bright fill
             if playing:
                 phase = (frame * 4) & 0xFF
                 v = phase if phase < 128 else 255 - phase
@@ -656,32 +639,32 @@ class SoundboardScreen(Screen):
             tft.fill_rect(x, y, w, h, fill_c)
             tft.rect(x, y, w, h, theme.WHITE)
         elif present:
-            # Dim colored fill
             r = slot_rgb[0] >> 2
             g = slot_rgb[1] >> 2
             b = slot_rgb[2] >> 2
             tft.fill_rect(x, y, w, h, rgb(r, g, b))
             tft.rect(x, y, w, h, color_full)
         else:
-            # Empty — dark outline
             tft.rect(x, y, w, h, theme.DIM)
 
-        # Label — manifest label or fallback
         label = state.slot_label(idx)
         if label is None:
             label = t("sb_sound", idx + 1)
-        # Truncate to fit (cell_w / 8 chars)
         max_chars = max(1, (w - 4) // 8)
-        if len(label) > max_chars:
-            label = label[:max_chars]
-        lx = x + (w - len(label) * 8) // 2
-        ly = y + h - 10
+        lines = _wrap_label(label, max_chars=max_chars)
         if flashing or playing:
-            tft.text(label, lx, ly, theme.BLACK)
+            text_color = theme.BLACK
         elif present:
-            tft.text(label, lx, ly, theme.WHITE)
+            text_color = theme.WHITE
         else:
-            tft.text(label, lx, ly, theme.DIM)
+            text_color = theme.DIM
+        line_h = 10
+        block_h = len(lines) * line_h
+        ly = y + h - block_h - 4
+        for line in lines:
+            lx = x + (w - len(line) * 8) // 2
+            tft.text(line, lx, ly, text_color)
+            ly += line_h
 
     def _draw_arc_slot(self, tft, theme, rgb, state, idx, x, y, w, h, frame):
         """Draw one arcade-button slot square (smaller)."""
@@ -689,8 +672,8 @@ class SoundboardScreen(Screen):
         playing = idx in state.playing_arcades
         flashing = self._flash and self._flash[0] == "arc" and self._flash[1] == idx
 
-        arc_rgb = _ARC_COLORS_RGB[idx]
-        color_full = rgb(*arc_rgb)
+        arc_rgb = theme.ARC_RGB[idx]
+        color_full = theme.ARC_565[idx]
 
         if flashing or playing:
             tft.fill_rect(x, y, w, h, color_full)
@@ -718,44 +701,3 @@ class SoundboardScreen(Screen):
             tft.text(label, lx, ly, theme.WHITE)
         else:
             tft.text(label, lx, ly, theme.DIM)
-
-    def _render_portrait(self, tft, theme, frame):
-        """Secondary/portrait layout (128×160) — simplified grid."""
-        state = self._state
-        w = theme.width  # 128
-        h = theme.height  # 160
-        rgb = tft.rgb
-
-        # Header (clear first to avoid text-on-text when bank changes)
-        tft.fill_rect(0, 0, w, 20, theme.BLACK)
-        bank_name = self._resolve_bank_name(state)
-        draw_centered(tft, capitalize(bank_name[:8]), 2, theme.CYAN, w, scale=2)
-
-        # Mini button grid: 4×2
-        cell_w = (w - 8) // 4
-        cell_h = 28
-        top = 22
-        for i in range(NUM_MINI_BUTTONS):
-            col = i % 4
-            row = i // 4
-            x = 4 + col * cell_w
-            y = top + row * (cell_h + 2)
-            self._draw_slot(tft, theme, rgb, state, i, x, y, cell_w - 2, cell_h, frame)
-
-        # Arcade row
-        arc_top = top + 2 * (cell_h + 2) + 4
-        arc_w = (w - 6) // NUM_ARCADE_BUTTONS
-        for i in range(NUM_ARCADE_BUTTONS):
-            x = 3 + i * arc_w
-            self._draw_arc_slot(
-                tft, theme, rgb, state, i, x, arc_top, arc_w - 2, 22, frame
-            )
-
-        # Volume (clear row to avoid text-on-text)
-        vol_y = h - 14
-        tft.fill_rect(0, vol_y, w, 14, theme.BLACK)
-        if state.muted:
-            draw_centered(tft, t("sb_muted"), vol_y, theme.RED, w)
-        else:
-            vol_label = t("sb_volume", state.volume)
-            draw_centered(tft, vol_label, vol_y, theme.MUTED, w)

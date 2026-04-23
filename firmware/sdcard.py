@@ -14,7 +14,6 @@ from micropython import const
 import micropython
 import time
 
-
 _CMD_TIMEOUT = const(100)
 
 _R1_IDLE_STATE = const(1 << 0)

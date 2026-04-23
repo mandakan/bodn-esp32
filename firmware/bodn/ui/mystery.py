@@ -230,11 +230,7 @@ class MysteryScreen(Screen):
                 self._dirty = False
                 tft.fill(theme.BLACK)
                 self._full_clear = False
-                landscape = theme.width > theme.height
-                if landscape:
-                    self._render_landscape(tft, theme, frame)
-                else:
-                    self._render_portrait(tft, theme, frame)
+                self._render_game(tft, theme, frame)
             self._pause.render(tft, theme, frame)
             return
 
@@ -243,16 +239,12 @@ class MysteryScreen(Screen):
             if self._full_clear:
                 self._full_clear = False
                 tft.fill(theme.BLACK)
-            landscape = theme.width > theme.height
-            if landscape:
-                self._render_landscape(tft, theme, frame)
-            else:
-                self._render_portrait(tft, theme, frame)
+            self._render_game(tft, theme, frame)
 
         # Hold-to-pause progress bar (always called so PauseMenu can clear its dirty flag)
         self._pause.render(tft, theme, frame)
 
-    def _render_landscape(self, tft, theme, frame):
+    def _render_game(self, tft, theme, frame):
         out_type = self._engine.output_type
         out_color = self._engine.display_color
         held = self._manager.inp.btn_held if self._manager else [False] * 8
@@ -295,17 +287,17 @@ class MysteryScreen(Screen):
         else:
             draw_centered(tft, "?", swatch_y + swatch_h // 4, theme.MUTED, w, scale=4)
 
-        # Button grid — bottom half, centered
+        # Button row — single row of 8 matching the physical strip left-to-right
         btn_y = h // 2 + 20
-        cell_w = w // 4 - 8
-        cell_h = (h - btn_y - 20) // 2
-        btn_x0 = (w - 4 * cell_w) // 2
+        cell_w = w // 8 - 2
+        cell_h = h - btn_y - 20
+        btn_x0 = (w - 8 * cell_w) // 2
         draw_button_grid(
             tft,
             theme,
             theme.BTN_NAMES,
             held,
-            cols=4,
+            cols=8,
             x0=btn_x0,
             y0=btn_y,
             cell_w=cell_w,
@@ -322,77 +314,6 @@ class MysteryScreen(Screen):
             self._hud_counter = "{}/{}".format(found, total)
         tft.text(self._hud_counter, 8, h - 14, theme.MUTED)
         self._draw_mod_dots(tft, theme, w - 60, h - 12)
-
-    def _render_portrait(self, tft, theme, frame):
-        out_type = self._engine.output_type
-        out_color = self._engine.display_color
-        held = self._manager.inp.btn_held if self._manager else [False] * 8
-        w = theme.width
-        h = theme.height
-
-        # Clear swatch + label zone for redraw
-        swatch_y = 8
-        swatch_h = h * 2 // 5
-        tft.fill_rect(0, swatch_y, w, swatch_h + 30, theme.BLACK)
-
-        # Large color swatch — top half of screen
-        if out_type != OUT_IDLE:
-            r, g, b = out_color
-            c565 = tft.rgb(r, g, b)
-            tft.fill_rect(8, swatch_y, w - 16, swatch_h, c565)
-
-            if out_type == OUT_MAGIC:
-                for i in range(8):
-                    px = ((frame * 7 + i * 37) * 53) % (w - 32) + 16
-                    py = ((frame * 11 + i * 23) * 41) % (swatch_h - 16) + swatch_y + 8
-                    tft.fill_rect(px, py, 5, 5, theme.WHITE)
-                draw_centered(
-                    tft,
-                    t("mystery_magic"),
-                    swatch_y + swatch_h + 8,
-                    theme.YELLOW,
-                    w,
-                    scale=2,
-                )
-            elif out_type == OUT_MIX:
-                draw_centered(
-                    tft,
-                    t("mystery_mix"),
-                    swatch_y + swatch_h + 8,
-                    theme.WHITE,
-                    w,
-                    scale=2,
-                )
-        else:
-            draw_centered(tft, "?", swatch_y + swatch_h // 3, theme.MUTED, w, scale=4)
-
-        # Button grid — centered, below swatch area
-        btn_y = h * 3 // 5
-        cell_w = w // 4 - 4
-        cell_h = (h - btn_y - 24) // 2
-        btn_x0 = (w - 4 * cell_w) // 2
-        draw_button_grid(
-            tft,
-            theme,
-            theme.BTN_NAMES,
-            held,
-            cols=4,
-            x0=btn_x0,
-            y0=btn_y,
-            cell_w=cell_w,
-            cell_h=cell_h,
-        )
-
-        # Bottom bar: discovery counter + modifier dots
-        tft.fill_rect(0, h - 18, w, 18, theme.BLACK)
-        found = self._engine.discovery_count
-        total = self._engine.total_discoverable
-        if found != self._hud_found or total != self._hud_total:
-            self._hud_found = found
-            self._hud_total = total
-            self._hud_counter = "{}/{}".format(found, total)
-        tft.text(self._hud_counter, 8, h - 14, theme.MUTED)
-        self._draw_mod_dots(tft, theme, w - 50, h - 12)
 
     def _draw_mod_dots(self, tft, theme, x, y):
         """Draw small colored dots for active modifiers."""

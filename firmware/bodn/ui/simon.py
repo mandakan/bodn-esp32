@@ -40,7 +40,8 @@ _STATE_EMOTIONS = {
 class SimonScreen(Screen):
     """Pattern Copy — watch the sequence, then repeat it!
 
-    Buttons 0–5 are the play buttons (6 colors).
+    Buttons 0–5 are the play buttons (6 colors).  They render as a single
+    row on screen matching the physical strip below the display.
     Hold nav encoder button to open the pause menu.
     """
 
@@ -243,19 +244,12 @@ class SimonScreen(Screen):
         tft = self._manager.tft
         theme = self._manager.theme
         eng = self._engine
-        landscape = theme.width > theme.height
         round_num = eng.sequence_length
 
-        if landscape:
-            dot_y = 40
-            dot_size = min(20, (theme.width - 40) // max(1, round_num) - 4)
-            step = dot_size + 4
-            total_w = round_num * step - 4
-        else:
-            dot_y = 20
-            dot_size = min(14, (theme.width - 16) // max(1, round_num) - 2)
-            step = dot_size + 2
-            total_w = round_num * step - 2
+        dot_y = 40
+        dot_size = min(20, (theme.width - 40) // max(1, round_num) - 4)
+        step = dot_size + 4
+        total_w = round_num * step - 4
 
         dot_x0 = (theme.width - total_w) // 2
         row_h = dot_size + 4
@@ -292,13 +286,6 @@ class SimonScreen(Screen):
         self._pause.render(tft, theme, frame)
 
     def _render_game(self, tft, theme, frame):
-        landscape = theme.width > theme.height
-        if landscape:
-            self._render_landscape(tft, theme, frame)
-        else:
-            self._render_portrait(tft, theme, frame)
-
-    def _render_landscape(self, tft, theme, frame):
         eng = self._engine
         w = theme.width
         h = theme.height
@@ -379,20 +366,19 @@ class SimonScreen(Screen):
                 else:
                     tft.rect(x, dot_y, dot_size, dot_size, theme.MUTED)
 
-        # Button grid — bottom portion
+        # Button row — single row of 6 matching physical buttons 0-5 left-to-right
         btn_y = h // 2 + 20
-        # Show only 6 buttons (2 rows × 3 cols)
         btn_names = theme.BTN_NAMES[:NUM_BUTTONS]
         btn_held = held[:NUM_BUTTONS]
-        cell_w = w // 3 - 8
-        cell_h = (h - btn_y - 24) // 2
-        btn_x0 = (w - 3 * cell_w) // 2
+        cell_w = w // NUM_BUTTONS - 2
+        cell_h = h - btn_y - 24
+        btn_x0 = (w - NUM_BUTTONS * cell_w) // 2
         draw_button_grid(
             tft,
             theme,
             btn_names,
             btn_held,
-            cols=3,
+            cols=NUM_BUTTONS,
             x0=btn_x0,
             y0=btn_y,
             cell_w=cell_w,
@@ -405,85 +391,3 @@ class SimonScreen(Screen):
         if eng.high_score > 0:
             hs_text = t("simon_best_short", eng.high_score)
             tft.text(hs_text, w - len(hs_text) * 8 - 8, h - 14, theme.YELLOW)
-
-    def _render_portrait(self, tft, theme, frame):
-        eng = self._engine
-        w = theme.width
-        h = theme.height
-        held = self._manager.inp.btn_held if self._manager else [False] * 8
-
-        if eng.state == READY:
-            draw_centered(tft, t("simon_title_p1"), 20, theme.CYAN, w, scale=2)
-            draw_centered(tft, t("simon_title_p2"), 40, theme.CYAN, w, scale=2)
-            draw_centered(tft, t("simon_watch_repeat_p1"), h // 2 - 16, theme.WHITE, w)
-            draw_centered(tft, t("simon_watch_repeat_p2"), h // 2, theme.WHITE, w)
-            draw_centered(tft, t("simon_press_start_short"), h - 30, theme.MUTED, w)
-            return
-
-        if eng.state == GAME_OVER:
-            draw_centered(tft, t("simon_great_short"), 20, theme.YELLOW, w, scale=2)
-            draw_centered(
-                tft, t("simon_score_short", eng.score), h // 2, theme.WHITE, w, scale=2
-            )
-            draw_centered(tft, t("simon_press_again_short"), h - 20, theme.MUTED, w)
-            return
-
-        # State label
-        if eng.state == SHOWING:
-            draw_centered(tft, t("simon_watch"), 4, theme.YELLOW, w)
-        elif eng.state == WAITING:
-            draw_centered(tft, t("simon_your_turn"), 4, theme.GREEN, w)
-        elif eng.state == WIN:
-            draw_centered(tft, t("simon_yes"), 4, theme.YELLOW, w)
-        elif eng.state == FAIL:
-            draw_centered(tft, t("simon_try_again"), 4, theme.RED, w)
-
-        # Sequence dots
-        round_num = eng.sequence_length
-        dot_y = 20
-        dot_size = min(14, (w - 16) // max(1, round_num) - 2)
-        total_w = round_num * (dot_size + 2) - 2
-        dot_x0 = (w - total_w) // 2
-
-        for i in range(round_num):
-            x = dot_x0 + i * (dot_size + 2)
-            btn_idx = eng.sequence[i]
-            color = theme.BTN_565[btn_idx]
-
-            if eng.state == SHOWING:
-                if i < eng._show_pos or (i == eng._show_pos and eng.active_button >= 0):
-                    tft.fill_rect(x, dot_y, dot_size, dot_size, color)
-                else:
-                    tft.rect(x, dot_y, dot_size, dot_size, theme.MUTED)
-            elif eng.state == WAITING:
-                if i < eng._input_pos:
-                    tft.fill_rect(x, dot_y, dot_size, dot_size, color)
-                elif i == eng._input_pos:
-                    tft.rect(x, dot_y, dot_size, dot_size, theme.WHITE)
-                else:
-                    tft.rect(x, dot_y, dot_size, dot_size, theme.MUTED)
-            else:
-                tft.fill_rect(x, dot_y, dot_size, dot_size, color)
-
-        # Button grid — 2 rows × 3 cols
-        btn_y = h * 3 // 5
-        btn_names = theme.BTN_NAMES[:NUM_BUTTONS]
-        btn_held = held[:NUM_BUTTONS]
-        cell_w = w // 3 - 2
-        cell_h = (h - btn_y - 16) // 2
-        btn_x0 = (w - 3 * cell_w) // 2
-        draw_button_grid(
-            tft,
-            theme,
-            btn_names,
-            btn_held,
-            cols=3,
-            x0=btn_x0,
-            y0=btn_y,
-            cell_w=cell_w,
-            cell_h=cell_h,
-        )
-
-        # Score
-        tft.fill_rect(0, h - 16, w, 16, theme.BLACK)
-        tft.text(t("simon_round_short", round_num), 4, h - 12, theme.MUTED)

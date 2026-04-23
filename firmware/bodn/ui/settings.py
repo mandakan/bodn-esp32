@@ -275,9 +275,8 @@ class SettingsScreen(Screen):
 
         w = theme.width
         h = theme.height
-        landscape = w > h
-        title_h = 28 if landscape else 24
-        row_h = 24 if landscape else 20
+        title_h = 28
+        row_h = 24
         menu_h = h - title_h - 4
         visible = menu_h // row_h
 

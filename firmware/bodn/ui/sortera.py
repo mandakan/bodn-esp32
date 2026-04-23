@@ -631,9 +631,11 @@ class SorteraScreen(Screen):
             )
         elif eng.rule_dimension == "category":
             return t(
-                "sortera_find_animal"
-                if eng.rule_value == "animal"
-                else "sortera_find_vehicle",
+                (
+                    "sortera_find_animal"
+                    if eng.rule_value == "animal"
+                    else "sortera_find_vehicle"
+                ),
                 t(_CATEGORY_KEYS.get(eng.rule_value, eng.rule_value)),
             )
         return eng.rule_value
