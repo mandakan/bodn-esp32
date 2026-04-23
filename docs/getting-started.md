@@ -82,11 +82,15 @@ Verify on the REPL: `import _audiomix` and `import _spidma` should both succeed.
 ## 2. Deploy firmware
 
 ```bash
-# Copy all firmware files to the device
-./tools/sync.sh
+# Copy all firmware files to the device (auto-detects USB vs WiFi via bodn.local)
+./tools/deploy.sh
+
+# Or force a specific transport:
+./tools/deploy.sh --usb             # USB (mpremote)
+./tools/deploy.sh --wifi 192.168.1.143   # WiFi push to a specific IP
 ```
 
-This uses `mpremote` under the hood. The device resets automatically after deploy.
+`deploy.sh` wraps `tools/sync.sh` (USB) and `tools/ota-push.py` (WiFi) — use it as the default entry point. The device resets automatically after deploy.
 
 ## 3. Connect to the serial console
 
@@ -296,7 +300,7 @@ machine.soft_reset()   # re-runs boot.py + main.py
 | Problem | Fix |
 |---------|-----|
 | No serial output at all | Wrong USB port — use the UART port (CH340X), not OTG |
-| `No module named 'bodn'` | Firmware not deployed — run `./tools/sync.sh` |
+| `No module named 'bodn'` | Firmware not deployed — run `./tools/deploy.sh` |
 | Port not found (`/dev/cu.usbserial-*`) | Install CH340 driver: [macOS driver](https://www.wch-ic.com/downloads/CH341SER_MAC_ZIP.html) |
 | `BOOT [NET] fail` | Normal on first boot — WiFi defaults to AP mode. Connect to the "Bodn" network |
 | `BOOT [NTP] warn` | No internet access — harmless, just means clock isn't synced |
@@ -304,13 +308,13 @@ machine.soft_reset()   # re-runs boot.py + main.py
 | MCP23017 not found (missing from I2C scan) | Check I2C wiring (SCL→47, SDA→48), 3.3V power, and RESET tied to VCC. Run `from bodn.i2c_diag import run; run()` |
 | MCP pins fluctuate with no buttons pressed | Long button wires need 4.7kΩ external pull-ups to 3.3V (internal 100kΩ too weak for >10cm wires) |
 | Encoders skip steps or behave erratically | Add 4.7kΩ pull-ups on CLK/DT lines. Check wire length and routing away from power lines |
-| Can't Ctrl-C to REPL (encoder IRQ blocks it) | Create `/skip_main` flag file (see §7), or press RST and run `./tools/sync.sh --minimal` within 1s |
+| Can't Ctrl-C to REPL (encoder IRQ blocks it) | Create `/skip_main` flag file (see §7), or press RST and run `./tools/deploy.sh --usb` within 1s |
 | Display shows corrupted pixels or colour shifts | SPI clock too high for your wiring. Lower `TFT_SPI_BAUDRATE` in `firmware/bodn/config.py` from 80 MHz to 40 MHz (or 26 MHz). No firmware rebuild needed — just sync Python files. Long wires and breadboard connections are especially sensitive to high SPI clocks |
 | Display works but has occasional glitches | Same as above — try 40 MHz. Also check that SPI wires (SCK, MOSI, CS, DC) are short (<10cm) and routed away from power lines |
 
 ## 10. Next steps
 
 - **Wokwi simulation**: see the [README](../README.md#wokwi-simulation) for running in the simulator
-- **OTA updates**: once WiFi is working, use `tools/ota-push.py` to push firmware without USB
+- **OTA updates**: once WiFi is working, `./tools/deploy.sh` will auto-pick the WiFi path via `bodn.local` mDNS (or use `tools/ota-push.py` directly). Full syncs land in ~2 minutes with a takeover status screen on the device
 - **Parental controls**: connect to the device's IP in a browser to configure session limits
 - **Pin reference**: see `docs/wiring.md` for the full auto-generated pinout

@@ -44,7 +44,7 @@ Sounds live on internal flash. The directory structure is mandatory; filenames a
 **WAV format**: 16-bit mono, 22 050 Hz. ~44 KB per second of audio.
 Files not in this exact structure are ignored — dumping files in `/sounds/` directly has no effect.
 
-Upload via `sync.sh`, `ota-push.py`, or the web UI (planned).
+Upload via `deploy.sh` (wraps `sync.sh` / `ota-push.py`), or the web UI (planned). For bulk media, write files directly to the SD card via a PC card reader — the SD card asset pipeline runs through `tools/sd-sync.py`.
 
 ## manifest.json
 

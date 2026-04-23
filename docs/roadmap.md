@@ -47,6 +47,8 @@
 - [x] **Story Mode** — branching stories read aloud via SD-loaded TTS packages
 - [x] **Sortera** — NFC classification game (DCCS-style, 16 animal cards)
 - [x] **Räkna** — NFC math game (levels 1–6, from counting to symbolic equations)
+- [x] **Tone Lab / Ljudlabb** — free-play sound design (pitch, waveform, effects, gated output)
+- [x] **Blippa** — free-play NFC "blip any card" mode with instant audio/visual feedback
 - [x] Pause menu (hold-to-open), session overlay, in-game wind-down animation
 - [x] Secondary display content per game mode (cat face, ambient clock, status strip)
 - [x] i18n with Swedish default and English fallback (å/ä/ö extended font glyphs)
@@ -81,7 +83,13 @@
 - [x] Thermal protection (software-only safeguard for LiPo — shed load at 50 °C, sleep at 60 °C)
 - [x] SD card support for bulk media (mounted at boot, graceful fallback if absent)
 - [x] Asset resolver (`bodn.assets.resolve` / `resolve_voice`) with SD-first / flash-fallback precedence
-- [x] Custom MicroPython firmware build with native C modules (`_audiomix`, `_spidma`, `_draw`, `_mcpinput`, `_neopixel`)
+- [x] Custom MicroPython firmware build with native C modules (`_audiomix`, `_spidma`, `_draw`, `_mcpinput`, `_neopixel`, `_life`)
+- [x] Custom 8 MiB partition table (2× app slots + VFS) wired into BODN_S3 board build
+- [x] ESP32-S3 running at 240 MHz for smoother UI + audio under load
+- [x] Configurable NeoPixel max-brightness cap to protect power + thermals
+- [x] OTA sync speedup (10–15 min → ~2 min) with dedicated takeover status screen
+- [x] `tools/deploy.sh` entry point: auto-detects USB vs WiFi (via `bodn.local` mDNS)
+- [x] `tools/size-review.py` for auditing unused compiled firmware features
 - [x] Boot log persistence to flash, viewable via the web UI
 
 ## Milestone 6: NFC card games
@@ -89,7 +97,7 @@
 - [x] NFC tag format (self-describing NDEF Text Records) and card-set schema
 - [x] PN532 NFC reader driver (I2C, polling task, power-gated rail)
 - [x] Robust tag writing with retries and PN532 recovery
-- [x] NFC provisioning UI (card set viewer, programming, UID cache)
+- [x] NFC provisioning UI (card set viewer, programming, UID cache) — on-device *and* web UI
 - [x] Card-face PDF generator (OpenMoji emoji → A4, 85×54 mm, 2×4 per page)
 - [x] Sortera card set (16 animal cards × 4 colours) with runtime filter by programmed tags
 - [x] Räkna card set (numbers, operators, equation builders — levels 1–6)

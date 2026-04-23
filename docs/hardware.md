@@ -216,7 +216,7 @@ NAV doubles as parameter B in game modes — rotation controls speed/cursor, sho
 
 Chain order: Stick A DOUT → Stick B DIN → Stick B DOUT → Lid Ring DIN.
 
-Brightness is capped in software per zone: sticks at 25% (64/255), lid ring at 12.5% (32/255) for ambient glow. For strips longer than ~0.5 m, inject 5V power at the midpoint to prevent voltage drop and color shift at the far end.
+Brightness is capped in software per zone: sticks at 25% (64/255), lid ring at 12.5% (32/255) for ambient glow. A global hard cap (`NEOPIXEL_MAX_BRIGHTNESS` in `firmware/bodn/config.py`, default 128/255) is enforced at the `bodn.neo` choke point — pattern brightness is clamped and per-pixel RGB values are scaled — to protect the 5 V buck-boost and LED strip from full-white current surges. Raising it to 255 restores a zero-cost fast path. For strips longer than ~0.5 m, inject 5V power at the midpoint to prevent voltage drop and color shift at the far end.
 
 NeoPixel VDD is powered from the DC-DC converter's 5V output (see [Power distribution](#power-distribution) below), ensuring stable voltage on both USB and battery.
 
@@ -261,7 +261,8 @@ Source: [OLIMEX/ESP32-S3-DevKit-LiPo on GitHub](https://github.com/OLIMEX/ESP32-
 Board: **Olimex ESP32-S3-DevKit-LiPo** (Rev B)
 
 - Module: ESP32-S3-WROOM-1-N8R8 (8 MB flash + 8 MB PSRAM)
-- Dual-core Xtensa LX7 @ 240 MHz, 512 KB internal SRAM
+- Dual-core Xtensa LX7 @ 240 MHz (SoC turbo), 512 KB internal SRAM
+- Custom partition table (`boards/BODN_S3/partitions-bodn-8MiB.csv`): 2× 2.1 MiB OTA app slots + 3.7 MiB VFS. Changing the layout requires a USB reflash with erase — VFS data does not survive a layout change.
 - Wi-Fi 802.11 b/g/n + Bluetooth 5 (LE)
 - Two USB-C ports: one for UART (programming/console via CH340X), one for OTG/JTAG
 - Built-in LiPo charger (BL4054B, 100 mA with default 10k prog resistor)
@@ -667,8 +668,8 @@ Core firmware, UI sounds, and navigation all live on flash. Only media assets (s
 arcade sounds, images, animations) require the SD card.
 
 **Asset management workflow:** Pop the card into a PC card reader and copy files directly —
-this is the primary method for bulk loading. The existing WiFi sync tools (`sync.sh`,
-`ota-push.py`) push firmware to flash only and do not touch SD card content.
+this is the primary method for bulk loading. The existing deploy tools (`deploy.sh`,
+`sync.sh`, `ota-push.py`) push firmware to flash only and do not touch SD card content.
 See `docs/assets.md` for the directory structure.
 
 ## GPIO budget
