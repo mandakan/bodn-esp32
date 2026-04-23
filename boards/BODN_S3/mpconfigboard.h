@@ -13,3 +13,9 @@
 // neither the Python bindings nor the C stack gets compiled.
 #define MICROPY_PY_BLUETOOTH                (0)
 #define MICROPY_PY_ESPNOW                   (0)
+
+// Stock ESP32 ROM level (EXTRA_FEATURES) only enables deflate
+// decompression; FULL_FEATURES is needed for DeflateIO.write. The web
+// UI precomputes HTML_GZ at import time to cut ~25 KB off every page
+// load over WiFi — without this the fallback serves raw HTML.
+#define MICROPY_PY_DEFLATE_COMPRESS         (1)

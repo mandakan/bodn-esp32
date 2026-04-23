@@ -1133,7 +1133,7 @@ async def housekeeping_task(session_mgr, settings, audio=None, pwm=None):
         await asyncio.sleep_ms(500)
 
 
-async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
+async def nfc_scan_task(manager, mode_screens, session_mgr, audio, settings):
     """Poll NFC reader cooperatively and route tags globally.
 
     Uses the PN532 two-phase API via ``NFCReader.scan_cooperative`` so a
@@ -1177,6 +1177,16 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio):
         # sleep or soft reboot when PN532 needs time to come up).
         if not reader.available():
             await asyncio.sleep_ms(2000)
+            continue
+
+        # Pause NFC polling during WiFi OTA — scan_cooperative's I2C
+        # transactions + its 40 ms of awaits per cycle compete with the
+        # upload handler's await reader.read() points, dropping WiFi
+        # throughput to ~1-4 KB/s. primary_task and secondary_task
+        # already step aside on ota_active; this keeps NFC in line.
+        if ota_active(settings):
+            prev_uid = None
+            await asyncio.sleep_ms(500)
             continue
 
         # Provisioning screens hold the bus for a blocking write — skip
@@ -1389,7 +1399,7 @@ async def main():
     if audio:
         tasks.append(audio.start())
     # Always start NFC task — it retries init if hardware wasn't ready at boot
-    tasks.append(nfc_scan_task(manager, mode_screens, session_mgr, audio))
+    tasks.append(nfc_scan_task(manager, mode_screens, session_mgr, audio, settings))
     await asyncio.gather(*tasks)
 
 

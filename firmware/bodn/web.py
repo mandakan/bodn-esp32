@@ -18,7 +18,9 @@ from bodn import storage
 # Deadline in ticks_ms; once past it, ota_active() returns False and the
 # main render tasks go back to normal. Refreshed on every /api/upload
 # and /api/ota/* call, so an interrupted deploy recovers on its own.
-_OTA_QUIET_MS = 10_000
+# 30 s gives enough slack that a single slow file (OTA retry window is
+# 30-60 s) doesn't flip the screen back to the menu mid-sync.
+_OTA_QUIET_MS = 30_000
 
 
 def _mark_ota_active(settings):
@@ -351,10 +353,29 @@ async def _handle_upload(reader, writer, headers, settings=None):
             # request line.
             writer._keep_alive = False
         _record_free_delta(written)
-        # Bump per-sync counters for the status screen.
+        # Update per-sync counters for the status screen.
+        # Client sends X-File-Index (1-based position in its plan) so
+        # a retry (e.g. after the first attempt times out while the
+        # device is still writing) sets the counter idempotently
+        # instead of pushing it past the total — the "12/10" bug.
+        # Fall back to incrementing when the header is absent so older
+        # clients still see progress.
         if settings is not None:
-            settings["_ota_files_done"] = settings.get("_ota_files_done", 0) + 1
-            settings["_ota_bytes_done"] = settings.get("_ota_bytes_done", 0) + written
+            idx = headers.get("x-file-index")
+            if idx is not None:
+                try:
+                    settings["_ota_files_done"] = max(
+                        settings.get("_ota_files_done", 0), int(idx)
+                    )
+                except (TypeError, ValueError):
+                    settings["_ota_files_done"] = settings.get("_ota_files_done", 0) + 1
+            else:
+                settings["_ota_files_done"] = settings.get("_ota_files_done", 0) + 1
+            total_b = settings.get("_ota_total_bytes", 0)
+            new_bytes = settings.get("_ota_bytes_done", 0) + written
+            if total_b > 0 and new_bytes > total_b:
+                new_bytes = total_b
+            settings["_ota_bytes_done"] = new_bytes
         t_resp0 = ticks()
         await _send_json(
             writer,
@@ -571,7 +592,10 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             # Pre-gzipped ~10 KB vs ~35 KB raw — cuts radio time and drain()
             # latency on every full page load. Browsers always send gzip in
             # Accept-Encoding; the raw path remains as a safety net.
-            if "gzip" in headers.get("accept-encoding", "").lower():
+            if (
+                HTML_GZ is not None
+                and "gzip" in headers.get("accept-encoding", "").lower()
+            ):
                 await _send(
                     writer,
                     200,
