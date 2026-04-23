@@ -12,7 +12,7 @@ try:
 except ImportError:
     import ujson as json
 
-from bodn.web_ui import HTML
+from bodn.web_ui import HTML, HTML_GZ
 from bodn import storage
 
 # Deadline in ticks_ms; once past it, ota_active() returns False and the
@@ -568,7 +568,32 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
 
         # Route
         if method == "GET" and path == "/":
-            await _send(writer, 200, "text/html", HTML)
+            # Pre-gzipped ~10 KB vs ~35 KB raw — cuts radio time and drain()
+            # latency on every full page load. Browsers always send gzip in
+            # Accept-Encoding; the raw path remains as a safety net.
+            if "gzip" in headers.get("accept-encoding", "").lower():
+                await _send(
+                    writer,
+                    200,
+                    "text/html",
+                    HTML_GZ,
+                    extra_headers=[
+                        "Content-Encoding: gzip",
+                        "Cache-Control: max-age=300",
+                        "Vary: Accept-Encoding",
+                    ],
+                )
+            else:
+                await _send(
+                    writer,
+                    200,
+                    "text/html",
+                    HTML,
+                    extra_headers=[
+                        "Cache-Control: max-age=300",
+                        "Vary: Accept-Encoding",
+                    ],
+                )
 
         elif method == "GET" and path == "/api/status":
             data = {
