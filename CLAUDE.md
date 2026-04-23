@@ -111,6 +111,7 @@ bodn-esp32/
 │     ├─ stories/           # story package — scripts discovered at runtime on SD
 │     ├─ story_rules.py     # story graph validation + traversal (pure logic)
 │     ├─ temperature.py     # DS18B20 + SoC temperature monitoring
+│     ├─ tone_explorer_rules.py # Tone Lab / Ljudlabb state model (pure logic)
 │     ├─ tones.py           # procedural tone generation (pure logic)
 │     ├─ tts.py             # TTS playback helper (SD-first voice resolution)
 │     ├─ wav.py             # WAV header parser + streaming reader (pure logic)
@@ -121,6 +122,7 @@ bodn-esp32/
 │        ├─ admin_qr.py     # admin URL screen with QR code
 │        ├─ ambient.py      # AmbientClock (content) + StatusStrip (status)
 │        ├─ android.py      # boot-time Android-style status bar helper
+│        ├─ blippa.py       # Blippa free-play "blip any card" NFC mode
 │        ├─ catface.py      # cat face with emotions (secondary content)
 │        ├─ clock.py        # clock display mode
 │        ├─ demo.py         # LED playground mode
@@ -135,9 +137,11 @@ bodn-esp32/
 │        ├─ icon_browser.py # OpenMoji emoji sprite browser (settings)
 │        ├─ icons.py        # 16×16 bitmap icons (flash fallback)
 │        ├─ input.py        # unified input state with debouncing
+│        ├─ launch_splash.py # full-screen "Loading <mode>" splash for NFC launches
 │        ├─ logo.py         # pixel art boot logo (Norse mead vessel)
 │        ├─ mystery.py      # Mystery Box discovery game
 │        ├─ nfc_provision.py # NFC card set viewer + tag programming
+│        ├─ ota.py          # OTA firmware sync takeover status screen
 │        ├─ overlay.py      # session state overlay
 │        ├─ pause.py        # in-game pause menu (hold-to-open)
 │        ├─ rakna.py        # Räkna NFC math game screen
@@ -154,6 +158,8 @@ bodn-esp32/
 │        ├─ space.py        # Spaceship cockpit mode
 │        ├─ story.py        # branching story mode (scripts + TTS on SD)
 │        ├─ theme.py        # colour palette and layout constants
+│        ├─ tone_explorer.py # Tone Lab / Ljudlabb free-play screen
+│        ├─ tone_explorer_secondary.py # Tone Lab status / overflow display
 │        └─ widgets.py      # stateless draw helpers + sprite cache
 ├─ docs/
 │  ├─ assets.md             # SD/flash asset layout and resolver rules
@@ -187,7 +193,8 @@ bodn-esp32/
 │  ├─ generate_cards.py     # NFC card face PDF generator (OpenMoji → A4 PDF)
 │  ├─ convert_icons.py      # OpenMoji SVG → BDF sprite conversion for on-screen icons
 │  ├─ import_freesound.py   # import and licence-track Freesound.org samples
-│  └─ make_asset.py         # rasterise SVG sources into 4bpp BDF sprites
+│  ├─ make_asset.py         # rasterise SVG sources into 4bpp BDF sprites
+│  └─ size-review.py        # audit custom firmware for unused compiled features
 ├─ cmodules/                  # native C extensions (compiled into firmware)
 │  ├─ micropython.cmake       # top-level cmake: includes sub-modules
 │  ├─ audiomix/               # native audio mixer (_audiomix module, core 0)
@@ -211,6 +218,10 @@ bodn-esp32/
 │  │  ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
 │  │  ├─ mcpinput.c/h         # Python bindings + core 1 scan task
 │  │  └─ scanner.c/h          # I2C read loop + edge detection
+│  ├─ life/                   # native Game of Life step kernel (_life module)
+│  │  ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
+│  │  ├─ life_mod.c           # Python bindings
+│  │  └─ life.c/h             # step kernel (torus-wrap neighbour count)
 │  └─ neopixel/               # NeoPixel pattern engine (_neopixel module)
 │     ├─ micropython.cmake    # per-module cmake (INTERFACE lib)
 │     ├─ neopixel_mod.c/h     # Python bindings
@@ -316,12 +327,13 @@ source ~/esp-idf/export.sh                        # once per terminal session
 ./tools/build-firmware.sh flash                    # build + flash
 ./tools/build-firmware.sh clean                    # clean build directory
 # The custom firmware is stock MicroPython + _audiomix, _spidma, _draw,
-# _mcpinput, and _neopixel C modules. Each has a Python fallback:
+# _mcpinput, _neopixel, and _life C modules. Each has a Python fallback:
 #   _audiomix  → AudioEngine falls back to the viper/IRQ path
 #   _spidma    → display writes fall back to blocking machine.SPI
 #   _draw      → bodn.ui.draw falls back to pure-Python framebuf helpers
 #   _mcpinput  → MCP23017 input scanned on the main loop
 #   _neopixel  → bodn.neo falls back to the built-in neopixel module
+#   _life      → life_rules.step falls back to pure Python
 
 # SD card asset sync (build + copy in one step — runs all 3 steps above)
 uv run python tools/sd-sync.py                    # auto-detect BODN* SD card on macOS
@@ -378,11 +390,13 @@ breakdown. Status at a glance:
 1. **Hardware bring-up** — complete (dual displays, inputs, LEDs, thermal).
 2. **Audio basics** — complete (16-voice native C mixer, TTS, hand-recordings).
    Record/replay from INMP441 still outstanding.
-3. **Kid-facing UI** — 12 game modes shipped (Mystery, Simon, Flöde, Rule
+3. **Kid-facing UI** — 14 game modes shipped (Mystery, Simon, Flöde, Rule
    Follow, Garden, Soundboard, Sequencer, High-Five, Space, Story, Sortera,
-   Räkna). Record & replay still planned.
-4. **Parental controls** — complete (web UI, session limits, PIN, OTA).
+   Räkna, Tone Lab / Ljudlabb, Blippa). Record & replay still planned.
+4. **Parental controls** — complete (web UI, session limits, PIN, OTA,
+   NFC tag provisioning from the browser).
 5. **Quality-of-life** — complete (battery, thermal, diagnostics, SD card,
    asset resolver, custom firmware build, boot-log persistence).
-6. **NFC card games** — PN532 driver + provisioning UI shipped; Sortera,
-   Räkna, and launcher card sets live. More card sets planned.
+6. **NFC card games** — PN532 driver + on-device + web-UI provisioning
+   shipped; Sortera, Räkna, and launcher card sets live. More card sets
+   planned.

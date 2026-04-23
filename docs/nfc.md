@@ -168,3 +168,14 @@ from bodn.nfc import (
 | `/api/nfc/sets` | GET | List available card sets |
 | `/api/nfc/set/{mode}` | GET | Full card set data |
 | `/api/nfc/cache` | GET | UID cache contents |
+| `/api/nfc/provision/start` | POST | Begin a browser-driven provisioning session (arms the PN532 to write the next tag it sees). On-device UI defers while a web session is active. |
+| `/api/nfc/provision/status` | GET | Poll the outcome of the current provisioning session (idle / waiting / written / error). |
+| `/api/nfc/provision/cancel` | POST | Release the provisioning lock without writing. |
+
+### Provisioning paths
+
+Tags can be written from **two** places — the on-device `NFC` settings
+screen and the parental web UI (NFC panel). Both share the same PN532
+driver and a single cross-process lock (`bodn.nfc.provision_*`) so only
+one path can hold the reader at a time. The other path shows a "busy"
+indicator until the session is released.

@@ -9,10 +9,10 @@ mythology — the drink that granted wisdom and poetic inspiration.
 A colourful, tactile device that grows with a child (starting around age 4):
 
 - **Press buttons and turn knobs** → hear sounds, see colours and animations
-- **Play games** → Simon memory, Mystery Box discovery, Flöde flow puzzles, Rule Follow, Garden of Life, Soundboard, Spaceship cockpit, Story Mode, High-Five Friends, Sequencer
+- **Play games** → Simon memory, Mystery Box discovery, Flöde flow puzzles, Rule Follow, Garden of Life, Soundboard, Spaceship cockpit, Story Mode, High-Five Friends, Sequencer, Tone Lab (free-play sound design), Blippa (free-play NFC)
 - **NFC card games** → scan physical cards for Sortera (classification) and Räkna (math); launcher cards start any game mode (PN532 reader + NTAG213 stickers)
 - **Offline spoken audio** → Piper TTS generates Swedish and English narration for game instructions and stories; hand-recorded WAVs can transparently override any line
-- **Parental controls** → session time limits, break enforcement, quiet hours, lockdown — all configured from a phone via a local web UI
+- **Parental controls** → session time limits, break enforcement, quiet hours, lockdown, NFC tag provisioning — all configured from a phone via a local web UI
 
 ## Hardware
 
@@ -78,6 +78,7 @@ firmware/
     storage.py          # JSON settings & session history on flash
     stories/            # story package (scripts discovered at runtime on SD)
     temperature.py      # DS18B20 + SoC temperature monitoring
+    tone_explorer_rules.py # Tone Lab / Ljudlabb state model (pure logic)
     tones.py            # procedural tone generation (pure logic)
     tts.py              # TTS playback helper (SD-first voice resolution)
     wav.py              # WAV header parser + streaming reader (pure logic)
@@ -86,7 +87,7 @@ firmware/
     wifi.py             # WiFi connect (STA / AP) + mDNS + runtime control
     *_rules.py          # pure-logic game engines: mystery, simon, flode,
                         #   rulefollow, life, soundboard, space, story,
-                        #   sequencer, highfive, sortera, rakna
+                        #   sequencer, highfive, sortera, rakna, tone_explorer
     ui/
       screen.py         # Screen base class + ScreenManager
       theme.py          # colour palette and layout constants
@@ -114,6 +115,9 @@ firmware/
       story.py                # branching story mode (scripts + TTS on SD)
       sortera.py              # Sortera NFC classification game
       rakna.py                # Räkna NFC math game
+      tone_explorer.py           # Tone Lab / Ljudlabb free-play screen
+      tone_explorer_secondary.py # Tone Lab secondary display content
+      blippa.py               # Blippa free-play "blip any card" NFC mode
       clock.py          # clock display mode
       catface.py        # animated cat face (secondary content)
       ambient.py        # AmbientClock + StatusStrip (secondary display)
@@ -125,11 +129,13 @@ firmware/
       admin_qr.py       # admin URL screen with QR code
       nfc_provision.py  # NFC card set viewer + provisioning
       icon_browser.py   # OpenMoji emoji sprite browser
+      launch_splash.py  # full-screen "Loading <mode>" splash for NFC launches
+      ota.py            # OTA firmware sync takeover status screen
 ```
 
 ### Native C modules
 
-Five C modules in `cmodules/` compile into a custom MicroPython firmware build
+Six C modules in `cmodules/` compile into a custom MicroPython firmware build
 (see `tools/build-firmware.sh`). Each has a Python fallback so stock
 MicroPython still runs — the board definition lives in `boards/BODN_S3/`.
 
@@ -140,6 +146,7 @@ MicroPython still runs — the board definition lives in `boards/BODN_S3/`.
 | `_draw` | Bitmap fonts, sprite blit, primitives with alpha blending |
 | `_mcpinput` | Deterministic MCP23017 input scanner (core 1 task) |
 | `_neopixel` | NeoPixel pattern engine (animations run in C, not Python) |
+| `_life` | Game of Life step kernel (torus-wrap, falls back to Python) |
 
 ## Getting started
 
@@ -157,8 +164,8 @@ see [`docs/getting-started.md`](docs/getting-started.md).
 # Install host tools (mpremote, ruff, black)
 uv sync
 
-# Deploy firmware to the device
-./tools/sync.sh
+# Deploy firmware to the device (auto-detects USB vs WiFi via bodn.local)
+./tools/deploy.sh
 
 # Open a REPL
 uv run mpremote connect auto repl
@@ -311,8 +318,8 @@ See [`docs/roadmap.md`](docs/roadmap.md) for detailed milestones.
 
 1. ~~**Hardware bring-up**~~ — display, buttons, encoders ✓
 2. ~~**Audio basics**~~ — tones, WAV playback, native C mixer on core 0 ✓
-3. **Kid-facing UI** — 12 game modes shipped (incl. Sortera + Räkna NFC games); record & replay still planned
-4. ~~**Parental controls**~~ — web UI, session limits, PIN, OTA sync ✓
+3. **Kid-facing UI** — 14 game modes shipped (incl. Sortera + Räkna NFC games, Tone Lab, Blippa); record & replay still planned
+4. ~~**Parental controls**~~ — web UI, session limits, PIN, OTA sync, NFC tag provisioning from the browser ✓
 5. **Quality-of-life** — battery indicator, temperature monitoring, i18n (Swedish/English), offline TTS ✓
 6. **NFC integration** — PN532 driver, Sortera + Räkna shipped; more card-based modes on deck
 
