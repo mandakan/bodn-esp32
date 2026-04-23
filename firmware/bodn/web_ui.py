@@ -653,3 +653,31 @@ loadSettings();loadDebugState();refresh();setInterval(refresh,5000);
 </body>
 </html>
 """
+
+
+def _precompute_gzip(s):
+    """Compress a string once at import time for HTTP Content-Encoding: gzip.
+
+    WiFi + TCP drain() is the dominant cost when a parent opens the web UI
+    while the child is playing; sending ~10 KB instead of ~35 KB cuts radio
+    time and lets the async loop yield back to game tasks faster. Runs once
+    at module import — later requests just send these bytes.
+    """
+    import io
+
+    raw = s.encode("utf-8") if isinstance(s, str) else s
+    try:
+        import deflate  # MicroPython >= 1.21
+
+        buf = io.BytesIO()
+        d = deflate.DeflateIO(buf, deflate.GZIP)
+        d.write(raw)
+        d.close()
+        return buf.getvalue()
+    except ImportError:
+        import gzip  # CPython (host tests)
+
+        return gzip.compress(raw)
+
+
+HTML_GZ = _precompute_gzip(HTML)
