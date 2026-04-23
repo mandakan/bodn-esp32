@@ -381,6 +381,98 @@ def is_scan_suspended():
 
 
 # ---------------------------------------------------------------------------
+# Shared provisioning state
+# ---------------------------------------------------------------------------
+#
+# The reader is a single shared resource between the on-device provisioning
+# screen (ui/nfc_provision.py) and the web UI (web.py → /api/nfc/provision/*).
+# Both need to suspend background scanning and drive a blocking PN532 write;
+# if they race, one overwrites the other and the user sees silent failures.
+#
+# ``provision_acquire`` gates access on a single owner string ("device" or
+# "web").  Whichever UI opens second sees ``state="busy"`` from
+# ``provision_state`` and should refuse to start its own write.
+
+_provision = {
+    "state": "idle",  # idle | armed | writing | ok | fail
+    "owner": None,  # "device" | "web" | None
+    "mode": None,
+    "card_id": None,
+    "error": None,
+}
+
+
+def provision_state():
+    """Return a snapshot of the current provisioning state."""
+    return {
+        "state": _provision["state"],
+        "owner": _provision["owner"],
+        "mode": _provision["mode"],
+        "card_id": _provision["card_id"],
+        "error": _provision["error"],
+    }
+
+
+def provision_acquire(owner, mode=None, card_id=None):
+    """Take ownership of the reader for provisioning.
+
+    The same owner re-acquiring rearms with a new (mode, card_id) target.
+    A different owner attempting to acquire while someone else holds the
+    reader is rejected.  Also suspends background scanning so the write
+    doesn't race with the cooperative scan on the shared I2C bus.
+
+    Returns True on success, False if another owner already holds it.
+    """
+    cur = _provision["owner"]
+    if cur is not None and cur != owner:
+        return False
+    _provision["state"] = "armed" if mode is not None else "idle"
+    _provision["owner"] = owner
+    _provision["mode"] = mode
+    _provision["card_id"] = card_id
+    _provision["error"] = None
+    suspend_scan(True)
+    return True
+
+
+def provision_release(owner=None):
+    """Release ownership of the reader.
+
+    If ``owner`` is given, only release when it matches the current owner
+    (prevents the device screen from clobbering a web-side write that's
+    still in flight, and vice versa).  Passing ``None`` unconditionally
+    resets the state — used for module reinit in tests.
+    """
+    if (
+        owner is not None
+        and _provision["owner"] is not None
+        and _provision["owner"] != owner
+    ):
+        return False
+    _provision["state"] = "idle"
+    _provision["owner"] = None
+    _provision["mode"] = None
+    _provision["card_id"] = None
+    _provision["error"] = None
+    suspend_scan(False)
+    return True
+
+
+def provision_mark(owner, state, error=None):
+    """Update the state field within the current ownership.
+
+    No-op when the caller isn't the current owner — prevents a stale
+    handler from overwriting state after the UI that acquired the lock
+    has already released it.
+    """
+    if _provision["owner"] != owner:
+        return False
+    _provision["state"] = state
+    _provision["error"] = error
+    return True
+
+
+# ---------------------------------------------------------------------------
 # NFC reader (PN532 hardware driver)
 # ---------------------------------------------------------------------------
 

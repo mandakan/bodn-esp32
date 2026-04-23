@@ -386,6 +386,99 @@ async def _handle_upload(reader, writer, headers, settings=None):
         await _send_json(writer, {"error": str(e)}, 500)
 
 
+async def _handle_provision_start(writer, body):
+    """Arm the NFC reader to write the next presented tag.
+
+    Body: ``{"mode": <card-set-name>, "card_id": <id-or-null>}``.  When
+    ``card_id`` is omitted the tag is written as a launcher-style mode
+    card (no card id).  Returns 409 if the on-device screen or another
+    web session already holds the reader, or 503 if the PN532 isn't
+    detected.  On success the handler spawns a background task to drive
+    the write and returns ``{"ok": true}`` immediately — the client
+    polls ``GET /api/nfc/provision/status`` for the outcome.
+    """
+    from bodn.nfc import (
+        NFCReader,
+        encode_tag_data,
+        load_card_set,
+        lookup_card,
+        provision_acquire,
+        provision_state,
+    )
+
+    mode = body.get("mode")
+    card_id = body.get("card_id")  # may be None for launcher-style mode cards
+    if not mode:
+        await _send_json(writer, {"error": "mode required"}, 400)
+        return
+
+    # Validate the target card exists in its set.  A typo here would
+    # otherwise write a dead URL onto the tag with no visible failure.
+    cs = load_card_set(mode)
+    if cs is None:
+        await _send_json(writer, {"error": "unknown mode: " + str(mode)}, 404)
+        return
+    if card_id is not None and lookup_card(mode, card_id) is None:
+        await _send_json(writer, {"error": "unknown card: " + str(card_id)}, 404)
+        return
+
+    reader = NFCReader()
+    if not reader.available():
+        await _send_json(writer, {"error": "NFC reader not available"}, 503)
+        return
+
+    cur = provision_state()
+    if cur["owner"] is not None and cur["owner"] != "web":
+        await _send_json(
+            writer,
+            {"error": "reader busy", "owner": cur["owner"], "state": cur["state"]},
+            409,
+        )
+        return
+
+    if not provision_acquire("web", mode=mode, card_id=card_id):
+        await _send_json(writer, {"error": "reader busy"}, 409)
+        return
+
+    data = encode_tag_data(mode, card_id)
+    try:
+        asyncio.create_task(_run_web_provision_write(reader, data))
+    except (AttributeError, RuntimeError):
+        # No running event loop (host tests).  Run synchronously so the
+        # state still transitions for callers that poll /status.
+        await _run_web_provision_write(reader, data)
+
+    await _send_json(writer, {"ok": True, "mode": mode, "card_id": card_id})
+
+
+async def _run_web_provision_write(reader, data):
+    """Background task that performs a single tag write for the web UI.
+
+    Keeps the HTTP handler responsive: /start returns immediately and
+    the client polls /status for the final state.  Any exception is
+    captured and surfaced through ``provision_mark`` rather than
+    propagating to the asyncio loop.
+    """
+    from bodn.nfc import provision_mark, provision_state
+
+    provision_mark("web", "writing")
+    try:
+        ok = reader.write(data)
+    except Exception as e:
+        provision_mark("web", "fail", str(e))
+        return
+
+    # The client may have cancelled while the write was in flight; in
+    # that case provision_mark is a no-op because ownership is already
+    # cleared, which is exactly what we want.
+    if provision_state()["owner"] != "web":
+        return
+    if ok:
+        provision_mark("web", "ok")
+    else:
+        provision_mark("web", "fail", "write returned False")
+
+
 async def _handle_request(reader, writer, request_line, session_mgr, settings):
     """Parse HTTP request and route to handler.
 
@@ -736,8 +829,49 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             except Exception as e:
                 await _send_json(writer, {"error": str(e)}, 500)
 
-        # NFC provisioning endpoints (POST /api/nfc/provision/*) will be
-        # added when the PN532 hardware reader is available (issue #121).
+        # --- NFC provisioning endpoints ---
+        #
+        # Shared with the on-device provisioning screen via
+        # bodn.nfc.provision_* — the first UI to call provision_acquire
+        # holds the reader until it releases, so the two can't race on
+        # the PN532's I2C bus.
+
+        elif method == "GET" and path == "/api/nfc/provision/status":
+            try:
+                from bodn.nfc import provision_state, NFCReader
+
+                snap = provision_state()
+                snap["reader_available"] = NFCReader().available()
+                await _send_json(writer, snap)
+            except Exception as e:
+                await _send_json(writer, {"error": str(e)}, 500)
+
+        elif method == "POST" and path == "/api/nfc/provision/start":
+            try:
+                await _handle_provision_start(writer, body or {})
+            except Exception as e:
+                await _send_json(writer, {"error": str(e)}, 500)
+
+        elif method == "POST" and path == "/api/nfc/provision/cancel":
+            try:
+                from bodn.nfc import provision_release, provision_state
+
+                cur = provision_state()
+                # Only the web side can cancel via this endpoint — the
+                # device screen manages its own lifecycle and a rogue
+                # web client shouldn't be able to boot the parent out
+                # of an open provisioning screen.
+                if cur["owner"] == "web":
+                    provision_release("web")
+                    await _send_json(writer, {"ok": True})
+                else:
+                    await _send_json(
+                        writer,
+                        {"ok": False, "reason": "not owned by web"},
+                        409,
+                    )
+            except Exception as e:
+                await _send_json(writer, {"error": str(e)}, 500)
 
         else:
             await _send(writer, 404, "text/plain", "Not found")

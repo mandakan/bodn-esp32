@@ -195,7 +195,13 @@ th{color:#aaa}
 <h3 style="color:#e94560;font-size:0.95em;margin-bottom:8px">Card Sets</h3>
 <div id="nfc-sets"><p style="font-size:0.8em;color:#666">Loading...</p></div>
 <h3 style="margin-top:16px;color:#e94560;font-size:0.95em;margin-bottom:8px">Provisioning</h3>
-<p style="font-size:0.8em;color:#666">Tag provisioning requires NFC reader hardware. See <a href="https://github.com/mandakan/bodn-esp32/issues/121" style="color:#e94560">#121</a>.</p>
+<div id="nfc-prov">
+<div class="field"><label>Card set</label><select class="input-field" id="prov-mode" onchange="provPopulateCards()"></select></div>
+<div class="field"><label>Card</label><select class="input-field" id="prov-card"></select><p style="font-size:0.75em;color:#666;margin-top:4px">Choose &quot;&mdash; launcher &mdash;&quot; to write a mode-launcher tag with no card id.</p></div>
+<button class="btn btn-primary" id="prov-write-btn" onclick="provStart()">Write next tag</button>
+<button class="btn" id="prov-cancel-btn" onclick="provCancel()" style="display:none;background:#555;color:#fff;margin-top:8px">Cancel</button>
+<div id="prov-status" style="text-align:center;padding:10px;margin-top:10px;border-radius:6px;background:#16213e;font-size:0.85em;color:#aaa">Loading status&hellip;</div>
+</div>
 <h3 style="margin-top:16px;color:#e94560;font-size:0.95em;margin-bottom:8px">UID Cache</h3>
 <div id="nfc-cache"><p style="font-size:0.8em;color:#666">Loading...</p></div>
 </div>
@@ -516,12 +522,15 @@ html+='</tbody></table>';
 el.innerHTML=html;
 }catch(e){el.innerHTML='<p style="font-size:0.8em;color:#e94560">Failed to load boot log.</p>';}
 }
+var provSets={};
+var provPollTimer=null;
 async function loadNFC(){
 try{
 var r=await fetch('/api/nfc/sets');var sets=await r.json();
 var el=document.getElementById('nfc-sets');
-if(sets.error){el.innerHTML='<p style="color:#e94560">'+sets.error+'</p>';return;}
-if(!sets.length){el.innerHTML='<p style="color:#aaa;font-size:0.8em">No card sets found on SD card.</p>';return;}
+if(sets.error){el.innerHTML='<p style="color:#e94560">'+sets.error+'</p>';}
+else if(!sets.length){el.innerHTML='<p style="color:#aaa;font-size:0.8em">No card sets found on SD card.</p>';}
+else{
 var html='';
 sets.forEach(function(s){
 html+='<div style="background:#16213e;border-radius:8px;padding:10px;margin:6px 0">';
@@ -530,17 +539,84 @@ html+=' <span style="color:#aaa;font-size:0.8em">v'+s.version+' &middot; '+s.car
 html+='</div>';
 });
 el.innerHTML=html;
+}
+await provLoadSets(sets);
 }catch(e){document.getElementById('nfc-sets').innerHTML='<p style="color:#e94560;font-size:0.8em">Error loading card sets.</p>';}
 try{
 var cr=await fetch('/api/nfc/cache');var cache=await cr.json();
 var ce=document.getElementById('nfc-cache');
 var keys=Object.keys(cache);
-if(!keys.length){ce.innerHTML='<p style="color:#aaa;font-size:0.8em">Empty (no tags scanned yet).</p>';return;}
+if(!keys.length){ce.innerHTML='<p style="color:#aaa;font-size:0.8em">Empty (no tags scanned yet).</p>';}
+else{
 var html='<table style="width:100%;border-collapse:collapse;font-size:0.8em"><thead><tr><th style="text-align:left;padding:4px;color:#aaa">UID</th><th style="text-align:left;padding:4px;color:#aaa">Mode</th><th style="text-align:left;padding:4px;color:#aaa">Card</th></tr></thead><tbody>';
 keys.forEach(function(uid){html+='<tr><td style="font-family:monospace;padding:4px">'+uid+'</td><td style="padding:4px">'+cache[uid].mode+'</td><td style="padding:4px">'+cache[uid].id+'</td></tr>';});
 html+='</tbody></table>';
 ce.innerHTML=html;
+}
 }catch(e){}
+provStartPolling();
+}
+async function provLoadSets(sets){
+var sel=document.getElementById('prov-mode');
+if(!sel)return;
+if(!sets||!sets.length){sel.innerHTML='<option value="">(no card sets found)</option>';document.getElementById('prov-card').innerHTML='';return;}
+if(sel.options.length===sets.length&&sel.value)return;
+sel.innerHTML='';
+sets.forEach(function(s){var o=document.createElement('option');o.value=s.mode;o.textContent=s.mode+' ('+s.card_count+')';sel.appendChild(o);});
+await provPopulateCards();
+}
+async function provPopulateCards(){
+var mode=document.getElementById('prov-mode').value;
+var cardSel=document.getElementById('prov-card');
+if(!mode){cardSel.innerHTML='';return;}
+if(!provSets[mode]){
+try{var r=await fetch('/api/nfc/set/'+encodeURIComponent(mode));provSets[mode]=await r.json();}
+catch(e){cardSel.innerHTML='<option value="">(error loading set)</option>';return;}
+}
+var cs=provSets[mode];
+cardSel.innerHTML='';
+var launch=document.createElement('option');launch.value='';launch.textContent='— launcher —';cardSel.appendChild(launch);
+(cs.cards||[]).forEach(function(c){var o=document.createElement('option');o.value=c.id;var lbl=c.label_sv||c.label_en||c.id;o.textContent=c.id+' ('+lbl+')';cardSel.appendChild(o);});
+}
+function provRender(s){
+var el=document.getElementById('prov-status');
+var btn=document.getElementById('prov-write-btn');
+var cancel=document.getElementById('prov-cancel-btn');
+if(!el)return;
+var msg='',colour='#16213e',txt='#aaa';
+if(s.reader_available===false){msg='NFC reader not detected.';colour='#16213e';txt='#e94560';btn.disabled=true;}
+else if(s.owner==='device'){msg='Device screen is using the reader. Close it on the device to write from here.';colour='#16213e';txt='#f39c12';btn.disabled=true;}
+else if(s.state==='armed'||s.state==='writing'){msg=(s.state==='armed'?'Hold a tag on the reader…':'Writing…')+' ('+s.mode+(s.card_id?'/'+s.card_id:'')+')';colour='#0f3460';txt='#e94560';btn.disabled=true;}
+else if(s.state==='ok'){msg='Tag written: '+s.mode+(s.card_id?'/'+s.card_id:'')+'.';colour='#1a3a1a';txt='#27ae60';btn.disabled=false;}
+else if(s.state==='fail'){msg='Write failed'+(s.error?': '+s.error:'')+'.';colour='#3a1a1a';txt='#e94560';btn.disabled=false;}
+else{msg='Ready.';colour='#16213e';txt='#aaa';btn.disabled=false;}
+el.style.background=colour;el.style.color=txt;el.textContent=msg;
+cancel.style.display=(s.owner==='web'&&(s.state==='armed'||s.state==='writing'))?'block':'none';
+}
+async function provPoll(){
+try{var r=await fetch('/api/nfc/provision/status');var s=await r.json();provRender(s);}
+catch(e){/* drop a single poll */}
+}
+function provStartPolling(){
+if(provPollTimer)return;
+provPoll();
+provPollTimer=setInterval(provPoll,1000);
+}
+async function provStart(){
+var mode=document.getElementById('prov-mode').value;
+var card=document.getElementById('prov-card').value;
+if(!mode)return;
+var body={mode:mode};
+if(card)body.card_id=card;
+try{
+var r=await fetch('/api/nfc/provision/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+if(!r.ok){var err=await r.json().catch(function(){return{error:'HTTP '+r.status};});provRender({reader_available:true,state:'fail',error:err.error||('HTTP '+r.status)});return;}
+}catch(e){provRender({reader_available:true,state:'fail',error:String(e)});return;}
+provPoll();
+}
+async function provCancel(){
+try{await fetch('/api/nfc/provision/cancel',{method:'POST'});}catch(e){}
+provPoll();
 }
 var hnEl=document.getElementById('hostname');
 if(hnEl)hnEl.addEventListener('input',function(){document.getElementById('hostname-preview').textContent=this.value.trim()||'bodn'});
