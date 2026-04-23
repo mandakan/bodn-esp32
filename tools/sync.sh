@@ -103,7 +103,7 @@ $MPREMOTE \
     reset
 cd "$ROOT"
 
-# Update OTA hashes so ota-push.py / ftp-sync.py won't re-upload everything.
+# Update OTA hashes so ota-push.py won't re-upload everything.
 echo "Updating OTA hashes..."
 uv run python -c "
 import hashlib, json

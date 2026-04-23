@@ -357,11 +357,8 @@ def main() -> None:
     base_url, token, force = _parse_args()
 
     print(f"Pushing firmware to {base_url}...")
-    # Clear any leftover /.ota/ staging from a previously aborted run —
-    # HTTP uploads write live, but old firmware (or the FTP path) may
-    # have left staged copies behind eating VFS. Best-effort: ignore
-    # failures and keep going; the device-side endpoint no-ops when
-    # staging is already empty.
+    # Clear any stale OTA progress counters from a previously aborted run.
+    # Best-effort: ignore failures and keep going.
     ota_abort(base_url, token)
     ok, uploaded = push(base_url, token, force)
     if not ok:

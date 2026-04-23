@@ -64,7 +64,6 @@
 - [x] Session-aware LED animations (amber warnings, fade-off wind-down, dark sleep)
 - [x] PIN protection for web UI
 - [x] OTA firmware updates via HTTP (bearer token auth)
-- [x] FTP-based bulk OTA sync with MD5 hash verification
 - [x] Per-mode time limits (infrastructure ready, modes use when needed)
 - [x] Session recording to flash (date, start time, duration, mode, end reason)
 - [x] Usage statistics over time (daily totals, mode breakdown, 7-day history)

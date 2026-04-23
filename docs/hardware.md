@@ -668,7 +668,7 @@ arcade sounds, images, animations) require the SD card.
 
 **Asset management workflow:** Pop the card into a PC card reader and copy files directly —
 this is the primary method for bulk loading. The existing WiFi sync tools (`sync.sh`,
-`ftp-sync.py`, `ota-push.py`) push firmware to flash only and do not touch SD card content.
+`ota-push.py`) push firmware to flash only and do not touch SD card content.
 See `docs/assets.md` for the directory structure.
 
 ## GPIO budget

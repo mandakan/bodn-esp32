@@ -3,11 +3,6 @@
 import os
 
 try:
-    import hashlib
-except ImportError:
-    hashlib = None
-
-try:
     import uasyncio as asyncio
 except ImportError:
     import asyncio
@@ -19,9 +14,6 @@ except ImportError:
 
 from bodn.web_ui import HTML
 from bodn import storage
-
-OTA_STAGE = "/.ota"
-_OTA_MANIFEST = OTA_STAGE + "/MANIFEST.json"
 
 # Deadline in ticks_ms; once past it, ota_active() returns False and the
 # main render tasks go back to normal. Refreshed on every /api/upload
@@ -119,84 +111,6 @@ def _mkdirs(path):
             os.mkdir(d)
         except OSError:
             pass
-
-
-def _rmtree(path):
-    """Remove a directory tree (MicroPython has no shutil)."""
-    try:
-        for name in os.listdir(path):
-            full = path + "/" + name
-            try:
-                os.listdir(full)  # if this works, it's a dir
-                _rmtree(full)
-            except OSError:
-                os.remove(full)
-        os.rmdir(path)
-    except OSError:
-        pass
-
-
-def _ota_walk(stage_dir):
-    """Yield (staged_path, target_path) pairs from the staging directory.
-
-    Silently yields nothing if the staging dir doesn't exist (HTTP uploads
-    write live, so /.ota is only populated by the FTP path).
-    """
-    try:
-        entries = os.listdir(stage_dir)
-    except OSError:
-        return
-    for name in entries:
-        full = stage_dir + "/" + name
-        try:
-            os.listdir(full)  # directory
-            for pair in _ota_walk(full):
-                yield pair
-        except OSError:
-            # It's a file — compute the target path by stripping the stage prefix
-            target = full[len(OTA_STAGE) :]
-            yield full, target
-
-
-def _verify_manifest():
-    """Check MANIFEST.json in staging against actual file hashes.
-
-    Returns (ok: bool, errors: list[tuple]).
-    If no manifest exists (HTTP OTA path), returns (True, []) — backward compat.
-    If hashlib is unavailable, skips verification and returns (True, []).
-    """
-    if hashlib is None:
-        return True, []
-    try:
-        with open(_OTA_MANIFEST) as f:
-            manifest = json.load(f)
-    except OSError:
-        return True, []  # no manifest → HTTP OTA path, skip
-    except Exception as e:
-        return False, [("MANIFEST.json", "parse error: " + str(e))]
-
-    files = manifest.get("files", {})
-    if not files:
-        return False, [("MANIFEST.json", "empty files list")]
-
-    errors = []
-    for rel_path, expected in files.items():
-        staged = OTA_STAGE + "/" + rel_path
-        try:
-            h = hashlib.md5()
-            with open(staged, "rb") as f:
-                while True:
-                    chunk = f.read(512)
-                    if not chunk:
-                        break
-                    h.update(chunk)
-            actual = "".join("{:02x}".format(b) for b in h.digest())
-            if actual != expected:
-                errors.append((rel_path, "hash mismatch"))
-        except OSError:
-            errors.append((rel_path, "missing from staging"))
-
-    return len(errors) == 0, errors
 
 
 async def _send(writer, status, content_type, body, extra_headers=None):
@@ -330,11 +244,9 @@ async def _handle_upload(reader, writer, headers, settings=None):
 
     We used to stage into /.ota/ and copy to live on commit, but that
     doubles filesystem usage, which exceeds the VFS partition on the 8 MiB
-    build once firmware grows past ~half the partition. The bulk-atomic
-    FTP path still uses /.ota/ staging because it needs MANIFEST-backed
-    cross-file integrity verification; HTTP uploads are one-file-at-a-time
-    and retry per file, so per-file atomicity (write .new + rename) is
-    sufficient.
+    build once firmware grows past ~half the partition. HTTP uploads are
+    one-file-at-a-time and retry per file, so per-file atomicity (write
+    .new + rename) is sufficient.
 
     When `settings["debug_ota"]` is truthy, prints a per-phase timing
     breakdown to serial so a slow floor can be diagnosed without guessing.
@@ -400,8 +312,7 @@ async def _handle_upload(reader, writer, headers, settings=None):
         # for HTTP OTA: the client retries on error, and on any write
         # exception we delete the target so the next boot fails
         # cleanly on a missing file rather than importing a truncated
-        # one. FTP OTA still uses the `/.ota/` manifest-verified path
-        # when cross-file atomicity matters.
+        # one.
         t_open0 = ticks()
         t_read = 0
         t_write = 0
@@ -678,43 +589,9 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             await _handle_upload(reader, writer, headers, settings=settings)
 
         elif method == "POST" and path == "/api/ota/commit":
-            # Two deploy paths converge here:
-            #   * HTTP (/api/upload) writes directly to the live path and
-            #     never creates a MANIFEST — commit is just "please reboot".
-            #   * FTP populates /.ota/ plus a MANIFEST; commit verifies
-            #     hashes and moves staged files to live.
-            # Presence of MANIFEST.json is the unambiguous signal for the
-            # FTP path. Without this gate, a stale /.ota/ left over from
-            # an aborted HTTP deploy (or a USB hotfix) would silently
-            # downgrade live files on the next commit.
+            # HTTP (/api/upload) writes directly to the live path, so commit
+            # is just "flush FAT metadata and reboot".
             try:
-                try:
-                    os.stat(_OTA_MANIFEST)
-                    have_manifest = True
-                except OSError:
-                    have_manifest = False
-                count = 0
-                if have_manifest:
-                    ok, errors = _verify_manifest()
-                    if not ok:
-                        await _send_json(
-                            writer,
-                            {"error": "integrity check failed", "details": errors},
-                            400,
-                        )
-                        return
-                    for staged, target in _ota_walk(OTA_STAGE):
-                        if staged == _OTA_MANIFEST:
-                            continue  # control file — never deploy to live
-                        parent = target.rsplit("/", 1)[0]
-                        _mkdirs(parent)
-                        try:
-                            os.remove(target)
-                        except OSError:
-                            pass
-                        os.rename(staged, target)
-                        count += 1
-                    _rmtree(OTA_STAGE)
                 # Flush filesystem to flash before hard reset — without this,
                 # FAT metadata for unrelated dirs (e.g. /data/) can be lost.
                 try:
@@ -722,7 +599,7 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
                 except Exception:
                     pass  # os.sync() not available on all builds
                 writer._keep_alive = False  # we're about to reset
-                await _send_json(writer, {"ok": True, "committed": count})
+                await _send_json(writer, {"ok": True, "committed": 0})
                 try:
                     import machine
 
@@ -748,9 +625,7 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             await _send_json(writer, {"ok": True})
 
         elif method == "POST" and path == "/api/ota/abort":
-            # Discard staged files and clear any progress state — a
-            # follow-up sync starts from a clean slate.
-            _rmtree(OTA_STAGE)
+            # Clear any progress state — a follow-up sync starts fresh.
             _reset_ota_progress(settings)
             await _send_json(writer, {"ok": True})
 
