@@ -22,7 +22,6 @@ from bodn.i18n import t, capitalize
 from bodn.neo import neo
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
-
 # Card-set modes Blippa listens to.  Add new modes here when new card
 # sets ship (see docs/nfc.md).  Launcher tags are handled globally by
 # bodn.nfc.route_tag and never reach this screen.

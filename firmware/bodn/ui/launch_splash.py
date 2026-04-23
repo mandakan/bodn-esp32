@@ -22,18 +22,15 @@ def _build_mode_icon(mode_name, theme):
     """
     if not mode_name:
         return None
-    landscape = theme.width > theme.height
-    emoji_size = 96 if landscape else 48
-    spr = make_emoji_sprite(mode_name, emoji_size)
-    if spr is None and emoji_size != 48:
+    spr = make_emoji_sprite(mode_name, 96)
+    if spr is None:
         spr = make_emoji_sprite(mode_name, 48)
     if spr is not None:
         return spr
     icon_data = MODE_ICONS.get(mode_name)
     if icon_data is None:
         return None
-    scale = 4 if landscape else 3
-    return make_icon_sprite(icon_data, 16, 16, theme.CYAN, scale=scale)
+    return make_icon_sprite(icon_data, 16, 16, theme.CYAN, scale=4)
 
 
 def make_launch_splash(manager, mode_name):

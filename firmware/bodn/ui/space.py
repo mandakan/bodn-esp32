@@ -706,13 +706,6 @@ class SpaceScreen(Screen):
         self._pause.render(tft, theme, frame)
 
     def _render_game(self, tft, theme, frame):
-        landscape = theme.width > theme.height
-        if landscape:
-            self._render_landscape(tft, theme, frame)
-        else:
-            self._render_portrait(tft, theme, frame)
-
-    def _render_landscape(self, tft, theme, frame):
         eng = self._engine
         w = theme.width  # 320
         h = theme.height  # 240
@@ -886,34 +879,3 @@ class SpaceScreen(Screen):
                 else (theme.YELLOW if prog > 0.25 else theme.RED)
             )
             tft.fill_rect(9, h - 35, filled, 6, col)
-
-    def _render_portrait(self, tft, theme, frame):
-        """Portrait layout for secondary/rotated mounting."""
-        eng = self._engine
-        w = theme.width
-        h = theme.height
-
-        tft.fill_rect(0, 0, w, 14, theme.BLACK)
-        tft.text(t("space_title_short"), 4, 3, theme.CYAN)
-
-        state = eng.state
-        if state == CRUISING:
-            draw_centered(tft, t("space_cruising_label"), h // 2 - 8, theme.CYAN, w)
-        elif state == ANNOUNCE:
-            sc = eng.scenario_type
-            if 0 <= sc < len(_SC_LABEL):
-                draw_centered(tft, t(_SC_LABEL[sc]), h // 2, theme.YELLOW, w)
-        elif state in (ACTIVE, HINT):
-            sc = eng.scenario_type
-            if 0 <= sc < len(_SC_INSTR):
-                draw_centered(tft, t(_SC_INSTR[sc]), h // 2 - 8, theme.WHITE, w)
-        elif state == SUCCESS:
-            draw_centered(tft, t("space_success_label"), h // 2, theme.YELLOW, w)
-
-        # Mini throttle bar at bottom
-        by = h - 14
-        tft.fill_rect(0, by, w, 14, theme.BLACK)
-        filled = int(eng.throttle / 255 * (w - 2))
-        if filled > 0:
-            tft.fill_rect(1, by + 3, filled, 8, theme.CYAN)
-        tft.rect(0, by + 2, w, 10, theme.MUTED)

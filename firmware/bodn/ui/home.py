@@ -106,17 +106,16 @@ class HomeScreen(Screen):
     def _build_sprites(self, theme):
         """Pre-render icon and label sprites for all carousel modes."""
         color = theme.CYAN
-        icon_scale = 4 if theme.width > theme.height else 3
+        icon_scale = 4
         label_scale = 2
+        emoji_size = 96
         self._icon_scale = icon_scale
-        # Emoji: 96px on landscape primary, 48px on smaller/portrait displays
-        emoji_size = 96 if theme.width > theme.height else 48
         has_emoji = False
         for name in self._names:
             # Try pre-rendered emoji sprite (with background pad)
             if name not in self._icon_sprites:
                 spr = make_emoji_sprite(name, emoji_size)
-                if spr is None and emoji_size != 48:
+                if spr is None:
                     spr = make_emoji_sprite(name, 48)
                 if spr is not None:
                     self._icon_sprites[name] = spr
@@ -350,12 +349,7 @@ class HomeScreen(Screen):
             return
 
         name = self._names[self._index]
-        landscape = theme.width > theme.height
-
-        if landscape:
-            self._render_landscape(tft, theme, frame, name, full_clear)
-        else:
-            self._render_portrait(tft, theme, frame, name, full_clear)
+        self._render_landscape(tft, theme, frame, name, full_clear)
 
     def _draw_dots(self, tft, theme, y, w):
         """Draw carousel dot indicators centered at y."""
@@ -467,51 +461,6 @@ class HomeScreen(Screen):
             blit_sprite(tft, label_spr, (w - label_spr[1]) // 2 + ox, name_y)
 
         # Clear prev_name when animation completes
-        if ox == 0:
-            self._prev_name = None
-
-        # Carousel dots
-        self._draw_dots(tft, theme, dots_y, w)
-
-    def _render_portrait(self, tft, theme, frame, name, full_clear):
-        """Portrait layout: icon centered, stacked vertically."""
-        w = theme.width
-        ox = self._anim_x(w)
-
-        icon_size = self._icon_display_size
-        iy = theme.CENTER_Y - icon_size // 2 - 8
-        dots_y = theme.CENTER_Y + 44
-
-        # Content band: from icon top to below dots
-        band_top = iy
-        band_bot = dots_y + 8
-
-        # Clear only the content band during animation, not the whole screen
-        if not full_clear:
-            tft.fill_rect(0, band_top, w, band_bot - band_top, theme.BLACK)
-
-        # Static elements — only drawn on full clear
-        if full_clear:
-            draw_centered(tft, t("home_title"), theme.HEADER_Y, theme.WHITE, w)
-            remaining = self._session_mgr.sessions_remaining
-            color = theme.GREEN if remaining > 0 else theme.RED
-            tft.text(t("home_plays_left", remaining), 16, theme.height - 16, color)
-
-        # Outgoing item
-        if self._prev_name and ox != 0:
-            out_ox = ox - self._anim_dir * w
-            self._blit_mode_icon(tft, self._prev_name, w, icon_size, out_ox, iy)
-            prev_text = capitalize(t("mode_" + self._prev_name))
-            ptx = (w - len(prev_text) * 8) // 2 + out_ox
-            tft.text(prev_text, ptx, theme.CENTER_Y + 24, theme.CYAN)
-
-        # Incoming item
-        self._blit_mode_icon(tft, name, w, icon_size, ox, iy)
-
-        mode_text = capitalize(t("mode_" + name))
-        mtx = (w - len(mode_text) * 8) // 2 + ox
-        tft.text(mode_text, mtx, theme.CENTER_Y + 24, theme.WHITE)
-
         if ox == 0:
             self._prev_name = None
 

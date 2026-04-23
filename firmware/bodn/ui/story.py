@@ -10,6 +10,7 @@
 #   Bottom ~60px: choice labels with arcade button colour dots
 
 import time
+
 #
 # Arcade buttons 0..N light up during CHOOSING to show available choices.
 
