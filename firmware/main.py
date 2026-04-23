@@ -690,12 +690,12 @@ async def input_scan_task(mcp, mcp2, inp, switches=None):
         try:
             # Drain debounced events from C module
             events = _mcpinput.get_events()
-            for ev_type, pin, _t in events:
+            for ev_type, pin, ts in events:
                 mapping = _pin_map.get(pin)
                 if mapping:
                     kind, idx = mapping
                     if ev_type == _mcpinput.PRESS:
-                        inp.native_press(kind, idx)
+                        inp.native_press(kind, idx, ts)
                     else:
                         inp.native_release(kind, idx)
 

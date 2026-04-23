@@ -160,12 +160,20 @@ class InputState:
         self.enc_btn_held = [False] * n_enc
         self.enc_btn_pressed = [False] * n_enc
         self.enc_btn_just_released = [False] * n_enc
+        # Press timestamps (ms) captured by the native scanner.  Only
+        # meaningful when the corresponding *_just_pressed flag is True;
+        # otherwise the value is stale.  Used by time-sensitive modes
+        # (e.g. Sequencer) to quantize live input against the audio clock.
+        self.btn_press_ts = [0] * n_btn
+        self.arc_press_ts = [0] * n_arc
 
         # Pending edge-latched state (accumulated by scan, consumed by consume)
         self._pend_btn_press = [False] * n_btn
         self._pend_btn_release = [False] * n_btn
         self._pend_arc_press = [False] * n_arc
         self._pend_arc_release = [False] * n_arc
+        self._pend_btn_press_ts = [0] * n_btn
+        self._pend_arc_press_ts = [0] * n_arc
         self._pend_enc_btn_press = [False] * n_enc
         self._pend_enc_btn_release = [False] * n_enc
         self._pend_enc_delta = [0] * n_enc
@@ -203,6 +211,7 @@ class InputState:
         prev_btn = self._prev_btn
         pend_bp = self._pend_btn_press
         pend_br = self._pend_btn_release
+        pend_bp_ts = self._pend_btn_press_ts
         on_press = self._on_press
 
         # Buttons
@@ -212,6 +221,7 @@ class InputState:
             btn_held[i] = cur
             if cur and not prev:
                 pend_bp[i] = True
+                pend_bp_ts[i] = now
                 if on_press:
                     on_press("btn", i)
             if not cur and prev:
@@ -230,6 +240,7 @@ class InputState:
         prev_arc = self._prev_arc
         pend_ap = self._pend_arc_press
         pend_ar = self._pend_arc_release
+        pend_ap_ts = self._pend_arc_press_ts
 
         for i, pin in enumerate(arc_pins):
             prev = prev_arc[i]
@@ -237,6 +248,7 @@ class InputState:
             arc_held[i] = cur
             if cur and not prev:
                 pend_ap[i] = True
+                pend_ap_ts[i] = now
                 if on_press:
                     on_press("arc", i)
             if not cur and prev:
@@ -280,17 +292,28 @@ class InputState:
                 pend_er[i] = True
             prev_enc_btn[i] = cur_btn
 
-    def native_press(self, kind, index):
-        """Latch a press edge from native C module events."""
+    def native_press(self, kind, index, ts_ms=None):
+        """Latch a press edge from native C module events.
+
+        ``ts_ms`` is the scanner's capture timestamp (ms since boot).
+        When omitted, falls back to ``self._time_ms()`` — callers that
+        have a real timestamp (e.g. from ``_mcpinput.get_events()``)
+        should pass it so that time-sensitive modes can compensate for
+        the frame-sync delay.
+        """
+        if ts_ms is None:
+            ts_ms = self._time_ms()
         on_press = self._on_press
         if kind == "btn" and index < len(self.btn_held):
             self.btn_held[index] = True
             self._pend_btn_press[index] = True
+            self._pend_btn_press_ts[index] = ts_ms
             if on_press:
                 on_press("btn", index)
         elif kind == "arc" and index < len(self.arc_held):
             self.arc_held[index] = True
             self._pend_arc_press[index] = True
+            self._pend_arc_press_ts[index] = ts_ms
             if on_press:
                 on_press("arc", index)
 
@@ -372,22 +395,30 @@ class InputState:
         # Buttons: copy latched edges, clear pending
         pend_bp = self._pend_btn_press
         pend_br = self._pend_btn_release
+        pend_bp_ts = self._pend_btn_press_ts
         bjp = self.btn_just_pressed
         bjr = self.btn_just_released
+        bp_ts = self.btn_press_ts
         for i in range(n_btn):
             bjp[i] = pend_bp[i]
             bjr[i] = pend_br[i]
+            if pend_bp[i]:
+                bp_ts[i] = pend_bp_ts[i]
             pend_bp[i] = False
             pend_br[i] = False
 
         # Arcade buttons
         pend_ap = self._pend_arc_press
         pend_ar = self._pend_arc_release
+        pend_ap_ts = self._pend_arc_press_ts
         ajp = self.arc_just_pressed
         ajr = self.arc_just_released
+        ap_ts = self.arc_press_ts
         for i in range(n_arc):
             ajp[i] = pend_ap[i]
             ajr[i] = pend_ar[i]
+            if pend_ap[i]:
+                ap_ts[i] = pend_ap_ts[i]
             pend_ap[i] = False
             pend_ar[i] = False
 

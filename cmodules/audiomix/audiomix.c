@@ -478,6 +478,43 @@ static mp_obj_t audiomix_clock_get_step(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(audiomix_clock_get_step_obj, audiomix_clock_get_step);
 
+// _audiomix.clock_get_pos() -> (step, sample_count, samples_per_step)
+//
+// Snapshot of the clock's fractional position.  Python computes
+// frac_step = step + sample_count / samples_per_step for accurate
+// quantization of live-played notes.  Double-reads current_step to
+// avoid returning an inconsistent (step, sample_count) pair when the
+// mixer task wraps sample_count on core 0 between our two reads.
+static mp_obj_t audiomix_clock_get_pos(void) {
+    if (audiomix_state == NULL) {
+        mp_obj_t zeros[3] = {
+            mp_obj_new_int(0), mp_obj_new_int(0), mp_obj_new_int(0),
+        };
+        return mp_obj_new_tuple(3, zeros);
+    }
+    seq_clock_t *clk = &audiomix_state->clock;
+    uint8_t step_a, step_b;
+    uint32_t sc, sps;
+    // Retry once if core 0 wrapped mid-read.  At audio rate the wrap
+    // window is a few instructions wide, so one retry is enough.
+    do {
+        step_a = clk->current_step;
+        sc = clk->sample_count;
+        sps = clk->samples_per_step;
+        step_b = clk->current_step;
+    } while (step_a != step_b);
+    // Clamp sample_count in case sps == 0 or sc briefly exceeds sps.
+    if (sps == 0) sc = 0;
+    else if (sc >= sps) sc = sps - 1;
+    mp_obj_t tup[3] = {
+        mp_obj_new_int(step_a),
+        mp_obj_new_int(sc),
+        mp_obj_new_int(sps),
+    };
+    return mp_obj_new_tuple(3, tup);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(audiomix_clock_get_pos_obj, audiomix_clock_get_pos);
+
 // _audiomix.clock_set_perc(step, perc_mask)
 // perc_mask: bits 0-4 = tracks 0-4
 static mp_obj_t audiomix_clock_set_perc(mp_obj_t step_obj, mp_obj_t mask_obj) {
@@ -943,6 +980,7 @@ static const mp_rom_map_elem_t audiomix_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_clock_set_bpm),      MP_ROM_PTR(&audiomix_clock_set_bpm_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_set_steps),    MP_ROM_PTR(&audiomix_clock_set_steps_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_get_step),     MP_ROM_PTR(&audiomix_clock_get_step_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clock_get_pos),      MP_ROM_PTR(&audiomix_clock_get_pos_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_set_perc),     MP_ROM_PTR(&audiomix_clock_set_perc_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_set_melody),   MP_ROM_PTR(&audiomix_clock_set_melody_obj) },
     { MP_ROM_QSTR(MP_QSTR_clock_set_perc_buffer), MP_ROM_PTR(&audiomix_clock_set_perc_buffer_obj) },

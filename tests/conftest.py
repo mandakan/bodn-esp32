@@ -506,6 +506,11 @@ class _FakeAudiomix:
     def clock_get_step(self):
         return 0
 
+    def clock_get_pos(self):
+        # (step, sample_count, samples_per_step).  Tests that exercise
+        # fractional-step quantization monkey-patch this attribute.
+        return (0, 0, 0)
+
     def clock_clear_grid(self):
         pass
 
@@ -561,6 +566,7 @@ for _attr in (
     "clock_start",
     "clock_stop",
     "clock_get_step",
+    "clock_get_pos",
     "clock_clear_grid",
     "clock_set_perc",
     "clock_set_perc_buffer",
@@ -594,6 +600,7 @@ _mcpinput_stub.led_mode = _mcpinput_noop
 _mcpinput_stub.led_set_whack_pins = _mcpinput_noop
 _mcpinput_stub.led_set_whack_target = _mcpinput_noop
 _mcpinput_stub.led_get_whack_result = lambda: (False, False)
+_mcpinput_stub.led_set_track_active = _mcpinput_noop
 for _name, _val in (
     ("PRESS", 1),
     ("RELEASE", 2),
