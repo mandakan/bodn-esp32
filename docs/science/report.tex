@@ -130,7 +130,24 @@ colour, then by shape. Most 3-year-olds fail the switch; most 5-year-olds
 succeed. The transition period (ages 3--5) represents a critical window for
 practice.
 
-% [TODO: Expand with developmental trajectory data and EF training literature]
+Longitudinal data confirm that self-regulation (a broader construct overlapping
+substantially with EF) improves steeply between ages 3 and 5, with individual
+differences in developmental trajectory already predicting kindergarten
+readiness \citep{montroy2016development}. The practical implication is that
+\emph{when} intervention happens matters: the same dose of practice delivered at
+age 3--5 is likely to produce larger gains than at age 7+.
+
+The EF-training literature itself is mixed. \citet{diamond2016conclusions}
+reviewed dozens of intervention studies and reached a sobering conclusion:
+computerised working-memory training generalises poorly beyond the trained task,
+while play-based, embodied, and socially embedded approaches (martial arts,
+mindfulness, curricula such as Tools of the Mind) produce broader and more
+durable transfer. The authors identify several common features of programs that
+work --- sustained engagement, challenge calibrated to the child's current
+level, multimodal practice, and low-stakes failure. \Bodn{}'s design is
+explicitly shaped by this evidence: every game mode is playful rather than
+drill-like, difficulty scales adaptively, feedback is multimodal, and errors are
+gentle.
 
 % --- 2.2 Guided Play ---
 \subsection{Guided Play and Playful Learning}
@@ -144,7 +161,25 @@ no child agency). Evidence suggests that guided play produces deeper learning
 than either extreme for concept acquisition and problem-solving
 \citep{hirshpasek2015putting}.
 
-% [TODO: Expand with specific studies on guided play and EF outcomes]
+\citet{skene2022guided} reported the most comprehensive quantitative evidence to
+date: a systematic review and meta-analysis of 39 studies covering 3{,}800
+children, finding that guidance during play produced greater gains than both
+free play and direct instruction for early mathematics, shape knowledge, and
+task-switching (an executive-function measure). The effect was strongest when
+the child retained agency over how the activity unfolded even while an adult
+(or an environment) set the frame. \citet{hassingerdas2017more} extend this
+framework to well-designed games, arguing that games sit naturally on the
+guided-play continuum: they supply clear goals and rules while preserving
+voluntary engagement and child-led choice within those rules. \Bodn{}'s game
+modes are deliberately structured this way --- each mode has a bounded rule
+system (the ``frame''), but within the frame the child chooses when to play,
+how fast to progress, and what to explore.
+
+This framing also helps explain why open-ended modes like Mystery Box and Tone
+Lab sit alongside rule-based modes like Simon and Rule Follow without
+contradiction. Both are species of guided play: the environment's structure
+differs, but in each case the child's action remains voluntary and
+self-directed.
 
 % --- 2.3 Tangible User Interfaces ---
 \subsection{Tangible User Interfaces for Young Children}
@@ -167,7 +202,26 @@ affordances of tangible interfaces offer several advantages over touchscreens:
     sensorimotor associations.
 \end{itemize}
 
-% [TODO: Expand with TUI studies specifically targeting preschool age]
+Empirical work specifically targeting preschool-age children supports these
+claims. \citet{antle2013embodied} observed that 3--6-year-olds preferred
+physical--digital interactions over screen-only equivalents and sustained
+engagement longer; physicality, Antle argues, bridges concrete and abstract
+thinking in a way screens alone cannot. \citet{manches2012tangibles} showed
+that the deliberate, sequential nature of physical manipulation itself
+exercises working memory more deeply than rapid button-tapping: searching for,
+selecting, and placing a physical object is an extended motor--cognitive act
+that offloads some intermediate state into the physical arrangement, freeing
+mental resources for the task itself. \citet{sylla2012tinkrbook} reported that
+tangible story tokens increased narrative complexity and sustained engagement
+compared with screen-only storytelling in young children.
+
+\citet{horn2012hybrid} make an important qualification: pure-tangible
+interfaces are not automatically better than graphical ones. The clearest gains
+come from hybrid designs that combine tangible input with rich on-screen (and
+on-board) feedback. \Bodn{}'s architecture follows this hybrid pattern ---
+every interaction is physical, every response is multimodal, and the two
+screens are strictly used for feedback rather than as the interaction surface
+themselves.
 
 % --- 2.4 Multimodal Feedback and Sensory Integration ---
 \subsection{Multimodal Feedback and Sensory Integration}
@@ -185,7 +239,17 @@ feedback. This redundancy:
   \item Supports different learning preferences and sensory profiles
 \end{itemize}
 
-% [TODO: Cite specific multisensory integration studies in early childhood]
+The specifically cross-modal case is worth drawing out, because \Bodn{} exploits
+it directly. \citet{maurer2006shape} replicated the classic Bouba/Kiki effect
+in 2.5-year-olds, demonstrating that children form non-arbitrary
+sound--shape associations well before literacy. \citet{dolscheid2014thickness}
+showed that even four-month-old infants map higher pitch to higher spatial
+position --- a prelinguistic cross-modal correspondence. These capacities are
+the foundation for the Tone Lab's morphing blob: the shape responds to timbre
+(round to spiky) and the vertical position responds to pitch (low to high),
+giving the child a visual channel onto the same signal their ears are
+processing. The goal is to make the sound's structure perceptible rather than
+merely audible.
 
 % --- 2.5 Music and Auditory Development ---
 \subsection{Auditory Processing and Musical Exposure}
@@ -196,7 +260,20 @@ skills that underpin language acquisition and musical development
 \citep{kraus2010music, trainor2005critical}. Active sound production (as
 opposed to passive listening) is particularly effective.
 
-% [TODO: Expand with findings on sound categorisation and auditory discrimination]
+Two more specific lines of evidence inform \Bodn{}'s audio design. First,
+\citet{gordon2003learning}'s Music Learning Theory argues that tonal and
+rhythmic vocabulary should be built through open, in-tune exploration before
+any formal notation is introduced --- children need to encounter many
+well-formed musical patterns before they can produce or analyse them
+themselves. The Tone Lab's strict-pentatonic constraint and the Sequencer's
+fixed tempo grid both reflect this principle: the child explores freely but
+everything they produce is musically well-formed. Second,
+\citet{watson1985perception} and \citet{rochat2001infant} argue that the
+perception of oneself as a \emph{cause} of sound is strongest when input and
+audible effect are contingent within a narrow temporal window. \Bodn{}'s audio
+path is therefore engineered to keep input-to-sound latency in the
+low-millisecond range (the native C mixer runs on a dedicated CPU core),
+preserving the tight contingency loop that underwrites early agency.
 
 % --- 2.6 Bilingualism ---
 \subsection{Bilingualism and Executive Function}
@@ -208,14 +285,20 @@ children, attributed to the constant need to manage two active language systems
 inhibitory control and cognitive flexibility---the same skills that \Bodn{}'s
 game modes target.
 
-The bilingual advantage has been contested: \citet{paap2015bilingualism} argued
-that positive results reflect publication bias rather than a robust effect.
-However, in the specific context of early childhood (ages 3--5), where language
-systems are still being established, the evidence for enhanced inhibitory
-control remains more consistent \citep{bialystok2011reshaping}. Sweden provides
-a particularly favourable setting for early bilingualism: English-language media
-exposure is pervasive, and Swedish preschools increasingly introduce English
-informally.
+The bilingual advantage has been contested:
+\citet{paap2015bilingualism} argued that positive results reflect publication
+bias rather than a robust effect, and \citet{lehtonen2018bilingualism}'s
+meta-analysis of adult studies reached a similar conclusion once publication
+bias was modelled. However, in the specific context of early childhood (ages
+3--5), where language systems are still being established, the evidence for
+enhanced inhibitory control remains more consistent
+\citep{bialystok2011reshaping, barac2014cognitive}. The pragmatic conclusion
+is that dual-language exposure is worth pursuing for its intrinsic
+communicative value --- being able to understand and speak two languages ---
+even if the downstream executive-function benefits are smaller or more
+context-dependent than early work suggested. Sweden provides a particularly
+favourable setting for early bilingualism: English-language media exposure is
+pervasive, and Swedish preschools increasingly introduce English informally.
 
 \subsubsection*{Letter Case and Early Literacy}
 
@@ -236,10 +319,10 @@ distinguish their two languages from birth using rhythmic and phonological cues,
 countering the common concern that simultaneous exposure causes confusion.
 \citet{tan2024translation} showed that \emph{translation equivalents}---knowing
 a word in one language---significantly increases the probability of learning the
-corresponding word in the other language, especially at younger ages. Classroom
-research on dual-language labeling confirms that presenting objects labelled in
-both languages supports vocabulary development in both
-\citep{castro2011dual}. \Bodn{}'s printed NFC cards therefore present both
+corresponding word in the other language, especially at younger ages. A peer-reviewed synthesis of
+dual-language-learner research concludes that vocabulary acquisition in both
+languages is supported when children receive consistent, paired exposure to
+the same concepts in each language \citep{barac2014cognitive}. \Bodn{}'s printed NFC cards therefore present both
 Swedish and English labels simultaneously (e.g.\ ``Katt / Cat''), while the
 on-device UI shows one language at a time (switchable in settings) to respect
 the display's space constraints.
@@ -254,7 +337,24 @@ skills, and emotional understanding. While the causal direction remains debated,
 the correlational evidence is strong, and pretend play is universally observed
 across cultures during the preschool years.
 
-% [TODO: Discuss the Spaceship cockpit mode as structured pretend play]
+Two \Bodn{} modes are explicitly designed as scaffolded pretend-play
+environments. \emph{Spaceship Cockpit} casts the child as the captain of a
+small ship, with the AI companion ``Stellar'' announcing scenarios (``Asteroids
+ahead! Steer out of the way!'') via TTS. The physical encoders, toggles, and
+arcade buttons are reframed as throttle, shields, and steering --- the same
+hardware controls become different fictional objects depending on the scenario.
+This kind of symbolic substitution (treating object A \emph{as if} it were
+object B) is a hallmark of preschool pretend play and is thought to contribute
+to theory-of-mind development by requiring the child to hold two
+interpretations of the same object in mind simultaneously
+\citep{lillard2013impact}. \emph{Story Mode} complements this with branching
+narrative: the child guides a character through a story world by choosing
+between spoken options at decision points. The narrative frame supplies the
+pretend context; the branching structure ensures the child's choices matter.
+Blippa adds a third, looser register --- because the interaction is goal-free,
+children spontaneously treat the reader as a supermarket scanner or transit
+gate, producing entirely child-initiated pretend scenarios that the device
+simply supports.
 
 % --- 2.8 Growth Mindset and Failure Tolerance ---
 \subsection{Feedback, Failure, and Growth Mindset}
@@ -270,7 +370,22 @@ outcome-focused feedback (``Wrong!'') promotes fixed mindset.
 (gentle tone, dim red glow) rather than punitive signals. The intent is to
 frame failure as information, not judgement.
 
-% [TODO: Expand with specific feedback design decisions and their rationale]
+Several concrete design decisions follow from this stance. Success feedback is
+not louder or more dramatic than error feedback --- it is simply different in
+tone. This is deliberate: overly celebratory success animations implicitly
+punish failure by contrast. No mode uses a red ``wrong'' buzzer, a loudly
+descending ``sad trombone,'' or a shaking screen; every error is acknowledged
+with a soft chime and a warm, dim visual cue and then immediately gives the
+child another try. Simon, for example, allows up to three attempts per
+sequence and only grows the sequence length on success, so the child is never
+confronted with an impossibly long sequence. Rule Follow switches rules after
+several successes rather than after errors, so the game becomes harder as the
+child improves rather than punishing failure with added difficulty. High-Five
+Friends auto-restarts after three misses rather than forcing a session-ending
+screen. These decisions collectively aim to keep the emotional stakes low
+enough that the child continues engaging --- a necessary condition for the
+kind of repeated, voluntary practice that \citet{diamond2016conclusions}
+identify as the core ingredient of effective EF interventions.
 
 % =============================================================================
 \section{System Design}
@@ -294,9 +409,14 @@ interface components:
   \item MAX98357A I2S amplifier with 3W speaker
   \item INMP441 I2S MEMS microphone
   \item 6600\,mAh LiPo battery with thermal monitoring (DS18B20$\times$2)
+  \item PN532 NFC reader (I2C) for tangible card interaction
 \end{itemize}
 
-% [TODO: Add hardware diagram or reference to docs/hardware.md]
+A complete bill of materials, pin assignments, and thermal-protection
+escalation table is maintained in the project's \texttt{docs/hardware.md}.
+The device enclosure is a wooden box chosen for its warmth and durability;
+the goal is for the object to feel like a toy rather than a piece of
+consumer electronics.
 
 % --- 3.2 Software Architecture ---
 \subsection{Software Architecture}
@@ -316,9 +436,24 @@ The firmware is written in MicroPython and follows a modular architecture:
     quiet hours.
   \item \textbf{i18n system}: All user-facing strings localised
     (Swedish default, English available).
+  \item \textbf{Native C modules}: performance-critical paths (audio mixer,
+    display DMA, bitmap blit, MCP23017 input scan, NeoPixel animation
+    engine, Game of Life step kernel) are implemented as MicroPython user
+    C modules. Each has a pure-Python fallback so the design can be
+    iterated in the simulator before the custom firmware is built.
+  \item \textbf{Asset resolver}: a single \texttt{resolve()} function routes
+    all sound and TTS lookups, checking the SD card first and falling back
+    to flash. This lets hand-recorded narration transparently override
+    generated TTS, and keeps firmware size independent of the media
+    library.
 \end{itemize}
 
-% [TODO: Architectural diagram]
+The emphasis on pure-logic rule engines reflects a deliberate testing
+strategy: every game mode's rules can be exercised under CPython on a
+laptop with \texttt{pytest}, while hardware-dependent code is tested
+separately via the Wokwi simulator or directly on the device. This keeps
+the developmental logic reviewable by non-embedded collaborators and
+dramatically shortens the iteration loop.
 
 % =============================================================================
 \section{Developmental Analysis}
@@ -332,8 +467,9 @@ matrix.
 \subsection{Feature--Domain Mapping}
 \label{sec:mapping}
 
-% [TODO: Expand each feature description with specific design decisions
-%  linked to developmental literature]
+Each subsection below describes one of the fourteen currently shipped game
+modes, identifies the primary developmental aspects it targets, and links the
+design decisions back to the literature reviewed in Section~\ref{sec:background}.
 
 \subsubsection{Simon (H\"armapa)}
 The Simon memory game directly targets \textbf{working memory} capacity. The
@@ -466,8 +602,8 @@ melody track (eight mini buttons mapping to a pentatonic scale) are recorded
 into an 8- or 16-step grid during looped playback. Toggle switches control
 play/pause, step count, and metronome---making abstract musical concepts
 tangible. The mode introduces computational thinking through creative play
-\citep{papert1980mindstorms}: building patterns, running them, hearing something
-unexpected, and debugging by toggling individual steps. BPM is adjustable via
+\citep{papert1980mindstorms, bers2018coding}: building patterns, running them,
+hearing something unexpected, and debugging by toggling individual steps. BPM is adjustable via
 encoder (70--140), providing fine motor practice with immediate auditory
 feedback.
 
@@ -557,70 +693,163 @@ Creative expression  & & & & & $\bullet\bullet$ & $\bullet\bullet\bullet$ & & & 
 \subsection{Gap Analysis}
 \label{sec:gaps}
 
-The matrix reveals strong coverage for executive functions, visual processing,
-open exploration, and---with the addition of Sequencer and High-Five
-Friends---auditory processing, hand-eye coordination, and persistence.
-Story Mode significantly improved three previously identified gaps: listening
-comprehension, bilingual exposure, and imaginative play each now have two
-primary-level features (Spaceship + Story Mode). The Sequencer filled the
-creative expression gap, and High-Five Friends added a dedicated hand-eye
-coordination mode. The two NFC modes that followed---Sortera and R\"akna---add
-a tangible manipulation layer and address two previously
-underserved domains: Sortera provides a tangible Dimensional Change Card Sort
-implementation \citep{zelazo2006dccs} that strengthens cognitive flexibility
-and inhibitory control, while R\"akna opens the early-mathematics
+The current fourteen-mode catalogue yields strong coverage (three or more
+features at primary or significant level) across every developmental aspect
+except spatial reasoning. The shift is the result of several deliberate
+additions that each filled a specific gap identified in earlier revisions of
+this matrix. Story Mode gave listening comprehension, bilingual exposure, and
+imaginative play a second primary-level feature apiece. The Sequencer
+introduced creative expression and computational thinking. High-Five Friends
+added dedicated hand--eye coordination with adaptive timing. The three NFC
+modes then added a tangible manipulation layer: Sortera provides a tangible
+Dimensional Change Card Sort \citep{zelazo2006dccs} strengthening cognitive
+flexibility and inhibitory control; R\"akna opens the early-mathematics
 domain that \citet{duncan2007school} identified as the single strongest
-predictor of later academic achievement. Tone Lab adds a third
-primary-level auditory-processing mode alongside Soundboard and Story Mode,
-and---uniquely---targets cross-modal sound--shape perception
-\citep{kohler1929gestalt, maurer2006shape, dolscheid2014thickness} that no
-previous mode addressed directly. Remaining areas with limited coverage
-include:
+predictor of later academic achievement, following Bruner's
+Concrete--Pictorial--Abstract progression \citep{bruner1966instruction} and
+Siegler and Ramani's \citeyearpar{siegler2009playing} linear-number-board
+evidence; and Blippa closes the tangible cause-and-effect loop without any
+goal or failure state, aligning with \citet{bonawitz2011double} on
+exploration-driven causal learning. Finally, Tone Lab added a third
+primary-level auditory-processing mode alongside Soundboard and Story Mode
+and---uniquely---targeted cross-modal sound--shape perception
+\citep{kohler1929gestalt, maurer2006shape, dolscheid2014thickness}, a
+developmental capacity no previous mode addressed directly.
+
+The single remaining under-covered domain is:
 
 \begin{enumerate}[noitemsep]
-  \item \textbf{Spatial reasoning}: Still primarily Fl\"ode; R\"akna's linear
-    number path contributes incidentally. A tangram or construction mode would
-    add breadth.
-  \item \textbf{Problem solving}: Fl\"ode (primary), Sequencer (debugging),
-    and R\"akna (equation building) now all contribute; a scavenger-hunt style
-    NFC puzzle mode would further broaden the domain.
-  \item \textbf{Bilingual exposure}: Story Mode provides full narration in
-    both languages, and Sortera and R\"akna add active bilingual reinforcement
-    (dual-language labels and TTS on each card scan). A dedicated
-    language-switching game could further leverage the bilingual advantage for
-    EF development \citep{bialystok2011reshaping}.
+  \item \textbf{Spatial reasoning}: still primarily Fl\"ode, with R\"akna's
+    left-to-right number path contributing only incidentally. A tangram or
+    construction mode would add breadth, and the predictive link between
+    preschool spatial assembly and later mathematics
+    \citep{verdine2014deconstructing} makes this a high-leverage gap to
+    close.
 \end{enumerate}
+
+Two further areas remain thinner than the rest even though they pass the
+three-feature threshold: problem solving is presently Fl\"ode (primary),
+Sequencer (debugging), and R\"akna (equation building), so a scavenger-hunt
+NFC puzzle mode would usefully broaden it; and listening comprehension rests
+on only two primary features (Spaceship, Story Mode), so a dedicated
+language-switching game could both strengthen it and further leverage
+bilingual exposure for EF development \citep{bialystok2011reshaping}.
 
 % =============================================================================
 \section{Discussion}
 \label{sec:discussion}
 
-% [TODO: Discuss the following themes]
-
 \subsection{Tangible Interfaces vs.\ Touchscreen Applications}
-% Advantages of physical controls for this age group.
-% Compare with tablet-based EF training (e.g., Cogmed, PBS games).
-% Discuss the embodied cognition perspective.
+
+The dominant form factor for children's digital learning tools is the
+tablet-based app. \Bodn{}'s commitment to physical controls is a deliberate
+departure, grounded in three specific arguments.
+
+First, the embodied-cognition literature holds that thinking in young children
+is scaffolded by the body: the actions a child can perform constrain and shape
+the concepts they can form \citep{antle2013embodied, price2003tangibles}. A
+button that clicks, an encoder that detents, and a toggle that latches give the
+child proprioceptive feedback independent of the screen --- the hand
+\emph{knows} something happened even before the eyes register it. Touchscreen
+taps provide none of this. Second, physical controls act as an external memory
+\citep{manches2012tangibles}: an NFC card on the table is visible in the
+peripheral field whether or not the child is currently attending to it, which
+supports the kind of extended planning behaviour that a rapidly scrolling
+touchscreen actively disrupts. Third, and pragmatically, physical devices are
+easier to regulate: a wooden box with a power switch is harder to use
+compulsively than an app embedded in a general-purpose device that also
+contains YouTube.
+
+Commercial tablet-based EF training programs (Cogmed and similar) have produced
+mixed results in preschool populations, with transfer effects narrow to the
+trained tasks \citep{diamond2016conclusions}. \Bodn{} does not attempt to
+produce drill-based training; it instead embeds EF demands inside games the
+child chooses to play repeatedly, in line with the broader-transfer
+approaches Diamond \& Ling identified as effective.
 
 \subsection{Adaptive Difficulty and the Zone of Proximal Development}
-% How Böðn's difficulty scaling relates to Vygotsky's ZPD.
-% The Spaceship mode's adaptive timeout system as a case study.
-% Simon's sequence length progression.
+
+\citet{vygotsky1978mind} proposed that learning is most efficient when a child
+is supported to operate just beyond what they can already do unaided --- the
+Zone of Proximal Development (ZPD). Several \Bodn{} modes implement explicit
+adaptive-difficulty systems that aim to keep the child in this zone. Simon
+grows sequence length by one item per success and never shortens it unless the
+child fails repeatedly, so the demand tracks the child's capacity. Spaceship
+shortens the response timeout as the child succeeds; a child who is struggling
+receives more time, a child who is mastering the scenarios receives less.
+High-Five Friends shrinks the reaction window from 2\,s down to 0.5\,s across a
+round. R\"akna's six-level progression makes the same principle explicit at a
+coarser granularity: the child begins with free dot-card exploration and moves
+to symbolic equations over months or years as readiness emerges.
+
+An implicit assumption of the ZPD framing is that the \emph{right} level of
+challenge is knowable in advance. In practice, \Bodn{}'s adaptive loops use
+simple rules based on recent success/failure counts rather than any formal
+model of the child's skill. This is adequate for single-session adaptation but
+does not persist across sessions. A Bayesian skill-estimation layer is listed
+in Section~\ref{sec:future} as a plausible extension.
 
 \subsection{Feedback Design and Growth Mindset}
-% How error feedback was designed to support a growth mindset (Dweck, 2006).
-% Contrast with commercial children's games that use punitive feedback.
+
+The growth-mindset literature \citep{dweck2006mindset} argues that feedback
+focused on process (``you tried a different strategy --- good'') produces more
+persistent learners than feedback focused on outcome or innate ability. \Bodn{}
+operationalises this at the level of every error sound and every animation:
+mistakes produce soft, warm cues; successes produce differently-shaped cues
+rather than proportionally larger ones; and no mode ever displays a
+``game over'' screen in large red letters. This is an unusually strong
+stance --- many commercial children's games use loud failure feedback
+explicitly because it provokes the ``one more try'' response --- and the
+trade-off is accepted deliberately: \Bodn{} prioritises emotional safety over
+short-term engagement loops, betting that lower-frustration play sustains
+longer-term engagement \citep{diamond2016conclusions}.
+
+A subtler design decision concerns achievements and progression markers.
+\Bodn{} has no stars, no points, no leaderboards, and no unlockable content
+gated behind performance. The rationale is two-fold: first, extrinsic rewards
+can undermine intrinsic motivation in young children; second, rewards create
+winners and losers in a single-device household, which is undesirable. Level
+progression in R\"akna, for example, is surfaced only in the parental
+controls, not to the child.
 
 \subsection{Session Limits and Healthy Technology Use}
-% How parental controls relate to AAP and WHO screen time guidelines.
-% The distinction between ``active screen time'' and ``passive screen time.''
-% Ethical considerations for children's technology design.
+
+The WHO \citep{who2019guidelines} recommends no more than one hour of sedentary
+screen time per day for children aged 2--4. The key word is \emph{sedentary}:
+the concern is not the photons emitted by a screen but the passive consumption
+pattern that typically accompanies them. \Bodn{} challenges the category: its
+screens exist, but they respond only to physical action, and the child cannot
+progress without moving. This is closer to ``physical play with visual
+feedback'' than to traditional screen time, and the session-limit framework is
+sized accordingly.
+
+\Bodn{}'s parental controls allow configurable session duration, daily session
+count, mandatory breaks between sessions, and quiet hours. Session-end is
+signalled by a gradual wind-down animation rather than an abrupt cutoff ---
+the child learns that ``time to stop'' is a predictable, normal part of play,
+rather than a punishment. All play-history data stays on the device; no
+telemetry is uploaded to a cloud, and the parental web dashboard is served
+directly from the ESP32 over the local network.
 
 \subsection{Limitations}
-% No formal user studies or experimental validation yet.
-% Single-user focus: no cooperative play features.
-% Hardware constraints: limited display resolution, no haptic feedback.
-% The bilingual advantage literature is debated (cite Paap et al., 2015).
+
+Several limitations should be acknowledged. First, no formal user studies or
+controlled evaluations have been conducted; the claims in this paper are
+design-rationale arguments grounded in the developmental literature, not
+experimental findings about \Bodn{} itself. Second, \Bodn{} is currently a
+single-user device: every mode assumes one child at a time, and cooperative
+or turn-taking features are not yet implemented. This limits the system's
+ability to support socio-cognitive development in peer contexts. Third, the
+bilingual-advantage literature that motivates some of \Bodn{}'s design
+decisions is actively contested
+\citep{paap2015bilingualism, lehtonen2018bilingualism}; the dual-language
+features should be viewed primarily as supporting communicative competence in
+both languages, with downstream EF effects as a possible but uncertain
+bonus. Fourth, hardware constraints (low-resolution displays, no haptic
+feedback beyond the physical controls, a modest 3\,W speaker) limit the
+range of sensory experiences the device can deliver. Finally, the author is
+not a developmental psychologist; the literature review draws on published
+work but has not been peer-reviewed by domain experts.
 
 % =============================================================================
 \section{Future Work}
@@ -689,16 +918,28 @@ include:
 \section{Conclusion}
 \label{sec:conclusion}
 
-% [TODO: Summarise the argument]
+We have argued that tangible, open-source hardware can deliver developmentally
+informed play experiences for young children that neither screen-based apps
+nor traditional toys match alone. \Bodn{}'s design grounds each feature in
+established developmental science: executive functions are exercised by Simon,
+Rule Follow, Sortera, and Sequencer; early mathematics by R\"akna; bilingual
+exposure by Story Mode, Sortera, R\"akna, and Blippa; creative expression by
+Tone Lab and Sequencer; pretend play by Spaceship and Story Mode. Across all
+fourteen modes a small set of recurring design principles do the heavy lifting
+--- physical-first interaction with multimodal feedback, guided play with
+preserved child agency, low-stakes failure, and contingent input--output loops
+tight enough to support the perception of oneself as a cause.
 
-\Bodn{} demonstrates that tangible, open-source hardware can deliver
-developmentally informed play experiences for young children. By grounding each
-feature in established developmental science---particularly the executive
-function literature---and by providing physical controls rather than touchscreen
-interaction, the system aims to combine the adaptability of digital systems with
-the developmental benefits of hands-on play. The open-source design invites
-collaboration from educators, developmental psychologists, and the maker
-community to extend and validate the approach.
+The coverage analysis (Section~\ref{sec:coverage}) indicates that the current
+catalogue addresses nearly every developmental aspect identified as relevant
+for ages 3--7, with spatial reasoning as the one remaining gap. Future work
+should close that gap, add empirical validation studies, and extend the
+platform to cooperative play. Because \Bodn{} is fully open source --- hardware
+designs, firmware, documentation, and the research behind the design decisions
+--- we hope the approach can serve both as a platform for empirical work in
+child development and as an invitation to other makers, educators, and
+developmental researchers to collaborate on physical computing for young
+children.
 
 % =============================================================================
 % References
