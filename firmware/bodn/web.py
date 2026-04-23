@@ -606,7 +606,26 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
             # Strip runtime-only keys (non-serializable objects like _pwm,
             # _idle_tracker, plus internal lists like _all_modes).
             public = {k: v for k, v in settings.items() if not k.startswith("_")}
+            # Never echo the WiFi password back. The UI gets a
+            # `wifi_pass_set` flag instead and only sends a new password
+            # when the user actually wants to replace it.
+            stored_pass = public.pop("wifi_pass", "")
+            public["wifi_pass_set"] = bool(stored_pass)
             await _send_json(writer, public)
+
+        elif method == "GET" and path == "/api/wifi/status":
+            from bodn import wifi as _wifi
+
+            data = {
+                "wifi_mode": settings.get("wifi_mode", "ap"),
+                "stored_ssid": settings.get("wifi_ssid", ""),
+                "live_ssid": _wifi.live_ssid(),
+                "connected": _wifi.is_sta_connected(),
+                "ip": _wifi.get_ip(),
+                "hostname": settings.get("hostname", "bodn"),
+                "wifi_pass_set": bool(settings.get("wifi_pass", "")),
+            }
+            await _send_json(writer, data)
 
         elif method == "POST" and path == "/api/settings":
             if body:
@@ -658,9 +677,16 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
 
         elif method == "POST" and path == "/api/wifi":
             if body:
-                for k in ("wifi_mode", "wifi_ssid", "wifi_pass", "hostname"):
+                for k in ("wifi_mode", "wifi_ssid", "hostname"):
                     if k in body:
                         settings[k] = body[k]
+                # Only overwrite the stored password when the client sends
+                # a non-empty value. The UI leaves the field blank to mean
+                # "keep the existing password" — clearing it here would
+                # silently brick STA mode on the next reboot.
+                new_pass = body.get("wifi_pass")
+                if new_pass:
+                    settings["wifi_pass"] = new_pass
                 storage.save_settings(settings)
             writer._keep_alive = False  # we're about to reset
             await _send_json(writer, {"ok": True})

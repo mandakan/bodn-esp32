@@ -201,9 +201,10 @@ th{color:#aaa}
 </div>
 
 <div id="wifi" class="panel">
+<div id="wifi-status" style="font-size:0.85em;color:#aaa;margin-bottom:10px"></div>
 <div class="field"><label>Mode</label><select class="input-field" id="wifi_mode"><option value="ap">Access Point</option><option value="sta">Connect to network</option></select></div>
 <div class="field"><label>SSID</label><input class="input-field" type="text" id="wifi_ssid"></div>
-<div class="field"><label>Password</label><input class="input-field" type="password" id="wifi_pass"></div>
+<div class="field"><label>Password</label><input class="input-field" type="password" id="wifi_pass" placeholder="Type a new password to replace"><p id="wifi-pass-hint" style="font-size:0.75em;color:#666;margin-top:4px"></p></div>
 <div class="field"><label>Hostname</label><input class="input-field" type="text" id="hostname" placeholder="bodn"><p style="font-size:0.75em;color:#666;margin-top:4px">Device will be reachable at <span id="hostname-preview">bodn</span>.local</p></div>
 <button class="btn btn-primary" onclick="saveWifi()">Save &amp; Reboot</button>
 <div id="wifi-msg" class="msg"></div>
@@ -219,6 +220,7 @@ if(id==='history')loadHistory();
 if(id==='stats')loadStats();
 if(id==='debug')loadBootLog();
 if(id==='nfc')loadNFC();
+if(id==='wifi')loadWifiStatus();
 }
 function updRv(el,id,suf){document.getElementById(id).textContent=el.value+suf}
 function badgeClass(s){
@@ -293,7 +295,7 @@ if(tzEl&&!tzEl.options.length){for(var o=-12;o<=14;o++){var op=document.createEl
 ['max_session_min','max_sessions_day','break_min','volume'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k];
 });
-['quiet_start','quiet_end','wifi_ssid','wifi_pass','wifi_mode','ui_pin','ota_token','language','hostname'].forEach(function(k){
+['quiet_start','quiet_end','wifi_ssid','wifi_mode','ui_pin','ota_token','language','hostname'].forEach(function(k){
 var el=document.getElementById(k);if(el&&d[k]!=null)el.value=d[k]||'';
 });
 if(tzEl&&d.tz_offset!=null)tzEl.value=d.tz_offset;
@@ -436,12 +438,40 @@ msg.textContent=r.ok?'Saved!':'Error';
 setTimeout(function(){msg.className='msg'},2000);
 if(r.ok&&body.ui_pin){document.cookie='bodn_pin='+body.ui_pin+';path=/;SameSite=Strict'}
 }
+async function loadWifiStatus(){
+var st=document.getElementById('wifi-status');
+var hint=document.getElementById('wifi-pass-hint');
+var pw=document.getElementById('wifi_pass');
+var ssid=document.getElementById('wifi_ssid');
+try{
+var r=await fetch('/api/wifi/status');var d=await r.json();
+var parts=[];
+if(d.connected){
+parts.push('Currently connected to <b style="color:#27ae60">'+(d.live_ssid||'(unknown SSID)')+'</b>');
+if(d.ip&&d.ip!=='0.0.0.0')parts.push('IP <code>'+d.ip+'</code>');
+}else if((d.wifi_mode||'')==='ap'){
+parts.push('Running in <b>Access Point</b> mode');
+if(d.ip&&d.ip!=='0.0.0.0')parts.push('IP <code>'+d.ip+'</code>');
+}else{
+parts.push('Not connected');
+}
+if(st)st.innerHTML=parts.join(' &middot; ');
+// If no SSID is stored but the radio is associated, prefill the input
+// with the live SSID so the user doesn't have to re-type it.
+if(ssid&&!ssid.value&&d.live_ssid)ssid.value=d.live_ssid;
+if(hint)hint.textContent=d.wifi_pass_set?'Password is stored. Leave blank to keep it; type a new one to replace.':'No password stored.';
+if(pw)pw.placeholder=d.wifi_pass_set?'Leave blank to keep current password':'Enter network password';
+}catch(e){if(st)st.textContent='WiFi status unavailable.';}
+}
 async function saveWifi(){
 var hn=document.getElementById('hostname').value.trim()||'bodn';
 var body={wifi_mode:document.getElementById('wifi_mode').value,
 wifi_ssid:document.getElementById('wifi_ssid').value,
-wifi_pass:document.getElementById('wifi_pass').value,
 hostname:hn};
+// Only send wifi_pass when the user actually typed a new one. Sending an
+// empty string would wipe the stored password on the device.
+var pw=document.getElementById('wifi_pass').value;
+if(pw)body.wifi_pass=pw;
 var r=await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 var msg=document.getElementById('wifi-msg');
 msg.className=r.ok?'msg ok':'msg err';

@@ -48,6 +48,37 @@ def get_ip():
     return "0.0.0.0"
 
 
+def is_sta_connected():
+    """Return True if the station interface is currently associated."""
+    try:
+        sta = network.WLAN(network.STA_IF)
+        return bool(sta.active() and sta.isconnected())
+    except Exception:
+        return False
+
+
+def live_ssid():
+    """Return the SSID the station interface is currently associated with.
+
+    Falls back to '' when the radio isn't connected or the port doesn't
+    expose `essid`/`ssid` via `WLAN.config`.
+    """
+    try:
+        sta = network.WLAN(network.STA_IF)
+        if not (sta.active() and sta.isconnected()):
+            return ""
+    except Exception:
+        return ""
+    for key in ("essid", "ssid"):
+        try:
+            val = sta.config(key)
+            if val:
+                return val
+        except Exception:
+            continue
+    return ""
+
+
 def _set_hostname(hostname="bodn"):
     """Set the network hostname so mDNS advertises <hostname>.local.
 
