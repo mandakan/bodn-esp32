@@ -75,17 +75,19 @@ class NFCProvisionScreen(Screen):
         self._state = "menu"
         self._title_sprite = make_label_sprite(t("settings_nfc"), 0xFFFF, scale=2)
         self._load_sets()
-        # Exclusive NFC access: otherwise the background scanner reads the
-        # tag first and launches its target mode, stealing the card before
-        # the user can write a new payload to it.
-        from bodn.nfc import suspend_scan
+        # Take the provisioning lock as owner="device".  Also suspends the
+        # background scanner (otherwise it reads the tag first and launches
+        # its target mode, stealing the card before the user can write a
+        # new payload to it) and makes the web UI's NFC panel show "busy"
+        # while this screen is open.
+        from bodn.nfc import provision_acquire
 
-        suspend_scan(True)
+        provision_acquire("device")
 
     def exit(self):
-        from bodn.nfc import suspend_scan
+        from bodn.nfc import provision_release
 
-        suspend_scan(False)
+        provision_release("device")
 
     def _load_sets(self):
         try:
@@ -188,6 +190,13 @@ class NFCProvisionScreen(Screen):
                     if self._card_idx < len(self._cards) - 1:
                         self._card_idx += 1
                 self._write_state = _IDLE
+                # Reflect back to the shared state so the web UI stops
+                # showing a stale "writing" badge after the device result
+                # finishes displaying.  Ownership stays on "device" —
+                # only the transient state resets.
+                from bodn.nfc import provision_mark
+
+                provision_mark("device", "idle")
                 self._dirty = True
                 self._full_clear = True
             return
@@ -225,7 +234,13 @@ class NFCProvisionScreen(Screen):
 
         # Background scan is already suspended for the whole screen
         # lifetime (enter/exit), so the I2C bus is exclusive here.
-        from bodn.nfc import encode_tag_data
+        from bodn.nfc import encode_tag_data, provision_acquire, provision_mark
+
+        # Refresh the (mode, card_id) target on the shared provisioning
+        # state so the web UI's /status endpoint can show what the device
+        # is writing to while busy.
+        provision_acquire("device", mode=mode, card_id=card_id)
+        provision_mark("device", "writing")
 
         try:
             data = encode_tag_data(mode, card_id)
@@ -233,12 +248,15 @@ class NFCProvisionScreen(Screen):
             if ok:
                 self._write_state = _OK
                 self._written_count += 1
+                provision_mark("device", "ok")
             else:
                 print("NFC: write returned False for", card_id)
                 self._write_state = _FAIL
+                provision_mark("device", "fail", "write returned False")
         except Exception as e:
             print("NFC: write error:", e)
             self._write_state = _FAIL
+            provision_mark("device", "fail", str(e))
 
         self._write_ms = time.ticks_ms()
         self._dirty = True
