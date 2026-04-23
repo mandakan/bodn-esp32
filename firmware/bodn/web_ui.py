@@ -671,13 +671,20 @@ def _precompute_gzip(s):
 
         buf = io.BytesIO()
         d = deflate.DeflateIO(buf, deflate.GZIP)
+        # Stock ESP32 MicroPython at ROM_LEVEL_EXTRA_FEATURES ships the
+        # deflate module for decompression only; DeflateIO.write doesn't
+        # exist. Fall back to serving raw HTML — the caller checks for
+        # None and picks the uncompressed branch.
         d.write(raw)
         d.close()
         return buf.getvalue()
-    except ImportError:
-        import gzip  # CPython (host tests)
+    except (ImportError, AttributeError):
+        try:
+            import gzip  # CPython (host tests)
 
-        return gzip.compress(raw)
+            return gzip.compress(raw)
+        except ImportError:
+            return None
 
 
 HTML_GZ = _precompute_gzip(HTML)

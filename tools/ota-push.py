@@ -200,6 +200,7 @@ def push(
     if plan_files > 0:
         _ota_begin(client, plan_files, plan_bytes, token)
 
+    file_index = 0
     for rel_path in FILES:
         local = FIRMWARE_DIR / rel_path
         if not local.exists():
@@ -216,8 +217,10 @@ def push(
             skipped += 1
             continue
         remote = "/" + rel_path
+        file_index += 1
         hdrs = {
             "X-Path": remote,
+            "X-File-Index": str(file_index),
             "Content-Type": "application/octet-stream",
         }
         if token:

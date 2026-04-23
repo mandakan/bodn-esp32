@@ -151,11 +151,22 @@ class SecondaryDisplay:
     # -- Invalidation --
 
     def invalidate(self, zone="both"):
-        """Force a redraw. zone: 'content', 'status', or 'both'."""
+        """Force a redraw. zone: 'content', 'status', or 'both'.
+
+        Also re-enters the active screens so their own dirty-tracking
+        state resets. Without this, after an external clear (e.g. the
+        OTA takeover paints the full TFT), the manager fills the zone
+        black but the screen's render() sees nothing changed against
+        its cached state and skips drawing — leaving the zone blank.
+        """
         if zone in ("content", "both"):
             self._content_dirty = True
+            if self._content:
+                self._content.enter(self)
         if zone in ("status", "both"):
             self._status_dirty = True
+            if self._status:
+                self._status.enter(self)
 
     # -- Tick --
 
