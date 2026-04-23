@@ -184,7 +184,7 @@ def create_hardware():
         scl=config.I2C_SCL,
         freq=400_000,
         mcp_addr=config.MCP23017_ADDR,
-        debounce_ms=12,
+        debounce_ms=4,
         int_pin=-1,
     )
     from bodn.native_i2c import NativeI2C

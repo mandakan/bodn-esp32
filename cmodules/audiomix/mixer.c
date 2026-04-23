@@ -711,10 +711,13 @@ const char *mixer_init(const mixer_config_t *cfg, audiomix_state_t **state_out) 
     // Configure I2S via ESP-IDF new driver
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(
         I2S_NUM_0, I2S_ROLE_MASTER);
-    // DMA config: 8 descriptors × 256 frames = 2048 frames total
-    // At 16kHz stereo 16-bit: 2048 frames × 4 bytes = 8192 bytes ≈ 128ms buffer
-    // Each descriptor holds 256 frames = 16ms — matches our mix chunk size
-    chan_cfg.dma_desc_num = 8;
+    // DMA config: 3 descriptors × 256 frames = 768 frames total
+    // At 16kHz stereo 16-bit: 768 frames × 4 bytes = 3072 bytes ≈ 48ms buffer
+    // Each descriptor holds 256 frames = 16ms — matches our mix chunk size.
+    // Kept shallow so pitch/wave changes in Tone Lab become audible quickly;
+    // the mixer runs on a dedicated core-0 task so underruns are rare even
+    // with only 3 descriptors of slack.
+    chan_cfg.dma_desc_num = 3;
     chan_cfg.dma_frame_num = 256;
 
     esp_err_t err = i2s_new_channel(&chan_cfg, &s_i2s_handle, NULL);
