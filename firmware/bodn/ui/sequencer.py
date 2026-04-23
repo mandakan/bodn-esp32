@@ -38,6 +38,13 @@ _METRO_VOICE = const(7)
 _METRO_HI = const(1200)  # downbeat accent
 _METRO_LO = const(800)  # other beats
 
+# Record offset compensation (ms) — subtracted from a press timestamp
+# before quantizing, so the snap target matches what the user HEARD when
+# they pressed (the mixer's I2S buffer queue delays audio by ~15-25 ms).
+# Same concept as Ableton's "Recording Input Latency" / MPC's "Rec Offset".
+# Tune by ear; 20 ms is the default for this I2S setup.
+_REC_OFFSET_MS = const(20)
+
 # Drum sample names on SD — index matches arcade button hardware index
 _DRUM_NAMES = ["hihat", "snare", "kick", "tom", "crash"]
 
@@ -288,12 +295,25 @@ class SequencerScreen(Screen):
             self._flash_msg = t("seq_cleared")
             self._flash_end = now + 1000
 
+        # --- Advance playhead (C clock drives timing) ---
+        # Done BEFORE input handling so eng._frac reflects the current
+        # fractional position when we quantize live presses.
+        if eng.state == PLAYING:
+            c_step, sc, sps = _audiomix.clock_get_pos()
+            eng.step = c_step
+            if sps > 0:
+                eng._frac = c_step + sc / sps
+            else:
+                eng._frac = float(c_step)
+            eng.step_advanced = c_step != self._prev_step
+
         # --- Arcade buttons: percussion ---
         any_toggled_on = False
         perc_changed = False
         for i in range(NUM_PERC_TRACKS):
             if i < len(inp.arc_just_pressed) and inp.arc_just_pressed[i]:
-                step, val = eng.toggle_perc(i)
+                snap = self._snap_step(inp.arc_press_ts[i], now)
+                step, val = eng.toggle_perc(i, step=snap)
                 perc_changed = True
                 self._sync_step_to_clock(step)
                 if val:
@@ -306,7 +326,8 @@ class SequencerScreen(Screen):
         # --- Mini buttons: melody ---
         for i in range(8):
             if i < len(inp.btn_just_pressed) and inp.btn_just_pressed[i]:
-                step, val = eng.set_melody(i)
+                snap = self._snap_step(inp.btn_press_ts[i], now)
+                step, val = eng.set_melody(i, step=snap)
                 self._sync_step_to_clock(step)
                 if val:
                     any_toggled_on = True
@@ -321,13 +342,6 @@ class SequencerScreen(Screen):
             if self._c_leds:
                 self._sync_track_active()
             self._dirty = True
-
-        # --- Advance playhead (C clock drives timing) ---
-        if eng.state == PLAYING:
-            c_step = _audiomix.clock_get_step()
-            eng.step = c_step
-            eng._frac = float(c_step)  # keep nearest_step() in sync
-            eng.step_advanced = c_step != self._prev_step
 
         # Update prev_step in update() so step_advanced is frame-accurate
         self._prev_step = eng.step
@@ -360,6 +374,30 @@ class SequencerScreen(Screen):
         if self._flash_msg and now >= self._flash_end:
             self._flash_msg = None
             self._dirty = True
+
+    # ------------------------------------------------------------------
+    # Live-input quantization
+    # ------------------------------------------------------------------
+
+    def _snap_step(self, press_ts_ms, now_ms):
+        """Quantize a live button press to the nearest grid step.
+
+        Uses the scanner's capture timestamp (``press_ts_ms``) to undo
+        the frame-sync delay, then subtracts ``_REC_OFFSET_MS`` so the
+        snap target matches what the user heard at press time.  When the
+        clock isn't running (setup-before-play), falls back to the
+        engine's own ``nearest_step()``.
+        """
+        eng = self._engine
+        if eng.state != PLAYING or eng._ms_per_step <= 0:
+            return eng.nearest_step()
+        age_ms = time.ticks_diff(now_ms, press_ts_ms) + _REC_OFFSET_MS
+        n = eng.n_steps
+        # Wrap into [0, n); float modulo with positive modulus always
+        # returns a non-negative result, so a press just before step 0
+        # (age > frac) snaps correctly to step n-1.
+        frac_at_press = (eng._frac - age_ms / eng._ms_per_step) % n
+        return int(frac_at_press + 0.5) % n
 
     # ------------------------------------------------------------------
     # C clock grid sync

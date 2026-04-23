@@ -425,3 +425,75 @@ def test_brightness_consistent_across_instances():
             bc.update(d, v)
     values = [bc.value for bc in controls]
     assert len(set(values)) == 1  # all identical
+
+
+# ---------------------------------------------------------------------------
+# Press-timestamp plumbing (for live-jam quantization in Sequencer)
+# ---------------------------------------------------------------------------
+
+
+def _make_arcade_input(n_btn=8, n_arc=5, n_enc=3):
+    buttons = [FakePin() for _ in range(n_btn)]
+    switches = [FakePin() for _ in range(2)]
+    encoders = [FakeEncoder() for _ in range(n_enc)]
+    arcade = [FakePin() for _ in range(n_arc)]
+    t = [0]
+
+    def time_ms():
+        return t[0]
+
+    inp = InputState(buttons, switches, encoders, time_ms, arcade_pins=arcade)
+    return inp, buttons, arcade, t
+
+
+def test_native_press_records_timestamp():
+    inp, _, _, t = _make_arcade_input()
+    t[0] = 1234
+    inp.native_press("arc", 2, 1100)  # scanner captured this press at t=1100
+    inp.consume()
+    assert inp.arc_just_pressed[2]
+    assert inp.arc_press_ts[2] == 1100
+    # Other channels unchanged.
+    assert not inp.arc_just_pressed[0]
+
+
+def test_native_press_defaults_to_now():
+    inp, _, _, t = _make_arcade_input()
+    t[0] = 500
+    inp.native_press("btn", 1)  # no timestamp → fall back to time_ms()
+    inp.consume()
+    assert inp.btn_just_pressed[1]
+    assert inp.btn_press_ts[1] == 500
+
+
+def test_python_scan_captures_press_timestamp():
+    inp, btns, _, t = _make_arcade_input()
+    # First quiet scan so the button starts in the released state.
+    t[0] = 0
+    inp.scan()
+    inp.consume()
+
+    btns[3]._val = 0  # press
+    t[0] = 10
+    inp.scan()
+    t[0] = 50  # settle past debounce (15ms)
+    inp.scan()
+    inp.consume()
+    assert inp.btn_just_pressed[3]
+    assert inp.btn_press_ts[3] == 50  # latched at the scan where edge fired
+
+
+def test_press_ts_stable_while_not_pressed():
+    """arc_press_ts is only refreshed on a new press; otherwise stale value
+    is kept.  Consumers must gate on arc_just_pressed before reading."""
+    inp, _, _, t = _make_arcade_input()
+    t[0] = 100
+    inp.native_press("arc", 0, 100)
+    inp.consume()
+    assert inp.arc_press_ts[0] == 100
+
+    # No new press; consume() again.  arc_just_pressed clears, ts persists.
+    t[0] = 999
+    inp.consume()
+    assert not inp.arc_just_pressed[0]
+    assert inp.arc_press_ts[0] == 100  # stale but harmless
