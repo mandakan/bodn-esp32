@@ -45,74 +45,90 @@ HTML = """\
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Bodn</title>
 <style>
+:root{
+--bg:#1a1a2e;
+--surface:#16213e;
+--surface-alt:#0f3460;
+--accent:#e94560;
+--text:#e0e0e0;
+--text-dim:#aaa;
+--text-faint:#666;
+--ok:#27ae60;
+--warn:#f39c12;
+--info:#2980b9;
+--cooldown:#8e44ad;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;max-width:480px;margin:0 auto;padding:16px}
-h1{text-align:center;color:#e94560;margin-bottom:8px;font-size:1.5em}
-.tabs{display:flex;gap:4px;margin-bottom:16px}
-.tab{flex:1;padding:10px;text-align:center;background:#16213e;border:none;color:#aaa;border-radius:8px 8px 0 0;cursor:pointer;font-size:0.9em}
-.tab.active{background:#0f3460;color:#e94560;font-weight:bold}
-.panel{display:none;background:#0f3460;border-radius:0 0 8px 8px;padding:16px}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);max-width:480px;margin:0 auto;padding:16px}
+h1{text-align:center;color:var(--accent);margin-bottom:8px;font-size:1.5em}
+.tabs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;background:var(--surface);border-radius:8px 8px 0 0;position:sticky;top:0;z-index:10}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:1 0 auto;min-width:72px;padding:10px 14px;text-align:center;background:transparent;border:none;color:var(--text-dim);cursor:pointer;font-size:0.9em;font-weight:600;white-space:nowrap;border-radius:8px 8px 0 0;transition:background-color .15s,color .15s}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--surface-alt);color:var(--accent)}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}
+.panel{display:none;background:var(--surface-alt);border-radius:0 0 8px 8px;padding:16px}
 .panel.active{display:block}
 .badge{display:inline-block;padding:4px 12px;border-radius:12px;font-weight:bold;font-size:0.9em}
-.badge.playing{background:#27ae60;color:#fff}
+.badge.playing{background:var(--ok);color:#fff}
 .badge.idle{background:#555;color:#ccc}
-.badge.warn{background:#f39c12;color:#000}
-.badge.sleeping{background:#2980b9;color:#fff}
-.badge.lockdown{background:#e94560;color:#fff}
-.badge.cooldown{background:#8e44ad;color:#fff}
+.badge.warn{background:var(--warn);color:#000}
+.badge.sleeping{background:var(--info);color:#fff}
+.badge.lockdown{background:var(--accent);color:#fff}
+.badge.cooldown{background:var(--cooldown);color:#fff}
 .stat{margin:12px 0}
-.stat label{display:block;font-size:0.8em;color:#aaa;margin-bottom:4px}
+.stat label{display:block;font-size:0.8em;color:var(--text-dim);margin-bottom:4px}
 .stat .val{font-size:1.3em;font-weight:bold}
-.progress{background:#16213e;border-radius:6px;height:20px;overflow:hidden;margin-top:4px}
-.progress .bar{height:100%;background:#27ae60;transition:width 1s}
+.progress{background:var(--surface);border-radius:6px;height:20px;overflow:hidden;margin-top:4px}
+.progress .bar{height:100%;background:var(--ok);transition:width 1s}
 .field{margin:14px 0}
-.field label{display:block;font-size:0.85em;color:#aaa;margin-bottom:6px}
+.field label{display:block;font-size:0.85em;color:var(--text-dim);margin-bottom:6px}
 .field input[type=range]{width:100%}
-.field .rv{float:right;font-weight:bold;color:#e94560}
+.field .rv{float:right;font-weight:bold;color:var(--accent)}
 .toggle{display:flex;align-items:center;gap:10px;margin:14px 0}
 .toggle input{width:20px;height:20px}
 .btn{display:block;width:100%;padding:12px;margin-top:12px;border:none;border-radius:8px;font-size:1em;cursor:pointer}
-.btn-danger{background:#e94560;color:#fff}
-.btn-primary{background:#2980b9;color:#fff}
-.btn-save{background:#27ae60;color:#fff}
+.btn-danger{background:var(--accent);color:#fff}
+.btn-primary{background:var(--info);color:#fff}
+.btn-save{background:var(--ok);color:#fff}
 table{width:100%;border-collapse:collapse;margin-top:8px}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #16213e;font-size:0.85em}
-th{color:#aaa}
-.input-field{width:100%;padding:8px;background:#16213e;border:1px solid #333;color:#e0e0e0;border-radius:6px;margin-top:4px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--surface);font-size:0.85em}
+th{color:var(--text-dim)}
+.input-field{width:100%;padding:8px;background:var(--surface);border:1px solid #333;color:var(--text);border-radius:6px;margin-top:4px}
 .msg{text-align:center;padding:8px;margin:8px 0;border-radius:6px;display:none}
-.msg.ok{display:block;background:#27ae60;color:#fff}
-.msg.err{display:block;background:#e94560;color:#fff}
+.msg.ok{display:block;background:var(--ok);color:#fff}
+.msg.err{display:block;background:var(--accent);color:#fff}
 .bar-chart{margin:12px 0}
 .bar-row{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:0.85em}
-.bar-row .bar-label{width:70px;color:#aaa;text-align:right}
-.bar-row .bar-fill{height:16px;background:#e94560;border-radius:3px;min-width:2px}
-.bar-row .bar-val{color:#e0e0e0;font-size:0.8em}
-.stat-card{background:#16213e;border-radius:8px;padding:12px;margin:8px 0;text-align:center}
-.stat-card .val{font-size:1.5em;font-weight:bold;color:#e94560}
-.stat-card .lbl{font-size:0.75em;color:#aaa;margin-top:2px}
+.bar-row .bar-label{width:70px;color:var(--text-dim);text-align:right}
+.bar-row .bar-fill{height:16px;background:var(--accent);border-radius:3px;min-width:2px}
+.bar-row .bar-val{color:var(--text);font-size:0.8em}
+.stat-card{background:var(--surface);border-radius:8px;padding:12px;margin:8px 0;text-align:center}
+.stat-card .val{font-size:1.5em;font-weight:bold;color:var(--accent)}
+.stat-card .lbl{font-size:0.75em;color:var(--text-dim);margin-top:2px}
 .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.suggest-box{background:#1a3a1a;border:1px solid #27ae60;border-radius:8px;padding:12px;margin:12px 0}
-.suggest-box .title{color:#27ae60;font-weight:bold;margin-bottom:6px}
+.suggest-box{background:#1a3a1a;border:1px solid var(--ok);border-radius:8px;padding:12px;margin:12px 0}
+.suggest-box .title{color:var(--ok);font-weight:bold;margin-bottom:6px}
 .mode-row{display:flex;align-items:center;gap:8px;margin:8px 0}
-.mode-row label{flex:1;font-size:0.85em;color:#aaa}
-.mode-row input{width:70px;padding:6px;background:#16213e;border:1px solid #333;color:#e0e0e0;border-radius:6px;text-align:center}
-.mode-row .hint{font-size:0.7em;color:#666}
+.mode-row label{flex:1;font-size:0.85em;color:var(--text-dim)}
+.mode-row input{width:70px;padding:6px;background:var(--surface);border:1px solid #333;color:var(--text);border-radius:6px;text-align:center}
+.mode-row .hint{font-size:0.7em;color:var(--text-faint)}
 </style>
 </head>
 <body>
 <h1>Bodn</h1>
-<div class="tabs">
-<button class="tab active" onclick="show('dash',this)">Dashboard</button>
-<button class="tab" onclick="show('limits',this)">Limits</button>
-<button class="tab" onclick="show('history',this)">History</button>
-<button class="tab" onclick="show('stats',this)">Stats</button>
-<button class="tab" onclick="show('wifi',this)">WiFi</button>
-<button class="tab" onclick="show('security',this)">Security</button>
-<button class="tab" onclick="show('debug',this)">Debug</button>
-<button class="tab" onclick="show('nfc',this)">NFC</button>
+<div class="tabs" role="tablist" aria-label="Sections">
+<button class="tab active" role="tab" id="tab-dash" aria-controls="dash" aria-selected="true" tabindex="0" onclick="show('dash')">Dashboard</button>
+<button class="tab" role="tab" id="tab-limits" aria-controls="limits" aria-selected="false" tabindex="-1" onclick="show('limits')">Limits</button>
+<button class="tab" role="tab" id="tab-history" aria-controls="history" aria-selected="false" tabindex="-1" onclick="show('history')">History</button>
+<button class="tab" role="tab" id="tab-stats" aria-controls="stats" aria-selected="false" tabindex="-1" onclick="show('stats')">Stats</button>
+<button class="tab" role="tab" id="tab-wifi" aria-controls="wifi" aria-selected="false" tabindex="-1" onclick="show('wifi')">WiFi</button>
+<button class="tab" role="tab" id="tab-security" aria-controls="security" aria-selected="false" tabindex="-1" onclick="show('security')">Security</button>
+<button class="tab" role="tab" id="tab-debug" aria-controls="debug" aria-selected="false" tabindex="-1" onclick="show('debug')">Debug</button>
+<button class="tab" role="tab" id="tab-nfc" aria-controls="nfc" aria-selected="false" tabindex="-1" onclick="show('nfc')">NFC</button>
 </div>
 
-<div id="dash" class="panel active">
+<div id="dash" class="panel active" role="tabpanel" aria-labelledby="tab-dash">
 <div style="text-align:center;margin-bottom:12px">
 <span id="state-badge" class="badge idle">IDLE</span>
 </div>
@@ -134,7 +150,7 @@ th{color:#aaa}
 <button class="btn btn-danger" id="lockdown-btn" onclick="toggleLockdown()">Lockdown</button>
 </div>
 
-<div id="limits" class="panel">
+<div id="limits" class="panel" role="tabpanel" aria-labelledby="tab-limits">
 <div class="field"><label>Session length <span class="rv" id="rv-sess">20 min</span></label><input type="range" id="max_session_min" min="1" max="60" value="20" oninput="updRv(this,'rv-sess',' min')"></div>
 <div class="field"><label>Max sessions/day <span class="rv" id="rv-maxs">5</span></label><input type="range" id="max_sessions_day" min="1" max="20" value="5" oninput="updRv(this,'rv-maxs','')"></div>
 <div class="field"><label>Break between sessions <span class="rv" id="rv-brk">15 min</span></label><input type="range" id="break_min" min="1" max="60" value="15" oninput="updRv(this,'rv-brk',' min')"></div>
@@ -155,11 +171,11 @@ th{color:#aaa}
 <div id="limits-msg" class="msg"></div>
 </div>
 
-<div id="history" class="panel">
+<div id="history" class="panel" role="tabpanel" aria-labelledby="tab-history">
 <table><thead><tr><th>Date</th><th>Start</th><th>Duration</th><th>Mode</th></tr></thead><tbody id="hist-body"></tbody></table>
 </div>
 
-<div id="stats" class="panel">
+<div id="stats" class="panel" role="tabpanel" aria-labelledby="tab-stats">
 <div class="stats-grid">
 <div class="stat-card"><div class="val" id="st-avg-sess">--</div><div class="lbl">Avg session</div></div>
 <div class="stat-card"><div class="val" id="st-avg-day">--</div><div class="lbl">Avg daily</div></div>
@@ -177,21 +193,21 @@ th{color:#aaa}
 </div>
 </div>
 
-<div id="security" class="panel">
+<div id="security" class="panel" role="tabpanel" aria-labelledby="tab-security">
 <div class="field"><label>Web UI PIN (empty = no login required)</label><input class="input-field" type="password" id="ui_pin" maxlength="8" inputmode="numeric" placeholder="e.g. 1234"></div>
 <div class="field"><label>OTA token (empty = no token required)</label><input class="input-field" type="text" id="ota_token" placeholder="e.g. my-secret-token"></div>
 <button class="btn btn-save" onclick="saveSecurity()">Save</button>
 <div id="sec-msg" class="msg"></div>
 </div>
 
-<div id="debug" class="panel">
+<div id="debug" class="panel" role="tabpanel" aria-labelledby="tab-debug">
 <div class="toggle"><input type="checkbox" id="dbg-serial" onchange="toggleDebug()"><label>Log inputs to serial (~2x/sec)</label></div>
 <p style="font-size:0.75em;color:#666;margin-top:8px">Prints button, switch, and encoder state to the serial console.</p>
 <h3 style="margin:16px 0 6px;color:#e94560;font-size:0.9em">Last boot</h3>
 <div id="boot-log"><p style="font-size:0.8em;color:#666">Open this tab to load.</p></div>
 </div>
 
-<div id="nfc" class="panel">
+<div id="nfc" class="panel" role="tabpanel" aria-labelledby="tab-nfc">
 <h3 style="color:#e94560;font-size:0.95em;margin-bottom:8px">Card Sets</h3>
 <div id="nfc-sets"><p style="font-size:0.8em;color:#666">Loading...</p></div>
 <h3 style="margin-top:16px;color:#e94560;font-size:0.95em;margin-bottom:8px">Provisioning</h3>
@@ -206,7 +222,7 @@ th{color:#aaa}
 <div id="nfc-cache"><p style="font-size:0.8em;color:#666">Loading...</p></div>
 </div>
 
-<div id="wifi" class="panel">
+<div id="wifi" class="panel" role="tabpanel" aria-labelledby="tab-wifi">
 <div id="wifi-status" style="font-size:0.85em;color:#aaa;margin-bottom:10px"></div>
 <div class="field"><label>Mode</label><select class="input-field" id="wifi_mode"><option value="ap">Access Point</option><option value="sta">Connect to network</option></select></div>
 <div class="field"><label>SSID</label><input class="input-field" type="text" id="wifi_ssid"></div>
@@ -217,17 +233,29 @@ th{color:#aaa}
 </div>
 
 <script>
-function show(id,el){
+function show(id){
+var tab=document.getElementById('tab-'+id);
 document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+document.querySelectorAll('.tab').forEach(t=>{t.classList.remove('active');t.setAttribute('aria-selected','false');t.tabIndex=-1;});
 document.getElementById(id).classList.add('active');
-el.classList.add('active');
+if(tab){tab.classList.add('active');tab.setAttribute('aria-selected','true');tab.tabIndex=0;tab.scrollIntoView({block:'nearest',inline:'nearest'});}
 if(id==='history')loadHistory();
 if(id==='stats')loadStats();
 if(id==='debug')loadBootLog();
 if(id==='nfc')loadNFC();
 if(id==='wifi')loadWifiStatus();
 }
+document.querySelector('.tabs').addEventListener('keydown',function(e){
+var tabs=Array.prototype.slice.call(document.querySelectorAll('.tab'));
+var i=tabs.indexOf(document.activeElement);
+if(i<0)return;
+var next=-1;
+if(e.key==='ArrowRight')next=(i+1)%tabs.length;
+else if(e.key==='ArrowLeft')next=(i-1+tabs.length)%tabs.length;
+else if(e.key==='Home')next=0;
+else if(e.key==='End')next=tabs.length-1;
+if(next>=0){e.preventDefault();tabs[next].focus();tabs[next].click();}
+});
 function updRv(el,id,suf){document.getElementById(id).textContent=el.value+suf}
 function badgeClass(s){
 if(s==='PLAYING')return'playing';
