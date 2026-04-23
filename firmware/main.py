@@ -17,7 +17,6 @@ from bodn.pca9685 import PCA9685
 from bodn.arcade import ArcadeButtons
 from bodn.session import SessionManager
 from bodn.web import start_server, ota_active
-from bodn.ftp import start_ftp
 from bodn.wifi import WiFiController
 from bodn import storage
 from st7735 import ST7735
@@ -1289,8 +1288,8 @@ async def main():
     )
     wifi_ctrl = WiFiController(settings)
 
-    # Create IdleTracker up front and expose it via settings so HTTP and FTP
-    # servers can poke it on activity — prevents lightsleep during an active
+    # Create IdleTracker up front and expose it via settings so the HTTP
+    # server can poke it on activity — prevents lightsleep during an active
     # sync (otherwise a multi-minute upload trips the idle timeout).
     idle_tracker = IdleTracker(
         timeout_s=settings.get("sleep_timeout_s", config.SLEEP_TIMEOUT_S),
@@ -1304,11 +1303,6 @@ async def main():
         print("Web server running on port 80")
     except Exception as e:
         print("Web server failed to start:", e)
-
-    try:
-        await start_ftp(settings)
-    except Exception as e:
-        print("FTP server failed to start:", e)
 
     (
         tft,

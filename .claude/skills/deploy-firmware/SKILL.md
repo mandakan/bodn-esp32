@@ -37,13 +37,9 @@ Under the hood it calls `tools/sync.sh` (USB via `mpremote`) or
 - **USB** (`sync.sh`): one `mpremote fs cp -r . :/` + `reset`. Slow per-file
   roundtrip but always works when a cable is attached.
 - **WiFi HTTP** (`ota-push.py`): per-file POST to `/api/upload` with retry,
-  writes directly to the live path (no `/.ota/` staging) so the VFS
-  partition doesn't need headroom for a second copy. Fastest for
-  few-files-changed typical edits.
-
-`tools/ftp-sync.py` still exists for bulk uploads with MANIFEST-verified
-cross-file atomicity, but is effectively legacy — HTTP handles everything
-smaller deploys need without FTP's per-file timeout cliffs.
+  writes directly to the live path (no staging) so the VFS partition
+  doesn't need headroom for a second copy. Fastest for few-files-changed
+  typical edits.
 
 ## Wokwi simulator
 

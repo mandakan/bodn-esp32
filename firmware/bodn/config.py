@@ -192,6 +192,3 @@ def encoder_dpu(settings):
 SLEEP_TIMEOUT_S = (
     0  # 0 = disabled; sleep unreliable until wake sources are fully tested
 )
-
-# FTP server (dev mode — STA only, never exposed on AP)
-FTP_PORT = 21

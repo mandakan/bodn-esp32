@@ -124,12 +124,12 @@ If you prefer to manage files by hand:
 For small changes when the device is running and connected to a home network (STA mode):
 
 ```bash
-# Copy a single file
-uv run python tools/ftp-sync.py 192.168.1.42
+# Push changed firmware files via HTTP OTA
+uv run python tools/ota-push.py 192.168.1.42
 ```
 
-Note: FTP sync pushes firmware only by default. To sync SD content, either use the PC
-card reader workflow or extend the FTP client script manually.
+Note: OTA push writes firmware only. To sync SD content, use the PC card
+reader workflow.
 
 ## Future: on-device asset downloader
 

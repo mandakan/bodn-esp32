@@ -45,9 +45,6 @@ graph LR
     detentsperlogicalunit["detents per logical unit<br/><sub>GPIO 1 → ENCODER_SENS_DEFAULT</sub>"]
     detentsperlogicalunit -.- ESP
 
-    FTPserver["FTP server<br/><sub>GPIO 21 → FTP_PORT</sub>"]
-    FTPserver -.- ESP
-
 ```
 
 ### No firmware rebuild needed — just change and sync Python files.
@@ -145,12 +142,6 @@ graph LR
 |--------|------|-----------------|
 | ENCODER_SENS_DEFAULT | 1 | `ENCODER_SENS_DEFAULT` |
 
-### FTP server
-
-| Signal | GPIO | Config variable |
-|--------|------|-----------------|
-| FTP_PORT | 21 | `FTP_PORT` |
-
 ### All GPIOs
 
 | GPIO | Component | Signal |
@@ -175,7 +166,7 @@ graph LR
 | 17 | previously reserved for touch CS . | SD_SCK |
 | 18 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | DT |
 | 20 | DS18B20 1-Wire temperature sensors | ONEWIRE_PIN |
-| 21 | FTP server | FTP_PORT |
+| 21 | Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3. | CLK |
 | 38 | previously reserved for touch CS . | SD_MISO |
 | 39 | ST7735 TFT | TFT2_CS |
 | 40 | previously reserved for touch CS . | SD_MOSI |
@@ -192,7 +183,6 @@ graph LR
 > **Pin conflicts detected:**
 > - **GPIO 40**: DS18B20 1-Wire temperature sensors: TEMP_WARN_C / previously reserved for touch CS .: SD_MOSI
 > - **GPIO 1**: No firmware rebuild needed — just change and sync Python files.: BL / detents per logical unit: ENCODER_SENS_DEFAULT
-> - **GPIO 21**: Push buttons moved to MCP2 to free GPIOs 17 and 40 for SD card SPI3.: CLK / FTP server: FTP_PORT
 <!-- pinout:end -->
 
 ## Encoder roles and placement

@@ -78,7 +78,6 @@ bodn-esp32/
 │     ├─ encoder.py         # PCNT hardware rotary encoder (zero-CPU quadrature)
 │     ├─ encoder_scope.py   # visual encoder oscilloscope (CLK/DT on TFT)
 │     ├─ flode_rules.py     # Flöde puzzle engine (pure logic)
-│     ├─ ftp.py             # FTP server for OTA bulk sync
 │     ├─ gesture.py         # tap/hold/long-press gesture detection
 │     ├─ highfive_rules.py  # High-Five Friends reflex game engine (pure logic)
 │     ├─ i2c_diag.py        # live I2C bus diagnostic tool (REPL)
@@ -179,7 +178,6 @@ bodn-esp32/
 │  ├─ wokwi-sync.py         # deploy firmware to Wokwi simulator (raw TCP)
 │  ├─ wokwi-push.py         # push a single file into a running Wokwi sim
 │  ├─ ota-push.py           # WiFi push via HTTP (used by deploy.sh --wifi)
-│  ├─ ftp-sync.py           # legacy WiFi push via FTP (unreliable — prefer ota-push.py)
 │  ├─ build-firmware.sh     # build custom MicroPython firmware with C modules
 │  ├─ generate_tts.py       # generate i18n TTS WAVs from STRINGS dicts
 │  ├─ generate_story_tts.py # generate story narration TTS from story scripts
@@ -383,7 +381,7 @@ breakdown. Status at a glance:
 3. **Kid-facing UI** — 12 game modes shipped (Mystery, Simon, Flöde, Rule
    Follow, Garden, Soundboard, Sequencer, High-Five, Space, Story, Sortera,
    Räkna). Record & replay still planned.
-4. **Parental controls** — complete (web UI, session limits, PIN, OTA, FTP).
+4. **Parental controls** — complete (web UI, session limits, PIN, OTA).
 5. **Quality-of-life** — complete (battery, thermal, diagnostics, SD card,
    asset resolver, custom firmware build, boot-log persistence).
 6. **NFC card games** — PN532 driver + provisioning UI shipped; Sortera,

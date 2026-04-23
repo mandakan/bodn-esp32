@@ -57,7 +57,6 @@ firmware/
     diag.py             # system diagnostics data gathering
     encoder.py          # PCNT hardware rotary encoder (zero-CPU quadrature)
     encoder_scope.py    # visual encoder oscilloscope (CLK/DT on TFT)
-    ftp.py              # FTP server for OTA bulk sync
     gesture.py          # tap/hold/long-press gesture detection
     i18n.py             # internationalisation: t(), set_language(), init()
     i2c_diag.py         # live I2C bus diagnostic tool (REPL)
@@ -222,13 +221,7 @@ Once the device is running and on WiFi, you can push firmware updates over the a
 uv run python tools/ota-push.py                          # AP mode default (192.168.4.1)
 uv run python tools/ota-push.py 192.168.1.42             # specific device IP
 uv run python tools/ota-push.py --wokwi                   # Wokwi (localhost:9080)
-
-# FTP bulk sync — faster, STA/home network only; uses MD5 to skip unchanged files
-uv run python tools/ftp-sync.py 192.168.1.42             # sync changed files
-uv run python tools/ftp-sync.py 192.168.1.42 --force     # re-upload all files
 ```
-
-FTP credentials are set via `ftp_user` / `ftp_pass` in the device settings.
 
 **Note:** OTA reboot does not work in Wokwi — the simulator's filesystem is in RAM
 and is lost on reset. Use `wokwi-sync.py` for Wokwi development instead.
@@ -319,7 +312,7 @@ See [`docs/roadmap.md`](docs/roadmap.md) for detailed milestones.
 1. ~~**Hardware bring-up**~~ — display, buttons, encoders ✓
 2. ~~**Audio basics**~~ — tones, WAV playback, native C mixer on core 0 ✓
 3. **Kid-facing UI** — 12 game modes shipped (incl. Sortera + Räkna NFC games); record & replay still planned
-4. ~~**Parental controls**~~ — web UI, session limits, PIN, OTA, FTP sync ✓
+4. ~~**Parental controls**~~ — web UI, session limits, PIN, OTA sync ✓
 5. **Quality-of-life** — battery indicator, temperature monitoring, i18n (Swedish/English), offline TTS ✓
 6. **NFC integration** — PN532 driver, Sortera + Räkna shipped; more card-based modes on deck
 

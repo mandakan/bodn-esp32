@@ -30,9 +30,6 @@ DEFAULT_SETTINGS = {
     "language": "sv",
     "sleep_timeout_s": 300,
     "tz_offset": 1,
-    "ftp_enabled": True,
-    "ftp_user": "bodn",
-    "ftp_pass": "bodn",
 }
 
 # Keep 7 days of session history
