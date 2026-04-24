@@ -280,6 +280,50 @@ def draw_progress_bar(tft, x, y, w, h, value, max_val, fg, bg, border=None):
         tft.fill_rect(x + fill_w, y, unfill_w, h, bg)
 
 
+def _isqrt(n):
+    if n <= 0:
+        return 0
+    x = n
+    y = (x + 1) // 2
+    while y < x:
+        x = y
+        y = (x + n // x) // 2
+    return x
+
+
+def fill_circle(tft, cx, cy, r, color):
+    """Scanline-fill a disk centered at (cx, cy) with radius r."""
+    if r <= 0:
+        return
+    for dy in range(-r, r + 1):
+        dx = _isqrt(r * r - dy * dy)
+        tft.fill_rect(cx - dx, cy + dy, dx * 2 + 1, 1, color)
+
+
+def draw_circle(tft, cx, cy, r, color):
+    """Draw a 1-px circle outline using Bresenham's midpoint algorithm."""
+    if r <= 0:
+        return
+    x = r
+    y = 0
+    err = 1 - r
+    while x >= y:
+        tft.pixel(cx + x, cy + y, color)
+        tft.pixel(cx + y, cy + x, color)
+        tft.pixel(cx - y, cy + x, color)
+        tft.pixel(cx - x, cy + y, color)
+        tft.pixel(cx - x, cy - y, color)
+        tft.pixel(cx - y, cy - x, color)
+        tft.pixel(cx + y, cy - x, color)
+        tft.pixel(cx + x, cy - y, color)
+        y += 1
+        if err < 0:
+            err += 2 * y + 1
+        else:
+            x -= 1
+            err += 2 * (y - x) + 1
+
+
 def draw_button_grid(tft, theme, names, held, cols=4, x0=0, y0=0, cell_w=32, cell_h=16):
     """Draw button indicators in a grid layout."""
     n = min(len(names), len(held))
