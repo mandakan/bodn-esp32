@@ -6,6 +6,11 @@
 from bodn.ui.screen import Screen
 from bodn.ui.secondary import CONTENT_SIZE
 
+
+def _by_y(p):
+    return p[1]
+
+
 # Emotion constants
 NEUTRAL = "neutral"
 CURIOUS = "curious"
@@ -211,7 +216,7 @@ def _fill_circle(tft, cx, cy, r, color):
 
 def _fill_triangle(tft, x0, y0, x1, y1, x2, y2, color):
     """Fill a triangle by scanline (simple, not performance-critical)."""
-    pts = sorted([(x0, y0), (x1, y1), (x2, y2)], key=lambda p: p[1])
+    pts = sorted([(x0, y0), (x1, y1), (x2, y2)], key=_by_y)
     (ax, ay), (bx, by), (cx, cy) = pts
 
     if ay == cy:
