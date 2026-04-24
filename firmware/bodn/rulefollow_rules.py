@@ -41,12 +41,14 @@ SWITCH_AFTER_MAX = const(6)  # max correct before rule switch
 # Opposite mapping: 0↔2, 1↔3 (diagonal swap in 2×2 grid)
 _OPPOSITE = (2, 3, 0, 1)
 
-# Button colors (RGB, matching theme.BTN_RGB for buttons 0–3)
+# Button colours — aligned 1:1 with the physical mini-button caps 0–3
+# (see theme.BTN_RGB: green, blue, white, yellow). Opposite pairs are the
+# diagonal swap 0↔2, 1↔3 (green↔white, blue↔yellow).
 BTN_COLORS = [
-    (255, 0, 0),  # Red
-    (0, 255, 0),  # Green
-    (0, 0, 255),  # Blue
-    (255, 255, 0),  # Yellow
+    (0, 200, 0),  # 0: green
+    (0, 100, 255),  # 1: blue
+    (255, 255, 255),  # 2: white
+    (255, 220, 0),  # 3: yellow
 ]
 
 # Rule colors (RGB) — blue for match, orange for opposite

@@ -5,7 +5,7 @@ from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
-from bodn.ui.widgets import draw_centered, draw_button_grid
+from bodn.ui.widgets import draw_centered, fill_circle, draw_circle
 from bodn.ui.pause import PauseMenu
 from bodn.i18n import t
 from bodn.rulefollow_rules import (
@@ -26,6 +26,11 @@ from bodn.neo import neo
 from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = const(0)  # config.ENC_NAV
+
+# Full colour names for buttons 0–3 (matches BTN_COLORS order).
+# BTN_NAMES in theme.py is a 3-char abbreviation sized for Mystery's
+# narrow 8-cell row; here we want the readable word.
+_COLOR_KEYS = ("color_green", "color_blue", "color_white", "color_yellow")
 
 # Map game states to cat emotions
 _STATE_EMOTIONS = {
@@ -89,8 +94,8 @@ class RuleFollowScreen(Screen):
         neo.clear_all_overrides()
         # Pre-cache RGB565 conversions (avoids theme.rgb() calls per render)
         rgb = manager.theme.rgb
-        self._rule_565 = {r: rgb(*RULE_COLORS[r]) for r in RULE_COLORS}
-        self._btn_565 = [rgb(*BTN_COLORS[i]) for i in range(NUM_BUTTONS)]
+        self._rule_565 = [rgb(*c) for c in RULE_COLORS]
+        self._btn_565 = [rgb(*c) for c in BTN_COLORS]
 
     def exit(self):
         neo.all_off()
@@ -334,24 +339,20 @@ class RuleFollowScreen(Screen):
             by = 24
             tft.fill_rect(bx, by, block_size, block_size, stim_color)
 
-            # Button grid below
+            # Button swatches below — colour circles matching the physical
+            # cap colours 1:1. No text labels: the child matches by colour.
             btn_y = by + block_size + 12
-            btn_names = theme.BTN_NAMES[:NUM_BUTTONS]
-            btn_held = held[:NUM_BUTTONS]
-            cell_w = w // 4 - 4
-            cell_h = h - btn_y - 20
-            btn_x0 = (w - 4 * cell_w) // 2
-            draw_button_grid(
-                tft,
-                theme,
-                btn_names,
-                btn_held,
-                cols=4,
-                x0=btn_x0,
-                y0=btn_y,
-                cell_w=cell_w,
-                cell_h=cell_h,
-            )
+            cell_w = w // NUM_BUTTONS
+            cell_h = h - btn_y - 24
+            r = min(cell_w, cell_h) // 2 - 4
+            cy = btn_y + cell_h // 2
+            for i in range(NUM_BUTTONS):
+                cx = i * cell_w + cell_w // 2
+                color = self._btn_565[i]
+                if i < len(held) and held[i]:
+                    fill_circle(tft, cx, cy, r, color)
+                else:
+                    draw_circle(tft, cx, cy, r, color)
 
             # Score bar
             tft.fill_rect(0, h - 18, w, 18, theme.BLACK)
@@ -391,7 +392,7 @@ class RuleFollowScreen(Screen):
                 )
                 draw_centered(
                     tft,
-                    theme.BTN_NAMES[eng.correct_button],
+                    t(_COLOR_KEYS[eng.correct_button]),
                     h // 2 + block // 2 + 8,
                     theme.WHITE,
                     w,
