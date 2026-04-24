@@ -5,7 +5,7 @@ from micropython import const
 from bodn import config
 from bodn.ui.screen import Screen
 from bodn.ui.input import BrightnessControl
-from bodn.ui.widgets import draw_centered, draw_button_grid
+from bodn.ui.widgets import draw_centered, fill_circle, draw_circle
 from bodn.ui.pause import PauseMenu
 from bodn.i18n import t
 from bodn.simon_rules import (
@@ -23,8 +23,8 @@ from bodn.ui.catface import NEUTRAL, CURIOUS, HAPPY
 
 NAV = const(0)  # config.ENC_NAV
 
-# Pentatonic tones per button (6 buttons, ascending pitch)
-_SIMON_TONES = (262, 330, 392, 523, 659, 784)  # C4 E4 G4 C5 E5 G5
+# Pentatonic tones per arcade button (5 buttons, ascending pitch)
+_SIMON_TONES = (262, 330, 392, 523, 659)  # C4 E4 G4 C5 E5
 
 # Map game states to cat emotions
 _STATE_EMOTIONS = {
@@ -40,8 +40,9 @@ _STATE_EMOTIONS = {
 class SimonScreen(Screen):
     """Pattern Copy — watch the sequence, then repeat it!
 
-    Buttons 0–5 are the play buttons (6 colors).  They render as a single
-    row on screen matching the physical strip below the display.
+    The 5 illuminated arcade buttons are the play buttons (green, blue,
+    white, yellow, red — 1:1 with the first five mini buttons).  They
+    render as a single row on screen matching the physical arcade row.
     Hold nav encoder button to open the pause menu.
     """
 
@@ -73,8 +74,12 @@ class SimonScreen(Screen):
         self._leds_dirty = True
 
     def _on_immediate_press(self, kind, index):
-        """Scan-time callback — fires at 200 Hz, bypassing frame sync."""
-        if kind != "btn" or index >= NUM_BUTTONS:
+        """Scan-time callback — fires at 200 Hz, bypassing frame sync.
+
+        Only responds to arcade buttons, and only during WAITING so the
+        child can't interfere with the demonstration.
+        """
+        if kind != "arc" or index >= NUM_BUTTONS:
             return
         state = self._engine.state
         if state == WAITING and self._audio:
@@ -119,8 +124,13 @@ class SimonScreen(Screen):
         if self._pause.is_open or self._pause.is_holding:
             return
 
-        # Find first just-pressed button
-        btn = inp.first_btn_pressed()
+        # Find first just-pressed arcade button. Reject input entirely
+        # while the sequence is being demonstrated — the child must wait.
+        state = self._engine.state
+        if state == SHOWING:
+            btn = -1
+        else:
+            btn = inp.first_arc_pressed()
         now = time.ticks_ms()
         dt = time.ticks_diff(now, self._last_ms)
         self._last_ms = now
@@ -213,23 +223,33 @@ class SimonScreen(Screen):
             else:
                 neo.zone_off(neo.ZONE_LID_RING)
 
-        # Arcade LEDs: animated per-state (runs every frame)
+        # Arcade LEDs: the physical targets the child presses. Semantics
+        # mirror the on-screen sequence dots so the two reinforce each
+        # other — light only what the child should be looking at.
         arc = self._arcade
         if arc:
             state = self._engine.state
-            if state == WIN:
-                if not any(arc._flash_ttl):
-                    for i in range(5):
-                        arc.flash(i, duration=15)
-                arc.tick_flash()
-            elif state == SHOWING:
-                arc.all_pulse(frame, speed=2)
-            elif state in (READY, GAME_OVER):
-                arc.wave(frame, speed=1)
+            if state == SHOWING:
+                # Light only the arcade button that matches the current
+                # sequence step; everything else dark. One-at-a-time.
+                active = self._engine.active_button
+                for i in range(NUM_BUTTONS):
+                    if i == active:
+                        arc.on(i)
+                    else:
+                        arc.off(i)
             elif state == WAITING:
-                arc.wave(frame, speed=2)
-            elif state == FAIL:
+                # All 5 glow so the child knows which buttons to press.
                 arc.all_glow()
+            elif state == WIN:
+                # Kick off a new burst once the previous one has decayed.
+                if not arc.tick_flash():
+                    for i in range(NUM_BUTTONS):
+                        arc.flash(i, duration=15)
+            elif state == FAIL:
+                arc.all_blink(frame, speed=4)
+            elif state in (READY, GAME_OVER):
+                arc.all_pulse(frame, speed=1)
             else:
                 arc.all_off()
             arc.flush()
@@ -250,18 +270,22 @@ class SimonScreen(Screen):
         dot_size = min(20, (theme.width - 40) // max(1, round_num) - 4)
         step = dot_size + 4
         total_w = round_num * step - 4
+        r = dot_size // 2
 
         dot_x0 = (theme.width - total_w) // 2
         row_h = dot_size + 4
         tft.fill_rect(0, dot_y, theme.width, row_h, theme.BLACK)
 
         for i in range(round_num):
-            x = dot_x0 + i * step
+            cx = dot_x0 + i * step + r
+            cy = dot_y + r
             color = theme.BTN_565[eng.sequence[i]]
-            if i < eng._show_pos or (i == eng._show_pos and eng.active_button >= 0):
-                tft.fill_rect(x, dot_y, dot_size, dot_size, color)
+            # One-at-a-time: only the currently flashing dot is filled;
+            # everything else is a muted outline (including during the gap).
+            if i == eng._show_pos and eng.active_button >= 0:
+                fill_circle(tft, cx, cy, r, color)
             else:
-                tft.rect(x, dot_y, dot_size, dot_size, theme.MUTED)
+                draw_circle(tft, cx, cy, r, theme.MUTED)
 
         self._manager.request_show(0, dot_y, theme.width, row_h)
 
@@ -289,7 +313,9 @@ class SimonScreen(Screen):
         eng = self._engine
         w = theme.width
         h = theme.height
-        held = self._manager.inp.btn_held if self._manager else [False] * 8
+        arc_held = (
+            self._manager.inp.arc_held if self._manager else [False] * NUM_BUTTONS
+        )
 
         if eng.state == READY:
             draw_centered(tft, t("simon_title"), 20, theme.CYAN, w, scale=2)
@@ -335,55 +361,56 @@ class SimonScreen(Screen):
         elif eng.state == FAIL:
             draw_centered(tft, t("simon_try_again"), 8, theme.RED, w, scale=2)
 
-        # Sequence display: colored dots showing the pattern
+        # Sequence display: coloured discs showing the pattern.
         dot_y = 40
         dot_size = min(20, (w - 40) // max(1, round_num) - 4)
         total_w = round_num * (dot_size + 4) - 4
         dot_x0 = (w - total_w) // 2
+        r = dot_size // 2
 
         for i in range(round_num):
-            x = dot_x0 + i * (dot_size + 4)
+            cx = dot_x0 + i * (dot_size + 4) + r
+            cy = dot_y + r
             btn_idx = eng.sequence[i]
             color = theme.BTN_565[btn_idx]
 
             if eng.state == SHOWING:
-                if i < eng._show_pos or (i == eng._show_pos and eng.active_button >= 0):
-                    tft.fill_rect(x, dot_y, dot_size, dot_size, color)
+                # One-at-a-time flash: only the current step is filled.
+                if i == eng._show_pos and eng.active_button >= 0:
+                    fill_circle(tft, cx, cy, r, color)
                 else:
-                    tft.rect(x, dot_y, dot_size, dot_size, theme.MUTED)
+                    draw_circle(tft, cx, cy, r, theme.MUTED)
             elif eng.state == WAITING:
                 if i < eng._input_pos:
-                    tft.fill_rect(x, dot_y, dot_size, dot_size, color)
+                    fill_circle(tft, cx, cy, r, color)
                 elif i == eng._input_pos:
-                    tft.rect(x, dot_y, dot_size, dot_size, theme.WHITE)
+                    # Cyan cursor — won't clash with the white cap colour.
+                    draw_circle(tft, cx, cy, r, theme.CYAN)
                 else:
-                    tft.rect(x, dot_y, dot_size, dot_size, theme.MUTED)
+                    draw_circle(tft, cx, cy, r, theme.MUTED)
             elif eng.state == WIN:
-                tft.fill_rect(x, dot_y, dot_size, dot_size, color)
+                fill_circle(tft, cx, cy, r, color)
             elif eng.state == FAIL:
                 if i < eng._input_pos:
-                    tft.fill_rect(x, dot_y, dot_size, dot_size, color)
+                    fill_circle(tft, cx, cy, r, color)
                 else:
-                    tft.rect(x, dot_y, dot_size, dot_size, theme.MUTED)
+                    draw_circle(tft, cx, cy, r, theme.MUTED)
 
-        # Button row — single row of 6 matching physical buttons 0-5 left-to-right
+        # Arcade button row — 5 colour discs matching the physical
+        # round arcade buttons 1:1 (green, blue, white, yellow, red).
         btn_y = h // 2 + 20
-        btn_names = theme.BTN_NAMES[:NUM_BUTTONS]
-        btn_held = held[:NUM_BUTTONS]
         cell_w = w // NUM_BUTTONS - 2
         cell_h = h - btn_y - 24
         btn_x0 = (w - NUM_BUTTONS * cell_w) // 2
-        draw_button_grid(
-            tft,
-            theme,
-            btn_names,
-            btn_held,
-            cols=NUM_BUTTONS,
-            x0=btn_x0,
-            y0=btn_y,
-            cell_w=cell_w,
-            cell_h=cell_h,
-        )
+        r = min(cell_w, cell_h) // 2 - 2
+        cy = btn_y + cell_h // 2
+        for i in range(NUM_BUTTONS):
+            cx = btn_x0 + i * cell_w + cell_w // 2
+            color = theme.ARC_565[i]
+            if i < len(arc_held) and arc_held[i]:
+                fill_circle(tft, cx, cy, r, color)
+            else:
+                draw_circle(tft, cx, cy, r, color)
 
         # Bottom bar: score
         tft.fill_rect(0, h - 18, w, 18, theme.BLACK)
