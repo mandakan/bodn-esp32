@@ -28,6 +28,8 @@ class ClockScreen(Screen):
         self._manager = None
         self._pause = PauseMenu(settings=settings)
         self._last_sec = -1
+        self._clock_str = ""
+        self._date_str = ""
         self._dirty = True
 
     def enter(self, manager):
@@ -52,28 +54,40 @@ class ClockScreen(Screen):
         if self._pause.is_open or self._pause.is_holding:
             return
 
-        # Time tick — partial push, no full render cycle
-        t = time.localtime()
-        if t[5] != self._last_sec and self._manager:
-            self._last_sec = t[5]
+        # Second-resolution gate: time.time() returns an int on MicroPython,
+        # so the tick check allocates nothing. Only call localtime() (which
+        # allocates a tuple) when the second has actually changed.
+        sec = time.time()
+        if sec != self._last_sec and self._manager:
+            self._last_sec = sec
+            t = time.localtime(sec)
+            self._clock_str = "{:02d}:{:02d}".format(t[3], t[4])
+            self._date_str = "{:04d}-{:02d}-{:02d}".format(t[0], t[1], t[2])
             tft = self._manager.tft
             theme = self._manager.theme
             text_y = theme.CENTER_Y + self._TEXT_REL_Y
             tft.fill_rect(0, text_y, theme.width, self._TEXT_H, theme.BLACK)
-            self._render_clock(tft, theme)
+            self._draw_clock(tft, theme)
             self._manager.request_show(0, text_y, theme.width, self._TEXT_H)
 
     def render(self, tft, theme, frame):
         """Full redraw — only called on transitions and pause menu changes."""
         self._dirty = False
         tft.fill(theme.BLACK)
-        self._render_clock(tft, theme)
+        if not self._clock_str:
+            sec = time.time()
+            self._last_sec = sec
+            t = time.localtime(sec)
+            self._clock_str = "{:02d}:{:02d}".format(t[3], t[4])
+            self._date_str = "{:04d}-{:02d}-{:02d}".format(t[0], t[1], t[2])
+        self._draw_clock(tft, theme)
         if self._pause.is_open:
             self._pause.render(tft, theme, frame)
 
-    def _render_clock(self, tft, theme):
-        t = time.localtime()
-        clock = "{:02d}:{:02d}".format(t[3], t[4])
-        date = "{:04d}-{:02d}-{:02d}".format(t[0], t[1], t[2])
-        draw_centered(tft, clock, theme.CENTER_Y - 20, theme.CYAN, theme.width, scale=2)
-        draw_centered(tft, date, theme.CENTER_Y + 10, theme.WHITE, theme.width)
+    def _draw_clock(self, tft, theme):
+        draw_centered(
+            tft, self._clock_str, theme.CENTER_Y - 20, theme.CYAN, theme.width, scale=2
+        )
+        draw_centered(
+            tft, self._date_str, theme.CENTER_Y + 10, theme.WHITE, theme.width
+        )

@@ -23,6 +23,25 @@ except ImportError:
 from bodn.assets import resolve_voice
 from bodn.i18n import get_language
 
+# (lang, key) -> resolved path string, or None when the clip is missing.
+# resolve_voice() does up to four os.stat() calls per lookup on SD; caching
+# both hits and misses makes repeated TTS plays of the same key zero-I/O.
+# Bounded by (languages x keys) ~= a few hundred entries.
+_PATH_CACHE = {}
+
+# Sentinel so a cached "missing" (None) is distinguishable from "not cached".
+_MISS = object()
+
+
+def reset_cache():
+    """Drop cached TTS path lookups.
+
+    Call from anywhere that could invalidate paths at runtime (e.g. an SD
+    card hot-swap).  Language changes don't need this — entries are keyed
+    by (lang, key).
+    """
+    _PATH_CACHE.clear()
+
 
 def say(key, audio, channel="ui"):
     """Play a spoken audio clip for the given i18n key.
@@ -37,7 +56,11 @@ def say(key, audio, channel="ui"):
         generated TTS exists for this key.
     """
     lang = get_language()
-    resolved = resolve_voice("/sounds/tts/{}/{}.wav".format(lang, key))
+    cache_key = (lang, key)
+    resolved = _PATH_CACHE.get(cache_key, _MISS)
+    if resolved is _MISS:
+        resolved = resolve_voice("/sounds/tts/{}/{}.wav".format(lang, key))
+        _PATH_CACHE[cache_key] = resolved
     if resolved is None:
         return False
     audio.play(resolved, channel=channel)

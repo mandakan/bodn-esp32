@@ -3,12 +3,13 @@
 from unittest.mock import MagicMock, patch
 
 from bodn.i18n import init, set_language
-from bodn.tts import say
+from bodn.tts import reset_cache, say
 
 
 class TestSay:
     def setup_method(self):
         init("sv")
+        reset_cache()
 
     def test_returns_true_when_voice_resolves(self):
         audio = MagicMock()
@@ -79,3 +80,23 @@ class TestSay:
         audio.play.assert_called_once_with(
             "/sounds/tts/sv/bat_low.wav", channel="music"
         )
+
+    def test_path_cache_reuses_resolver_result(self):
+        audio = MagicMock()
+        with patch(
+            "bodn.tts.resolve_voice",
+            return_value="/sounds/tts/sv/simon_watch.wav",
+        ) as mock_resolve:
+            say("simon_watch", audio)
+            say("simon_watch", audio)
+            say("simon_watch", audio)
+        assert mock_resolve.call_count == 1
+        assert audio.play.call_count == 3
+
+    def test_path_cache_records_misses(self):
+        audio = MagicMock()
+        with patch("bodn.tts.resolve_voice", return_value=None) as mock_resolve:
+            assert say("missing_key", audio) is False
+            assert say("missing_key", audio) is False
+        assert mock_resolve.call_count == 1
+        audio.play.assert_not_called()

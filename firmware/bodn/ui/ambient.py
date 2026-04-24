@@ -29,8 +29,10 @@ class AmbientClock(Screen):
         self._last_min = -1
 
     def needs_redraw(self):
-        t = time.localtime()
-        cur_min = t[4]
+        # time.time() returns an int on MicroPython, so minute-resolution
+        # change detection allocates nothing.  localtime() only runs in
+        # render() once per minute.
+        cur_min = time.time() // 60
         if cur_min != self._last_min:
             self._last_min = cur_min
             return True
@@ -78,8 +80,9 @@ class StatusStrip(Screen):
     def needs_redraw(self):
         changed = False
 
-        t = time.localtime()
-        cur_min = t[4]
+        # Minute-resolution gate using int seconds to avoid per-tick
+        # tuple allocation from time.localtime().
+        cur_min = time.time() // 60
         if cur_min != self._last_min:
             self._last_min = cur_min
             changed = True

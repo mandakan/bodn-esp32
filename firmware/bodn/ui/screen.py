@@ -139,7 +139,11 @@ class ScreenManager:
 
     def push(self, screen):
         """Push a screen onto the stack."""
-        gc.collect()
+        # No gc.collect() here: push() keeps the outgoing screen alive in the
+        # stack, so nothing has just been freed for a collect to reclaim. The
+        # ~200 ms stall this used to add sat on the most common user action
+        # (home -> mode). Collects still run on pop()/replace(), which is
+        # where exit() actually releases sprites and caches.
         self._stack.append(screen)
         self._dirty = True
         # Reset gesture detector so leftover button state (e.g. the press
@@ -154,6 +158,9 @@ class ScreenManager:
             return None
         screen = self._stack.pop()
         screen.exit()
+        # exit() just released the screen's sprites/caches; collect while we
+        # know the heap has fresh garbage and the user is already expecting
+        # a navigation pause.
         gc.collect()
         self._dirty = True
         # Notify the newly-revealed screen so it can reset partial-draw state
@@ -171,6 +178,7 @@ class ScreenManager:
             self._stack[-1] = screen
         else:
             self._stack.append(screen)
+        # Same reasoning as pop(): the outgoing exit() just freed assets.
         gc.collect()
         self._dirty = True
         screen.enter(self)
