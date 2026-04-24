@@ -3,7 +3,9 @@
 # A sequence memory game: Bodn plays a pattern of button presses (LED + color),
 # then the child reproduces it. Correct → sequence grows. Wrong → replay.
 #
-# Uses buttons 0–5 (6 colors), targeting 2–3 step sequences for age 4.
+# Uses buttons 0–4 (5 colors). Button 5 has a black cap, which the UI renders
+# as dark teal on the dark background — too easy to confuse with other colours
+# in a memory game, so it's excluded from the pool.
 
 import os
 
@@ -25,18 +27,19 @@ WIN_MS = const(1800)  # celebration duration
 FAIL_MS = const(1400)  # fail cue duration
 
 # Game config
-NUM_BUTTONS = const(6)  # use buttons 0–5
+NUM_BUTTONS = const(5)  # use buttons 0–4 (skip black cap at index 5)
 START_LENGTH = const(2)  # initial sequence length (age 4 sweet spot)
 MAX_FAILS = const(3)  # replays before game over
 
-# Button colors (RGB, matching theme.BTN_RGB for buttons 0–5)
+# Button colors (RGB) — must match physical cap colours so the LED flash
+# is the same colour as the cap the child has to press. Keep in sync with
+# theme.BTN_RGB in bodn/ui/theme.py.
 BTN_COLORS = [
-    (255, 0, 0),  # Red
-    (0, 255, 0),  # Green
-    (0, 0, 255),  # Blue
-    (255, 255, 0),  # Yellow
-    (0, 255, 255),  # Cyan
-    (255, 0, 255),  # Magenta
+    (0, 200, 0),  # 0: green
+    (0, 100, 255),  # 1: blue
+    (255, 255, 255),  # 2: white
+    (255, 220, 0),  # 3: yellow
+    (255, 0, 0),  # 4: red
 ]
 
 
