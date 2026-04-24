@@ -22,6 +22,16 @@ except ImportError:
     micropython = None
     _has_viper = False
 
+# Surface a one-time warning when the pure-Python fallback path is active.
+# Viper accelerates the tone-generation inner loops ~10-20x; on a firmware
+# build without viper support the fallback is silent today, which hides
+# what would otherwise be a visible audio perf cliff.
+if not _has_viper:
+    try:
+        print("tones: viper unavailable, using pure-Python fallback (~10-20x slower)")
+    except Exception:
+        pass
+
 # 256-entry sine lookup table (int16 range)
 _SINE_LUT = [int(32767 * math.sin(2 * math.pi * i / 256)) for i in range(256)]
 

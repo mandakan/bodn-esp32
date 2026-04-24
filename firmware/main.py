@@ -753,6 +753,8 @@ async def primary_task(
     ota_frame = 0
     next_ota_render_ms = 0
     _OTA_RENDER_INTERVAL_MS = 250  # ~4 fps — enough for a moving progress bar
+    from bodn.ui import ota as ota_ui
+
     while True:
         # ── OTA quiet mode ───────────────────────────────────
         # While a WiFi OTA is in progress, every ~20 ms we'd otherwise
@@ -769,8 +771,6 @@ async def primary_task(
             prev_ota = True
             now = ticks_ms()
             if ticks_diff(now, next_ota_render_ms) >= 0:
-                from bodn.ui import ota as ota_ui
-
                 try:
                     ota_ui.render(manager.tft, manager.theme, settings, ota_frame)
                     manager.tft.show()
