@@ -96,6 +96,7 @@ STRINGS = {
     # Mystery Box
     "mystery_magic": "Magi!",
     "mystery_mix": "Mixa!",
+    "mystery_complete": "Allt hittat!",
     # Garden of Life
     "mode_garden": "trädgården",
     "garden_plant": "Plantera!",

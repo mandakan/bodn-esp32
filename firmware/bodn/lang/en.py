@@ -96,6 +96,7 @@ STRINGS = {
     # Mystery Box
     "mystery_magic": "Magic!",
     "mystery_mix": "Mix!",
+    "mystery_complete": "All found!",
     # Garden of Life
     "mode_garden": "garden",
     "garden_plant": "Plant!",

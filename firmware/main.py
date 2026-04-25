@@ -397,14 +397,16 @@ def create_ui(
 
     def _make_mystery():
         from bodn.ui.mystery import MysteryScreen
+        from bodn.ui.mystery_secondary import MysterySecondary
 
-        _reset_secondary()
+        recipe = MysterySecondary()
+        secondary.set_content(recipe)
         return MysteryScreen(
             overlay,
             arcade=arcade,
             audio=audio,
             settings=settings,
-            secondary_screen=cat,
+            secondary_screen=recipe,
             on_exit=_reset_secondary,
         )
 
