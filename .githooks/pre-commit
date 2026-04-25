@@ -40,6 +40,23 @@ if echo "$STAGED" | grep -qE '^(firmware/.+\.py|boards/BODN_S3/(sdkconfig\.board
     fi
 fi
 
+# --- Web UI build check: regenerate web_ui.py if any tools/web/ source is staged ---
+if echo "$STAGED" | grep -qE '^tools/web/(index\.html|style\.css|app\.js|login\.html)$'; then
+    BEFORE=$(cat firmware/bodn/web_ui.py 2>/dev/null || true)
+    uv run python tools/build-web-ui.py >/dev/null 2>&1
+    AFTER=$(cat firmware/bodn/web_ui.py)
+    if [ "$BEFORE" != "$AFTER" ]; then
+        echo ""
+        echo "ERROR: firmware/bodn/web_ui.py is out of sync with tools/web/ sources."
+        echo ""
+        echo "  The file has been regenerated for you. Just stage it:"
+        echo ""
+        echo "    git add firmware/bodn/web_ui.py"
+        echo ""
+        exit 1
+    fi
+fi
+
 # --- Wiring sync check: only when config.py is being committed ---
 if ! echo "$STAGED" | grep -q 'firmware/bodn/config\.py'; then
     exit 0

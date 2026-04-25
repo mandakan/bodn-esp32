@@ -12,7 +12,7 @@ try:
 except ImportError:
     import ujson as json
 
-from bodn.web_ui import HTML, HTML_GZ
+from bodn.web_ui import HTML, HTML_GZ, LOGIN_HTML, LOGIN_GZ
 from bodn import storage
 
 # Deadline in ticks_ms; once past it, ota_active() returns False and the
@@ -582,20 +582,27 @@ async def _handle_request(reader, writer, request_line, session_mgr, settings):
         if path != "/api/login":
             if not _check_pin(headers, settings):
                 # Serve the login page instead
-                from bodn.web_ui import LOGIN_HTML
-
-                await _send(writer, 200, "text/html", LOGIN_HTML)
+                if "gzip" in headers.get("accept-encoding", "").lower():
+                    await _send(
+                        writer,
+                        200,
+                        "text/html",
+                        LOGIN_GZ,
+                        extra_headers=[
+                            "Content-Encoding: gzip",
+                            "Vary: Accept-Encoding",
+                        ],
+                    )
+                else:
+                    await _send(writer, 200, "text/html", LOGIN_HTML)
                 return writer._keep_alive
 
         # Route
         if method == "GET" and path == "/":
-            # Pre-gzipped ~10 KB vs ~35 KB raw — cuts radio time and drain()
-            # latency on every full page load. Browsers always send gzip in
-            # Accept-Encoding; the raw path remains as a safety net.
-            if (
-                HTML_GZ is not None
-                and "gzip" in headers.get("accept-encoding", "").lower()
-            ):
+            # Pre-gzipped at build time (~10 KB vs ~35 KB raw) — cuts radio
+            # time and drain() latency on every full page load. The raw path
+            # is a safety net for the rare client that doesn't accept gzip.
+            if "gzip" in headers.get("accept-encoding", "").lower():
                 await _send(
                     writer,
                     200,
