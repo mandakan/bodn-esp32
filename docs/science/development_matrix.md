@@ -85,7 +85,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 |---------|:--:|:--:|:--:|-------|
 | Simon | ◉ | ○ | | Sequence recall is pure WM; waiting for turn is mild IC |
 | Rule Follow | ● | ◉ | ◉ | Fight the impulse (IC), switch rules mid-game (CF) |
-| Mystery Box | | | | No memory or inhibition demands — pure exploration |
+| Mystery Box | ○ | | ○ | Recipe book invites planning ("which two haven't I tried?", WM); modifier toggles unlock at 5 / 10 / all-singles and reframe the rules (CF) |
 | Flöde | ○ | | | Mild WM for remembering gap positions |
 | Garden of Life | | | | Observation-only; no EF demand |
 | Soundboard | | | | Free-form; no EF demand |
@@ -105,7 +105,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 |---------|:--:|:--:|:--:|:--:|:--:|-------|
 | Simon | | ● | | ◉ | | Reproduce sequence in exact order |
 | Rule Follow | | | | | | Rule-based, not pattern/spatial |
-| Mystery Box | ◉ | ● | | | | "I press these → that happens"; discover combo patterns |
+| Mystery Box | ◉ | ● | | ○ | | "I press these → that happens"; magic combos are two-button sequences; recipe book reinforces pattern reliability |
 | Flöde | | | ◉ | ● | ◉ | Align gaps spatially; sequential segment adjustment; trial-and-error |
 | Garden of Life | ● | ◉ | | | | Watch patterns emerge; placement affects evolution |
 | Soundboard | ● | | | | | Button → sound (cause-effect) |
@@ -165,7 +165,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 |---------|:----:|:--:|:--:|-------|
 | Simon | ● | ● | | Handle wrong-answer frustration; try again |
 | Rule Follow | ◉ | ○ | | Manage impulse to press "obvious" button |
-| Mystery Box | | | | No frustration possible — everything works |
+| Mystery Box | | ○ | | No failure state; collect-them-all recipe book gives a soft carrot for sustained attention without pressure |
 | Flöde | | ◉ | | Puzzles require sustained effort through difficulty |
 | Garden of Life | ○ | | | Patience in watching slow evolution |
 | Soundboard | | | | Free-form, no emotional challenge |
@@ -185,7 +185,7 @@ readiness, outperforming IQ (Diamond, 2013; Moffitt et al., 2011).
 |---------|:--:|:--:|:--:|-------|
 | Simon | | | | Fixed goal, no creative latitude |
 | Rule Follow | | | | Fixed rules, no creative latitude |
-| Mystery Box | ◉ | ◉ | | Unlimited combos to discover; no right answer |
+| Mystery Box | ◉ | ◉ | | 16-tile recipe book + modifier unlocks shape exploration as guided play; no right answer |
 | Flöde | | | | Goal-directed puzzle |
 | Garden of Life | ◉ | ● | ● | Endless seed placements; emergent "art" |
 | Soundboard | ◉ | | ◉ | Browse freely; create sound combinations |
@@ -254,7 +254,7 @@ The foundation — everything should produce immediate, rewarding feedback.
 
 | Feature | Role | Difficulty |
 |---------|------|------------|
-| Mystery Box | **Core** — endless safe exploration | No difficulty; everything works |
+| Mystery Box | **Core** — endless safe exploration | No difficulty; recipe book makes "what's left" visible without pressure |
 | Soundboard | **Core** — button → sound mapping | Free-form |
 | Tone Lab | **Introduce** — use only the arcade buttons and the pitch encoder | Free-form; strict pentatonic means nothing sounds wrong |
 | Garden of Life | **Core** — watch pretty patterns emerge | Just press and observe |
@@ -277,7 +277,7 @@ The child can follow rules, hold short sequences, and switch between ideas.
 | Spaceship | **Growing challenge** — 5 scenario types, medium timeouts | Medium |
 | Story Mode | **Growing** — longer stories, 3 choices, remember plot points | Medium |
 | Flöde | **Introduce** — levels 1–2 (1–2 segments) | Easy |
-| Mystery Box | Still engaging — modifier discovery deepens | Same |
+| Mystery Box | **Growing** — chase the recipe book; modifier toggles unlock at 5 / 10 finds, hue at all 8 singles | Easy carrot, persistent across reboots |
 | Sortera | **Growing** — rule switches between colour, shape, and animal dimensions | Medium |
 | Räkna | **Growing** — Levels 2–3 (quantity matching, more/less) | Easy–Medium |
 | Blippa | Still engaging — card vocabulary grows with the collection | Same |

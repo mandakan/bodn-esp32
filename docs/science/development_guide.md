@@ -494,8 +494,13 @@ productive.
 **How Böðn supports it:**
 
 - **Mystery Box**: No instructions, no scoring, no timer. The child explores
-  freely and discovers color combinations through action. Modifiers (hue shift,
-  inversion, mirroring) multiply the discovery space without adding complexity.
+  freely and discovers color combinations through action. A 16-tile recipe
+  book on the secondary display fills in as singles and "magic" pairs are
+  found, giving an unobtrusive carrot ("which one haven't I made yet?")
+  that persists across reboots. Modifier toggles (invert, mirror) unlock at
+  5 and 10 discoveries and the hue-shift encoder unlocks once all 8 caps
+  are found, so each modifier is itself a small discovery rather than
+  mystery hardware from the start.
 
 - **Garden of Life**: Place seeds and watch what happens. No "right" answer — the
   emergent patterns are the reward.
