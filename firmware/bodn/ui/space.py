@@ -222,6 +222,11 @@ class SpaceScreen(Screen):
         self._arc_led_mode = None  # track current arcade LED mode to set-once
         self._alarm_active = False
         self._bridge_next = 0  # frame when next bridge ambience can play
+        # Track instrument values to force redraw on encoder movement even if
+        # no scenario state changed (defensive — catches cases where _dirty
+        # might not have been set elsewhere).
+        self._prev_throttle = -1
+        self._prev_steering = -1000
         # Pre-loaded PCM buffers (bytearray in PSRAM, None = use procedural tone)
         # Populated by preload_space_assets() via the factory, or lazily in enter().
         self._preloaded_bufs = preloaded_bufs
@@ -246,6 +251,8 @@ class SpaceScreen(Screen):
         self._alarm_active = False
         self._bridge_next = 0
         self._arc_led_mode = None
+        self._prev_throttle = -1
+        self._prev_steering = -1000
         if self._preloaded_bufs is not None:
             pb = self._preloaded_bufs
             self._btn_bufs = pb.get("btn")
@@ -387,6 +394,17 @@ class SpaceScreen(Screen):
             if self._secondary:
                 self._secondary.set_emotion(NEUTRAL)
 
+        elif event == "cruise":
+            # Clean transition back to CRUISING (after SUCCESS celebration or
+            # mid-scenario free-play cancel). Make sure leftover scenario UI,
+            # alarms, and arcade-LED state are reset.
+            self._dirty = True
+            self._full_clear = True
+            self._leds_dirty = True
+            self._stop_alarm()
+            if self._secondary:
+                self._secondary.set_emotion(NEUTRAL)
+
         # State change → update cat face + mark dirty
         state = self._engine.state
         if state != self._prev_state:
@@ -397,8 +415,16 @@ class SpaceScreen(Screen):
             if self._secondary:
                 self._secondary.set_emotion(_STATE_EMOTIONS.get(state, NEUTRAL))
 
-        # Throttle/steering changes → redraw instruments + update drone pitch
-        if enc_a or enc_b:
+        # Throttle/steering changes → redraw instruments + update drone pitch.
+        # Compare actual values (not just deltas) so the bars always reflect
+        # current state — encoders that hit the clamp still feel responsive,
+        # and any missed delta on the boundary frame still triggers a redraw.
+        if (
+            self._engine.throttle != self._prev_throttle
+            or self._engine.steering != self._prev_steering
+        ):
+            self._prev_throttle = self._engine.throttle
+            self._prev_steering = self._engine.steering
             self._dirty = True
             self._leds_dirty = True
 
@@ -417,8 +443,12 @@ class SpaceScreen(Screen):
             self._prev_sw1 = sw1
         elif sw1 != self._prev_sw1:
             self._prev_sw1 = sw1
-            self._speak_toggle("space_stealth_on" if sw1 else "space_stealth_off", sw1)
+            # sw1 = free-play toggle (no scenarios when on)
+            self._speak_toggle(
+                "space_freeplay_on" if sw1 else "space_freeplay_off", sw1
+            )
             self._dirty = True
+            self._full_clear = True
 
         # Arcade LEDs — set mode once, C engine animates autonomously
         self._update_arcade_leds(state, frame)
@@ -736,12 +766,15 @@ class SpaceScreen(Screen):
         """Static cruising display — no animation, redrawn only when dirty."""
         tft.fill_rect(0, 20, w, h - 40, theme.BLACK)
 
-        draw_centered(tft, t("space_cruising_label"), h // 2 - 8, theme.CYAN, w)
+        # Top label: free-play vs ordinary cruise
+        label_key = (
+            "space_freeplay_label" if self._engine.stealth else "space_cruising_label"
+        )
+        label_col = theme.MAGENTA if self._engine.stealth else theme.CYAN
+        draw_centered(tft, t(label_key), h // 2 - 8, label_col, w)
         # Shield indicator
         sw_color = theme.GREEN if self._engine.shields_on else theme.MUTED
         tft.text(t("space_shields"), 8, h // 2 + 8, sw_color)
-        if self._engine.stealth:
-            tft.text(t("space_stealth"), w // 2, h // 2 + 8, theme.DIM)
 
     def _render_announce(self, tft, theme, frame, w, h):
         """Scenario announcement with pulsing border + instruction."""

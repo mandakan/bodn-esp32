@@ -30,6 +30,8 @@
     "space_shield_off":   { "storage": "sd" },
     "space_stealth_on":   { "storage": "sd" },
     "space_stealth_off":  { "storage": "sd" },
+    "space_freeplay_on":  { "storage": "sd" },
+    "space_freeplay_off": { "storage": "sd" },
     "sortera_welcome":           { "storage": "sd" },
     "sortera_correct":           { "storage": "sd" },
     "sortera_new_rule":          { "storage": "sd" },
