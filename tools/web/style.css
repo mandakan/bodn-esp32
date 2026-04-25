@@ -1,0 +1,182 @@
+/* Bodn parental controls UI — responsive sidebar layout. */
+
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --surface-alt: #0f3460;
+  --accent: #e94560;
+  --text: #e0e0e0;
+  --text-dim: #aaa;
+  --text-faint: #666;
+  --ok: #27ae60;
+  --warn: #f39c12;
+  --info: #2980b9;
+  --cooldown: #8e44ad;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0 }
+
+body {
+  font-family: system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1 {
+  text-align: center;
+  color: var(--accent);
+  margin-bottom: 12px;
+  font-size: 1.5em;
+}
+
+.layout { display: flex; flex-direction: column; gap: 8px }
+
+/* Mobile: tabs wrap into rows above the active panel. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 4px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tab {
+  flex: 1 1 70px;
+  min-width: 70px;
+  padding: 10px 12px;
+  text-align: center;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 6px;
+  transition: background-color .15s, color .15s;
+}
+
+.tab:hover { color: var(--text); background: rgba(255,255,255,0.04) }
+.tab.active { background: var(--surface-alt); color: var(--accent) }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
+
+.panel {
+  display: none;
+  background: var(--surface-alt);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.panel.active { display: block }
+
+/* Desktop: sidebar nav + content column. */
+@media (min-width: 768px) {
+  body { padding: 24px; max-width: 1024px }
+  .layout {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    grid-template-areas: "head head" "nav main";
+    gap: 16px;
+    align-items: start;
+  }
+  h1 { grid-area: head; text-align: left; margin-bottom: 0 }
+  .tabs {
+    grid-area: nav;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    padding: 8px;
+    top: 16px;
+  }
+  .tab { flex: 0 0 auto; text-align: left }
+  .panel { grid-area: main }
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.badge.playing { background: var(--ok); color: #fff }
+.badge.idle { background: #555; color: #ccc }
+.badge.warn { background: var(--warn); color: #000 }
+.badge.sleeping { background: var(--info); color: #fff }
+.badge.lockdown { background: var(--accent); color: #fff }
+.badge.cooldown { background: var(--cooldown); color: #fff }
+
+.stat { margin: 12px 0 }
+.stat label { display: block; font-size: 0.8em; color: var(--text-dim); margin-bottom: 4px }
+.stat .val { font-size: 1.3em; font-weight: bold }
+
+.progress { background: var(--surface); border-radius: 6px; height: 20px; overflow: hidden; margin-top: 4px }
+.progress .bar { height: 100%; background: var(--ok); transition: width 1s }
+
+.field { margin: 14px 0 }
+.field label { display: block; font-size: 0.85em; color: var(--text-dim); margin-bottom: 6px }
+.field input[type=range] { width: 100% }
+.field .rv { float: right; font-weight: bold; color: var(--accent) }
+
+.toggle { display: flex; align-items: center; gap: 10px; margin: 14px 0 }
+.toggle input { width: 20px; height: 20px }
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin-top: 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1em;
+  cursor: pointer;
+}
+
+.btn-danger { background: var(--accent); color: #fff }
+.btn-primary { background: var(--info); color: #fff }
+.btn-save { background: var(--ok); color: #fff }
+
+table { width: 100%; border-collapse: collapse; margin-top: 8px }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--surface); font-size: 0.85em }
+th { color: var(--text-dim) }
+
+.input-field {
+  width: 100%;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid #333;
+  color: var(--text);
+  border-radius: 6px;
+  margin-top: 4px;
+}
+
+.msg { text-align: center; padding: 8px; margin: 8px 0; border-radius: 6px; display: none }
+.msg.ok { display: block; background: var(--ok); color: #fff }
+.msg.err { display: block; background: var(--accent); color: #fff }
+
+.bar-chart { margin: 12px 0 }
+.bar-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 0.85em }
+.bar-row .bar-label { width: 70px; color: var(--text-dim); text-align: right }
+.bar-row .bar-fill { height: 16px; background: var(--accent); border-radius: 3px; min-width: 2px }
+.bar-row .bar-val { color: var(--text); font-size: 0.8em }
+
+.stat-card { background: var(--surface); border-radius: 8px; padding: 12px; margin: 8px 0; text-align: center }
+.stat-card .val { font-size: 1.5em; font-weight: bold; color: var(--accent) }
+.stat-card .lbl { font-size: 0.75em; color: var(--text-dim); margin-top: 2px }
+
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+
+.suggest-box { background: #1a3a1a; border: 1px solid var(--ok); border-radius: 8px; padding: 12px; margin: 12px 0 }
+.suggest-box .title { color: var(--ok); font-weight: bold; margin-bottom: 6px }
+
+.mode-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 }
+.mode-row label { flex: 1; font-size: 0.85em; color: var(--text-dim) }
+.mode-row input { width: 70px; padding: 6px; background: var(--surface); border: 1px solid #333; color: var(--text); border-radius: 6px; text-align: center }
+.mode-row .hint { font-size: 0.7em; color: var(--text-faint) }

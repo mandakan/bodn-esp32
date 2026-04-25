@@ -117,7 +117,7 @@ bodn-esp32/
 │     ├─ wav.py             # WAV header parser + streaming reader (pure logic)
 │     ├─ wifi.py            # WiFi connect (STA / AP) + mDNS + runtime control
 │     ├─ web.py             # async HTTP server for parental controls
-│     ├─ web_ui.py          # HTML/CSS/JS served to the browser
+│     ├─ web_ui.py          # HTML/CSS/JS served to the browser (generated from tools/web/)
 │     └─ ui/
 │        ├─ admin_qr.py     # admin URL screen with QR code
 │        ├─ ambient.py      # AmbientClock (content) + StatusStrip (status)
@@ -185,6 +185,12 @@ bodn-esp32/
 │  ├─ wokwi-push.py         # push a single file into a running Wokwi sim
 │  ├─ ota-push.py           # WiFi push via HTTP (used by deploy.sh --wifi)
 │  ├─ build-firmware.sh     # build custom MicroPython firmware with C modules
+│  ├─ build-web-ui.py       # build firmware/bodn/web_ui.py from tools/web/ sources
+│  ├─ web/                  # source HTML/CSS/JS for the parental-controls UI
+│  │  ├─ index.html         # main UI shell (CSS + JS injected at build time)
+│  │  ├─ style.css          # responsive layout (sidebar on >=768px, wrap on mobile)
+│  │  ├─ app.js             # client-side logic
+│  │  └─ login.html         # PIN entry page (self-contained)
 │  ├─ generate_tts.py       # generate i18n TTS WAVs from STRINGS dicts
 │  ├─ generate_story_tts.py # generate story narration TTS from story scripts
 │  ├─ convert_audio.py      # convert all audio sources to device format
@@ -299,6 +305,10 @@ make -C micropython/ports/unix                     # build the Unix port binary
 # On real hardware: connect to Bodn AP, open http://192.168.4.1
 # In Wokwi: requires Wokwi Private Gateway for inbound port forwarding
 # Without gateway, test via REPL: import boot; boot.settings["lockdown"] = True
+
+# Rebuild firmware/bodn/web_ui.py from tools/web/ (minify + inline + gzip)
+# Pre-commit hook regenerates it automatically when sources are staged.
+uv run python tools/build-web-ui.py
 
 # OTA firmware push via HTTP (works in AP and STA mode — use deploy.sh normally)
 uv run python tools/ota-push.py               # AP mode (192.168.4.1)

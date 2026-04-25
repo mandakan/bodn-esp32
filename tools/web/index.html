@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bodn</title>
+<style>{{STYLE}}</style>
+</head>
+<body>
+<div class="layout">
+<h1>Bodn</h1>
+<nav class="tabs" role="tablist" aria-label="Sections">
+<button class="tab active" role="tab" id="tab-dash" aria-controls="dash" aria-selected="true" tabindex="0" onclick="show('dash')">Dashboard</button>
+<button class="tab" role="tab" id="tab-limits" aria-controls="limits" aria-selected="false" tabindex="-1" onclick="show('limits')">Limits</button>
+<button class="tab" role="tab" id="tab-history" aria-controls="history" aria-selected="false" tabindex="-1" onclick="show('history')">History</button>
+<button class="tab" role="tab" id="tab-stats" aria-controls="stats" aria-selected="false" tabindex="-1" onclick="show('stats')">Stats</button>
+<button class="tab" role="tab" id="tab-wifi" aria-controls="wifi" aria-selected="false" tabindex="-1" onclick="show('wifi')">WiFi</button>
+<button class="tab" role="tab" id="tab-security" aria-controls="security" aria-selected="false" tabindex="-1" onclick="show('security')">Security</button>
+<button class="tab" role="tab" id="tab-debug" aria-controls="debug" aria-selected="false" tabindex="-1" onclick="show('debug')">Debug</button>
+<button class="tab" role="tab" id="tab-nfc" aria-controls="nfc" aria-selected="false" tabindex="-1" onclick="show('nfc')">NFC</button>
+</nav>
+
+<div id="dash" class="panel active" role="tabpanel" aria-labelledby="tab-dash">
+<div style="text-align:center;margin-bottom:12px">
+<span id="state-badge" class="badge idle">IDLE</span>
+</div>
+<div class="stat"><label>Sessions today</label><span id="s-count" class="val">0</span> / <span id="s-max" class="val">5</span></div>
+<div class="stat"><label id="time-label">Time remaining</label><div class="progress"><div id="time-bar" class="bar" style="width:0%"></div></div><div id="time-text" style="text-align:center;font-size:0.85em;margin-top:4px">--</div></div>
+<div class="toggle"><input type="checkbox" id="sessions-enabled" checked onchange="toggleSessions()"><label>Session limits enabled</label></div>
+<div class="stats-grid">
+<div id="bat-card" class="stat-card" style="display:none">
+<div class="val" id="bat-val">--</div>
+<div class="lbl" id="bat-lbl">Battery</div>
+</div>
+<div id="temp-card" class="stat-card" style="display:none">
+<div class="val" id="temp-val">--</div>
+<div class="lbl" id="temp-lbl">Temperature</div>
+</div>
+</div>
+<div id="safety-alert" style="display:none;margin:8px 0;padding:10px;border-radius:8px;font-size:0.85em;font-weight:bold"></div>
+<button class="btn btn-primary" id="resume-btn" onclick="resumeNow()" style="display:none;margin-bottom:8px">Resume now</button>
+<button class="btn btn-danger" id="lockdown-btn" onclick="toggleLockdown()">Lockdown</button>
+</div>
+
+<div id="limits" class="panel" role="tabpanel" aria-labelledby="tab-limits">
+<div class="field"><label>Session length <span class="rv" id="rv-sess">20 min</span></label><input type="range" id="max_session_min" min="1" max="60" value="20" oninput="updRv(this,'rv-sess',' min')"></div>
+<div class="field"><label>Max sessions/day <span class="rv" id="rv-maxs">5</span></label><input type="range" id="max_sessions_day" min="1" max="20" value="5" oninput="updRv(this,'rv-maxs','')"></div>
+<div class="field"><label>Break between sessions <span class="rv" id="rv-brk">15 min</span></label><input type="range" id="break_min" min="1" max="60" value="15" oninput="updRv(this,'rv-brk',' min')"></div>
+<div class="field"><label>Quiet start (HH:MM, empty=off)</label><input class="input-field" type="text" id="quiet_start" placeholder="21:00"></div>
+<div class="field"><label>Quiet end (HH:MM)</label><input class="input-field" type="text" id="quiet_end" placeholder="07:00"></div>
+<div class="field"><label>Device language</label><select id="language" class="input-field"><option value="sv">Svenska</option><option value="en">English</option></select></div>
+<div class="field"><label>Timezone (UTC offset, DST added automatically)</label><select id="tz_offset" class="input-field"></select></div>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Audio</h3>
+<div class="field"><label>Sound enabled</label><select id="audio_enabled" class="input-field"><option value="true">On</option><option value="false">Off</option></select></div>
+<div class="field"><label>Volume <span class="rv" id="rv-vol">30%</span></label><input type="range" id="volume" min="0" max="100" step="5" value="30" oninput="updRv(this,'rv-vol','%')"></div>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Visible modes</h3>
+<p style="font-size:0.75em;color:#666;margin:4px 0">Toggle which modes appear in the main menu.</p>
+<div id="mode-vis"></div>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em">Per-mode limits</h3>
+<p style="font-size:0.75em;color:#666;margin:4px 0">Minutes per session. Empty = use global. 0 = unlimited.</p>
+<div id="mode-limits"></div>
+<button class="btn btn-save" onclick="saveSettings()">Save</button>
+<div id="limits-msg" class="msg"></div>
+</div>
+
+<div id="history" class="panel" role="tabpanel" aria-labelledby="tab-history">
+<table><thead><tr><th>Date</th><th>Start</th><th>Duration</th><th>Mode</th></tr></thead><tbody id="hist-body"></tbody></table>
+</div>
+
+<div id="stats" class="panel" role="tabpanel" aria-labelledby="tab-stats">
+<div class="stats-grid">
+<div class="stat-card"><div class="val" id="st-avg-sess">--</div><div class="lbl">Avg session</div></div>
+<div class="stat-card"><div class="val" id="st-avg-day">--</div><div class="lbl">Avg daily</div></div>
+<div class="stat-card"><div class="val" id="st-total-sess">--</div><div class="lbl">Total sessions</div></div>
+<div class="stat-card"><div class="val" id="st-days">--</div><div class="lbl">Days tracked</div></div>
+</div>
+<h3 style="margin:12px 0 4px;font-size:0.9em;color:#aaa">Daily play time</h3>
+<div id="daily-chart" class="bar-chart"></div>
+<h3 style="margin:12px 0 4px;font-size:0.9em;color:#aaa">Time by mode</h3>
+<div id="mode-chart" class="bar-chart"></div>
+<div id="suggest-box" class="suggest-box" style="display:none">
+<div class="title">Suggested limits</div>
+<div id="suggest-text"></div>
+<button class="btn btn-primary" onclick="applySuggestions()" style="margin-top:8px">Apply suggestions</button>
+</div>
+</div>
+
+<div id="security" class="panel" role="tabpanel" aria-labelledby="tab-security">
+<div class="field"><label>Web UI PIN (empty = no login required)</label><input class="input-field" type="password" id="ui_pin" maxlength="8" inputmode="numeric" placeholder="e.g. 1234"></div>
+<div class="field"><label>OTA token (empty = no token required)</label><input class="input-field" type="text" id="ota_token" placeholder="e.g. my-secret-token"></div>
+<button class="btn btn-save" onclick="saveSecurity()">Save</button>
+<div id="sec-msg" class="msg"></div>
+</div>
+
+<div id="debug" class="panel" role="tabpanel" aria-labelledby="tab-debug">
+<div class="toggle"><input type="checkbox" id="dbg-serial" onchange="toggleDebug()"><label>Log inputs to serial (~2x/sec)</label></div>
+<p style="font-size:0.75em;color:#666;margin-top:8px">Prints button, switch, and encoder state to the serial console.</p>
+<h3 style="margin:16px 0 6px;color:#e94560;font-size:0.9em">Last boot</h3>
+<div id="boot-log"><p style="font-size:0.8em;color:#666">Open this tab to load.</p></div>
+</div>
+
+<div id="nfc" class="panel" role="tabpanel" aria-labelledby="tab-nfc">
+<h3 style="color:#e94560;font-size:0.95em;margin-bottom:8px">Card Sets</h3>
+<div id="nfc-sets"><p style="font-size:0.8em;color:#666">Loading...</p></div>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em;margin-bottom:8px">Provisioning</h3>
+<div id="nfc-prov">
+<div class="field"><label>Card set</label><select class="input-field" id="prov-mode" onchange="provPopulateCards()"></select></div>
+<div class="field"><label>Card</label><select class="input-field" id="prov-card"></select><p style="font-size:0.75em;color:#666;margin-top:4px">Choose &quot;&mdash; launcher &mdash;&quot; to write a mode-launcher tag with no card id.</p></div>
+<button class="btn btn-primary" id="prov-write-btn" onclick="provStart()">Write next tag</button>
+<button class="btn" id="prov-cancel-btn" onclick="provCancel()" style="display:none;background:#555;color:#fff;margin-top:8px">Cancel</button>
+<div id="prov-status" style="text-align:center;padding:10px;margin-top:10px;border-radius:6px;background:#16213e;font-size:0.85em;color:#aaa">Loading status&hellip;</div>
+</div>
+<h3 style="margin-top:16px;color:#e94560;font-size:0.95em;margin-bottom:8px">UID Cache</h3>
+<div id="nfc-cache"><p style="font-size:0.8em;color:#666">Loading...</p></div>
+</div>
+
+<div id="wifi" class="panel" role="tabpanel" aria-labelledby="tab-wifi">
+<div id="wifi-status" style="font-size:0.85em;color:#aaa;margin-bottom:10px"></div>
+<div class="field"><label>Mode</label><select class="input-field" id="wifi_mode"><option value="ap">Access Point</option><option value="sta">Connect to network</option></select></div>
+<div class="field"><label>SSID</label><input class="input-field" type="text" id="wifi_ssid"></div>
+<div class="field"><label>Password</label><input class="input-field" type="password" id="wifi_pass" placeholder="Type a new password to replace"><p id="wifi-pass-hint" style="font-size:0.75em;color:#666;margin-top:4px"></p></div>
+<div class="field"><label>Hostname</label><input class="input-field" type="text" id="hostname" placeholder="bodn"><p style="font-size:0.75em;color:#666;margin-top:4px">Device will be reachable at <span id="hostname-preview">bodn</span>.local</p></div>
+<button class="btn btn-primary" onclick="saveWifi()">Save &amp; Reboot</button>
+<div id="wifi-msg" class="msg"></div>
+</div>
+</div>
+
+<script>{{SCRIPT}}</script>
+</body>
+</html>
