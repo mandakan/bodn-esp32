@@ -300,8 +300,10 @@ class SpaceScreen(Screen):
             self._on_exit()
 
     def needs_redraw(self):
+        # CRUISING: cheap instrument tick (encoder bars).
         # ANNOUNCE: cheap border tick.  ACTIVE/HINT: cheap countdown tick.
-        if self._engine.state in (ACTIVE, ANNOUNCE, HINT):
+        # All four also fall through to a full redraw whenever _dirty is set.
+        if self._engine.state in (CRUISING, ACTIVE, ANNOUNCE, HINT):
             return True
         return self._dirty or self._pause.needs_render
 
@@ -415,17 +417,11 @@ class SpaceScreen(Screen):
             if self._secondary:
                 self._secondary.set_emotion(_STATE_EMOTIONS.get(state, NEUTRAL))
 
-        # Throttle/steering changes → redraw instruments + update drone pitch.
-        # Compare actual values (not just deltas) so the bars always reflect
-        # current state — encoders that hit the clamp still feel responsive,
-        # and any missed delta on the boundary frame still triggers a redraw.
-        if (
-            self._engine.throttle != self._prev_throttle
-            or self._engine.steering != self._prev_steering
-        ):
-            self._prev_throttle = self._engine.throttle
-            self._prev_steering = self._engine.steering
-            self._dirty = True
+        # Encoder movement also drives stick LEDs (throttle progress in
+        # SC_ENGINE, steering arrows in SC_ASTEROID, etc.) — flag them dirty
+        # whenever an encoder ticks. The instrument bars themselves are
+        # repainted by _tick_instruments() in render() and don't need _dirty.
+        if enc_a or enc_b:
             self._leds_dirty = True
 
         self._update_drone(self._engine.throttle)
@@ -717,6 +713,8 @@ class SpaceScreen(Screen):
             return
 
         state = self._engine.state
+        w = theme.width
+        h = theme.height
 
         if self._dirty:
             self._dirty = False
@@ -724,16 +722,30 @@ class SpaceScreen(Screen):
                 self._full_clear = False
                 tft.fill(theme.BLACK)
             self._render_game(tft, theme, frame)
-        elif state == ANNOUNCE:
-            # Cheap per-frame update: just the pulsing border
-            self._tick_announce_border(tft, theme, frame)
-        elif state in (ACTIVE, HINT):
-            # Cheap per-frame update: just the countdown bar
-            w = theme.width
-            h = theme.height
-            self._tick_countdown_bar(tft, theme, frame, w, h)
+            # Cache drawn instrument values so the cheap tick can short-circuit
+            self._prev_throttle = self._engine.throttle
+            self._prev_steering = self._engine.steering
+        else:
+            if state == ANNOUNCE:
+                self._tick_announce_border(tft, theme, frame)
+            elif state in (ACTIVE, HINT):
+                self._tick_countdown_bar(tft, theme, frame, w, h)
+            # Always refresh the instrument bar on encoder movement, regardless
+            # of state. Cheap: only writes when throttle/steering changed.
+            self._tick_instruments(tft, theme, w, h)
 
         self._pause.render(tft, theme, frame)
+
+    def _tick_instruments(self, tft, theme, w, h):
+        """Redraw the bottom instrument bar only if throttle/steering changed."""
+        if (
+            self._engine.throttle == self._prev_throttle
+            and self._engine.steering == self._prev_steering
+        ):
+            return
+        self._prev_throttle = self._engine.throttle
+        self._prev_steering = self._engine.steering
+        self._render_instruments(tft, theme, w, h, self._engine)
 
     def _render_game(self, tft, theme, frame):
         eng = self._engine
