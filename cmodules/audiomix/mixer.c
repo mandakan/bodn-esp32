@@ -711,13 +711,19 @@ const char *mixer_init(const mixer_config_t *cfg, audiomix_state_t **state_out) 
     // Configure I2S via ESP-IDF new driver
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(
         I2S_NUM_0, I2S_ROLE_MASTER);
-    // DMA config: 3 descriptors × 256 frames = 768 frames total
-    // At 16kHz stereo 16-bit: 768 frames × 4 bytes = 3072 bytes ≈ 48ms buffer
+    // DMA config: 6 descriptors × 256 frames = 1536 frames total
+    // At 16kHz stereo 16-bit: 1536 frames × 4 bytes = 6144 bytes ≈ 96ms buffer
     // Each descriptor holds 256 frames = 16ms — matches our mix chunk size.
-    // Kept shallow so pitch/wave changes in Tone Lab become audible quickly;
-    // the mixer runs on a dedicated core-0 task so underruns are rare even
-    // with only 3 descriptors of slack.
-    chan_cfg.dma_desc_num = 3;
+    //
+    // History: started at 8 (~128ms), dropped to 3 (~48ms) for Tone Lab
+    // input-to-tone responsiveness, then bumped back to 6 (~96ms) after
+    // crackling appeared in Spaceship and Mystery — those modes stream
+    // looped WAVs (drone, alarm, narration) concurrently with SD reads
+    // and framebuffer DMA, and 48ms wasn't enough slack to ride out the
+    // contention. 96ms still feels snappy for Tone Lab's musical play
+    // (well under the ~100ms perceptual threshold) while restoring
+    // ~50% more underrun headroom.
+    chan_cfg.dma_desc_num = 6;
     chan_cfg.dma_frame_num = 256;
 
     esp_err_t err = i2s_new_channel(&chan_cfg, &s_i2s_handle, NULL);

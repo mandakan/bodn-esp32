@@ -423,8 +423,9 @@ class TestTimeoutFlow:
         ev = _tick(eng, enc_b=2)
         assert ev == "success"
         assert eng.state == SUCCESS
-        # Advance through SUCCESS celebration
-        _advance_ms(eng, SUCCESS_MS + 200)
+        # Advance through SUCCESS celebration — should fire "cruise" event
+        ev = _advance_ms(eng, SUCCESS_MS + 200)
+        assert ev == "cruise"
         assert eng.state == CRUISING
 
 
@@ -446,8 +447,10 @@ class TestDifficultyAdaptation:
             eng._steer_dir = 1
             ev = _tick(eng, enc_b=2)
             assert ev == "success"
+            # Run past SUCCESS_MS and reset cruise countdown for next loop
             _advance_ms(eng, SUCCESS_MS + 200)
             assert eng.state == CRUISING
+            eng._cruise_target = 100
 
         assert eng.difficulty == 2
 
@@ -501,6 +504,78 @@ class TestTimeProperties:
 # ---------------------------------------------------------------------------
 # LED generation (smoke tests)
 # ---------------------------------------------------------------------------
+
+
+class TestFreePlayMode:
+    """sw1 (stealth) toggles free-play mode: no scenarios, cockpit still works."""
+
+    def test_no_scenario_picked_when_stealth_on(self):
+        eng = SpaceEngine()
+        eng._cruise_target = 100
+        # Stealth on from frame 1 → cruise countdown should never trigger
+        for _ in range(500):
+            ev = _tick(eng, sw1=True)
+            assert ev != "announce"
+        assert eng.state == CRUISING
+
+    def test_cockpit_still_responds_in_free_play(self):
+        eng = SpaceEngine()
+        _tick(eng, sw1=True, enc_a=3, enc_b=-2, sw0=True)
+        assert eng.throttle > 128
+        assert eng.steering < 0
+        assert eng.shields_on is True
+        assert eng.stealth is True
+
+    def test_enabling_free_play_cancels_active_scenario(self):
+        eng = SpaceEngine()
+        eng._cruise_target = 100
+        _advance_to_announce(eng)
+        _advance_through_announce(eng)
+        assert eng.state == ACTIVE
+        ev = _tick(eng, sw1=True)
+        assert ev == "cruise"
+        assert eng.state == CRUISING
+        assert eng.scenario_type == -1
+
+    def test_disabling_free_play_resumes_scenarios(self):
+        eng = SpaceEngine()
+        # Sit in free play
+        for _ in range(50):
+            _tick(eng, sw1=True)
+        # Turn off; cruise countdown should now run
+        eng._cruise_target = 100
+        ev = None
+        for _ in range(500):
+            ev = _tick(eng, sw1=False)
+            if ev == "announce":
+                break
+        assert ev == "announce"
+
+
+class TestAnnouncementInput:
+    """Input is accepted during ANNOUNCE — no waiting for TTS to finish."""
+
+    def test_correct_input_during_announce_resolves_immediately(self):
+        eng = SpaceEngine()
+        eng._cruise_target = 100
+        _advance_to_announce(eng)
+        # Force a deterministic scenario we can solve in one tick
+        eng.scenario_type = SC_ASTEROID
+        eng._steer_dir = 1
+        assert eng.state == ANNOUNCE
+        ev = _tick(eng, enc_b=2)
+        assert ev == "success"
+        assert eng.state == SUCCESS
+
+    def test_wrong_input_during_announce_does_not_resolve(self):
+        eng = SpaceEngine()
+        eng._cruise_target = 100
+        _advance_to_announce(eng)
+        eng.scenario_type = SC_COURSE
+        eng._target_arc = 1
+        ev = _tick(eng, arc=3)  # wrong button
+        assert ev is None
+        assert eng.state == ANNOUNCE
 
 
 class TestLEDGeneration:

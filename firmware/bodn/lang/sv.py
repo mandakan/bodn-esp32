@@ -200,6 +200,10 @@ STRINGS = {
     "space_shield_off": "Skölden är inaktiverad.",
     "space_stealth_on": "Smygläge aktiverat.",
     "space_stealth_off": "Smygläge inaktiverat.",
+    # Free play (sw1): pretend-play without scenario events
+    "space_freeplay_label": "Fri lek - inga uppdrag",
+    "space_freeplay_on": "Fri lek på. Inga uppdrag nu.",
+    "space_freeplay_off": "Uppdrag på igen, kapten.",
     # Story Mode
     "mode_story": "saga",
     "story_title": "Sagor",

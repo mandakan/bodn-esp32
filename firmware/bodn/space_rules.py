@@ -4,6 +4,11 @@
 # A friendly AI ("Stellar") announces random scenarios; the child resolves them.
 # No fail state — scenarios resolve gently after two timeouts.
 #
+# Free-play mode: toggle switch sw1 ("stealth") disables scenarios entirely.
+# The cockpit (throttle, steering, shields, button sounds, drone) keeps working;
+# Stellar simply stops triggering events. Flipping stealth on mid-scenario
+# cancels the current scenario gracefully.
+#
 # Targets executive functions at age 4+:
 #   Working memory   — remember which system needs attention
 #   Inhibitory control — wait for the right moment, then act
@@ -77,16 +82,16 @@ SC_LANDING = const(4)  # press the indicated arcade button
 NUM_SCENARIOS = const(5)
 
 # Timing in milliseconds (wall-clock, frame-rate independent)
-ANNOUNCE_MS = const(2000)  # AI speaks, then ACTIVE starts
+ANNOUNCE_MS = const(1500)  # AI speaks; input is accepted throughout
 SUCCESS_MS = const(2000)  # celebration before returning to CRUISING
 HINT_MS = const(1500)  # hint shown, then retry ACTIVE
 
 # Timeout per difficulty level (milliseconds)
-TIMEOUT_MS = [8000, 6000, 5000]  # level 1/2/3
+TIMEOUT_MS = [10000, 8000, 6000]  # level 1/2/3
 
 # Cruise intervals in milliseconds: random within [BASE, BASE + SPREAD)
-CRUISE_BASE_MS = const(7000)  # minimum ms between scenarios
-CRUISE_SPREAD_MS = const(5000)  # additional random ms
+CRUISE_BASE_MS = const(20000)  # minimum ms between scenarios
+CRUISE_SPREAD_MS = const(20000)  # additional random ms
 
 # Arcade button roles — fixed mapping, physical left-to-right order.
 # Indices are stable so future difficulty levels can remap without touching scenarios.
@@ -136,6 +141,7 @@ class SpaceEngine:
         "success"   — correct action; play success audio
         "hint"      — first timeout; play hint audio
         "resolve"   — second timeout; scenario gently resolved
+        "cruise"    — back to CRUISING after SUCCESS or free-play cancel
     """
 
     def __init__(self):
@@ -181,23 +187,42 @@ class SpaceEngine:
             enc_a_delta  -- throttle encoder delta (signed detent count)
             enc_b_delta  -- steering encoder delta (signed detent count)
             sw0          -- toggle switch 0 state (bool)
-            sw1          -- toggle switch 1 state (bool)
+            sw1          -- toggle switch 1 state (bool); True = free play
             dt           -- milliseconds since last tick (caller provides)
         """
         # Always update cockpit instruments (ambient feedback)
         self.throttle = _clamp(self.throttle + enc_a_delta * 8, 0, 255)
         self.steering = _clamp(self.steering + enc_b_delta * 8, -128, 127)
         self.shields_on = sw0
+
+        prev_stealth = self.stealth
         self.stealth = sw1
+
+        # Free play just turned on mid-scenario → cancel and return to cruise
+        if sw1 and not prev_stealth and self.state != CRUISING:
+            self._end_scenario()
+            return "cruise"
 
         self._state_ms += dt
 
         if self.state == CRUISING:
+            if sw1:
+                # Free play: keep the cruise timer parked
+                self._cruise_ms = 0
+                return None
             self._cruise_ms += dt
             if self._cruise_ms >= self._cruise_target:
                 return self._pick_scenario(sw0)
 
         elif self.state == ANNOUNCE:
+            # Accept input throughout the announcement so the child never
+            # has to wait for Stellar to finish talking.
+            if self._check_solution(btn, arc, enc_a_delta, enc_b_delta, sw0):
+                self._set_state(SUCCESS)
+                self._successes += 1
+                self._timeouts = 0
+                self._adjust_difficulty()
+                return "success"
             if self._state_ms >= ANNOUNCE_MS:
                 self._set_state(ACTIVE)
 
@@ -226,6 +251,7 @@ class SpaceEngine:
         elif self.state == SUCCESS:
             if self._state_ms >= SUCCESS_MS:
                 self._end_scenario()
+                return "cruise"
 
         return None
 

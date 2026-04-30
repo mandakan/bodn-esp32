@@ -200,6 +200,10 @@ STRINGS = {
     "space_shield_off": "Shield deactivated.",
     "space_stealth_on": "Stealth mode activated.",
     "space_stealth_off": "Stealth mode deactivated.",
+    # Free play (sw1): pretend-play without scenario events
+    "space_freeplay_label": "Free play - no missions",
+    "space_freeplay_on": "Free play on. No missions for now.",
+    "space_freeplay_off": "Missions back on, captain.",
     # Story Mode
     "mode_story": "story",
     "story_title": "Stories",
