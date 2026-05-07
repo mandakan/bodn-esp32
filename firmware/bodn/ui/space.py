@@ -440,9 +440,7 @@ class SpaceScreen(Screen):
         elif sw1 != self._prev_sw1:
             self._prev_sw1 = sw1
             # sw1 = free-play toggle (no scenarios when on)
-            self._speak_toggle(
-                "space_freeplay_on" if sw1 else "space_freeplay_off", sw1
-            )
+            self._speak_toggle("space_freeplay_on" if sw1 else "space_freeplay_off", sw1)
             self._dirty = True
             self._full_clear = True
 
@@ -450,9 +448,7 @@ class SpaceScreen(Screen):
         self._update_arcade_leds(state, frame)
 
         # NeoPixel LEDs — animate lid ring during active states, throttled
-        if self._leds_dirty or (
-            state in (ANNOUNCE, ACTIVE, HINT, SUCCESS) and frame % 3 == 0
-        ):
+        if self._leds_dirty or (state in (ANNOUNCE, ACTIVE, HINT, SUCCESS) and frame % 3 == 0):
             self._leds_dirty = False
             self._write_leds(state, frame)
 
@@ -508,14 +504,14 @@ class SpaceScreen(Screen):
             if buf:
                 self._audio.play_buffer(buf, loop=True, channel="music")
             else:
-                self._audio.tone(
-                    self._DRONE_FREQS[zone], 60000, "square", channel="music"
-                )
+                self._audio.tone(self._DRONE_FREQS[zone], 60000, "square", channel="music")
 
     # Bridge ambience: plays the bridge_loop once on an SFX channel at random
     # intervals during CRUISING.  ~8–20 s between plays at 30 fps.
-    _BRIDGE_MIN = const(240)  # ~8 s
-    _BRIDGE_SPREAD = const(360)  # +0–12 s
+    # Plain class attrs (not const()) so they're reachable via self. — MicroPython
+    # hoists class-scope const() names to the module, breaking self._BRIDGE_*.
+    _BRIDGE_MIN = 240  # ~8 s
+    _BRIDGE_SPREAD = 360  # +0–12 s
 
     def _maybe_play_bridge(self, frame):
         """Occasionally play bridge ambience during cruising."""
@@ -538,9 +534,7 @@ class SpaceScreen(Screen):
         if buf:
             self._audio.play_buffer(buf, loop=True, channel="music")
         else:
-            self._audio.tone(
-                self._ALARM_FREQS[danger], 60000, "square", channel="music"
-            )
+            self._audio.tone(self._ALARM_FREQS[danger], 60000, "square", channel="music")
         self._alarm_active = True
 
     def _stop_alarm(self):
@@ -670,14 +664,10 @@ class SpaceScreen(Screen):
                 )
             elif sc == SC_COURSE:
                 col = self._engine.target_color or (255, 200, 0)
-                neo.zone_pattern(
-                    LR, neo.PAT_PULSE, speed=2, colour=col, brightness=lid_bright
-                )
+                neo.zone_pattern(LR, neo.PAT_PULSE, speed=2, colour=col, brightness=lid_bright)
             elif sc == SC_LANDING:
                 col = self._engine.target_color or (0, 200, 60)
-                neo.zone_pattern(
-                    LR, neo.PAT_PULSE, speed=2, colour=col, brightness=lid_bright
-                )
+                neo.zone_pattern(LR, neo.PAT_PULSE, speed=2, colour=col, brightness=lid_bright)
             else:
                 neo.zone_off(LR)
         elif state == ANNOUNCE:
@@ -779,9 +769,7 @@ class SpaceScreen(Screen):
         tft.fill_rect(0, 20, w, h - 40, theme.BLACK)
 
         # Top label: free-play vs ordinary cruise
-        label_key = (
-            "space_freeplay_label" if self._engine.stealth else "space_cruising_label"
-        )
+        label_key = "space_freeplay_label" if self._engine.stealth else "space_cruising_label"
         label_col = theme.MAGENTA if self._engine.stealth else theme.CYAN
         draw_centered(tft, t(label_key), h // 2 - 8, label_col, w)
         # Shield indicator
@@ -856,19 +844,13 @@ class SpaceScreen(Screen):
         tft.rect(8, h - 36, bar_w, 8, theme.MUTED)
         filled = int(prog * (bar_w - 2))
         if filled > 0:
-            col = (
-                theme.GREEN
-                if prog > 0.5
-                else (theme.YELLOW if prog > 0.25 else theme.RED)
-            )
+            col = theme.GREEN if prog > 0.5 else (theme.YELLOW if prog > 0.25 else theme.RED)
             tft.fill_rect(9, h - 35, filled, 6, col)
 
     def _render_success(self, tft, theme, frame, w, h):
         """Celebration screen."""
         tft.fill_rect(0, 20, w, h - 40, theme.BLACK)
-        draw_centered(
-            tft, t("space_success_label"), h // 2 - 12, theme.YELLOW, w, scale=2
-        )
+        draw_centered(tft, t("space_success_label"), h // 2 - 12, theme.YELLOW, w, scale=2)
         draw_centered(tft, t("space_success_sub"), h // 2 + 12, theme.GREEN, w)
 
     def _render_instruments(self, tft, theme, w, h, eng):
@@ -918,9 +900,5 @@ class SpaceScreen(Screen):
         tft.rect(8, h - 36, bar_w, 8, theme.MUTED)
         filled = int(prog * (bar_w - 2))
         if filled > 0:
-            col = (
-                theme.GREEN
-                if prog > 0.5
-                else (theme.YELLOW if prog > 0.25 else theme.RED)
-            )
+            col = theme.GREEN if prog > 0.5 else (theme.YELLOW if prog > 0.25 else theme.RED)
             tft.fill_rect(9, h - 35, filled, 6, col)
