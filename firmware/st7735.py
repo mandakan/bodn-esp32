@@ -50,6 +50,9 @@ class ST7735(framebuf.FrameBuffer):
         skip_reset=False,
     ):
         self._slot = slot
+        # main.py inspects this flag to pick the DMA-aware render gate
+        # (vsync on tft.busy()) over the legacy 33ms predictive budget.
+        self._native = True
         self.rst = rst
         self.width = width
         self.height = height
