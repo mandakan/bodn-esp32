@@ -591,7 +591,75 @@ static void mix_task(void *arg) {
             if (v->source_type == SRC_NONE || v->writing) continue;
 
             uint32_t n;
-            if (v->fade_out) {
+            if (v->xfade_samples_left > 0 && v->pending_source == SRC_BUFFER
+                    && v->source_type == SRC_BUFFER) {
+                // BUFFER → BUFFER equal-power crossfade. Read xfade_n samples
+                // from the active source and the pending source in parallel,
+                // mix them with cos²/sin² weights so total power stays flat
+                // through the transition. When xfade_samples_left hits zero,
+                // promote pending → active in place.
+                uint32_t xfade_n = v->xfade_samples_left;
+                if (xfade_n > max_samples) xfade_n = max_samples;
+
+                int16_t scratch_b[AUDIOMIX_XFADE_SAMPLES];
+                uint32_t na = voice_read(state, v, voice_buf, xfade_n);
+
+                uint32_t nb = 0;
+                if (v->pending_buf_ptr != NULL && v->pending_buf_len > 0) {
+                    uint32_t max_bytes = xfade_n * 2;
+                    uint32_t remaining = v->pending_buf_len - v->pending_buf_pos;
+                    uint32_t to_copy = (remaining < max_bytes) ? remaining : max_bytes;
+                    to_copy = (to_copy / 2) * 2;
+                    if (to_copy > 0) {
+                        memcpy(scratch_b, v->pending_buf_ptr + v->pending_buf_pos, to_copy);
+                        v->pending_buf_pos += to_copy;
+                        nb = to_copy / 2;
+                    }
+                    if (v->pending_buf_pos >= v->pending_buf_len && v->pending_loop) {
+                        v->pending_buf_pos = 0;
+                    }
+                }
+
+                uint32_t produced = (na > nb) ? na : nb;
+                uint32_t total = v->xfade_samples_total;
+                if (total == 0) total = 1;
+                uint32_t done = total - v->xfade_samples_left;
+                for (uint32_t i = 0; i < produced; i++) {
+                    // Quarter-cycle phase: t_phase = (done+i) / total * 16384
+                    // (Q16 phase units; full cycle = 65536, quarter = 16384).
+                    uint32_t t_phase = ((done + i) * 16384u) / total;
+                    if (t_phase > 16384u) t_phase = 16384u;
+                    int16_t a = (i < na) ? voice_buf[i] : 0;
+                    int16_t b = (i < nb) ? scratch_b[i] : 0;
+                    int16_t wb = tonegen_lfo_sine(t_phase);             // sin(t·π/2)
+                    int16_t wa = tonegen_lfo_sine(t_phase + 16384u);    // cos(t·π/2)
+                    int32_t mix = ((int32_t)a * wa + (int32_t)b * wb) >> 15;
+                    // Equal-power weights can sum to ~1.414× when sources are
+                    // correlated (e.g. same loop crossfading to itself).
+                    // Saturate to int16 to avoid wraparound on the cast.
+                    if (mix > 32767) mix = 32767;
+                    else if (mix < -32768) mix = -32768;
+                    voice_buf[i] = (int16_t)mix;
+                }
+                n = produced;
+                v->xfade_samples_left -= produced;
+
+                if (v->xfade_samples_left == 0) {
+                    // Promote pending to active. The new buf_pos continues from
+                    // where the crossfade left it so the new source is sample-
+                    // accurate (no skip when the splice ends).
+                    v->buf_ptr = v->pending_buf_ptr;
+                    v->buf_len = v->pending_buf_len;
+                    v->buf_pos = v->pending_buf_pos;
+                    v->loop = v->pending_loop;
+                    v->fade_in = 0;        // already at full amplitude
+                    v->fade_out = 0;
+                    v->pending_source = SRC_NONE;
+                    state->seq_counter++;
+                    v->start_seq = state->seq_counter;
+                    // source_type stays SRC_BUFFER throughout
+                }
+            } else if (v->fade_out) {
                 // Read just enough for a fade-out ramp, then kill voice or
                 // activate the pending source if one was queued by Python
                 // via voice_play_buffer/voice_tone(..., fade=True).
@@ -603,7 +671,7 @@ static void mix_task(void *arg) {
                 if (v->pending_source == SRC_BUFFER) {
                     v->buf_ptr = v->pending_buf_ptr;
                     v->buf_len = v->pending_buf_len;
-                    v->buf_pos = 0;
+                    v->buf_pos = v->pending_buf_pos;
                     v->loop = v->pending_loop;
                     v->fade_in = 1;
                     state->seq_counter++;

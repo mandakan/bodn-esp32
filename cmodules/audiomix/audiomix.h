@@ -39,6 +39,13 @@
 // Fade length in samples
 #define AUDIOMIX_FADE_SAMPLES   16  // 1ms @ 16kHz
 
+// Source-swap crossfade length: BUFFER → BUFFER swaps overlap the old
+// source's fade-out with the new source's fade-in over this many samples
+// using equal-power (cos²/sin²) weights. 80 samples = 5 ms at 16 kHz —
+// long enough that the brain stops perceiving a transition, short enough
+// to feel instantaneous.
+#define AUDIOMIX_XFADE_SAMPLES  80
+
 // Waveform crossfade length (samples) for phase-preserving tone_wave swaps.
 // 48 ≈ 3ms at 16kHz — short enough to feel "instant", long enough to mask
 // the sample-value jump between differently-shaped oscillators.
@@ -150,17 +157,25 @@ typedef struct {
     uint32_t buf_len;                   // total bytes
     volatile uint32_t buf_pos;          // current read offset (core 1 advances)
 
-    // Pending source — captured by Python when fading out the current source.
-    // The mixer's fade_out handler reads these fields after the fade chunk
-    // and activates the new source instead of going to SRC_NONE. SRC_NONE in
-    // pending_source = no pending swap.
+    // Pending source — captured by Python when swapping a BUFFER/TONE
+    // source on a held voice. Two activation paths:
+    //   - xfade_samples_left > 0: equal-power crossfade with the current
+    //     source over xfade_samples_total samples (BUFFER → BUFFER only).
+    //   - fade_out = 1: sequential 1 ms fade-out of the current source,
+    //     then immediate activation of pending (used for any → TONE and
+    //     for TONE → BUFFER, where simultaneous read of both sources
+    //     would be more code than the seam is worth).
+    // SRC_NONE in pending_source = no pending swap.
     volatile audiomix_source_t pending_source;
     volatile uint8_t  pending_loop;
     const uint8_t    *pending_buf_ptr;
     uint32_t          pending_buf_len;
+    volatile uint32_t pending_buf_pos;     // mixer advances during crossfade
     uint32_t          pending_tone_freq;
     uint32_t          pending_tone_samples;
     uint8_t           pending_tone_wave;
+    volatile uint32_t xfade_samples_left;  // 0 = no crossfade in progress
+    uint32_t          xfade_samples_total; // for weight = i/total mapping
 
     // Age tracking for voice stealing
     volatile uint32_t start_seq;

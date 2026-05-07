@@ -127,12 +127,16 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     uint32_t samples = (audiomix_state->sample_rate * dur_ms) / 1000;
 
     if (fade && (v->source_type == SRC_BUFFER || v->source_type == SRC_TONE)) {
+        // TONE pending uses the sequential fade-out path; setting up a
+        // simultaneous-read pending tone (with its own modulation/LFO state)
+        // would be considerably more code for an edge case.
         v->writing = 1;
         v->pending_source = SRC_TONE;
         v->pending_tone_freq = freq;
         v->pending_tone_samples = samples;
         v->pending_tone_wave = (uint8_t)wave;
         v->fade_out = 1;
+        v->xfade_samples_left = 0;
         v->stop_req = 0;
         v->writing = 0;
         return mp_const_none;
@@ -141,6 +145,7 @@ static mp_obj_t audiomix_voice_tone(size_t n_args, const mp_obj_t *args) {
     v->writing = 1;
     v->source_type = SRC_NONE;
     v->pending_source = SRC_NONE;
+    v->xfade_samples_left = 0;
     v->tone_freq = freq;
     v->tone_samples_left = samples;
     v->tone_phase = 0;
@@ -325,16 +330,26 @@ static mp_obj_t audiomix_voice_play_buffer(size_t n_args, const mp_obj_t *args) 
 
     audiomix_voice_t *v = &audiomix_state->voices[idx];
 
-    // Fade-and-swap path: existing source plays out a short fade-out, then
-    // the mixer activates the pending source with its own fade-in. Avoids
-    // the click that an instantaneous swap would produce.
+    // Fade-and-swap path: avoid the click that an instantaneous source
+    // change would produce.
+    //   BUFFER → BUFFER: equal-power crossfade (xfade_samples_left).
+    //   TONE   → BUFFER: sequential — old source faded out over 1 ms, then
+    //                    mixer activates pending with its own fade_in.
     if (fade && (v->source_type == SRC_BUFFER || v->source_type == SRC_TONE)) {
         v->writing = 1;
         v->pending_source = SRC_BUFFER;
         v->pending_buf_ptr = bufinfo.buf;
         v->pending_buf_len = n_bytes;
+        v->pending_buf_pos = 0;
         v->pending_loop = loop ? 1 : 0;
-        v->fade_out = 1;
+        if (v->source_type == SRC_BUFFER) {
+            v->xfade_samples_total = AUDIOMIX_XFADE_SAMPLES;
+            v->xfade_samples_left = AUDIOMIX_XFADE_SAMPLES;
+            v->fade_out = 0;
+        } else {
+            v->fade_out = 1;
+            v->xfade_samples_left = 0;
+        }
         v->stop_req = 0;
         v->writing = 0;
         return mp_const_none;
@@ -343,6 +358,7 @@ static mp_obj_t audiomix_voice_play_buffer(size_t n_args, const mp_obj_t *args) 
     v->writing = 1;
     v->source_type = SRC_NONE;
     v->pending_source = SRC_NONE;  // discard any older pending swap
+    v->xfade_samples_left = 0;
     v->buf_ptr = bufinfo.buf;
     v->buf_len = n_bytes;
     v->buf_pos = 0;
