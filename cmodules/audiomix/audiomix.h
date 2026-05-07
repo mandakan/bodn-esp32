@@ -16,7 +16,13 @@
 
 #define AUDIOMIX_NUM_VOICES     16
 
-#define AUDIOMIX_RINGBUF_SIZE   2048  // bytes per voice (64ms @ 16kHz mono 16-bit)
+// Per-voice ring buffer for SRC_RINGBUF (streamed WAV) sources. The buffer
+// must be large enough to ride out the longest stall of the Python feeder
+// task on core 1 -- i.e. the worst slow frame from rendering, GC, or SD
+// contention. 8192 bytes = 256 ms at 16 kHz mono 16-bit, comfortably
+// above the 80-200 ms slow frames seen during scenario transitions.
+// PSRAM cost: 16 voices × 8 KB = 128 KB (negligible on the 8 MB part).
+#define AUDIOMIX_RINGBUF_SIZE   8192
 #define AUDIOMIX_MONO_BUF_SIZE  512   // bytes per mono read (256 samples = 16ms)
 
 // Scope tap: post-mix mono samples captured for visualisation.

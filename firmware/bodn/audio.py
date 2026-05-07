@@ -632,24 +632,46 @@ class AudioEngine:
     # -----------------------------------------------------------------------
 
     async def start(self):
-        """Start the audio engine."""
+        """Start the audio engine.
+
+        Hot path: when TTS or any streamed WAV is playing, this loop runs
+        every 16 ms. Reuses a single _dead list across iterations to avoid
+        the ~40-byte-per-iter allocation that was contributing to GC
+        pressure during scenarios. See PERFORMANCE_GUIDELINES.md §7.1.
+        """
         print("AudioEngine started (native, core 0, {} voices)".format(self._num_voices))
         sleep_ms = asyncio.sleep_ms
+        _voice_active = _audiomix.voice_active
+        _streaming = self._streaming
+        _dead = []  # reused; cleared each iteration
+        _buf_refs = self._buf_refs
         while True:
-            if self._streaming:
-                dead = []
-                for sv in self._streaming:
-                    if not _audiomix.voice_active(sv.idx):
-                        dead.append(sv)
-                        continue
-                    self._fill_ringbuf(sv)
-                for sv in dead:
-                    sv.close()
-                    try:
-                        self._streaming.remove(sv)
-                    except ValueError:
-                        pass  # already removed by _stop_streaming
-                    self._buf_refs.pop(sv.idx, None)
+            if _streaming:
+                # Walk active streams; collect dead ones into the reused
+                # buffer. List indexing avoids the iterator allocation
+                # that `for sv in self._streaming` would create.
+                n = len(_streaming)
+                i = 0
+                while i < n:
+                    sv = _streaming[i]
+                    if not _voice_active(sv.idx):
+                        _dead.append(sv)
+                    else:
+                        self._fill_ringbuf(sv)
+                    i += 1
+                if _dead:
+                    n = len(_dead)
+                    i = 0
+                    while i < n:
+                        sv = _dead[i]
+                        sv.close()
+                        try:
+                            _streaming.remove(sv)
+                        except ValueError:
+                            pass  # already removed by _stop_streaming
+                        _buf_refs.pop(sv.idx, None)
+                        i += 1
+                    _dead.clear()
                 await sleep_ms(16)
             else:
                 await sleep_ms(100)

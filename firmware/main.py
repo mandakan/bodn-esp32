@@ -758,6 +758,16 @@ async def primary_task(manager, settings, inp, encoders, mcp, mcp2, idle_tracker
     ticks_diff = time.ticks_diff
     prev_render_ms = 0
     tft = manager.tft
+    # Slow-frame watchdog — only enabled when debug_perf is on. When active
+    # it logs any frame that crosses _SLOW_FRAME_MS, with the gc.mem_free
+    # delta so GC sweeps stand out from SD/I/O stalls. Off by default to
+    # keep the print() out of the hot path during normal play.
+    _slow_watchdog = settings.get("debug_perf", False)
+    if _slow_watchdog:
+        import gc as _gc
+
+        _gc_mem_free = _gc.mem_free
+    _SLOW_FRAME_MS = 80
     _dma = getattr(tft, "_native", False)
     # vsync=True (default): skip frame if DMA busy (tear-free)
     # vsync=False: draw over buffer during DMA (may tear, higher FPS)
@@ -814,6 +824,8 @@ async def primary_task(manager, settings, inp, encoders, mcp, mcp2, idle_tracker
             manager.invalidate()
 
         t0 = ticks_ms()
+        if _slow_watchdog:
+            _wd_free0 = _gc_mem_free()
 
         # ── Input + game logic (always runs) ──────────────────
         try:
@@ -829,6 +841,8 @@ async def primary_task(manager, settings, inp, encoders, mcp, mcp2, idle_tracker
                 sys.print_exception(e)
             else:
                 print("primary_task update error #{}: {}".format(errors, e))
+        if _slow_watchdog:
+            _wd_t_update = ticks_ms()
 
         # ── Graphics — DMA-aware or predictive budget ─────────
         if _dma:
@@ -864,6 +878,23 @@ async def primary_task(manager, settings, inp, encoders, mcp, mcp2, idle_tracker
             prev_render_ms = 0  # reset predictor after a skip
             if _perf:
                 _perf_skips += 1
+
+        if _slow_watchdog:
+            _wd_total = ticks_diff(ticks_ms(), t0)
+            if _wd_total > _SLOW_FRAME_MS:
+                _wd_update = ticks_diff(_wd_t_update, t0)
+                _wd_render = _wd_total - _wd_update
+                _wd_free1 = _gc_mem_free()
+                print(
+                    "slow frame: total={}ms (upd={}, ren={}) free {}->{} (Δ{:+d})".format(
+                        _wd_total,
+                        _wd_update,
+                        _wd_render,
+                        _wd_free0,
+                        _wd_free1,
+                        _wd_free1 - _wd_free0,
+                    )
+                )
 
         # ── Power management ──────────────────────────────────
         if inp.has_activity():
