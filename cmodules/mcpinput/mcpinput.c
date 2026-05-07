@@ -114,6 +114,10 @@ static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_suppress_held_obj, mcpinput_suppress_h
 
 // ---------------------------------------------------------------------------
 // _mcpinput.get_events() -> list of (type, pin, time_ms) tuples
+//
+// Allocates a fresh list every call -- convenient but wasteful when polled
+// at 200 Hz from an idle device (~40 bytes per call even when empty).
+// Use drain_events(buf) below for the hot path.
 // ---------------------------------------------------------------------------
 
 static mp_obj_t mcpinput_get_events(void) {
@@ -146,6 +150,52 @@ static mp_obj_t mcpinput_get_events(void) {
     return list;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mcpinput_get_events_obj, mcpinput_get_events);
+
+// ---------------------------------------------------------------------------
+// _mcpinput.drain_events(list) -> int (count drained)
+//
+// Zero-allocation steady-state: clears `list` and appends one tuple per
+// pending event. When the device is idle (the common case) the list stays
+// empty and no allocations happen at all. Tuples are still allocated when
+// events fire, but those are bursts bounded by physical input rate, not
+// the 200 Hz polling rate.
+//
+// The caller owns `list` and reuses it across calls; MicroPython lists keep
+// their backing array on .clear(), so once it's grown to handle a typical
+// burst the storage is reused indefinitely.
+// ---------------------------------------------------------------------------
+
+static mp_obj_t mcpinput_drain_events(mp_obj_t list_obj) {
+    mp_obj_list_t *list = MP_OBJ_TO_PTR(list_obj);
+    if (!mp_obj_is_type(list_obj, &mp_type_list)) {
+        mp_raise_TypeError(MP_ERROR_TEXT("expected list"));
+    }
+    list->len = 0;  // .clear() without freeing the backing array
+
+    if (mcpinput_state == NULL) {
+        return mp_obj_new_int(0);
+    }
+
+    mcpinput_eventbuf_t *eb = &mcpinput_state->events;
+    uint32_t rd = eb->rd;
+    uint32_t wr = eb->wr;
+    uint32_t count = (wr - rd) & (MCPINPUT_EVENT_BUF_SIZE - 1);
+
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t idx = (rd + i) & (MCPINPUT_EVENT_BUF_SIZE - 1);
+        mcpinput_event_t *ev = &eb->events[idx];
+        mp_obj_t tuple[3] = {
+            mp_obj_new_int(ev->type),
+            mp_obj_new_int(ev->pin),
+            mp_obj_new_int(ev->time_ms),
+        };
+        mp_obj_list_append(list_obj, mp_obj_new_tuple(3, tuple));
+    }
+
+    eb->rd = wr;
+    return mp_obj_new_int(count);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mcpinput_drain_events_obj, mcpinput_drain_events);
 
 // ---------------------------------------------------------------------------
 // _mcpinput.read_state() -> int (16-bit bitmask of debounced pressed state)
@@ -534,6 +584,7 @@ static const mp_rom_map_elem_t mcpinput_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_scan_resume), MP_ROM_PTR(&mcpinput_scan_resume_obj) },
     { MP_ROM_QSTR(MP_QSTR_suppress_held), MP_ROM_PTR(&mcpinput_suppress_held_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_events),  MP_ROM_PTR(&mcpinput_get_events_obj) },
+    { MP_ROM_QSTR(MP_QSTR_drain_events), MP_ROM_PTR(&mcpinput_drain_events_obj) },
     { MP_ROM_QSTR(MP_QSTR_read_state),  MP_ROM_PTR(&mcpinput_read_state_obj) },
     { MP_ROM_QSTR(MP_QSTR_i2c_write),   MP_ROM_PTR(&mcpinput_i2c_write_obj) },
     { MP_ROM_QSTR(MP_QSTR_i2c_read),    MP_ROM_PTR(&mcpinput_i2c_read_obj) },
