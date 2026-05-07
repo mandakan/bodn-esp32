@@ -415,11 +415,16 @@ class AudioEngine:
             else:
                 i += 1
 
-    def _resolve_voice(self, voice, channel):
-        """Resolve a voice= or channel= argument to a voice index."""
+    def _resolve_voice(self, voice, channel, fade=False):
+        """Resolve a voice= or channel= argument to a voice index.
+
+        ``fade=True`` skips the immediate stop on direct voice access so the
+        C mixer can do a short fade-out from the existing source before
+        activating the new one (avoids click on source swap).
+        """
         if voice is not None:
-            # Direct voice access — stop existing and return
-            self._stop_voice(voice)
+            if not fade:
+                self._stop_voice(voice)
             return voice
         return self._allocate_voice(channel or "sfx")
 
@@ -443,25 +448,47 @@ class AudioEngine:
             _audiomix.voice_stop(idx)
         return idx
 
-    def play_buffer(self, data, loop=False, channel="sfx", voice=None):
-        """Play pre-loaded PCM data (bytearray).  Returns the voice index used."""
-        idx = self._resolve_voice(voice, channel)
+    def play_buffer(self, data, loop=False, channel="sfx", voice=None, fade=True):
+        """Play pre-loaded PCM data (bytearray).  Returns the voice index used.
+
+        ``fade=True`` (default) lets the C mixer do a ~1 ms fade-out of the
+        existing source on this voice before the new buffer's fade-in, so the
+        seam is click-free. Pass ``fade=False`` for low-latency SFX where the
+        ~1 ms transition would feel laggy.
+        """
+        idx = self._resolve_voice(voice, channel, fade=fade)
         self._stop_streaming(idx)
         # Set the new buffer reference BEFORE telling C to play.
         # voice_play_buffer atomically swaps source_type via the
         # writing flag, so the mixer won't read the old buf_ptr
         # after this call.  Keeping _buf_refs[idx] = data ensures
-        # GC can't free the buffer while C is using it.
+        # GC can't free the buffer while C is using it. With fade=True,
+        # the mixer keeps reading the OLD buffer for ~1 ms during the
+        # fade-out tail; stash the old ref under a sentinel key so it
+        # stays alive across the swap.
+        if fade:
+            self._buf_refs[(idx, "fade")] = self._buf_refs.get(idx)
         self._buf_refs[idx] = data
-        _audiomix.voice_play_buffer(idx, data, len(data), loop)
+        _audiomix.voice_play_buffer(idx, data, len(data), loop, 1 if fade else 0)
         return idx
 
-    def tone(self, freq_hz, duration_ms=200, wave="square", channel="sfx", voice=None):
-        """Play a procedural tone.  Returns the voice index used."""
-        idx = self._resolve_voice(voice, channel)
+    def tone(
+        self,
+        freq_hz,
+        duration_ms=200,
+        wave="square",
+        channel="sfx",
+        voice=None,
+        fade=True,
+    ):
+        """Play a procedural tone.  Returns the voice index used.
+
+        ``fade`` semantics mirror play_buffer().
+        """
+        idx = self._resolve_voice(voice, channel, fade=fade)
         self._stop_streaming(idx)
         wave_id = _WAVE_MAP.get(wave, 0)
-        _audiomix.voice_tone(idx, freq_hz, duration_ms, wave_id)
+        _audiomix.voice_tone(idx, freq_hz, duration_ms, wave_id, 1 if fade else 0)
         return idx
 
     def play_sound(self, name, channel="ui", voice=None):

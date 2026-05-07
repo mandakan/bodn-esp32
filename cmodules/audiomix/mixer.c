@@ -592,14 +592,58 @@ static void mix_task(void *arg) {
 
             uint32_t n;
             if (v->fade_out) {
-                // Read just enough for a fade-out ramp, then kill voice
+                // Read just enough for a fade-out ramp, then kill voice or
+                // activate the pending source if one was queued by Python
+                // via voice_play_buffer/voice_tone(..., fade=True).
                 n = voice_read(state, v, voice_buf, AUDIOMIX_FADE_SAMPLES);
                 if (n > 0) {
                     tonegen_fade(voice_buf, n, 0, 1, AUDIOMIX_FADE_SAMPLES);
                 }
                 v->fade_out = 0;
-                v->source_type = SRC_NONE;
-                ringbuf_reset(&v->ringbuf);
+                if (v->pending_source == SRC_BUFFER) {
+                    v->buf_ptr = v->pending_buf_ptr;
+                    v->buf_len = v->pending_buf_len;
+                    v->buf_pos = 0;
+                    v->loop = v->pending_loop;
+                    v->fade_in = 1;
+                    state->seq_counter++;
+                    v->start_seq = state->seq_counter;
+                    v->pending_source = SRC_NONE;
+                    v->source_type = SRC_BUFFER;
+                } else if (v->pending_source == SRC_TONE) {
+                    v->tone_freq = v->pending_tone_freq;
+                    v->tone_samples_left = v->pending_tone_samples;
+                    v->tone_phase = 0;
+                    v->tone_lfsr = 0xACE1;
+                    v->tone_wave = v->pending_tone_wave;
+                    v->tone_wave_pending = v->pending_tone_wave;
+                    v->tone_wave_xfade_left = 0;
+                    v->tone_sustain = 0;
+                    v->env_total_samples = 0;
+                    v->loop = 0;
+                    v->fade_in = 1;
+                    // Reset modulation so a fresh tone starts clean.
+                    v->mod_lfo_pitch_rate_cHz = 0;
+                    v->mod_lfo_pitch_depth_cents = 0;
+                    v->mod_lfo_pitch_phase = 0;
+                    v->mod_lfo_amp_rate_cHz = 0;
+                    v->mod_lfo_amp_depth_q15 = 0;
+                    v->mod_lfo_amp_phase = 0;
+                    v->mod_bend_cents_per_s = 0;
+                    v->mod_bend_current_cents = 0;
+                    v->mod_bend_limit_cents = 0;
+                    v->mod_stutter_rate_cHz = 0;
+                    v->mod_stutter_duty_q15 = 0;
+                    v->mod_stutter_phase = 0;
+                    v->mod_stutter_gate_q15 = 32767;
+                    state->seq_counter++;
+                    v->start_seq = state->seq_counter;
+                    v->pending_source = SRC_NONE;
+                    v->source_type = SRC_TONE;
+                } else {
+                    v->source_type = SRC_NONE;
+                    ringbuf_reset(&v->ringbuf);
+                }
             } else {
                 n = voice_read(state, v, voice_buf, max_samples);
             }

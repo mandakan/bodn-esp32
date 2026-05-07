@@ -38,8 +38,10 @@ import argparse
 import json
 import re
 import shutil
+import struct
 import subprocess
 import sys
+import wave
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -81,9 +83,57 @@ def check_ffmpeg():
         sys.exit("ERROR: ffmpeg not found. Install it: brew install ffmpeg")
 
 
-def _convert_file(
-    src: Path, dst: Path, dry_run: bool, force: bool, normalize: bool
-) -> str:
+# Loop files are trimmed to zero crossings within this many samples of each
+# edge so seam wraps don't click. 160 samples = 10 ms at 16 kHz — long enough
+# to find a crossing in any musical signal, short enough to be inaudible.
+_LOOP_TRIM_WINDOW_SAMPLES = 160
+
+
+def _zero_cross_trim_loop(path: Path) -> tuple[int, int] | None:
+    """In-place trim a 16 kHz mono 16-bit PCM WAV to its nearest zero crossings.
+
+    Looks within _LOOP_TRIM_WINDOW_SAMPLES at each edge for a sample whose
+    absolute value is small AND whose sign matches the opposite edge's sign,
+    so the wrap-around step is minimal.
+
+    Returns (start_idx, end_idx) on success, None if the file isn't a format
+    we can trim (will be left untouched and the caller continues).
+    """
+    try:
+        with wave.open(str(path), "rb") as wav:
+            if wav.getnchannels() != 1 or wav.getsampwidth() != 2:
+                return None
+            n_frames = wav.getnframes()
+            if n_frames < 2 * _LOOP_TRIM_WINDOW_SAMPLES:
+                return None
+            framerate = wav.getframerate()
+            raw = wav.readframes(n_frames)
+    except (wave.Error, OSError):
+        return None
+
+    samples = struct.unpack("<{}h".format(n_frames), raw)
+    window = min(_LOOP_TRIM_WINDOW_SAMPLES, n_frames // 4)
+
+    # Find sample with smallest |value| in each edge window.
+    start = min(range(window), key=lambda i: abs(samples[i]))
+    end_off = min(range(window), key=lambda i: abs(samples[n_frames - 1 - i]))
+    end = n_frames - end_off
+
+    # Already at zero — skip rewrite.
+    if start == 0 and end == n_frames:
+        return start, end
+
+    trimmed = samples[start:end]
+    raw_out = struct.pack("<{}h".format(len(trimmed)), *trimmed)
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(framerate)
+        wav.writeframes(raw_out)
+    return start, end
+
+
+def _convert_file(src: Path, dst: Path, dry_run: bool, force: bool, normalize: bool) -> str:
     """
     Convert src → dst.  Returns 'converted', 'skipped', 'missing', or 'error'.
     """
@@ -121,6 +171,10 @@ def _convert_file(
         print(f"  ERROR  {src.name}: {err}", file=sys.stderr)
         _errors += 1
         return "error"
+
+    # Loop files: trim to zero crossings so the wrap-around doesn't click.
+    if dst.suffix == ".wav" and dst.stem.endswith("_loop"):
+        _zero_cross_trim_loop(dst)
 
     kib = dst.stat().st_size // 1024
     print(f"  converted  {rel_src}  →  {rel_dst}  ({kib} KiB)")
@@ -301,9 +355,7 @@ def process_story_tts(dry_run: bool, force: bool, normalize: bool):
         else:
             print(f"  no WAV files in build/story_tts_raw/")
     else:
-        print(
-            f"  build/story_tts_raw/ not found — run tools/generate_story_tts.py first."
-        )
+        print(f"  build/story_tts_raw/ not found — run tools/generate_story_tts.py first.")
 
     # Stage story scripts into build/stories/
     _stage_story_scripts(dry_run, force)
@@ -329,9 +381,7 @@ def process_story_recordings(dry_run: bool, force: bool, normalize: bool):
         if not rec_root.is_dir():
             continue
         sources = sorted(
-            f
-            for f in rec_root.rglob("*")
-            if f.is_file() and f.suffix.lower() in AUDIO_EXTS
+            f for f in rec_root.rglob("*") if f.is_file() and f.suffix.lower() in AUDIO_EXTS
         )
         if not sources:
             continue
@@ -362,15 +412,11 @@ def _stage_story_scripts(dry_run: bool, force: bool):
         if not force and dst.exists() and dst.stat().st_mtime >= src.stat().st_mtime:
             continue
         if dry_run:
-            print(
-                f"  would copy  {src.relative_to(REPO_ROOT)}  →  {dst.relative_to(REPO_ROOT)}"
-            )
+            print(f"  would copy  {src.relative_to(REPO_ROOT)}  →  {dst.relative_to(REPO_ROOT)}")
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
-            print(
-                f"  copied  {src.relative_to(REPO_ROOT)}  →  {dst.relative_to(REPO_ROOT)}"
-            )
+            print(f"  copied  {src.relative_to(REPO_ROOT)}  →  {dst.relative_to(REPO_ROOT)}")
 
 
 def process_kits(dry_run: bool, force: bool, normalize: bool):
@@ -402,11 +448,7 @@ def process_kits(dry_run: bool, force: bool, normalize: bool):
             src = SOURCE_DIR / src_rel
             dst = BUILD_SOUNDS / "kits" / kit_name / f"{drum_name}.wav"
             status = _convert_file(src, dst, dry_run, force, normalize)
-            label = (
-                drum_val.get("en", drum_name)
-                if isinstance(drum_val, dict)
-                else drum_name
-            )
+            label = drum_val.get("en", drum_name) if isinstance(drum_val, dict) else drum_name
             print(f"    {label}: {status}")
 
 

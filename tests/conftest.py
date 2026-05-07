@@ -429,7 +429,7 @@ class _FakeAudiomix:
         if idx in self._voices:
             self._voices[idx]["active"] = False
 
-    def voice_tone(self, idx, freq, duration_ms, wave_id):
+    def voice_tone(self, idx, freq, duration_ms, wave_id, fade=0):
         self._voices[idx] = {"active": True, "type": "tone", "freq": freq}
 
     def voice_tone_sustained(self, idx, freq, wave_id):
@@ -479,7 +479,7 @@ class _FakeAudiomix:
             dst[i] = 0
         return len(dst) // 2
 
-    def voice_play_buffer(self, idx, data, length, loop):
+    def voice_play_buffer(self, idx, data, length, loop, fade=0):
         self._voices[idx] = {"active": True, "type": "buffer"}
 
     def voice_start_stream(self, idx, loop):

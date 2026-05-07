@@ -150,6 +150,18 @@ typedef struct {
     uint32_t buf_len;                   // total bytes
     volatile uint32_t buf_pos;          // current read offset (core 1 advances)
 
+    // Pending source — captured by Python when fading out the current source.
+    // The mixer's fade_out handler reads these fields after the fade chunk
+    // and activates the new source instead of going to SRC_NONE. SRC_NONE in
+    // pending_source = no pending swap.
+    volatile audiomix_source_t pending_source;
+    volatile uint8_t  pending_loop;
+    const uint8_t    *pending_buf_ptr;
+    uint32_t          pending_buf_len;
+    uint32_t          pending_tone_freq;
+    uint32_t          pending_tone_samples;
+    uint8_t           pending_tone_wave;
+
     // Age tracking for voice stealing
     volatile uint32_t start_seq;
 } audiomix_voice_t;
