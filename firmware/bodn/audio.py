@@ -57,7 +57,9 @@ CH_SFX = V_SFX_BASE
 CH_UI = V_UI
 CHANNEL_NAMES = {"music": V_MUSIC, "sfx": V_SFX_BASE, "ui": V_UI}
 
-_MONO_BUF_SIZE = const(512)  # bytes per mono read buffer (256 samples at 16-bit = 16 ms)
+_MONO_BUF_SIZE = const(
+    512
+)  # bytes per mono read buffer (256 samples at 16-bit = 16 ms)
 
 # Default gain (fixed-point 16.16) — ~70%
 _GAIN_DEFAULT = const(45875)
@@ -179,7 +181,9 @@ class ToneSource:
             return 0
         to_fill = min(len(buf), self._bytes_left)
         to_fill = (to_fill // 2) * 2
-        n, self._phase = tones.generate(buf, self.freq_hz, self.sample_rate, self.wave, self._phase)
+        n, self._phase = tones.generate(
+            buf, self.freq_hz, self.sample_rate, self.wave, self._phase
+        )
         n = min(n, to_fill)
         self._bytes_left -= n
         is_first = self._first_chunk
@@ -639,7 +643,9 @@ class AudioEngine:
         the ~40-byte-per-iter allocation that was contributing to GC
         pressure during scenarios. See PERFORMANCE_GUIDELINES.md §7.1.
         """
-        print("AudioEngine started (native, core 0, {} voices)".format(self._num_voices))
+        print(
+            "AudioEngine started (native, core 0, {} voices)".format(self._num_voices)
+        )
         sleep_ms = asyncio.sleep_ms
         _voice_active = _audiomix.voice_active
         _streaming = self._streaming

@@ -79,7 +79,9 @@ class BrightnessControl:
     """
 
     def __init__(self, initial=128, minimum=10, maximum=255, step=20, settings=None):
-        self._acc = EncoderAccumulator(settings=settings, fast_threshold=400, fast_multiplier=3)
+        self._acc = EncoderAccumulator(
+            settings=settings, fast_threshold=400, fast_multiplier=3
+        )
         self._value = initial
         self._min = minimum
         self._max = maximum

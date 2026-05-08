@@ -227,7 +227,11 @@ def create_hardware():
         # Append extra toggle switches from MCP2 (sw[2] = SW_L, sw[3] = SW_R)
         switches.append(mcp2.pin(config.MCP2_SW_LEFT))
         switches.append(mcp2.pin(config.MCP2_SW_RIGHT))
-        print("MCP2 (0x{:02X}) initialised — encoder switches + 2 toggles".format(config.MCP2_ADDR))
+        print(
+            "MCP2 (0x{:02X}) initialised — encoder switches + 2 toggles".format(
+                config.MCP2_ADDR
+            )
+        )
     except Exception as e:
         print(
             "MCP2 (0x{:02X}) not found, encoder buttons via fallback: {}".format(
@@ -242,10 +246,14 @@ def create_hardware():
         # Restore backlight — PCA9685.reset() turned all channels off
         pwm.set_duty(config.PWM_CH_BACKLIGHT, 4095)
         hw_status["pca"] = True
-        print("PCA9685 (0x{:02X}) initialised — PWM @ 1 kHz".format(config.PCA9685_ADDR))
+        print(
+            "PCA9685 (0x{:02X}) initialised — PWM @ 1 kHz".format(config.PCA9685_ADDR)
+        )
     except Exception as e:
         print(
-            "PCA9685 (0x{:02X}) not found, PWM dimming disabled: {}".format(config.PCA9685_ADDR, e)
+            "PCA9685 (0x{:02X}) not found, PWM dimming disabled: {}".format(
+                config.PCA9685_ADDR, e
+            )
         )
 
     # PN532 NFC reader (shared I2C bus)
@@ -362,7 +370,9 @@ def create_ui(
     theme = Theme(config.TFT_WIDTH, config.TFT_HEIGHT, ST7735.rgb)
     theme2 = Theme(config.TFT2_WIDTH, config.TFT2_HEIGHT, ST7735.rgb)
     arcade_pins = arcade.pins if arcade else []
-    inp = InputState(buttons, switches, encoders, time.ticks_ms, arcade_pins=arcade_pins)
+    inp = InputState(
+        buttons, switches, encoders, time.ticks_ms, arcade_pins=arcade_pins
+    )
     overlay = SessionOverlay(session_mgr, settings=settings)
 
     # Primary display — full screen manager with navigation
@@ -744,7 +754,9 @@ async def input_scan_task(mcp, mcp2, inp, switches=None):
         await asyncio.sleep_ms(5)
 
 
-async def primary_task(manager, settings, inp, encoders, mcp, mcp2, idle_tracker, power_mgr):
+async def primary_task(
+    manager, settings, inp, encoders, mcp, mcp2, idle_tracker, power_mgr
+):
     """Display update + power management with frame-skip budgeting.
 
     update() always runs (game logic, timing accumulators).
@@ -929,7 +941,9 @@ async def primary_task(manager, settings, inp, encoders, mcp, mcp2, idle_tracker
             idle_tracker.timeout_s = settings.get("sleep_timeout_s", 300)
 
         if settings.get("debug_input") and frame % 15 == 0:
-            btns = "".join("1" if inp.btn_held[i] else "." for i in range(len(inp.btn_held)))
+            btns = "".join(
+                "1" if inp.btn_held[i] else "." for i in range(len(inp.btn_held))
+            )
             sws = "".join("1" if inp.sw[i] else "." for i in range(len(inp.sw)))
             n_enc = len(encoders)
             enc_vals = " ".join("{}".format(inp.enc_pos[i]) for i in range(n_enc))
@@ -941,7 +955,11 @@ async def primary_task(manager, settings, inp, encoders, mcp, mcp2, idle_tracker
                 )
                 for i in range(n_enc)
             )
-            print("INP btn[{}] sw[{}] enc[{}] raw[{}]".format(btns, sws, enc_vals, enc_raw))
+            print(
+                "INP btn[{}] sw[{}] enc[{}] raw[{}]".format(
+                    btns, sws, enc_vals, enc_raw
+                )
+            )
 
         # ── Perf stats ───────────────────────────────────────
         if _perf and frame > 0 and frame % _PERF_INTERVAL == 0:
@@ -1146,7 +1164,9 @@ async def housekeeping_task(session_mgr, settings, audio=None, pwm=None):
             elif bat_status == "critical" and _prev_bat != "critical":
                 mv = battery.voltage_mv()
                 print(
-                    "BAT CRITICAL ({}mV <= {}mV): killing NeoPixels".format(mv, config.BAT_CRIT_MV)
+                    "BAT CRITICAL ({}mV <= {}mV): killing NeoPixels".format(
+                        mv, config.BAT_CRIT_MV
+                    )
                 )
                 neo.set_override(neo.OVERRIDE_BLACK)
 
@@ -1286,7 +1306,11 @@ async def nfc_scan_task(manager, mode_screens, session_mgr, audio, settings):
                             on_progress = make_launch_splash(manager, mode)
                             on_progress(0, 1)
                         try:
-                            screen = factory(on_progress=on_progress) if on_progress else factory()
+                            screen = (
+                                factory(on_progress=on_progress)
+                                if on_progress
+                                else factory()
+                            )
                         except TypeError:
                             screen = factory()
                         if mode != "settings":
@@ -1334,7 +1358,9 @@ async def main():
         except Exception as e:
             print("Failed to save session:", e)
 
-    session_mgr = SessionManager(settings, get_time, get_date, on_session_end=on_session_end)
+    session_mgr = SessionManager(
+        settings, get_time, get_date, on_session_end=on_session_end
+    )
     wifi_ctrl = WiFiController(settings)
 
     # Create IdleTracker up front and expose it via settings so the HTTP

@@ -19,6 +19,13 @@ dependencies = [
 [tool.black]
 target-version = ["py312"]
 
+# Empty [tool.ruff] section on purpose. Without it, ruff walks up the
+# directory tree looking for config and picks up a parent pyproject.toml
+# (e.g. ~/work/pyproject.toml) which silently changes line-length and
+# produces diffs that disagree with CI. This stops the walk; defaults
+# (line-length=88) match what CI uses.
+[tool.ruff]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["firmware"]
