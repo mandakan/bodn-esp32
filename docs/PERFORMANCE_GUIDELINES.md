@@ -395,6 +395,63 @@ WiFi is one of the largest power and latency contributors.
   - Prefer simple dicts, tuples, and small classes over deeply nested objects.
 - Cleanly separate **configuration data** from runtime state so saving/loading settings is cheap.
 
+### 7.1 Avoiding GC stalls
+
+MicroPython's mark-and-sweep GC stalls core 1 for 300-500 ms when the live heap is large (we run with 8 MB PSRAM). One stall is enough to underrun the I2S audio buffer (~96 ms slack), so the rule is:
+
+> **Code that runs more often than once per render frame must not allocate.**
+
+The expensive idioms are not what you'd expect — they're the convenient ones:
+
+- `enumerate(seq)` allocates a fresh iterator every call.
+- `range(n)` allocates a fresh range object every call.
+- Generator expressions (`any(d != 0 for d in xs)`) allocate the generator.
+- `any(list)` / `all(list)` allocate a list iterator.
+- `f"{x}"` and `"{}".format(x)` allocate a new string every call.
+- `bytes_obj[a:b]` allocates a new `bytes`.
+- Returning a fresh list/tuple from a C binding (`mp_obj_new_list`, `mp_obj_new_tuple`) — even an empty one is ~40 bytes.
+
+At 200 Hz (input scan rate) those add up to ~40 KB/sec, which triggers a GC sweep every ~30 s — exactly what was causing the audio crackling and the visible "frame frozen for half a second" we hunted in early 2026.
+
+**Idiom to use instead** — indexed `while` loop with cached length:
+
+```python
+# BAD — fresh iterator every call
+for i, item in enumerate(items):
+    do_something(i, item)
+
+# BAD — fresh range object + generator
+if any(x != 0 for x in items):
+    ...
+
+# GOOD — zero allocation
+n = len(items)
+i = 0
+while i < n:
+    do_something(i, items[i])
+    i += 1
+
+# GOOD — explicit early exit
+n = len(items)
+i = 0
+while i < n:
+    if items[i] != 0:
+        return True
+    i += 1
+return False
+```
+
+**For C bindings called at high rate:** accept a pre-allocated list the caller owns and clear-and-append into it. MicroPython's `list.clear()` (or setting `len = 0` from C) keeps the backing array, so once it's grown the storage is reused. See `_mcpinput.drain_events(buf)` vs `_mcpinput.get_events()` for the pattern.
+
+**For repeated strings in renders:** build them once on state transition, store as `self._foo_text = "..."`, render with the cached value. Never put `f"..."` or `.format()` in a per-frame render path.
+
+**Where the rule applies** (any of these is "hot"):
+- Async tasks polled at >= 30 Hz (`input_scan_task` at 200 Hz, `secondary_task` at 20 Hz, `primary_task` at 30 Hz).
+- Anything called from a screen's `update()` or `render()`.
+- Anything called from the audio engine's streaming feeder.
+
+**Where it does not apply:** `enter()` / `exit()`, one-time setup, error/diagnostic paths behind clearly rare conditions.
+
 ---
 
 ## 8. Logging & debugging
@@ -460,6 +517,13 @@ When generating or reviewing code, check:
 7. **Allocations**:
    - Buffers reused; no big lists created in tight loops.
    - `memoryview` used for buffer slices passed to I/O (I2S, SPI, file).
+   - **No `enumerate()` or `range()` in hot paths** (anything ≥ 30 Hz) — use
+     `n = len(seq); i = 0; while i < n: ... i += 1` to avoid per-call iterator
+     allocation. Same goes for `any(genexp)` / `all(genexp)`. See §7.1.
+   - **No `f"..."` or `.format()` in `update()` / `render()`** — build strings
+     once on state transition and cache as `self._foo_text`.
+   - C bindings called at > 30 Hz must accept a pre-allocated buffer
+     (e.g. `_mcpinput.drain_events(list)`), not return a fresh one.
 8. **MicroPython idioms**:
    - Module-level numeric constants use `const()`.
    - Hot loops / long-running coroutines cache `self.*` and module attributes as locals.

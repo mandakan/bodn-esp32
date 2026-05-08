@@ -16,7 +16,13 @@
 
 #define AUDIOMIX_NUM_VOICES     16
 
-#define AUDIOMIX_RINGBUF_SIZE   2048  // bytes per voice (64ms @ 16kHz mono 16-bit)
+// Per-voice ring buffer for SRC_RINGBUF (streamed WAV) sources. The buffer
+// must be large enough to ride out the longest stall of the Python feeder
+// task on core 1 -- i.e. the worst slow frame from rendering, GC, or SD
+// contention. 8192 bytes = 256 ms at 16 kHz mono 16-bit, comfortably
+// above the 80-200 ms slow frames seen during scenario transitions.
+// PSRAM cost: 16 voices × 8 KB = 128 KB (negligible on the 8 MB part).
+#define AUDIOMIX_RINGBUF_SIZE   8192
 #define AUDIOMIX_MONO_BUF_SIZE  512   // bytes per mono read (256 samples = 16ms)
 
 // Scope tap: post-mix mono samples captured for visualisation.
@@ -38,6 +44,17 @@
 
 // Fade length in samples
 #define AUDIOMIX_FADE_SAMPLES   16  // 1ms @ 16kHz
+
+// Source-swap crossfade length: BUFFER → BUFFER swaps overlap the old
+// source's fade-out with the new source's fade-in over this many samples
+// using equal-power (cos²/sin²) weights. 240 samples = 15 ms at 16 kHz.
+//
+// 5 ms (80) was mathematically click-free but a few spectrally dissimilar
+// pairs (low-engine-loop ↔ high-engine-loop) still produced a perceptible
+// morph at that length. 15 ms eliminates the seam entirely without
+// feeling laggy as a control response. PSRAM cost is one stack-resident
+// scratch of 2 × XFADE_SAMPLES bytes per active crossfade.
+#define AUDIOMIX_XFADE_SAMPLES  240
 
 // Waveform crossfade length (samples) for phase-preserving tone_wave swaps.
 // 48 ≈ 3ms at 16kHz — short enough to feel "instant", long enough to mask
@@ -149,6 +166,38 @@ typedef struct {
     const uint8_t *buf_ptr;             // pointer into PSRAM
     uint32_t buf_len;                   // total bytes
     volatile uint32_t buf_pos;          // current read offset (core 1 advances)
+
+    // Pending source — captured by Python when swapping a BUFFER/TONE
+    // source on a held voice. Two activation paths:
+    //   - xfade_samples_left > 0: equal-power crossfade with the current
+    //     source over xfade_samples_total samples (BUFFER → BUFFER only).
+    //   - fade_out = 1: sequential 1 ms fade-out of the current source,
+    //     then immediate activation of pending (used for any → TONE and
+    //     for TONE → BUFFER, where simultaneous read of both sources
+    //     would be more code than the seam is worth).
+    // SRC_NONE in pending_source = no pending swap.
+    volatile audiomix_source_t pending_source;
+    volatile uint8_t  pending_loop;
+    const uint8_t    *pending_buf_ptr;
+    uint32_t          pending_buf_len;
+    volatile uint32_t pending_buf_pos;     // mixer advances during crossfade
+    uint32_t          pending_tone_freq;
+    uint32_t          pending_tone_samples;
+    uint8_t           pending_tone_wave;
+    volatile uint32_t xfade_samples_left;  // 0 = no crossfade in progress
+    uint32_t          xfade_samples_total; // for weight = i/total mapping
+
+    // "Next pending" — set by Python when a fade=True swap arrives while
+    // an existing crossfade is still in flight. Substituting pending_* in
+    // place would jump the rising-weight signal mid-mix and produce a
+    // click; instead we queue here, and the mixer activates this as the
+    // new pending the moment the current crossfade completes. Multiple
+    // retargets in quick succession overwrite each other so only the
+    // latest target wins.
+    volatile uint8_t  next_pending_set;
+    const uint8_t    *next_pending_buf_ptr;
+    uint32_t          next_pending_buf_len;
+    uint8_t           next_pending_loop;
 
     // Age tracking for voice stealing
     volatile uint32_t start_seq;

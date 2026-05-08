@@ -219,6 +219,11 @@ class SpaceScreen(Screen):
         self._prev_sw0 = None  # None = not yet initialised
         self._prev_sw1 = None
         self._drone_zone = -1  # current throttle zone (0/1/2), -1 = not started
+        # Pin engine drone + scenario alarm to a single music-channel voice so
+        # each new play_buffer cleanly replaces the previous one. Without this,
+        # the audio engine round-robins to a free voice and the old loop keeps
+        # playing -- alarm + drone layered, or low+high drone layered.
+        self._music_voice = None
         self._arc_led_mode = None  # track current arcade LED mode to set-once
         self._alarm_active = False
         self._bridge_next = 0  # frame when next bridge ambience can play
@@ -248,6 +253,7 @@ class SpaceScreen(Screen):
         self._prev_sw0 = None  # reset so first-frame state is read without TTS
         self._prev_sw1 = None
         self._drone_zone = -1
+        self._music_voice = None
         self._alarm_active = False
         self._bridge_next = 0
         self._arc_led_mode = None
@@ -506,16 +512,24 @@ class SpaceScreen(Screen):
             self._drone_zone = zone
             buf = self._drone_bufs[zone] if self._drone_bufs else None
             if buf:
-                self._audio.play_buffer(buf, loop=True, channel="music")
+                self._music_voice = self._audio.play_buffer(
+                    buf, loop=True, channel="music", voice=self._music_voice
+                )
             else:
-                self._audio.tone(
-                    self._DRONE_FREQS[zone], 60000, "square", channel="music"
+                self._music_voice = self._audio.tone(
+                    self._DRONE_FREQS[zone],
+                    60000,
+                    "square",
+                    channel="music",
+                    voice=self._music_voice,
                 )
 
     # Bridge ambience: plays the bridge_loop once on an SFX channel at random
     # intervals during CRUISING.  ~8–20 s between plays at 30 fps.
-    _BRIDGE_MIN = const(240)  # ~8 s
-    _BRIDGE_SPREAD = const(360)  # +0–12 s
+    # Plain class attrs (not const()) so they're reachable via self. — MicroPython
+    # hoists class-scope const() names to the module, breaking self._BRIDGE_*.
+    _BRIDGE_MIN = 240  # ~8 s
+    _BRIDGE_SPREAD = 360  # +0–12 s
 
     def _maybe_play_bridge(self, frame):
         """Occasionally play bridge ambience during cruising."""
@@ -536,16 +550,27 @@ class SpaceScreen(Screen):
         danger = self._SC_DANGER[sc]
         buf = self._alarm_bufs[danger] if self._alarm_bufs else None
         if buf:
-            self._audio.play_buffer(buf, loop=True, channel="music")
+            self._music_voice = self._audio.play_buffer(
+                buf, loop=True, channel="music", voice=self._music_voice
+            )
         else:
-            self._audio.tone(
-                self._ALARM_FREQS[danger], 60000, "square", channel="music"
+            self._music_voice = self._audio.tone(
+                self._ALARM_FREQS[danger],
+                60000,
+                "square",
+                channel="music",
+                voice=self._music_voice,
             )
         self._alarm_active = True
 
     def _stop_alarm(self):
         """Stop the alarm and resume the engine drone."""
         self._alarm_active = False
+        # Silence the music voice immediately. _update_drone will reclaim the
+        # same slot on the next frame; without this, the alarm loop keeps
+        # playing until the next throttle-zone change.
+        if self._audio and self._music_voice is not None:
+            self._audio.stop(voice=self._music_voice)
         self._drone_zone = -1  # force re-trigger on next update
 
     def _play_arc_tone(self, arc):

@@ -201,6 +201,9 @@ class InputState:
         Call at a fast rate (~5 ms) from the input task. Edge events
         (press/release) are OR-latched: once set, they stay True until
         consume() copies them to the public arrays and clears them.
+
+        Hot path: indexed `while` loops (no enumerate/range allocation).
+        See docs/PERFORMANCE_GUIDELINES.md §"Avoiding GC stalls".
         """
         now = self._time_ms()
 
@@ -215,9 +218,11 @@ class InputState:
         on_press = self._on_press
 
         # Buttons
-        for i, btn in enumerate(buttons):
+        n_btn = len(buttons)
+        i = 0
+        while i < n_btn:
             prev = prev_btn[i]
-            cur = btn_deb[i].update(btn.value(), now)
+            cur = btn_deb[i].update(buttons[i].value(), now)
             btn_held[i] = cur
             if cur and not prev:
                 pend_bp[i] = True
@@ -227,11 +232,16 @@ class InputState:
             if not cur and prev:
                 pend_br[i] = True
             prev_btn[i] = cur
+            i += 1
 
         # Toggle switches (no debounce — physical latching)
         sw = self.sw
-        for i, switch in enumerate(self._switches):
-            sw[i] = switch.value() == 0
+        switches = self._switches
+        n_sw = len(switches)
+        i = 0
+        while i < n_sw:
+            sw[i] = switches[i].value() == 0
+            i += 1
 
         # Arcade buttons
         arc_pins = self._arcade_pins
@@ -242,9 +252,11 @@ class InputState:
         pend_ar = self._pend_arc_release
         pend_ap_ts = self._pend_arc_press_ts
 
-        for i, pin in enumerate(arc_pins):
+        n_arc = len(arc_pins)
+        i = 0
+        while i < n_arc:
             prev = prev_arc[i]
-            cur = arc_deb[i].update(pin.value(), now)
+            cur = arc_deb[i].update(arc_pins[i].value(), now)
             arc_held[i] = cur
             if cur and not prev:
                 pend_ap[i] = True
@@ -254,6 +266,7 @@ class InputState:
             if not cur and prev:
                 pend_ar[i] = True
             prev_arc[i] = cur
+            i += 1
 
         # Encoders
         encoders = self._encoders
@@ -268,7 +281,10 @@ class InputState:
         pend_ep = self._pend_enc_btn_press
         pend_er = self._pend_enc_btn_release
 
-        for i, enc in enumerate(encoders):
+        n_enc = len(encoders)
+        i = 0
+        while i < n_enc:
+            enc = encoders[i]
             pos = enc.value
             enc_pos[i] = pos
             d = pos - prev_enc_pos[i]
@@ -291,6 +307,7 @@ class InputState:
             if not cur_btn and p_btn:
                 pend_er[i] = True
             prev_enc_btn[i] = cur_btn
+            i += 1
 
     def native_press(self, kind, index, ts_ms=None):
         """Latch a press edge from native C module events.
@@ -331,6 +348,9 @@ class InputState:
 
         MCP1 buttons/arcade are handled by native_press/native_release.
         MCP2 encoder buttons and toggle switches are still Python-polled.
+
+        Hot path: runs at ~200 Hz from input_scan_task. Use indexed `while`
+        loops (no enumerate/range allocation). See PERFORMANCE_GUIDELINES.md.
         """
         now = self._time_ms()
 
@@ -346,7 +366,10 @@ class InputState:
         pend_ep = self._pend_enc_btn_press
         pend_er = self._pend_enc_btn_release
 
-        for i, enc in enumerate(encoders):
+        n = len(encoders)
+        i = 0
+        while i < n:
+            enc = encoders[i]
             pos = enc.value
             enc_pos[i] = pos
             d = pos - prev_enc_pos[i]
@@ -369,6 +392,7 @@ class InputState:
             if not cur_btn and p_btn:
                 pend_er[i] = True
             prev_enc_btn[i] = cur_btn
+            i += 1
 
     def set_on_press(self, callback):
         """Register a callback fired from scan() on debounced press edge.
@@ -386,6 +410,9 @@ class InputState:
         Call once per display frame from ScreenManager.tick(). This ensures
         that fast scans (200 Hz) feed into the slower display loop (~30 Hz)
         without losing short button presses.
+
+        Hot path: called every render frame. Uses indexed `while` loops to
+        avoid allocating range() iterators per call.
         """
         now = self._time_ms()
         n_btn = len(self._buttons)
@@ -399,13 +426,15 @@ class InputState:
         bjp = self.btn_just_pressed
         bjr = self.btn_just_released
         bp_ts = self.btn_press_ts
-        for i in range(n_btn):
+        i = 0
+        while i < n_btn:
             bjp[i] = pend_bp[i]
             bjr[i] = pend_br[i]
             if pend_bp[i]:
                 bp_ts[i] = pend_bp_ts[i]
             pend_bp[i] = False
             pend_br[i] = False
+            i += 1
 
         # Arcade buttons
         pend_ap = self._pend_arc_press
@@ -414,13 +443,15 @@ class InputState:
         ajp = self.arc_just_pressed
         ajr = self.arc_just_released
         ap_ts = self.arc_press_ts
-        for i in range(n_arc):
+        i = 0
+        while i < n_arc:
             ajp[i] = pend_ap[i]
             ajr[i] = pend_ar[i]
             if pend_ap[i]:
                 ap_ts[i] = pend_ap_ts[i]
             pend_ap[i] = False
             pend_ar[i] = False
+            i += 1
 
         # Encoder deltas (sum across scans) and buttons
         pend_ed = self._pend_enc_delta
@@ -429,13 +460,15 @@ class InputState:
         ed = self.enc_delta
         ebp = self.enc_btn_pressed
         ebjr = self.enc_btn_just_released
-        for i in range(n_enc):
+        i = 0
+        while i < n_enc:
             ed[i] = pend_ed[i]
             pend_ed[i] = 0
             ebp[i] = pend_ep[i]
             ebjr[i] = pend_er[i]
             pend_ep[i] = False
             pend_er[i] = False
+            i += 1
 
         # Update gesture detector with consumed state
         gh = self._g_held
@@ -444,20 +477,26 @@ class InputState:
         bh = self.btn_held
         ah = self.arc_held
         ebh = self.enc_btn_held
-        for i in range(n_btn):
+        i = 0
+        while i < n_btn:
             gh[i] = bh[i]
             gp[i] = bjp[i]
             gr[i] = bjr[i]
+            i += 1
         off = n_btn
-        for i in range(n_arc):
+        i = 0
+        while i < n_arc:
             gh[off + i] = ah[i]
             gp[off + i] = ajp[i]
             gr[off + i] = ajr[i]
+            i += 1
         off += n_arc
-        for i in range(n_enc):
+        i = 0
+        while i < n_enc:
             gh[off + i] = ebh[i]
             gp[off + i] = ebp[i]
             gr[off + i] = ebjr[i]
+            i += 1
         self.gestures.update(gh, gp, gr, now)
 
     def resync_encoders(self):
@@ -475,15 +514,42 @@ class InputState:
             self.enc_velocity[i] = 0
 
     def has_activity(self):
-        """Return True if any input changed this frame (for idle tracking)."""
-        if any(self.btn_just_pressed) or any(self.btn_just_released):
-            return True
-        if any(self.arc_just_pressed) or any(self.arc_just_released):
-            return True
-        if any(d != 0 for d in self.enc_delta):
-            return True
-        if any(self.enc_btn_pressed):
-            return True
+        """Return True if any input changed this frame (for idle tracking).
+
+        Hot path: called every frame. Indexed loops avoid the genexp
+        (`any(d != 0 for d in ...)`) and the iterators that ``any(list)``
+        otherwise creates -- both are fresh allocations per call.
+        """
+        bjp = self.btn_just_pressed
+        bjr = self.btn_just_released
+        n = len(bjp)
+        i = 0
+        while i < n:
+            if bjp[i] or bjr[i]:
+                return True
+            i += 1
+        ajp = self.arc_just_pressed
+        ajr = self.arc_just_released
+        n = len(ajp)
+        i = 0
+        while i < n:
+            if ajp[i] or ajr[i]:
+                return True
+            i += 1
+        ed = self.enc_delta
+        n = len(ed)
+        i = 0
+        while i < n:
+            if ed[i]:
+                return True
+            i += 1
+        ebp = self.enc_btn_pressed
+        n = len(ebp)
+        i = 0
+        while i < n:
+            if ebp[i]:
+                return True
+            i += 1
         return False
 
     def any_btn_pressed(self):

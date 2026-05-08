@@ -54,6 +54,10 @@ def say(key, audio, channel="ui"):
     Returns:
         True if a WAV was found and queued, False if neither a recording nor
         generated TTS exists for this key.
+
+    A new TTS clip cancels any TTS already playing on the channel; without
+    this they would round-robin onto separate voices in the channel's pool
+    and play simultaneously.
     """
     lang = get_language()
     cache_key = (lang, key)
@@ -63,6 +67,7 @@ def say(key, audio, channel="ui"):
         _PATH_CACHE[cache_key] = resolved
     if resolved is None:
         return False
+    audio.stop(channel=channel)
     audio.play(resolved, channel=channel)
     return True
 

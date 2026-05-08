@@ -60,6 +60,11 @@ class PauseMenu(Screen):
         self._hold_progress = 0.0
         self._last_hold_step = -1
         self._bar_visible = False  # True when bar pixels are on screen
+        # Cached menu labels — rebuilt only on language change. Building
+        # them every render() at 30 fps was allocating ~1 KB/frame and
+        # forcing a GC sweep every ~20 s.
+        self._items = None
+        self._items_lang = None
 
     @property
     def is_open(self):
@@ -201,11 +206,25 @@ class PauseMenu(Screen):
 
         The hold bar is NOT drawn here — it's handled as a direct
         partial update in _update_hold() to avoid full-screen redraws.
+
+        Hot path: while pause is open this fires every frame at 30 fps,
+        so menu labels are cached on the instance and refreshed only
+        when the language changes (see PERFORMANCE_GUIDELINES.md §7.1).
         """
         self._dirty = False
 
         if not self._open:
             return
+
+        # Refresh cached labels if language changed since last render.
+        lang = get_language()
+        if self._items is None or self._items_lang != lang:
+            self._items = (
+                t("pause_resume"),
+                t("pause_quit"),
+                t("pause_lang", lang.upper()),
+            )
+            self._items_lang = lang
 
         w = theme.width
         h = theme.height
@@ -217,16 +236,17 @@ class PauseMenu(Screen):
         # Title
         draw_centered(tft, t("pause_title"), h // 4 + 12, theme.WHITE, w, scale=2)
 
-        # Menu items
-        items = [
-            t("pause_resume"),
-            t("pause_quit"),
-            t("pause_lang", get_language().upper()),
-        ]
-        for i, label in enumerate(items):
+        # Menu items — indexed loop, no enumerate allocation.
+        items = self._items
+        n = len(items)
+        i = 0
+        sel = self._index
+        while i < n:
             y = h // 4 + 48 + i * 24
-            selected = i == self._index
-            if selected:
+            if i == sel:
                 tft.fill_rect(w // 6 + 8, y - 2, w * 2 // 3 - 16, 20, theme.MUTED)
-            color = theme.CYAN if selected else theme.WHITE
-            draw_centered(tft, label, y + 2, color, w)
+                color = theme.CYAN
+            else:
+                color = theme.WHITE
+            draw_centered(tft, items[i], y + 2, color, w)
+            i += 1

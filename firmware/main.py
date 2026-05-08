@@ -673,49 +673,82 @@ async def input_scan_task(mcp, mcp2, inp, switches=None):
     Python drains events and scans MCP2 + encoders only.
 
     Edges are latched until the display task calls inp.consume().
+
+    Hot-path allocation discipline: this loop runs 200 times per second, so
+    allocations here are the dominant pressure on MicroPython's GC. We:
+      - reuse `_event_buf` across calls via _mcpinput.drain_events()
+      - cache len() results outside loops
+      - use indexed `while` loops instead of enumerate()/range()/genexps
+    See docs/PERFORMANCE_GUIDELINES.md §"Avoiding GC stalls".
     """
     import _mcpinput
 
-    # Build MCP1 pin → (kind, index) lookup from config
+    # Build MCP1 pin → (kind, index) lookup from config (one-time)
     _pin_map = {}
-    for i, p in enumerate(config.MCP_BTN_PINS):
-        _pin_map[p] = ("btn", i)
-    for i, p in enumerate(config.MCP_ARC_PINS):
-        _pin_map[p] = ("arc", i)
+    _btn_pins = config.MCP_BTN_PINS
+    _arc_pins = config.MCP_ARC_PINS
+    n = len(_btn_pins)
+    i = 0
+    while i < n:
+        _pin_map[_btn_pins[i]] = ("btn", i)
+        i += 1
+    n = len(_arc_pins)
+    i = 0
+    while i < n:
+        _pin_map[_arc_pins[i]] = ("arc", i)
+        i += 1
     # MCP1 toggle switch pins (read from bitmask, not events)
     _sw_pins = config.MCP_SW_PINS
-    # Number of MCP1 switches (sw[0], sw[1])
     _n_mcp1_sw = len(_sw_pins)
     _sw = switches or []
+    _n_sw = len(_sw)
+
+    # Pre-allocated event buffer reused across drain calls. List clear()
+    # keeps the backing array, so once it's grown to handle a typical burst
+    # the storage is reused indefinitely with zero allocation steady-state.
+    _event_buf = []
+    _PRESS = _mcpinput.PRESS
+    _drain = _mcpinput.drain_events
+    _read_state = _mcpinput.read_state
+    _native_press = inp.native_press
+    _native_release = inp.native_release
+    _scan_encoders = inp.scan_encoders
+    _inp_sw = inp.sw
 
     while True:
         try:
-            # Drain debounced events from C module
-            events = _mcpinput.get_events()
-            for ev_type, pin, ts in events:
-                mapping = _pin_map.get(pin)
+            # Drain debounced events from C module into our reused buffer.
+            n_ev = _drain(_event_buf)
+            ev_i = 0
+            while ev_i < n_ev:
+                ev = _event_buf[ev_i]
+                mapping = _pin_map.get(ev[1])
                 if mapping:
-                    kind, idx = mapping
-                    if ev_type == _mcpinput.PRESS:
-                        inp.native_press(kind, idx, ts)
+                    if ev[0] == _PRESS:
+                        _native_press(mapping[0], mapping[1], ev[2])
                     else:
-                        inp.native_release(kind, idx)
+                        _native_release(mapping[0], mapping[1])
+                ev_i += 1
 
             # Read MCP1 toggle switch state from bitmask
-            port_state = _mcpinput.read_state()
-            for i in range(_n_mcp1_sw):
-                inp.sw[i] = bool(port_state & (1 << _sw_pins[i]))
+            port_state = _read_state()
+            i = 0
+            while i < _n_mcp1_sw:
+                _inp_sw[i] = bool(port_state & (1 << _sw_pins[i]))
+                i += 1
 
             # Read MCP2 toggle switches (sw[2], sw[3], etc.) via Python
-            for i in range(_n_mcp1_sw, len(_sw)):
-                inp.sw[i] = _sw[i].value() == 0
+            i = _n_mcp1_sw
+            while i < _n_sw:
+                _inp_sw[i] = _sw[i].value() == 0
+                i += 1
 
             # MCP2 refresh for encoder buttons
             if mcp2:
                 mcp2.refresh()
 
             # Encoders + encoder buttons (PCNT + MCP2)
-            inp.scan_encoders()
+            _scan_encoders()
         except Exception:
             pass
         await asyncio.sleep_ms(5)
@@ -737,6 +770,16 @@ async def primary_task(
     ticks_diff = time.ticks_diff
     prev_render_ms = 0
     tft = manager.tft
+    # Slow-frame watchdog — only enabled when debug_perf is on. When active
+    # it logs any frame that crosses _SLOW_FRAME_MS, with the gc.mem_free
+    # delta so GC sweeps stand out from SD/I/O stalls. Off by default to
+    # keep the print() out of the hot path during normal play.
+    _slow_watchdog = settings.get("debug_perf", False)
+    if _slow_watchdog:
+        import gc as _gc
+
+        _gc_mem_free = _gc.mem_free
+    _SLOW_FRAME_MS = 80
     _dma = getattr(tft, "_native", False)
     # vsync=True (default): skip frame if DMA busy (tear-free)
     # vsync=False: draw over buffer during DMA (may tear, higher FPS)
@@ -793,6 +836,8 @@ async def primary_task(
             manager.invalidate()
 
         t0 = ticks_ms()
+        if _slow_watchdog:
+            _wd_free0 = _gc_mem_free()
 
         # ── Input + game logic (always runs) ──────────────────
         try:
@@ -808,6 +853,8 @@ async def primary_task(
                 sys.print_exception(e)
             else:
                 print("primary_task update error #{}: {}".format(errors, e))
+        if _slow_watchdog:
+            _wd_t_update = ticks_ms()
 
         # ── Graphics — DMA-aware or predictive budget ─────────
         if _dma:
@@ -843,6 +890,23 @@ async def primary_task(
             prev_render_ms = 0  # reset predictor after a skip
             if _perf:
                 _perf_skips += 1
+
+        if _slow_watchdog:
+            _wd_total = ticks_diff(ticks_ms(), t0)
+            if _wd_total > _SLOW_FRAME_MS:
+                _wd_update = ticks_diff(_wd_t_update, t0)
+                _wd_render = _wd_total - _wd_update
+                _wd_free1 = _gc_mem_free()
+                print(
+                    "slow frame: total={}ms (upd={}, ren={}) free {}->{} (Δ{:+d})".format(
+                        _wd_total,
+                        _wd_update,
+                        _wd_render,
+                        _wd_free0,
+                        _wd_free1,
+                        _wd_free1 - _wd_free0,
+                    )
+                )
 
         # ── Power management ──────────────────────────────────
         if inp.has_activity():
@@ -1025,8 +1089,7 @@ async def housekeeping_task(session_mgr, settings, audio=None, pwm=None):
 
             elif temp_status == "critical" and _prev_temp != "critical":
                 print(
-                    "TEMP CRITICAL ({}C >= {}C): "
-                    "killing NeoPixels, dimming backlight".format(
+                    "TEMP CRITICAL ({}C >= {}C): killing NeoPixels, dimming backlight".format(
                         int(t_max), config.TEMP_CRIT_C
                     )
                 )
