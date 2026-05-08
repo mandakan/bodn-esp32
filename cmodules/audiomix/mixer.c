@@ -654,10 +654,26 @@ static void mix_task(void *arg) {
                     v->loop = v->pending_loop;
                     v->fade_in = 0;        // already at full amplitude
                     v->fade_out = 0;
-                    v->pending_source = SRC_NONE;
                     state->seq_counter++;
                     v->start_seq = state->seq_counter;
                     // source_type stays SRC_BUFFER throughout
+
+                    // If Python queued another retarget while this crossfade
+                    // was in flight, activate it now as the new pending and
+                    // start a fresh crossfade. Chains cleanly through any
+                    // number of rapid zone changes without ever clicking.
+                    if (v->next_pending_set) {
+                        v->pending_buf_ptr = v->next_pending_buf_ptr;
+                        v->pending_buf_len = v->next_pending_buf_len;
+                        v->pending_buf_pos = 0;
+                        v->pending_loop = v->next_pending_loop;
+                        v->next_pending_set = 0;
+                        v->xfade_samples_total = AUDIOMIX_XFADE_SAMPLES;
+                        v->xfade_samples_left = AUDIOMIX_XFADE_SAMPLES;
+                        // pending_source stays SRC_BUFFER
+                    } else {
+                        v->pending_source = SRC_NONE;
+                    }
                 }
             } else if (v->fade_out) {
                 // Read just enough for a fade-out ramp, then kill voice or

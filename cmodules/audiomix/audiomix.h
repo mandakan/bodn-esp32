@@ -187,6 +187,18 @@ typedef struct {
     volatile uint32_t xfade_samples_left;  // 0 = no crossfade in progress
     uint32_t          xfade_samples_total; // for weight = i/total mapping
 
+    // "Next pending" — set by Python when a fade=True swap arrives while
+    // an existing crossfade is still in flight. Substituting pending_* in
+    // place would jump the rising-weight signal mid-mix and produce a
+    // click; instead we queue here, and the mixer activates this as the
+    // new pending the moment the current crossfade completes. Multiple
+    // retargets in quick succession overwrite each other so only the
+    // latest target wins.
+    volatile uint8_t  next_pending_set;
+    const uint8_t    *next_pending_buf_ptr;
+    uint32_t          next_pending_buf_len;
+    uint8_t           next_pending_loop;
+
     // Age tracking for voice stealing
     volatile uint32_t start_seq;
 } audiomix_voice_t;
