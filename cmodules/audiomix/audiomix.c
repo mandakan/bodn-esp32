@@ -337,18 +337,36 @@ static mp_obj_t audiomix_voice_play_buffer(size_t n_args, const mp_obj_t *args) 
     //                    mixer activates pending with its own fade_in.
     if (fade && (v->source_type == SRC_BUFFER || v->source_type == SRC_TONE)) {
         v->writing = 1;
-        v->pending_source = SRC_BUFFER;
-        v->pending_buf_ptr = bufinfo.buf;
-        v->pending_buf_len = n_bytes;
-        v->pending_buf_pos = 0;
-        v->pending_loop = loop ? 1 : 0;
-        if (v->source_type == SRC_BUFFER) {
-            v->xfade_samples_total = AUDIOMIX_XFADE_SAMPLES;
-            v->xfade_samples_left = AUDIOMIX_XFADE_SAMPLES;
-            v->fade_out = 0;
+        if (v->source_type == SRC_BUFFER && v->xfade_samples_left > 0) {
+            // A crossfade is already in flight — just retarget the pending
+            // buffer without resetting xfade_samples_left. The old keeps
+            // fading out exactly as it was; the rising "new" weight now
+            // mixes the latest target instead of the now-stale one. No
+            // amplitude discontinuity, just a brief timbre change as the
+            // sin²(t) weight applies to a different signal.
+            //
+            // Without this, fast zone changes (e.g. throttle spun quickly
+            // through two drone zones) produce an audible click because
+            // the mid-fade output (≈0.5×old + 0.5×first-new) jumps back
+            // to 1.0×old when the crossfade restarts at t=0.
+            v->pending_buf_ptr = bufinfo.buf;
+            v->pending_buf_len = n_bytes;
+            v->pending_buf_pos = 0;
+            v->pending_loop = loop ? 1 : 0;
         } else {
-            v->fade_out = 1;
-            v->xfade_samples_left = 0;
+            v->pending_source = SRC_BUFFER;
+            v->pending_buf_ptr = bufinfo.buf;
+            v->pending_buf_len = n_bytes;
+            v->pending_buf_pos = 0;
+            v->pending_loop = loop ? 1 : 0;
+            if (v->source_type == SRC_BUFFER) {
+                v->xfade_samples_total = AUDIOMIX_XFADE_SAMPLES;
+                v->xfade_samples_left = AUDIOMIX_XFADE_SAMPLES;
+                v->fade_out = 0;
+            } else {
+                v->fade_out = 1;
+                v->xfade_samples_left = 0;
+            }
         }
         v->stop_req = 0;
         v->writing = 0;

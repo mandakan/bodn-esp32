@@ -47,10 +47,14 @@
 
 // Source-swap crossfade length: BUFFER → BUFFER swaps overlap the old
 // source's fade-out with the new source's fade-in over this many samples
-// using equal-power (cos²/sin²) weights. 80 samples = 5 ms at 16 kHz —
-// long enough that the brain stops perceiving a transition, short enough
-// to feel instantaneous.
-#define AUDIOMIX_XFADE_SAMPLES  80
+// using equal-power (cos²/sin²) weights. 240 samples = 15 ms at 16 kHz.
+//
+// 5 ms (80) was mathematically click-free but a few spectrally dissimilar
+// pairs (low-engine-loop ↔ high-engine-loop) still produced a perceptible
+// morph at that length. 15 ms eliminates the seam entirely without
+// feeling laggy as a control response. PSRAM cost is one stack-resident
+// scratch of 2 × XFADE_SAMPLES bytes per active crossfade.
+#define AUDIOMIX_XFADE_SAMPLES  240
 
 // Waveform crossfade length (samples) for phase-preserving tone_wave swaps.
 // 48 ≈ 3ms at 16kHz — short enough to feel "instant", long enough to mask
